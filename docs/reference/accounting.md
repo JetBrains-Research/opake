@@ -248,10 +248,19 @@ or neither). This is the truncated-Poisson PLD for capped batches; it does
 training actually truncates draws. The capped form accepts a Gaussian,
 AdaClip(Gaussian), or `nonprivate()` base.
 
+The guarantee is [Ganesh (2025), Theorem
+3.1](https://arxiv.org/abs/2508.15089). It assumes each over-cap provisional
+sample is replaced by a uniformly random subset of exactly the cap size.
+Its directed add/remove adjacency is indexed by the public size \(n\) of the
+larger neighboring dataset. Therefore `dataset_size` must equal the sampler's
+pre-sampling size, and composition must preserve the same \(n\)-indexed
+adjacency interpretation.
+
 - `inner` (Gaussian | AdaClip | NonPrivate): Base mechanism
 - `sample_rate` (float): Expected sampling rate, in (0, 1)
 - `truncated_batch_size` (int | None): Optional max batch-size cap
-- `dataset_size` (int | None): Required when `truncated_batch_size` is set
+- `dataset_size` (int | None): Public larger-neighbor size \(n\), required when
+  `truncated_batch_size` is set
 
 ```python
 n = 50_000

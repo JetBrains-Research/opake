@@ -22,9 +22,10 @@ uncorrelated across steps, which is exactly what the matrix mechanism
 gives up.  Pair this sampler only with ``dpftrl_acc.balls_in_bins``.
 
 References:
+    - Choquette-Choo et al. (2024), "Near Exact Privacy Amplification
+      for Matrix Mechanisms": https://arxiv.org/abs/2410.06266
     - Chua et al. (2025), "Balls-and-Bins Sampling for DP-SGD":
       https://arxiv.org/abs/2412.16802
-    - Choquette-Choo et al. (2024), "Privacy Amplification for Matrix Mechanisms"
 """
 
 from collections.abc import Iterator, Mapping, Sized

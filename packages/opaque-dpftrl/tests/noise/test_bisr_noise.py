@@ -212,6 +212,19 @@ class TestBisrStrategy:
     def test_with_momentum(self):
         assert bisr_strategy(bandwidth=4, momentum=0.95).sensitivity(**_PART) > 0
 
+    def test_coefficients_match_lemma_one_alpha_one_specialization(self):
+        beta = 0.4
+        strategy = bisr_strategy(bandwidth=4, momentum=beta)
+        r = [1.0]
+        for j in range(1, strategy.bandwidth):
+            r.append(((j - 1.5) / j) * r[-1])
+        expected_inverse = tuple(
+            sum(r[j] * beta**j * r[k - j] for j in range(k + 1))
+            for k in range(strategy.bandwidth)
+        )
+
+        assert strategy._inv_coefs() == pytest.approx(expected_inverse)
+
     def test_rejects_bad_bandwidth(self):
         with pytest.raises(ValueError, match="bandwidth must be >= 2"):
             bisr_strategy(bandwidth=1)

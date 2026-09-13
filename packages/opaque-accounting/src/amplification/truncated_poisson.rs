@@ -15,16 +15,24 @@ use super::{validate_noise_multiplier, validate_rate};
 /// standard Poisson (variable batch size), truncated sampling caps the batch
 /// at `batch_size_max` for predictable memory/compute.
 ///
-/// Uses the mixture formula from \[Gan25\]:
+/// Uses Theorem 3.1 and the stable conditional-rate formula from section 3.4
+/// of Ganesh (2025), "Tighter Privacy Analysis for Truncated Poisson Sampling"
+/// <https://arxiv.org/abs/2508.15089>:
 /// - Component 1 (prob `1 − p_trunc`): standard Poisson PLD
 /// - Component 2 (prob `p_trunc`): Poisson with doubled sensitivity at conditional rate
+///
+/// The theorem uses directed, dataset-size-indexed add/remove adjacency:
+/// the larger dataset has exactly `dataset_size` records and the smaller one
+/// has `dataset_size - 1`. The cap must be applied by selecting a uniform
+/// size-`batch_size_max` subset whenever the provisional Poisson sample exceeds
+/// the cap.
 ///
 /// # Arguments
 ///
 /// * `noise_multiplier` — σ/Δ, must be > 0
 /// * `rate` — Poisson sampling probability q ∈ (0, 1)
 /// * `batch_size_max` — maximum batch size B_max > 0
-/// * `dataset_size` — total dataset size n > 0
+/// * `dataset_size` — public larger-neighbor size n > 0
 /// * `config` — discretization configuration
 ///
 /// # Errors
@@ -121,7 +129,7 @@ fn conditional_sampling_probability(
     pr_exceed * (batch_size_max as f64) / (n as f64) / p_trunc
 }
 
-/// Hockey-stick divergence for truncated Poisson (mixture formula from \[Gan25\]).
+/// Hockey-stick divergence for the Ganesh (2025), Theorem 3.1 mixture.
 fn truncated_get_delta(
     epsilon: f64,
     adjacency: Adjacency,
@@ -223,6 +231,7 @@ fn truncated_epsilon_bounds(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use statrs::distribution::Discrete;
 
     fn default_config() -> DiscretizationConfig {
         DiscretizationConfig::default()
@@ -291,5 +300,22 @@ mod tests {
     #[test]
     fn test_conditional_sampling_probability_zero_truncation() {
         assert_eq!(conditional_sampling_probability(100, 0.1, 200, 0.0), 0.0);
+    }
+
+    #[test]
+    fn test_conditional_rate_matches_theorem_three_one() {
+        let n = 12;
+        let rate = 0.3;
+        let cap = 4;
+        let truncation = truncation_probability(n, rate, cap);
+        let binom = Binomial::new(rate, (n - 1) as u64).unwrap();
+        let direct = rate
+            * (cap..n)
+                .map(|s| binom.pmf(s as u64) * cap as f64 / (s + 1) as f64)
+                .sum::<f64>()
+            / truncation;
+
+        let stable = conditional_sampling_probability(n, rate, cap, truncation);
+        assert!((stable - direct).abs() < 1e-12);
     }
 }

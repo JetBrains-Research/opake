@@ -94,7 +94,14 @@ uniform random subset of the selected indices is kept. That caps batch
 size (more stable training and memory) but **weakens** privacy relative to
 plain Poisson at the same `sample_rate` — account with
 `dpsgd_acc.poisson(..., truncated_batch_size=..., dataset_size=...)` so the
-PLD matches the cap.
+PLD matches the cap. This is the mechanism analyzed by [Ganesh (2025),
+Theorem 3.1](https://arxiv.org/abs/2508.15089).
+
+That theorem uses directed, dataset-size-indexed add/remove adjacency: the
+larger neighbor has public size \(n\), and the smaller has size \(n-1\).
+Pass the sampler's exact pre-sampling size as `dataset_size`, and preserve that
+same \(n\)-indexed interpretation when composing repeated releases or combining
+this accountant with another mechanism.
 
 ```python
 from opaque.dpsgd.sampling import PoissonSampler

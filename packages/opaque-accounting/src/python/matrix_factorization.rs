@@ -236,8 +236,8 @@ pub fn py_toeplitz_minsep_sensitivity_squared(
 
 /// Squared L2 sensitivity of the DP-λCGD strategy matrix.
 ///
-/// Uses the closed-form expression from Theorem 1 (eq 15) of
-/// Kalinin et al. (2026) "DP-λCGD". With momentum β > 0, computes
+/// Uses the closed-form expression completed in Appendix C, equation (16) of
+/// arXiv:2601.22334v1. With momentum β > 0, computes
 /// via momentum-aware column inner products.
 ///
 /// Args:
@@ -274,6 +274,8 @@ pub fn py_lambda_cgd_sensitivity_squared(
 ///
 /// Column normalization: C̃_λ = C_λ · D⁻¹ where D = diag(‖C_λ[:,j]‖).
 /// For single participation (k=1), always returns 1.0.
+/// The normalized result is covered by Lemma 8, equation (12) of the current
+/// arXiv:2601.22334v2, rather than its Toeplitz-only Theorem 1.
 ///
 /// Args:
 ///     lambda_ (float): Correlation coefficient in [0, 1).

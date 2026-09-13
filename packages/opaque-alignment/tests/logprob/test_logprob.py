@@ -417,6 +417,15 @@ def test_ld_alpha_requires_shared_prefix_len() -> None:
         sequence_logp(logits, ids, cmask, ld_alpha=0.5)
 
 
+@pytest.mark.parametrize("alpha", [-0.1, 1.1, float("nan"), float("inf")])
+def test_ld_alpha_rejects_values_outside_paper_domain(alpha: float) -> None:
+    logits = torch.randn(5, 7)
+    ids = torch.randint(0, 7, (5,))
+    cmask = torch.ones(5)
+    with pytest.raises(ValueError, match=r"finite and in \[0, 1\]"):
+        sequence_logp(logits, ids, cmask, ld_alpha=alpha, shared_prefix_len=2)
+
+
 def test_ld_alpha_vmap_grad_finite() -> None:
     torch.manual_seed(2)
     logits = torch.randn(4, 6, 9)

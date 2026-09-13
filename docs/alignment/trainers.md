@@ -288,7 +288,8 @@ These are flat fields on `DPOConfig`, composing on top of the head(s):
   The weight is detached and per-example, so per-example DP is preserved.
 - **LD-DPO** — `ld_alpha` (a float in `[0, 1]`, `None` ⇒ standard DPO)
   length-desensitizes the sequence log-prob by damping the verbose tail of each
-  completion beyond the shared-prefix length (arXiv:2409.06411).
+  completion beyond the paper's public length (the shorter completion length;
+  arXiv:2409.06411).
 - **f-divergence** — `f_divergence_type` selects the regularizer:
   `"reverse_kl"` (default, standard DPO), `"forward_kl"`, `"js_divergence"`, or
   `"alpha_divergence"`. For the α-divergence, `f_alpha_divergence_coef`

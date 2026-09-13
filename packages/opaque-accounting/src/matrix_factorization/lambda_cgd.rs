@@ -5,18 +5,18 @@
 //! `i ≥ j` and 0 otherwise. Its inverse is bidiagonal: 1 on the diagonal,
 //! -λ on the subdiagonal.
 //!
-//! # Sensitivity (Theorem 1, eq 15)
+//! # Sensitivity
 //!
-//! For a participation pattern with `k` participations and minimum
-//! separation `b`, the squared L2 sensitivity is:
+//! For the unnormalized Toeplitz strategy, Theorem 1 and Appendix C,
+//! equations (15)-(16) of arXiv v1 give:
 //!
 //! ```text
 //! sens²_{k,b}(C_λ) = (1 - λ^{2b}) / ((1 - λ²)(1 - λ^b)²) · Σ_{j=0}^{k-1} (1 - λ^{b(j+1)})²
 //! ```
 //!
-//! The `momentum` parameter exists in the Rust API for flexibility,
-//! but the standard Python API always passes momentum=0. Sensitivity
-//! is workload-independent (BandMF paper, Thm 1).
+//! The column-normalized strategy is not Toeplitz. Its sensitivity is instead
+//! covered by Lemma 8, equation (12) of the current arXiv v2 and is computed
+//! from normalized column inner products below.
 //!
 //! # References
 //!
@@ -62,8 +62,8 @@ fn effective_k(n_steps: usize, min_sep: usize, max_participations: Option<usize>
 
 /// Compute the squared L2 sensitivity of the DP-λCGD strategy matrix.
 ///
-/// Uses the closed-form expression from Theorem 1 (eq 15) of the paper
-/// for the no-momentum case (β=0). With momentum, computes via the sum
+/// Uses the closed-form expression completed in Appendix C, equation (16) of
+/// arXiv v1 for the no-momentum case (β=0). With momentum, computes via the sum
 /// of momentum-aware column inner products.
 ///
 /// # Arguments
@@ -127,7 +127,7 @@ pub fn lambda_cgd_sensitivity_squared(
         return Ok(sens_sq);
     }
 
-    // Optimized closed-form for β=0, large k (original Theorem 1, eq 15)
+    // Optimized closed form for β=0 (arXiv v1, Appendix C, equation 16).
     let lambda_b = lambda.powi(b as i32);
     if lambda_b < 1e-15 {
         let lambda2 = lambda * lambda;
@@ -157,8 +157,8 @@ pub fn lambda_cgd_sensitivity_squared(
 /// All columns of C̃_λ have unit norm.
 ///
 /// For single participation (k=1) with β=0, the sensitivity is always 1.0.
-/// For multi-participation (k > 1) with min-separation b, computes
-/// the Gram matrix from Lemma 8 of the paper.
+/// For multi-participation (k > 1) with min-separation b, computes the
+/// normalized-column Gram sum established by Lemma 8, equation (12) of arXiv v2.
 ///
 /// With momentum β > 0, column norms change and are computed from the
 /// momentum-aware inner product formula.

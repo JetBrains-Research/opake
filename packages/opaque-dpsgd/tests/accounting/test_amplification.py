@@ -276,6 +276,20 @@ class TestPoissonTruncatedConstructor:
         ):
             dpsgd_acc.poisson(dpsgd_acc.gaussian(0.8), 0.01, dataset_size=10_000)
 
+    @pytest.mark.parametrize(
+        ("field", "kwargs"),
+        [
+            (
+                "truncated_batch_size",
+                {"truncated_batch_size": 128.0, "dataset_size": 10_000},
+            ),
+            ("dataset_size", {"truncated_batch_size": 128, "dataset_size": 10_000.0}),
+        ],
+    )
+    def test_requires_integral_truncation_parameters(self, field, kwargs):
+        with pytest.raises(TypeError, match=field):
+            dpsgd_acc.poisson(dpsgd_acc.gaussian(0.8), 0.01, **kwargs)
+
     def test_rejects_full_rate_with_truncation(self):
         with pytest.raises(ConfigurationError, match=r"sample_rate=1\.0"):
             dpsgd_acc.poisson(

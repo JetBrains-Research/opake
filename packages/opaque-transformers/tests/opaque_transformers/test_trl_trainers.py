@@ -1631,10 +1631,10 @@ def test_dpo_fused_eligible_resolves_handles(tmp_path):
     assert trainer._lm_head_param_name == "lm_head.weight"
 
 
-def test_dpo_ld_shared_prefix_is_completion_relative():
+def test_dpo_ld_public_length_is_shorter_completion():
     chosen_mask = torch.tensor([[0, 0, 0, 1, 1, 1]])
     rejected_mask = torch.tensor([[0, 1, 1, 0, 0, 0]])
-    chosen_prefix, rejected_prefix = DPOTrainer._ld_shared_prefix(
+    chosen_prefix, rejected_prefix = DPOTrainer._ld_public_length(
         chosen_mask, rejected_mask
     )
     torch.testing.assert_close(chosen_prefix, torch.tensor([2]))

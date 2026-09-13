@@ -3,8 +3,9 @@
 Implements the logistic/exponential blend discovered by offline meta-learning
 of DPO-family objectives:
 
-    Azar, M. G., et al. (2024). DiscoPOP: Discovering Preference
-    Optimization Procedures Using Self-Supervised Feedback. NeurIPS 2024.
+    Lu, C., et al. (2024). Discovering Preference Optimization Algorithms
+    with and for Large Language Models. NeurIPS 2024.
+    https://arxiv.org/abs/2406.08414
 
 The modulation gate ``gate = σ(β·Δ / τ)`` blends a logistic component and an
 exponential component via ``L = logistic·(1 − gate) + exp·gate``.  Because
@@ -38,7 +39,7 @@ def discopop_loss(
     beta: float,
     discopop_tau: float = 0.05,
 ) -> torch.Tensor:
-    """DiscoPOP per-example loss (Azar 2024 / NeurIPS 2024).
+    """DiscoPOP per-example loss (Lu et al., 2024, equations 4-5).
 
     Blends a logistic component ``-log σ(β·Δ)`` and an exponential component
     ``exp(-β·Δ)`` using a soft gate parameterised by temperature *τ*::

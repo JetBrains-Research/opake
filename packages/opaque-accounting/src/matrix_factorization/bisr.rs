@@ -18,7 +18,8 @@
 //! # References
 //!
 //! - Kalinin, McKenna, Upadhyay, Lampert (2026) "Back to Square Roots:
-//!   Banded Inverse Square Root for DP Matrix Factorization"
+//!   An Optimal Bound on the Matrix Factorization Error for Multi-Epoch
+//!   Differentially Private SGD"
 //!   <https://arxiv.org/abs/2505.12128>
 
 use crate::error::{PldError, Result};

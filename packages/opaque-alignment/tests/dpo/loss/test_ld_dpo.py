@@ -13,6 +13,7 @@ later unit (γ.W).
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch.func import grad, vmap
 
@@ -48,6 +49,17 @@ def test_ld_dpo_alpha_zero_prefix_only() -> None:
     out = ld_dpo_split(logps, mask, shared_prefix_len=2, alpha=0.0)
     # Only positions 0 and 1 count: -1 + -2 = -3.
     assert torch.allclose(out, torch.tensor([-3.0]), atol=1e-6)
+
+
+@pytest.mark.parametrize("alpha", [-0.1, 1.1, float("nan"), float("inf")])
+def test_ld_dpo_rejects_alpha_outside_paper_domain(alpha: float) -> None:
+    with pytest.raises(ValueError, match=r"finite and in \[0, 1\]"):
+        ld_dpo_split(
+            torch.ones(4),
+            torch.ones(4),
+            shared_prefix_len=2,
+            alpha=alpha,
+        )
 
 
 def test_ld_dpo_tail_weighting() -> None:

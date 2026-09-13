@@ -5,8 +5,9 @@ bandwidth p.  The inverse strategy matrix :math:`C^{-1}` is banded
 Toeplitz with p coefficients.
 
 References:
-    - Kalinin, McKenna, Upadhyay, Lampert (2026) "Back to Square Roots"
-      https://arxiv.org/abs/2505.12128
+    - Kalinin, McKenna, Upadhyay, and Lampert (2026), "Back to Square
+      Roots: An Optimal Bound on the Matrix Factorization Error for Multi-Epoch
+      Differentially Private SGD", https://arxiv.org/abs/2505.12128
 """
 
 from __future__ import annotations
@@ -230,9 +231,11 @@ def _bisr_gram_matrix_cached(
 
 @lru_cache(maxsize=32)
 def _bisr_inverse_coefficients_cached(bandwidth: int, beta: float) -> tuple[float, ...]:
-    """Compute BISR inverse square-root coefficients (Lemma 1, arxiv:2505.12128).
+    """Compute the alpha=1 BISR coefficients (Lemma 1, arXiv:2505.12128).
 
-    For alpha=1: c_k = sum_{j=0}^{k} r_j * beta^j * r_{k-j}
+    For alpha=1: c_k = sum_{j=0}^{k} r_j * beta^j * r_{k-j}.
+    The lemma's 0 <= beta < alpha <= 1 hypothesis therefore becomes
+    0 <= beta < 1, enforced by :class:`BisrStrategy`.
     where r_0 = 1, r_j = ((j - 3/2) / j) * r_{j-1}.
     """
     r_tilde = [0.0] * bandwidth
@@ -770,7 +773,9 @@ def bisr_strategy(
     Args:
         bandwidth: BISR bandwidth p (>= 2).
         normalized: Use column-normalized matrix (default True).
-        momentum: Optimizer momentum in [0, 1) (default 0).
+        momentum: The paper's beta in the alpha=1 specialization. Must be in
+            ``[0, 1)`` (default 0), matching Lemma 1's
+            ``0 <= beta < alpha <= 1`` hypothesis.
         lr_schedule: Deprecated compatibility argument. Only ``None`` is
             accepted. Pass learning-rate schedules to the optimizer instead.
         inv_coefficients: Explicit :math:`C^{-1}` coefficients (default BISR optimal).

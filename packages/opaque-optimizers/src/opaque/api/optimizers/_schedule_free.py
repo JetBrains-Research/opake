@@ -7,8 +7,8 @@ style uniform average rather than relying on an external LR schedule
 (warmup, cosine, …).
 
 Reference:
-    Defazio, Yaida, Cutkosky, "The Road Less Scheduled",
-    arXiv:2405.15682.
+    Defazio, Yang, Mehta, Mishchenko, Khaled, and Cutkosky (2024),
+    "The Road Less Scheduled", https://arxiv.org/abs/2405.15682.
 
 Three weight sequences::
 

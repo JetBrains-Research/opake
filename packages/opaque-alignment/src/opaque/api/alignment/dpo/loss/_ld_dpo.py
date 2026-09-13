@@ -10,9 +10,10 @@ Implements the length-desensitisation decomposition from:
 
 LD-DPO observes that vanilla DPO is biased by completion length: longer
 completions accumulate more (signed) log-prob mass, which entangles a verbose
-bias into the preference signal.  LD-DPO splits each completion's logp into a
-"public"/shared prefix (weighted ``1.0``) and a length-desensitised tail
-(weighted by ``alpha`` ∈ ``[0, 1]``).  Setting ``alpha < 1`` damps the tail's
+bias into the preference signal. LD-DPO splits each completion's logp at the
+"public length" (the shorter completion length): the public portion has weight
+``1.0`` and the length-desensitised tail is weighted by ``alpha`` in ``[0, 1]``.
+Setting ``alpha < 1`` damps the tail's
 contribution, desensitising the objective to completion length::
 
     pos    = completion_mask.cumsum(-1)
@@ -20,18 +21,23 @@ contribution, desensitising the objective to completion length::
     logp   = (per_token_logps * completion_mask * weight).sum(-1)
 
 At ``alpha = 1`` this reduces to the plain masked-sum sequence logp; at
-``alpha = 0`` only the shared-prefix tokens contribute.
+``alpha = 0`` only tokens within the public length contribute.
 
 Positions are completion-relative: prompt and padding positions remain zero,
-while completion tokens are numbered ``1, 2, ...``. ``shared_prefix_len`` may
-be a Python ``int`` or a per-example tensor; it is broadcast against the
-position axis, so a per-example tensor of shape ``(..., 1)`` selects a
-different prefix length per example.
+while completion tokens are numbered ``1, 2, ...``. ``shared_prefix_len`` is a
+compatibility name for the paper's public length, not a token-identical prefix.
+It may be a Python ``int`` or a per-example tensor; it is broadcast against the
+position axis, so a per-example tensor of shape ``(..., 1)`` selects a different
+public length per example.
 """
 
 from __future__ import annotations
 
+import math
+
 import torch
+
+from opaque.exceptions import ConfigurationError
 
 __all__ = ["ld_dpo_split"]
 
@@ -42,10 +48,10 @@ def ld_dpo_split(
     shared_prefix_len: torch.Tensor | int,
     alpha: float,
 ) -> torch.Tensor:
-    """Length-desensitised sequence logp split (LD-DPO, arXiv:2409.06411).
+    """Apply the LD-DPO per-sequence weighting for a supplied public length.
 
-    Weights completion tokens at the shared-prefix positions by ``1.0`` and
-    tokens beyond the prefix by ``alpha``, then masked-sums over the sequence
+    Weights completion tokens within the public length by ``1.0`` and tokens
+    beyond it by ``alpha``, then masked-sums over the sequence
     axis::
 
         pos    = completion_mask.cumsum(-1)
@@ -58,19 +64,30 @@ def ld_dpo_split(
             ``vmap``) or a batch axis.
         completion_mask: Tensor of shape ``(..., T)``; non-zero where a token
             belongs to the completion span. Cast to the logp dtype.
-        shared_prefix_len: Length of the shared/public prefix. A Python
-            ``int`` (same prefix for every example) or a per-example tensor
-            that broadcasts against the position axis ``(T,)`` (e.g. shape
+        shared_prefix_len: The paper's public length (the shorter completion
+            length), retained under this compatibility name. A Python ``int``
+            (same value for every example) or a per-example tensor that
+            broadcasts against the position axis ``(T,)`` (e.g. shape
             ``(..., 1)``). The first ``shared_prefix_len`` completion tokens are
             weighted ``1.0``; later completion tokens are weighted ``alpha``.
-        alpha: Weight on the length-desensitised tail, typically ``∈ [0, 1]``.
+        alpha: Weight on the length-desensitised tail in ``[0, 1]``.
             ``alpha = 1`` recovers the plain masked-sum; ``alpha = 0`` keeps
-            only the prefix tokens.
+            only tokens within the public length.
 
     Returns:
         Float tensor of shape ``(...)`` (one length-desensitised logp per
         sequence).
+
+    Note:
+        This low-level, single-sequence primitive cannot derive the public
+        length from a chosen/rejected pair. Callers claiming the LD-DPO
+        objective must pass the minimum of the paired completion lengths.
     """
+    if not math.isfinite(alpha) or not 0.0 <= alpha <= 1.0:
+        raise ConfigurationError(
+            *(f"alpha (LD-DPO) must be finite and in [0, 1], got {alpha}",)
+        )
+
     mask = completion_mask.to(per_token_logps.dtype)
     completion_pos = (completion_mask != 0).cumsum(dim=-1)
     prefix_len = shared_prefix_len

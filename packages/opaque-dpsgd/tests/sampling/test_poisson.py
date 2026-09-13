@@ -214,6 +214,14 @@ class TestPoissonSamplerTruncated:
         with pytest.raises(ValueError, match="truncated_batch_size must be"):
             PoissonSampler(dataset, sample_rate=0.1, truncated_batch_size=0, key=key(0))
 
+    @pytest.mark.parametrize("cap", [1.5, True])
+    def test_init_requires_integral_truncated_batch_size(self, cap):
+        dataset = TensorDataset(torch.randn(100, 10))
+        with pytest.raises(TypeError, match="truncated_batch_size must be an int"):
+            PoissonSampler(
+                dataset, sample_rate=0.1, truncated_batch_size=cap, key=key(0)
+            )
+
     def test_truncation_enforced(self):
         dataset = TensorDataset(torch.randn(1000, 10))
         sampler = PoissonSampler(

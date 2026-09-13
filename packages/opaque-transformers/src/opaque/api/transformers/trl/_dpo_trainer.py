@@ -787,7 +787,7 @@ class DPOTrainer(DPTrainer):
         c_lp_kwargs: dict[str, Any] = {}
         r_lp_kwargs: dict[str, Any] = {}
         if self._ld_alpha is not None:
-            c_sp, r_sp = self._ld_shared_prefix(ccmask, rcmask)
+            c_sp, r_sp = self._ld_public_length(ccmask, rcmask)
             c_lp_kwargs = {"ld_alpha": self._ld_alpha, "shared_prefix_len": c_sp}
             r_lp_kwargs = {"ld_alpha": self._ld_alpha, "shared_prefix_len": r_sp}
 
@@ -882,14 +882,15 @@ class DPOTrainer(DPTrainer):
         return (completion_mask[..., 1:] != 0).sum(-1).clamp(min=1)
 
     @staticmethod
-    def _ld_shared_prefix(
+    def _ld_public_length(
         chosen_completion_mask: torch.Tensor,
         rejected_completion_mask: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Per-side LD-DPO shared-prefix length in completion tokens.
+        """Derive the paired LD-DPO public length in completion tokens.
 
-        Tokens up to ``shared`` (the shorter of the two completions) keep weight
-        ``1``; the verbose tail is damped by ``ld_alpha`` inside ``sequence_logp``.
+        The paper defines this as the shorter completion length. Tokens through
+        that position keep weight ``1``; the verbose tail is damped by
+        ``ld_alpha`` inside ``sequence_logp``.
         """
         c = chosen_completion_mask[..., 1:]
         r = rejected_completion_mask[..., 1:]
@@ -1121,7 +1122,7 @@ class DPOTrainer(DPTrainer):
             c_lp_kwargs: dict[str, Any] = {}
             r_lp_kwargs: dict[str, Any] = {}
             if self._ld_alpha is not None:
-                c_sp, r_sp = self._ld_shared_prefix(c_cmask, r_cmask)
+                c_sp, r_sp = self._ld_public_length(c_cmask, r_cmask)
                 c_lp_kwargs = {"ld_alpha": self._ld_alpha, "shared_prefix_len": c_sp}
                 r_lp_kwargs = {"ld_alpha": self._ld_alpha, "shared_prefix_len": r_sp}
 

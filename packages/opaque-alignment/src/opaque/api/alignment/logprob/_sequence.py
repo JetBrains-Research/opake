@@ -12,11 +12,17 @@ Negative-axis indexing is used throughout so it works both when called
 per-example (``logits`` ``(T, V)``, ``input_ids`` ``(T,)``) and when called on a
 batched input (``logits`` ``(B, T, V)``, ``input_ids`` ``(B, T)``).
 
-The ``ld_alpha`` (LD-DPO, arXiv:2409.06411) length-desensitised logp split is
-not implemented here; pass ``ld_alpha=None``.
+When ``ld_alpha`` is set, the function implements the LD-DPO
+length-desensitised split from equations (9)-(12) of
+https://arxiv.org/abs/2409.06411. The caller supplies the paper's public length
+(the shorter completion length) through the compatibility name
+``shared_prefix_len``.
+
 """
 
 from __future__ import annotations
+
+import math
 
 import torch
 
@@ -51,15 +57,19 @@ def sequence_logp(
         completion_mask: Tensor of shape ``(..., T)``; non-zero where a token
             belongs to the completion span and should contribute to the logp.
             It is cast to the logits dtype before multiplying.
-        ld_alpha: LD-DPO (arXiv:2409.06411) length-desensitisation coefficient.
+        ld_alpha: LD-DPO (arXiv:2409.06411) length-desensitisation coefficient
+            in ``[0, 1]``.
             When set, completion tokens beyond ``shared_prefix_len`` are weighted
-            by ``ld_alpha`` (typically ``∈ [0, 1]``) instead of ``1.0``, damping
+            by ``ld_alpha`` instead of ``1.0``, damping
             the verbose tail's contribution; ``ld_alpha=1.0`` recovers the plain
             masked sum. The fused path does not support it — LD-DPO needs the
             per-token log-probs, so use this eager ``sequence_logp``.
-        shared_prefix_len: LD-DPO shared-prefix length (an ``int`` or a
-            per-example tensor broadcasting against the shifted position axis).
-            Required when ``ld_alpha`` is set; ignored otherwise.
+        shared_prefix_len: LD-DPO public length (the shorter completion length),
+            retained under this compatibility name. An ``int`` or a per-example
+            tensor broadcasting against the shifted position axis. Required when
+            ``ld_alpha`` is set; ignored otherwise. This single-sequence helper
+            cannot derive it: callers claiming LD-DPO must pass the minimum of
+            the paired completion lengths.
         length_normalized: Divide the per-sequence logp by its completion-token
             count, giving the per-token mean reward ``(1/|y|)·log π(y)`` used by
             the reference-free heads (SimPO / ORPO). Default ``False`` (plain sum).
@@ -69,7 +79,8 @@ def sequence_logp(
         when ``length_normalized``).
 
     Raises:
-        ValueError: If ``ld_alpha`` is set without ``shared_prefix_len``.
+        ValueError: If ``ld_alpha`` is outside ``[0, 1]`` or is set without
+            ``shared_prefix_len``.
     """
     # Causal-LM shift: predict token t+1 from the logits at position t.
     shifted_logits = logits[..., :-1, :]
@@ -80,6 +91,10 @@ def sequence_logp(
 
     weight = target_weight
     if ld_alpha is not None:
+        if not math.isfinite(ld_alpha) or not 0.0 <= ld_alpha <= 1.0:
+            raise ConfigurationError(
+                *(f"ld_alpha (LD-DPO) must be finite and in [0, 1], got {ld_alpha}",)
+            )
         if shared_prefix_len is None:
             raise ConfigurationError(*("ld_alpha (LD-DPO) requires shared_prefix_len",))
         completion_pos = target_mask.to(torch.bool).cumsum(dim=-1)

@@ -86,7 +86,9 @@ Primary papers for the implemented alignment objectives:
   causal-LM shift, masks to the completion span, and sums. Works
   per-example or on a batch axis. Pass `length_normalized=True` for the
   per-token mean reward `log π(y)/|y|` (SimPO / ORPO), or `ld_alpha` for the
-  LD-DPO length-desensitized split.
+  LD-DPO length-desensitized split. Its compatibility argument
+  `shared_prefix_len` is the paper's public length (the shorter completion
+  length), not a token-identical prefix.
 - **`fused_sequence_logp()`** ([`opaque.alignment.dpo.loss`](#api-documentation))
   — memory-efficient `sequence_logp` over hidden states + `lm_head` weight
   (per-example only; same `length_normalized` option).

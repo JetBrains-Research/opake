@@ -59,9 +59,11 @@ eps = training.epsilon_at(1e-5)
 The sensitivity and Balls-in-Bins Gram depend only on the strategy matrix C,
 not on the optimizer workload. Learning-rate schedules belong to the optimizer
 and are deterministic post-processing of the private mechanism; they must not
-weight the privacy Gram. The sensitivity formula (Theorem 1, eq 15 of the
-paper) has a closed-form expression in terms of λ, min_sep, and
-max_participations.
+weight the privacy Gram. For the unnormalized Toeplitz strategy, Theorem 1 and
+Appendix C, equations (15)-(16) of arXiv v1 give the closed form in terms of λ,
+`min_sep`, and `max_participations`. The normalized default is not Toeplitz; its
+sensitivity is covered separately by Lemma 8, equation (12) of the current
+arXiv v2 and is computed from normalized column inner products.
 
 ## Assumptions and limitations
 

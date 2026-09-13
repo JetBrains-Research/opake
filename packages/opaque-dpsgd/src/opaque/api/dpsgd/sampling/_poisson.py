@@ -5,7 +5,9 @@ probability ``sample_rate``.  Optional ``truncated_batch_size`` caps the
 realised batch for stable sizes and memory; that is **weaker** for privacy than
 plain Poisson at the same ``sample_rate``—pair with
 :func:`opaque.dpsgd.accounting.poisson` passing both
-``truncated_batch_size`` and ``dataset_size``.
+``truncated_batch_size`` and the exact pre-sampling ``dataset_size``.
+Truncation selects a uniformly random subset, as required by Theorem 3.1 of
+https://arxiv.org/abs/2508.15089.
 
 For distributed training, shard the dataset **before** creating the
 sampler using ``local_shard()`` and derive a per-rank key with
@@ -135,10 +137,18 @@ class PoissonSampler(Sampler):
             )
         if n_steps is not None and n_steps < 1:
             raise ConfigurationError(*(f"n_steps must be >= 1 or None, got {n_steps}",))
-        if truncated_batch_size is not None and truncated_batch_size < 1:
-            raise ConfigurationError(
-                *(f"truncated_batch_size must be >= 1, got {truncated_batch_size}",)
-            )
+        if truncated_batch_size is not None:
+            if type(truncated_batch_size) is not int:
+                raise InputTypeError(
+                    *(
+                        "truncated_batch_size must be an int, got "
+                        f"{type(truncated_batch_size).__name__}",
+                    )
+                )
+            if truncated_batch_size < 1:
+                raise ConfigurationError(
+                    *(f"truncated_batch_size must be >= 1, got {truncated_batch_size}",)
+                )
 
         self.data_source: Sized = data_source
         self.sample_rate = sample_rate

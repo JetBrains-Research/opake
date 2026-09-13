@@ -14,11 +14,13 @@
 //!
 //! These functions are critical for computing privacy loss in subsampled
 //! mechanisms. Direct computation can lead to numerical overflow or
-//! underflow, so we use stable formulations from \[LRKS25\].
+//! underflow, so we use the stable formulations cited below.
 //!
 //! # References
 //!
-//! - \[LRKS25\]: "Avoiding pitfalls for privacy accounting of subsampled mechanisms"
+//! - Lebeda, Regehr, Kamath, and Steinke, "Avoiding Pitfalls for Privacy
+//!   Accounting of Subsampled Mechanisms under Composition"
+//!   <https://arxiv.org/abs/2405.20769>
 
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::f64::consts::LN_2;

@@ -456,9 +456,10 @@ class TestTripleRisk:
 class TestTruncatedPoissonValidity:
     """Truncated Poisson: internal consistency and fallback behavior.
 
-    Note: Truncated Poisson uses an asymmetric mixture model with a
-    doubled-sensitivity component (from [Gan25]), so it does NOT guarantee
-    lower epsilon than standard Poisson for the same sample_rate.
+    Note: Truncated Poisson uses the asymmetric mixture from Ganesh (2025),
+    Theorem 3.1 (https://arxiv.org/abs/2508.15089), with a
+    doubled-sensitivity component, so it does NOT guarantee lower epsilon
+    than standard Poisson for the same sample_rate.
     The benefit is a more accurate model of real production systems.
     """
 

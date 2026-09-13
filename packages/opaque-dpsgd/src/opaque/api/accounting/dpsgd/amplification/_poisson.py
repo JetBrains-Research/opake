@@ -28,7 +28,9 @@ class Poisson(DpProcess):
     Plain Poisson accepts any Opaque ``DpProcess``. ``sample_rate=1.0``
     returns the base mechanism without amplification. The capped form
     requires a Gaussian, AdaClip(Gaussian), or NonPrivate inner mechanism,
-    with both ``truncated_batch_size`` and ``dataset_size`` set.
+    with both ``truncated_batch_size`` and ``dataset_size`` set. Its guarantee
+    uses the dataset-size-indexed add/remove adjacency of Ganesh (2025),
+    https://arxiv.org/abs/2508.15089.
     """
 
     inner: _Inner
@@ -77,14 +79,28 @@ class Poisson(DpProcess):
                 )
             )
         if self.truncated_batch_size is not None:
-            if int(self.truncated_batch_size) < 1:
+            if type(self.truncated_batch_size) is not int:
+                raise InputTypeError(
+                    *(
+                        "Poisson: truncated_batch_size must be an int, got "
+                        f"{type(self.truncated_batch_size).__name__}.",
+                    )
+                )
+            if type(self.dataset_size) is not int:
+                raise InputTypeError(
+                    *(
+                        "Poisson: dataset_size must be an int, got "
+                        f"{type(self.dataset_size).__name__}.",
+                    )
+                )
+            if self.truncated_batch_size < 1:
                 raise ConfigurationError(
                     *(
                         "Poisson: truncated_batch_size must be >= 1, got "
                         f"{self.truncated_batch_size}",
                     )
                 )
-            if int(self.dataset_size) < 1:
+            if self.dataset_size < 1:
                 raise ConfigurationError(
                     *(f"Poisson: dataset_size must be >= 1, got {self.dataset_size}",)
                 )
@@ -187,7 +203,11 @@ def poisson(
 
     When ``truncated_batch_size`` is set, both it and ``dataset_size`` are
     required, and the analysis switches to the truncated Poisson-Gaussian
-    PLD (production DP-SGD with capped batch size).
+    PLD (production DP-SGD with capped batch size). This is Theorem 3.1 of
+    Ganesh (2025), https://arxiv.org/abs/2508.15089: provisional samples above
+    the cap must be truncated to a uniformly random subset. Its adjacency is
+    indexed by the public larger-neighbor size ``dataset_size``; composed uses
+    must retain that same dataset-size interpretation.
 
     Args:
         inner: The base Opaque :class:`DpProcess`. The capped form requires
@@ -200,7 +220,9 @@ def poisson(
         truncated_batch_size: Optional max batch-size cap; switches the
             analysis to truncated Poisson (requires ``sample_rate < 1``).
         dataset_size: Required when ``truncated_batch_size`` is set;
-            ``|D|``.
+            the public size ``n`` of the larger dataset in the theorem's
+            directed add/remove neighboring pair. It must exactly match the
+            sampler's pre-sampling dataset size.
 
     Returns:
         A :class:`Poisson` process.

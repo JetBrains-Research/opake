@@ -44,7 +44,7 @@ eps = training.epsilon_at(1e-5)
 | Parameter | Description |
 |-----------|-------------|
 | `bandwidth` | Number of bands p (≥ 2). Higher can improve utility, at the cost of more retained noise buffers and convolution work. |
-| `momentum` | Optimizer momentum β. Enters coefficient computation (changes C). |
+| `momentum` | The paper's β in the implemented α=1 specialization. Must satisfy \(0 \leq \beta < 1\), the specialized form of Lemma 1's \(0 \leq \beta < \alpha \leq 1\) hypothesis. |
 | `lr_schedule` | Deprecated compatibility argument; only `None` is accepted |
 
 ### Amplifier and accounting parameters
@@ -64,7 +64,7 @@ bounds may be conservative, but remain safe.
 ### BISR coefficients
 
 The inverse coefficients c̃_k are computed from the inverse square root
-formula (Lemma 1 of the paper):
+formula (Lemma 1 of the paper), specialized to \(\alpha=1\):
 
 - Base sequence: r̃_0 = 1, r̃_j = ((j - 3/2) / j) · r̃_{j-1}
 - With momentum β: c̃_k = Σ_{j=0}^{k} r̃_j · β^j · r̃_{k-j}
