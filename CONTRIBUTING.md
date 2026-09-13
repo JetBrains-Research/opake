@@ -294,11 +294,6 @@ uv run mkdocs build
 - **User guides**: `docs/user-guide/`
 - **Tutorials**: `docs/tutorials/`
 - **API reference**: Auto-generated from docstrings
-- **Scholarly references**: Add audited records and theorem hypotheses to
-  `citation_records.toml`, then add a `Citation: arXiv:<id>; <lead author>;
-  <title>` marker beside each formal source citation. The integrity tests
-  discover the per-file sites, compare their metadata with the registry, and
-  reject unresolved shorthand keys.
 
 ### Documentation Versioning
 

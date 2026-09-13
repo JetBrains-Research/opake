@@ -18,7 +18,6 @@ https://arxiv.org/abs/2409.06411. The caller supplies the paper's public length
 (the shorter completion length) through the compatibility name
 ``shared_prefix_len``.
 
-Citation: arXiv:2409.06411; Wei Liu et al.; Length Desensitization in Direct Preference Optimization
 """
 
 from __future__ import annotations

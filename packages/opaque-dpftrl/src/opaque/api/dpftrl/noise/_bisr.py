@@ -5,7 +5,6 @@ bandwidth p.  The inverse strategy matrix :math:`C^{-1}` is banded
 Toeplitz with p coefficients.
 
 References:
-    Citation: arXiv:2505.12128; Nikita P. Kalinin et al.; Back to Square Roots: An Optimal Bound on the Matrix Factorization Error for Multi-Epoch Differentially Private SGD
     - Kalinin, McKenna, Upadhyay, and Lampert (2026), "Back to Square
       Roots: An Optimal Bound on the Matrix Factorization Error for Multi-Epoch
       Differentially Private SGD", https://arxiv.org/abs/2505.12128

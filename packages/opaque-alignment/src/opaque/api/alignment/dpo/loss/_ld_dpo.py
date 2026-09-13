@@ -4,7 +4,6 @@
 
 Implements the length-desensitisation decomposition from:
 
-    Citation: arXiv:2409.06411; Wei Liu et al.; Length Desensitization in Direct Preference Optimization
     Liu, W., Bai, Y., Han, C., Weng, R., Xu, J., Cao, X., Wang, J., & Cai, X.
     (2024). Length Desensitization in Direct Preference Optimization.
     arXiv:2409.06411.

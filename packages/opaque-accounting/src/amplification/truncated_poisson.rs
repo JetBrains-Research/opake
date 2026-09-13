@@ -18,7 +18,6 @@ use super::{validate_noise_multiplier, validate_rate};
 /// Uses Theorem 3.1 and the stable conditional-rate formula from section 3.4
 /// of Ganesh (2025), "Tighter Privacy Analysis for Truncated Poisson Sampling"
 /// <https://arxiv.org/abs/2508.15089>:
-/// Citation: arXiv:2508.15089; Arun Ganesh; Tighter Privacy Analysis for Truncated Poisson Sampling
 /// - Component 1 (prob `1 − p_trunc`): standard Poisson PLD
 /// - Component 2 (prob `p_trunc`): Poisson with doubled sensitivity at conditional rate
 ///

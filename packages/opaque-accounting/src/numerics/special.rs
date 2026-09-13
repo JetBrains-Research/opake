@@ -18,7 +18,6 @@
 //!
 //! # References
 //!
-//! Citation: arXiv:2405.20769; Christian Janos Lebeda et al.; Avoiding Pitfalls for Privacy Accounting of Subsampled Mechanisms under Composition
 //! - Lebeda, Regehr, Kamath, and Steinke, "Avoiding Pitfalls for Privacy
 //!   Accounting of Subsampled Mechanisms under Composition"
 //!   <https://arxiv.org/abs/2405.20769>

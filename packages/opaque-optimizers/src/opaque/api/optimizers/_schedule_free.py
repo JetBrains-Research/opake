@@ -7,7 +7,6 @@ style uniform average rather than relying on an external LR schedule
 (warmup, cosine, …).
 
 Reference:
-    Citation: arXiv:2405.15682; Aaron Defazio et al.; The Road Less Scheduled
     Defazio, Yang, Mehta, Mishchenko, Khaled, and Cutkosky (2024),
     "The Road Less Scheduled", https://arxiv.org/abs/2405.15682.
 

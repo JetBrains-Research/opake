@@ -3,7 +3,6 @@
 Implements the logistic/exponential blend discovered by offline meta-learning
 of DPO-family objectives:
 
-    Citation: arXiv:2406.08414; Chris Lu et al.; Discovering Preference Optimization Algorithms with and for Large Language Models
     Lu, C., et al. (2024). Discovering Preference Optimization Algorithms
     with and for Large Language Models. NeurIPS 2024.
     https://arxiv.org/abs/2406.08414

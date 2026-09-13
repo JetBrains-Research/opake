@@ -20,7 +20,6 @@
 //!
 //! # References
 //!
-//! Citation: arXiv:2601.22334; Nikita P. Kalinin et al.; DP-λCGD: Efficient Noise Correlation for Differentially Private Model Training
 //! - Kalinin et al. (2026) "DP-λCGD: Efficient Noise Correlation for
 //!   Differentially Private Model Training" <https://arxiv.org/abs/2601.22334>
 
