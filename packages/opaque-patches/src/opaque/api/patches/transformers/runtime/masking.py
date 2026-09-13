@@ -447,6 +447,30 @@ def vmap_create_sliding_window_causal_mask(
     return causal_mask
 
 
+def vmap_create_recurrent_attention_mask(
+    config,
+    inputs_embeds: torch.Tensor | None = None,
+    attention_mask: torch.Tensor | None = None,
+    past_key_values=None,
+    **kwargs,
+) -> torch.Tensor | None:
+    """Build a vmap-safe padding mask for recurrent attention layers.
+
+    Transformers skips all-ones masks with a data-dependent Python branch.
+    Returning the trimmed mask instead is numerically identical and keeps padded
+    examples distinct under ``vmap``. Both ordinary 2D masks and batchless 1D
+    masks produced by per-example transforms are supported.
+    """
+    if inputs_embeds is None or attention_mask is None:
+        return None
+    if attention_mask.ndim not in (1, 2):
+        return None
+    query_length = _query_length(inputs_embeds)
+    if query_length == 1:
+        return None
+    return attention_mask[..., -query_length:].contiguous()
+
+
 def _vmap_safe_ignore_causal_mask_sdpa(*args, **kwargs) -> bool:
     """vmap-safe ``_ignore_causal_mask_sdpa``.
 
@@ -471,6 +495,7 @@ def apply_masking_patches(*, vmap_masking: bool = True) -> None:
     Patches:
     - transformers.masking_utils.create_causal_mask
     - transformers.masking_utils.create_sliding_window_causal_mask (Gemma2/Gemma3)
+    - transformers.masking_utils.create_recurrent_attention_mask (Qwen3-Next)
     - transformers.masking_utils._ignore_causal_mask_sdpa (vmap-safe)
     - transformers.integrations.sdpa_attention.repeat_kv
 
@@ -492,6 +517,11 @@ def apply_masking_patches(*, vmap_masking: bool = True) -> None:
         if hasattr(masking_utils, "create_sliding_window_causal_mask"):
             masking_utils.create_sliding_window_causal_mask = (
                 vmap_create_sliding_window_causal_mask
+            )
+
+        if hasattr(masking_utils, "create_recurrent_attention_mask"):
+            masking_utils.create_recurrent_attention_mask = (
+                vmap_create_recurrent_attention_mask
             )
 
         # Patch _ignore_causal_mask_sdpa for sliding-window models (Gemma2, Phi-3, Mistral).

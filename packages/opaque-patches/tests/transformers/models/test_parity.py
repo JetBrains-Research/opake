@@ -108,12 +108,7 @@ _BACKWARD_GRAD_XFAIL_REASONS = {
     ),
 }
 
-_VMAP_GRAD_XFAIL_REASONS = {
-    "qwen3_next": (
-        "Transformers Qwen3-Next masking uses data-dependent scalar extraction "
-        "that torch.vmap does not support"
-    ),
-}
+_VMAP_GRAD_XFAIL_REASONS: dict[str, str] = {}
 
 # Families whose Config / ForCausalLM class name does not follow the standard
 # pattern (FamilyConfig, FamilyForCausalLM). Map family → explicit module
@@ -247,6 +242,7 @@ FAMILIES = _get_families()
 _FAMILY_MODULE_PATCH_NAMES = (
     "create_causal_mask",
     "create_sliding_window_causal_mask",
+    "create_recurrent_attention_mask",
     "repeat_kv",
     "eager_attention_forward",
     "apply_rotary_pos_emb",

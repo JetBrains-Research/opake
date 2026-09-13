@@ -8,6 +8,7 @@ import torch
 from opaque.api.patches.transformers.runtime.masking import (
     vmap_create_causal_mask,
     vmap_create_compact_sdpa_sliding_window_causal_mask,
+    vmap_create_recurrent_attention_mask,
     vmap_create_sliding_window_causal_mask,
 )
 from opaque.patches import apply_runtime_patches
@@ -140,6 +141,40 @@ def test_vmap_causal_mask_preserves_all_valid_sdpa_fast_path():
     torch.vmap(torch.func.grad(create_mask), in_dims=(None, 0))(parameter, padded)
     assert len(created_masks) == 1
     assert created_masks[0] is not None
+
+
+@pytest.mark.parametrize(
+    ("input_shape", "mask", "expected"),
+    [
+        ((3, 4), [0, 1, 1, 0, 1], [1, 0, 1]),
+        ((1, 3, 4), [[0, 1, 1, 0, 1]], [[1, 0, 1]]),
+    ],
+)
+def test_recurrent_attention_mask_trims_batchless_and_batched_padding(
+    input_shape, mask, expected
+):
+    result = vmap_create_recurrent_attention_mask(
+        config=object(),
+        inputs_embeds=torch.randn(input_shape),
+        attention_mask=torch.tensor(mask),
+    )
+    assert torch.equal(result, torch.tensor(expected))
+    assert result.is_contiguous()
+
+
+def test_recurrent_attention_mask_preserves_per_example_padding_under_vmap():
+    inputs_embeds = torch.randn(3, 4)
+    masks = torch.tensor([[1, 1, 1, 1], [0, 1, 1, 1], [1, 1, 0, 1]])
+
+    result = torch.vmap(
+        lambda mask: vmap_create_recurrent_attention_mask(
+            config=object(),
+            inputs_embeds=inputs_embeds,
+            attention_mask=mask,
+        )
+    )(masks)
+
+    assert torch.equal(result, masks[:, -inputs_embeds.shape[0] :])
 
 
 class TestSlidingWindowCausalMask:

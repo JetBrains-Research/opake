@@ -257,6 +257,7 @@ def build_patched_model_pair(
 _FAMILY_MODULE_PATCH_NAMES = (
     "create_causal_mask",
     "create_sliding_window_causal_mask",
+    "create_recurrent_attention_mask",
     "repeat_kv",
     "eager_attention_forward",
     "apply_rotary_pos_emb",
