@@ -250,10 +250,10 @@ _FAMILY_MODULE_PATCH_NAMES = (
 )
 
 
-def _snapshot_pristine_family_state():
+def _snapshot_pristine_family_state(families=FAMILIES):
     """Capture upstream globals before any package test applies process-wide patches."""
     state = {}
-    for family in FAMILIES:
+    for family in families:
         model_mod = importlib.import_module(
             f"transformers.models.{family}.modeling_{family}"
         )
@@ -288,11 +288,13 @@ def _restore_family_state(state):
 
 
 @pytest.fixture(autouse=True)
-def _isolate_parity_family_state():
+def _isolate_parity_family_state(request):
     """Keep pristine parity references from altering later package tests."""
     from opaque.api.patches.transformers._family import _reset_patched_families
 
-    previous_state = _snapshot_pristine_family_state()
+    callspec = getattr(request.node, "callspec", None)
+    family = callspec.params.get("family") if callspec is not None else None
+    previous_state = _snapshot_pristine_family_state((family,)) if family else {}
     try:
         yield
     finally:
