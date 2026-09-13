@@ -4572,7 +4572,9 @@ for composite objectives:</p>
   causal-LM shift, masks to the completion span, and sums. Works
   per-example or on a batch axis. Pass <code>length_normalized=True</code> for the
   per-token mean reward <code>log π(y)/|y|</code> (SimPO / ORPO), or <code>ld_alpha</code> for the
-  LD-DPO length-desensitized split.</li>
+  LD-DPO length-desensitized split. Its compatibility argument
+  <code>shared_prefix_len</code> is the paper's public length (the shorter completion
+  length), not a token-identical prefix.</li>
 <li><strong><code>fused_sequence_logp()</code></strong> (<a href="#api-documentation"><code>opaque.alignment.dpo.loss</code></a>)
   — memory-efficient <code>sequence_logp</code> over hidden states + <code>lm_head</code> weight
   (per-example only; same <code>length_normalized</code> option).</li>
@@ -8104,7 +8106,7 @@ and discarded.</p>
 
     <div class="doc doc-contents ">
 
-        <p>DiscoPOP per-example loss (Azar 2024 / NeurIPS 2024).</p>
+        <p>DiscoPOP per-example loss (Lu et al., 2024, equations 4-5).</p>
 <p>Blends a logistic component <code>-log σ(β·Δ)</code> and an exponential component
 <code>exp(-β·Δ)</code> using a soft gate parameterised by temperature <em>τ</em>::</p>
 <div class="codehilite"><pre><span></span><code>logits    = (chosen_logratio - rejected_logratio) <span class="gs">* beta</span>
@@ -8232,8 +8234,7 @@ representable region unchanged.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/opaque-alignment/src/opaque/api/alignment/dpo/loss/_discopop.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-34">34</a></span>
-<span class="normal"><a href="#__codelineno-0-35">35</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-35">35</a></span>
 <span class="normal"><a href="#__codelineno-0-36">36</a></span>
 <span class="normal"><a href="#__codelineno-0-37">37</a></span>
 <span class="normal"><a href="#__codelineno-0-38">38</a></span>
@@ -8276,51 +8277,52 @@ representable region unchanged.</p>
 <span class="normal"><a href="#__codelineno-0-75">75</a></span>
 <span class="normal"><a href="#__codelineno-0-76">76</a></span>
 <span class="normal"><a href="#__codelineno-0-77">77</a></span>
-<span class="normal"><a href="#__codelineno-0-78">78</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="k">def</span><span class="w"> </span><span class="nf">discopop_loss</span><span class="p">(</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35"></a>    <span class="n">chosen_logratio</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="n">rejected_logratio</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39"></a>    <span class="n">discopop_tau</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">,</span>
-<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="w">    </span><span class="sd">"""DiscoPOP per-example loss (Azar 2024 / NeurIPS 2024).</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42"></a>
-<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">    Blends a logistic component ``-log σ(β·Δ)`` and an exponential component</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">    ``exp(-β·Δ)`` using a soft gate parameterised by temperature *τ*::</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45"></a>
-<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">        logits    = (chosen_logratio - rejected_logratio) * beta</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">        gate      = σ(logits / τ)          # → 1 for large positive logits</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">        logistic  = -log σ(logits)</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">        exp_comp  = exp(-logits)            # clamped to avoid overflow</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">        L         = logistic * (1 - gate) + exp_comp * gate</span>
-<a id="__codelineno-0-51" name="__codelineno-0-51"></a>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">        chosen_logratio: Per-example scalar log-ratio for the chosen</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">            completion.  May be 0-dim or ``(B,)``.</span>
-<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">        rejected_logratio: Per-example scalar log-ratio for the rejected</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">            completion.  Same shape as *chosen_logratio*.</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">        beta: KL-regularisation temperature (DPO β).</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">        discopop_tau: Modulation temperature *τ* (default ``0.05``).</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">            Smaller values sharpen the transition between the two components.</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60"></a>
-<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">        Per-example scalar loss tensor with the same shape as the inputs.</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a>
-<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">    Note:</span>
-<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">        The exponential component overflows half precision when ``logits ≪ 0``.</span>
-<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">        To prevent NaN/Inf while preserving gradient locality, the logits passed</span>
-<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">        to ``torch.exp`` are clamped from below at a dtype-specific bound:</span>
-<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">        ``11`` for ``float16`` and ``80`` otherwise.  This keeps the</span>
-<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">        exponential finite in the active compute dtype while leaving the</span>
-<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">        representable region unchanged.</span>
-<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">    """</span>
-<a id="__codelineno-0-72" name="__codelineno-0-72"></a>    <span class="n">logits</span> <span class="o">=</span> <span class="p">(</span><span class="n">chosen_logratio</span> <span class="o">-</span> <span class="n">rejected_logratio</span><span class="p">)</span> <span class="o">*</span> <span class="n">beta</span>
-<a id="__codelineno-0-73" name="__codelineno-0-73"></a>    <span class="n">exp_clamp</span> <span class="o">=</span> <span class="n">_exp_clamp_for_dtype</span><span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-<a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="n">logits_clamped</span> <span class="o">=</span> <span class="n">logits</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="nb">min</span><span class="o">=-</span><span class="n">exp_clamp</span><span class="p">)</span>
-<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">modulation</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">logits</span> <span class="o">/</span> <span class="n">discopop_tau</span><span class="p">)</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">logistic_component</span> <span class="o">=</span> <span class="o">-</span><span class="n">F</span><span class="o">.</span><span class="n">logsigmoid</span><span class="p">(</span><span class="n">logits</span><span class="p">)</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">exp_component</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">logits_clamped</span><span class="p">)</span>
-<a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="k">return</span> <span class="n">logistic_component</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">modulation</span><span class="p">)</span> <span class="o">+</span> <span class="n">exp_component</span> <span class="o">*</span> <span class="n">modulation</span>
+<span class="normal"><a href="#__codelineno-0-78">78</a></span>
+<span class="normal"><a href="#__codelineno-0-79">79</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="k">def</span><span class="w"> </span><span class="nf">discopop_loss</span><span class="p">(</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="n">chosen_logratio</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="n">rejected_logratio</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a>    <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a>    <span class="n">discopop_tau</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">,</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="w">    </span><span class="sd">"""DiscoPOP per-example loss (Lu et al., 2024, equations 4-5).</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">    Blends a logistic component ``-log σ(β·Δ)`` and an exponential component</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">    ``exp(-β·Δ)`` using a soft gate parameterised by temperature *τ*::</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">        logits    = (chosen_logratio - rejected_logratio) * beta</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">        gate      = σ(logits / τ)          # → 1 for large positive logits</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">        logistic  = -log σ(logits)</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">        exp_comp  = exp(-logits)            # clamped to avoid overflow</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">        L         = logistic * (1 - gate) + exp_comp * gate</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">        chosen_logratio: Per-example scalar log-ratio for the chosen</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">            completion.  May be 0-dim or ``(B,)``.</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">        rejected_logratio: Per-example scalar log-ratio for the rejected</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">            completion.  Same shape as *chosen_logratio*.</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">        beta: KL-regularisation temperature (DPO β).</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">        discopop_tau: Modulation temperature *τ* (default ``0.05``).</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">            Smaller values sharpen the transition between the two components.</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">        Per-example scalar loss tensor with the same shape as the inputs.</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">    Note:</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">        The exponential component overflows half precision when ``logits ≪ 0``.</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">        To prevent NaN/Inf while preserving gradient locality, the logits passed</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">        to ``torch.exp`` are clamped from below at a dtype-specific bound:</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">        ``11`` for ``float16`` and ``80`` otherwise.  This keeps the</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">        exponential finite in the active compute dtype while leaving the</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">        representable region unchanged.</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">    """</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a>    <span class="n">logits</span> <span class="o">=</span> <span class="p">(</span><span class="n">chosen_logratio</span> <span class="o">-</span> <span class="n">rejected_logratio</span><span class="p">)</span> <span class="o">*</span> <span class="n">beta</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="n">exp_clamp</span> <span class="o">=</span> <span class="n">_exp_clamp_for_dtype</span><span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">logits_clamped</span> <span class="o">=</span> <span class="n">logits</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="nb">min</span><span class="o">=-</span><span class="n">exp_clamp</span><span class="p">)</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">modulation</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">logits</span> <span class="o">/</span> <span class="n">discopop_tau</span><span class="p">)</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">logistic_component</span> <span class="o">=</span> <span class="o">-</span><span class="n">F</span><span class="o">.</span><span class="n">logsigmoid</span><span class="p">(</span><span class="n">logits</span><span class="p">)</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="n">exp_component</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">logits_clamped</span><span class="p">)</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a>    <span class="k">return</span> <span class="n">logistic_component</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">modulation</span><span class="p">)</span> <span class="o">+</span> <span class="n">exp_component</span> <span class="o">*</span> <span class="n">modulation</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -9381,9 +9383,9 @@ from the reference to achieve the same reward margin.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Length-desensitised sequence logp split (LD-DPO, arXiv:2409.06411).</p>
-<p>Weights completion tokens at the shared-prefix positions by <code>1.0</code> and
-tokens beyond the prefix by <code>alpha</code>, then masked-sums over the sequence
+        <p>Apply the LD-DPO per-sequence weighting for a supplied public length.</p>
+<p>Weights completion tokens within the public length by <code>1.0</code> and tokens
+beyond it by <code>alpha</code>, then masked-sums over the sequence
 axis::</p>
 <div class="codehilite"><pre><span></span><code>pos    = completion_mask.cumsum(-1)
 weight = where((pos &gt;= 1) &amp; (pos &lt;= shared_prefix_len), 1.0, alpha)
@@ -9446,9 +9448,10 @@ belongs to the completion span. Cast to the logp dtype.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Length of the shared/public prefix. A Python
-<code>int</code> (same prefix for every example) or a per-example tensor
-that broadcasts against the position axis <code>(T,)</code> (e.g. shape
+                <p>The paper's public length (the shorter completion
+length), retained under this compatibility name. A Python <code>int</code>
+(same value for every example) or a per-example tensor that
+broadcasts against the position axis <code>(T,)</code> (e.g. shape
 <code>(..., 1)</code>). The first <code>shared_prefix_len</code> completion tokens are
 weighted <code>1.0</code>; later completion tokens are weighted <code>alpha</code>.</p>
               </div>
@@ -9466,9 +9469,9 @@ weighted <code>1.0</code>; later completion tokens are weighted <code>alpha</cod
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Weight on the length-desensitised tail, typically <code>∈ [0, 1]</code>.
+                <p>Weight on the length-desensitised tail in <code>[0, 1]</code>.
 <code>alpha = 1</code> recovers the plain masked-sum; <code>alpha = 0</code> keeps
-only the prefix tokens.</p>
+only tokens within the public length.</p>
               </div>
             </td>
             <td>
@@ -9512,109 +9515,138 @@ only the prefix tokens.</p>
     </table>
 
 
+<details class="note" open>
+  <summary>Note</summary>
+  <p>This low-level, single-sequence primitive cannot derive the public
+length from a chosen/rejected pair. Callers claiming the LD-DPO
+objective must pass the minimum of the paired completion lengths.</p>
+</details>
+
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/opaque-alignment/src/opaque/api/alignment/dpo/loss/_ld_dpo.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-39">39</a></span>
-<span class="normal"><a href="#__codelineno-0-40">40</a></span>
-<span class="normal"><a href="#__codelineno-0-41">41</a></span>
-<span class="normal"><a href="#__codelineno-0-42">42</a></span>
-<span class="normal"><a href="#__codelineno-0-43">43</a></span>
-<span class="normal"><a href="#__codelineno-0-44">44</a></span>
-<span class="normal"><a href="#__codelineno-0-45">45</a></span>
-<span class="normal"><a href="#__codelineno-0-46">46</a></span>
-<span class="normal"><a href="#__codelineno-0-47">47</a></span>
-<span class="normal"><a href="#__codelineno-0-48">48</a></span>
-<span class="normal"><a href="#__codelineno-0-49">49</a></span>
-<span class="normal"><a href="#__codelineno-0-50">50</a></span>
-<span class="normal"><a href="#__codelineno-0-51">51</a></span>
-<span class="normal"><a href="#__codelineno-0-52">52</a></span>
-<span class="normal"><a href="#__codelineno-0-53">53</a></span>
-<span class="normal"><a href="#__codelineno-0-54">54</a></span>
-<span class="normal"><a href="#__codelineno-0-55">55</a></span>
-<span class="normal"><a href="#__codelineno-0-56">56</a></span>
-<span class="normal"><a href="#__codelineno-0-57">57</a></span>
-<span class="normal"><a href="#__codelineno-0-58">58</a></span>
-<span class="normal"><a href="#__codelineno-0-59">59</a></span>
-<span class="normal"><a href="#__codelineno-0-60">60</a></span>
-<span class="normal"><a href="#__codelineno-0-61">61</a></span>
-<span class="normal"><a href="#__codelineno-0-62">62</a></span>
-<span class="normal"><a href="#__codelineno-0-63">63</a></span>
-<span class="normal"><a href="#__codelineno-0-64">64</a></span>
-<span class="normal"><a href="#__codelineno-0-65">65</a></span>
-<span class="normal"><a href="#__codelineno-0-66">66</a></span>
-<span class="normal"><a href="#__codelineno-0-67">67</a></span>
-<span class="normal"><a href="#__codelineno-0-68">68</a></span>
-<span class="normal"><a href="#__codelineno-0-69">69</a></span>
-<span class="normal"><a href="#__codelineno-0-70">70</a></span>
-<span class="normal"><a href="#__codelineno-0-71">71</a></span>
-<span class="normal"><a href="#__codelineno-0-72">72</a></span>
-<span class="normal"><a href="#__codelineno-0-73">73</a></span>
-<span class="normal"><a href="#__codelineno-0-74">74</a></span>
-<span class="normal"><a href="#__codelineno-0-75">75</a></span>
-<span class="normal"><a href="#__codelineno-0-76">76</a></span>
-<span class="normal"><a href="#__codelineno-0-77">77</a></span>
-<span class="normal"><a href="#__codelineno-0-78">78</a></span>
-<span class="normal"><a href="#__codelineno-0-79">79</a></span>
-<span class="normal"><a href="#__codelineno-0-80">80</a></span>
-<span class="normal"><a href="#__codelineno-0-81">81</a></span>
-<span class="normal"><a href="#__codelineno-0-82">82</a></span>
-<span class="normal"><a href="#__codelineno-0-83">83</a></span>
-<span class="normal"><a href="#__codelineno-0-84">84</a></span>
-<span class="normal"><a href="#__codelineno-0-85">85</a></span>
-<span class="normal"><a href="#__codelineno-0-86">86</a></span>
-<span class="normal"><a href="#__codelineno-0-87">87</a></span>
-<span class="normal"><a href="#__codelineno-0-88">88</a></span>
-<span class="normal"><a href="#__codelineno-0-89">89</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="k">def</span><span class="w"> </span><span class="nf">ld_dpo_split</span><span class="p">(</span>
-<a id="__codelineno-0-40" name="__codelineno-0-40"></a>    <span class="n">per_token_logps</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="n">completion_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42"></a>    <span class="n">shared_prefix_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="nb">int</span><span class="p">,</span>
-<a id="__codelineno-0-43" name="__codelineno-0-43"></a>    <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="w">    </span><span class="sd">"""Length-desensitised sequence logp split (LD-DPO, arXiv:2409.06411).</span>
-<a id="__codelineno-0-46" name="__codelineno-0-46"></a>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    Weights completion tokens at the shared-prefix positions by ``1.0`` and</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">    tokens beyond the prefix by ``alpha``, then masked-sums over the sequence</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">    axis::</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a>
-<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">        pos    = completion_mask.cumsum(-1)</span>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">        weight = where((pos &gt;= 1) &amp; (pos &lt;= shared_prefix_len), 1.0, alpha)</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">        return (per_token_logps * completion_mask * weight).sum(-1)</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54"></a>
-<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">        per_token_logps: Per-token log-probabilities of the completion. Shape</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">            ``(..., T)``; leading dims may be empty (per-example under</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">            ``vmap``) or a batch axis.</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">        completion_mask: Tensor of shape ``(..., T)``; non-zero where a token</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">            belongs to the completion span. Cast to the logp dtype.</span>
-<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">        shared_prefix_len: Length of the shared/public prefix. A Python</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            ``int`` (same prefix for every example) or a per-example tensor</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">            that broadcasts against the position axis ``(T,)`` (e.g. shape</span>
-<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">            ``(..., 1)``). The first ``shared_prefix_len`` completion tokens are</span>
-<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">            weighted ``1.0``; later completion tokens are weighted ``alpha``.</span>
-<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">        alpha: Weight on the length-desensitised tail, typically ``∈ [0, 1]``.</span>
-<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">            ``alpha = 1`` recovers the plain masked-sum; ``alpha = 0`` keeps</span>
-<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">            only the prefix tokens.</span>
-<a id="__codelineno-0-69" name="__codelineno-0-69"></a>
-<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">        Float tensor of shape ``(...)`` (one length-desensitised logp per</span>
-<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">        sequence).</span>
-<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">    """</span>
-<a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="n">mask</span> <span class="o">=</span> <span class="n">completion_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">completion_pos</span> <span class="o">=</span> <span class="p">(</span><span class="n">completion_mask</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">prefix_len</span> <span class="o">=</span> <span class="n">shared_prefix_len</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">prefix_len</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-<a id="__codelineno-0-78" name="__codelineno-0-78"></a>        <span class="k">while</span> <span class="n">prefix_len</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="n">completion_pos</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
-<a id="__codelineno-0-79" name="__codelineno-0-79"></a>            <span class="n">prefix_len</span> <span class="o">=</span> <span class="n">prefix_len</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-0-80" name="__codelineno-0-80"></a>    <span class="n">is_prefix</span> <span class="o">=</span> <span class="p">(</span><span class="n">completion_pos</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">completion_pos</span> <span class="o">&lt;=</span> <span class="n">prefix_len</span><span class="p">)</span>
-<a id="__codelineno-0-81" name="__codelineno-0-81"></a>    <span class="n">weight</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
-<a id="__codelineno-0-82" name="__codelineno-0-82"></a>        <span class="n">is_prefix</span><span class="p">,</span>
-<a id="__codelineno-0-83" name="__codelineno-0-83"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">device</span><span class="p">),</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span>
-<a id="__codelineno-0-85" name="__codelineno-0-85"></a>            <span class="p">(),</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">device</span>
-<a id="__codelineno-0-86" name="__codelineno-0-86"></a>        <span class="p">),</span>
-<a id="__codelineno-0-87" name="__codelineno-0-87"></a>    <span class="p">)</span>
-<a id="__codelineno-0-88" name="__codelineno-0-88"></a>    <span class="n">masked</span> <span class="o">=</span> <span class="n">per_token_logps</span> <span class="o">*</span> <span class="n">mask</span> <span class="o">*</span> <span class="n">weight</span>
-<a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="k">return</span> <span class="n">masked</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-45"> 45</a></span>
+<span class="normal"><a href="#__codelineno-0-46"> 46</a></span>
+<span class="normal"><a href="#__codelineno-0-47"> 47</a></span>
+<span class="normal"><a href="#__codelineno-0-48"> 48</a></span>
+<span class="normal"><a href="#__codelineno-0-49"> 49</a></span>
+<span class="normal"><a href="#__codelineno-0-50"> 50</a></span>
+<span class="normal"><a href="#__codelineno-0-51"> 51</a></span>
+<span class="normal"><a href="#__codelineno-0-52"> 52</a></span>
+<span class="normal"><a href="#__codelineno-0-53"> 53</a></span>
+<span class="normal"><a href="#__codelineno-0-54"> 54</a></span>
+<span class="normal"><a href="#__codelineno-0-55"> 55</a></span>
+<span class="normal"><a href="#__codelineno-0-56"> 56</a></span>
+<span class="normal"><a href="#__codelineno-0-57"> 57</a></span>
+<span class="normal"><a href="#__codelineno-0-58"> 58</a></span>
+<span class="normal"><a href="#__codelineno-0-59"> 59</a></span>
+<span class="normal"><a href="#__codelineno-0-60"> 60</a></span>
+<span class="normal"><a href="#__codelineno-0-61"> 61</a></span>
+<span class="normal"><a href="#__codelineno-0-62"> 62</a></span>
+<span class="normal"><a href="#__codelineno-0-63"> 63</a></span>
+<span class="normal"><a href="#__codelineno-0-64"> 64</a></span>
+<span class="normal"><a href="#__codelineno-0-65"> 65</a></span>
+<span class="normal"><a href="#__codelineno-0-66"> 66</a></span>
+<span class="normal"><a href="#__codelineno-0-67"> 67</a></span>
+<span class="normal"><a href="#__codelineno-0-68"> 68</a></span>
+<span class="normal"><a href="#__codelineno-0-69"> 69</a></span>
+<span class="normal"><a href="#__codelineno-0-70"> 70</a></span>
+<span class="normal"><a href="#__codelineno-0-71"> 71</a></span>
+<span class="normal"><a href="#__codelineno-0-72"> 72</a></span>
+<span class="normal"><a href="#__codelineno-0-73"> 73</a></span>
+<span class="normal"><a href="#__codelineno-0-74"> 74</a></span>
+<span class="normal"><a href="#__codelineno-0-75"> 75</a></span>
+<span class="normal"><a href="#__codelineno-0-76"> 76</a></span>
+<span class="normal"><a href="#__codelineno-0-77"> 77</a></span>
+<span class="normal"><a href="#__codelineno-0-78"> 78</a></span>
+<span class="normal"><a href="#__codelineno-0-79"> 79</a></span>
+<span class="normal"><a href="#__codelineno-0-80"> 80</a></span>
+<span class="normal"><a href="#__codelineno-0-81"> 81</a></span>
+<span class="normal"><a href="#__codelineno-0-82"> 82</a></span>
+<span class="normal"><a href="#__codelineno-0-83"> 83</a></span>
+<span class="normal"><a href="#__codelineno-0-84"> 84</a></span>
+<span class="normal"><a href="#__codelineno-0-85"> 85</a></span>
+<span class="normal"><a href="#__codelineno-0-86"> 86</a></span>
+<span class="normal"><a href="#__codelineno-0-87"> 87</a></span>
+<span class="normal"><a href="#__codelineno-0-88"> 88</a></span>
+<span class="normal"><a href="#__codelineno-0-89"> 89</a></span>
+<span class="normal"><a href="#__codelineno-0-90"> 90</a></span>
+<span class="normal"><a href="#__codelineno-0-91"> 91</a></span>
+<span class="normal"><a href="#__codelineno-0-92"> 92</a></span>
+<span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
+<span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
+<span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
+<span class="normal"><a href="#__codelineno-0-96"> 96</a></span>
+<span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
+<span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
+<span class="normal"><a href="#__codelineno-0-99"> 99</a></span>
+<span class="normal"><a href="#__codelineno-0-100">100</a></span>
+<span class="normal"><a href="#__codelineno-0-101">101</a></span>
+<span class="normal"><a href="#__codelineno-0-102">102</a></span>
+<span class="normal"><a href="#__codelineno-0-103">103</a></span>
+<span class="normal"><a href="#__codelineno-0-104">104</a></span>
+<span class="normal"><a href="#__codelineno-0-105">105</a></span>
+<span class="normal"><a href="#__codelineno-0-106">106</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="k">def</span><span class="w"> </span><span class="nf">ld_dpo_split</span><span class="p">(</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a>    <span class="n">per_token_logps</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a>    <span class="n">completion_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="n">shared_prefix_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="nb">int</span><span class="p">,</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a>    <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="w">    </span><span class="sd">"""Apply the LD-DPO per-sequence weighting for a supplied public length.</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">    Weights completion tokens within the public length by ``1.0`` and tokens</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">    beyond it by ``alpha``, then masked-sums over the sequence</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    axis::</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">        pos    = completion_mask.cumsum(-1)</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">        weight = where((pos &gt;= 1) &amp; (pos &lt;= shared_prefix_len), 1.0, alpha)</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">        return (per_token_logps * completion_mask * weight).sum(-1)</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">        per_token_logps: Per-token log-probabilities of the completion. Shape</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">            ``(..., T)``; leading dims may be empty (per-example under</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">            ``vmap``) or a batch axis.</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">        completion_mask: Tensor of shape ``(..., T)``; non-zero where a token</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">            belongs to the completion span. Cast to the logp dtype.</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">        shared_prefix_len: The paper's public length (the shorter completion</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">            length), retained under this compatibility name. A Python ``int``</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">            (same value for every example) or a per-example tensor that</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">            broadcasts against the position axis ``(T,)`` (e.g. shape</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">            ``(..., 1)``). The first ``shared_prefix_len`` completion tokens are</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">            weighted ``1.0``; later completion tokens are weighted ``alpha``.</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">        alpha: Weight on the length-desensitised tail in ``[0, 1]``.</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">            ``alpha = 1`` recovers the plain masked-sum; ``alpha = 0`` keeps</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">            only tokens within the public length.</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">        Float tensor of shape ``(...)`` (one length-desensitised logp per</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">        sequence).</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80"></a>
+<a id="__codelineno-0-81" name="__codelineno-0-81"></a><span class="sd">    Note:</span>
+<a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="sd">        This low-level, single-sequence primitive cannot derive the public</span>
+<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">        length from a chosen/rejected pair. Callers claiming the LD-DPO</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="sd">        objective must pass the minimum of the paired completion lengths.</span>
+<a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="sd">    """</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">alpha</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">alpha</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87"></a>        <span class="k">raise</span> <span class="n">ConfigurationError</span><span class="p">(</span>
+<a id="__codelineno-0-88" name="__codelineno-0-88"></a>            <span class="o">*</span><span class="p">(</span><span class="sa">f</span><span class="s2">"alpha (LD-DPO) must be finite and in [0, 1], got </span><span class="si">{</span><span class="n">alpha</span><span class="si">}</span><span class="s2">"</span><span class="p">,)</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89"></a>        <span class="p">)</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90"></a>
+<a id="__codelineno-0-91" name="__codelineno-0-91"></a>    <span class="n">mask</span> <span class="o">=</span> <span class="n">completion_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a>    <span class="n">completion_pos</span> <span class="o">=</span> <span class="p">(</span><span class="n">completion_mask</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a>    <span class="n">prefix_len</span> <span class="o">=</span> <span class="n">shared_prefix_len</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">prefix_len</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a>        <span class="k">while</span> <span class="n">prefix_len</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="n">completion_pos</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96"></a>            <span class="n">prefix_len</span> <span class="o">=</span> <span class="n">prefix_len</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-97" name="__codelineno-0-97"></a>    <span class="n">is_prefix</span> <span class="o">=</span> <span class="p">(</span><span class="n">completion_pos</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">completion_pos</span> <span class="o">&lt;=</span> <span class="n">prefix_len</span><span class="p">)</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98"></a>    <span class="n">weight</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99"></a>        <span class="n">is_prefix</span><span class="p">,</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">device</span><span class="p">),</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102"></a>            <span class="p">(),</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">per_token_logps</span><span class="o">.</span><span class="n">device</span>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="p">),</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>    <span class="p">)</span>
+<a id="__codelineno-0-105" name="__codelineno-0-105"></a>    <span class="n">masked</span> <span class="o">=</span> <span class="n">per_token_logps</span> <span class="o">*</span> <span class="n">mask</span> <span class="o">*</span> <span class="n">weight</span>
+<a id="__codelineno-0-106" name="__codelineno-0-106"></a>    <span class="k">return</span> <span class="n">masked</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11293,22 +11325,7 @@ mean reward (SimPO / ORPO); matches <code>sequence_logp</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/opaque-alignment/src/opaque/api/alignment/logprob/_sequence.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-108">108</a></span>
-<span class="normal"><a href="#__codelineno-0-109">109</a></span>
-<span class="normal"><a href="#__codelineno-0-110">110</a></span>
-<span class="normal"><a href="#__codelineno-0-111">111</a></span>
-<span class="normal"><a href="#__codelineno-0-112">112</a></span>
-<span class="normal"><a href="#__codelineno-0-113">113</a></span>
-<span class="normal"><a href="#__codelineno-0-114">114</a></span>
-<span class="normal"><a href="#__codelineno-0-115">115</a></span>
-<span class="normal"><a href="#__codelineno-0-116">116</a></span>
-<span class="normal"><a href="#__codelineno-0-117">117</a></span>
-<span class="normal"><a href="#__codelineno-0-118">118</a></span>
-<span class="normal"><a href="#__codelineno-0-119">119</a></span>
-<span class="normal"><a href="#__codelineno-0-120">120</a></span>
-<span class="normal"><a href="#__codelineno-0-121">121</a></span>
-<span class="normal"><a href="#__codelineno-0-122">122</a></span>
-<span class="normal"><a href="#__codelineno-0-123">123</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-123">123</a></span>
 <span class="normal"><a href="#__codelineno-0-124">124</a></span>
 <span class="normal"><a href="#__codelineno-0-125">125</a></span>
 <span class="normal"><a href="#__codelineno-0-126">126</a></span>
@@ -11353,67 +11370,82 @@ mean reward (SimPO / ORPO); matches <code>sequence_logp</code>.</p>
 <span class="normal"><a href="#__codelineno-0-165">165</a></span>
 <span class="normal"><a href="#__codelineno-0-166">166</a></span>
 <span class="normal"><a href="#__codelineno-0-167">167</a></span>
-<span class="normal"><a href="#__codelineno-0-168">168</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-108" name="__codelineno-0-108"></a><span class="k">def</span><span class="w"> </span><span class="nf">fused_sequence_logp</span><span class="p">(</span>
-<a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="n">hidden_states</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="n">lm_head_weight</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="n">input_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-112" name="__codelineno-0-112"></a>    <span class="n">completion_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-113" name="__codelineno-0-113"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-114" name="__codelineno-0-114"></a>    <span class="n">length_normalized</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="w">    </span><span class="sd">"""Memory-efficient :func:`sequence_logp` over hidden states (fused, per-example).</span>
-<a id="__codelineno-0-117" name="__codelineno-0-117"></a>
-<a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">    Mathematically ``sequence_logp(hidden_states @ lm_head_weight.T, input_ids,</span>
-<a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">    completion_mask)``, but on CUDA + half precision with</span>
-<a id="__codelineno-0-120" name="__codelineno-0-120"></a><span class="sd">    ``opaque-alignment[patches]`` installed it computes the completion log-prob</span>
-<a id="__codelineno-0-121" name="__codelineno-0-121"></a><span class="sd">    via the patches fused linear-CE kernel — no ``(T, V)`` logits are</span>
-<a id="__codelineno-0-122" name="__codelineno-0-122"></a><span class="sd">    materialised and the LSE is recomputed in the backward. Otherwise it falls</span>
-<a id="__codelineno-0-123" name="__codelineno-0-123"></a><span class="sd">    back to the eager form.</span>
-<a id="__codelineno-0-124" name="__codelineno-0-124"></a>
-<a id="__codelineno-0-125" name="__codelineno-0-125"></a><span class="sd">    Since ``sequence_logp = Σ_completion log p = −Σ_completion CE``, the kernel is</span>
-<a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">    the preference-logp kernel: encode the completion span as the kept labels</span>
-<a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="sd">    (everything else → ``-100``), take the kernel's CE sum, and negate.</span>
-<a id="__codelineno-0-128" name="__codelineno-0-128"></a>
-<a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">    **Per-example.** Pass one sequence ``(T, H)`` and drive with</span>
-<a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">    ``vmap(grad(...))`` (how ``train_dpo`` already computes logp inside</span>
-<a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">    ``clipped_grad``); the kernel's merged vmap rules then make the chosen /</span>
-<a id="__codelineno-0-132" name="__codelineno-0-132"></a><span class="sd">    rejected microbatch one forward + one backward kernel. Unlike</span>
-<a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">    :func:`sequence_logp`, it is *not* meant to be called directly on a batch</span>
-<a id="__codelineno-0-134" name="__codelineno-0-134"></a><span class="sd">    axis. The LD-DPO ``ld_alpha`` split is not supported on the fused path; use</span>
-<a id="__codelineno-0-135" name="__codelineno-0-135"></a><span class="sd">    the eager :func:`sequence_logp` for that.</span>
-<a id="__codelineno-0-136" name="__codelineno-0-136"></a>
-<a id="__codelineno-0-137" name="__codelineno-0-137"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-138" name="__codelineno-0-138"></a><span class="sd">        hidden_states: Last-layer hidden states ``(T, H)`` for one sequence</span>
-<a id="__codelineno-0-139" name="__codelineno-0-139"></a><span class="sd">            (batched to ``(B, T, H)`` only by an outer ``vmap``).</span>
-<a id="__codelineno-0-140" name="__codelineno-0-140"></a><span class="sd">        lm_head_weight: LM-head weight ``(V, H)``; logits are</span>
-<a id="__codelineno-0-141" name="__codelineno-0-141"></a><span class="sd">            ``hidden_states @ lm_head_weight.T``.</span>
-<a id="__codelineno-0-142" name="__codelineno-0-142"></a><span class="sd">        input_ids: Token ids ``(T,)``.</span>
-<a id="__codelineno-0-143" name="__codelineno-0-143"></a><span class="sd">        completion_mask: ``(T,)``; non-zero on completion-span tokens.</span>
-<a id="__codelineno-0-144" name="__codelineno-0-144"></a><span class="sd">        length_normalized: Divide by the completion-token count for the per-token</span>
-<a id="__codelineno-0-145" name="__codelineno-0-145"></a><span class="sd">            mean reward (SimPO / ORPO); matches ``sequence_logp``.</span>
-<a id="__codelineno-0-146" name="__codelineno-0-146"></a>
-<a id="__codelineno-0-147" name="__codelineno-0-147"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-148" name="__codelineno-0-148"></a><span class="sd">        Scalar completion log-prob (per-token mean when ``length_normalized``);</span>
-<a id="__codelineno-0-149" name="__codelineno-0-149"></a><span class="sd">        matches :func:`sequence_logp`.</span>
-<a id="__codelineno-0-150" name="__codelineno-0-150"></a><span class="sd">    """</span>
-<a id="__codelineno-0-151" name="__codelineno-0-151"></a>    <span class="k">if</span> <span class="n">lce_available</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">):</span>
-<a id="__codelineno-0-152" name="__codelineno-0-152"></a>        <span class="c1"># Completion tokens keep their id; everything else → ignore_index, so the</span>
-<a id="__codelineno-0-153" name="__codelineno-0-153"></a>        <span class="c1"># kernel's CE sum is exactly −Σ_completion logp. The kernel applies the</span>
-<a id="__codelineno-0-154" name="__codelineno-0-154"></a>        <span class="c1"># next-token shift internally, matching sequence_logp's shifted mask.</span>
-<a id="__codelineno-0-155" name="__codelineno-0-155"></a>        <span class="n">masked_labels</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
-<a id="__codelineno-0-156" name="__codelineno-0-156"></a>            <span class="n">completion_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">),</span>
-<a id="__codelineno-0-157" name="__codelineno-0-157"></a>            <span class="n">input_ids</span><span class="p">,</span>
-<a id="__codelineno-0-158" name="__codelineno-0-158"></a>            <span class="n">torch</span><span class="o">.</span><span class="n">full_like</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="o">-</span><span class="mi">100</span><span class="p">),</span>
-<a id="__codelineno-0-159" name="__codelineno-0-159"></a>        <span class="p">)</span>
-<a id="__codelineno-0-160" name="__codelineno-0-160"></a>        <span class="n">seq_logp</span> <span class="o">=</span> <span class="o">-</span><span class="n">linear_nll_sum</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">,</span> <span class="n">lm_head_weight</span><span class="p">,</span> <span class="n">masked_labels</span><span class="p">)</span>
-<a id="__codelineno-0-161" name="__codelineno-0-161"></a>        <span class="k">if</span> <span class="n">length_normalized</span><span class="p">:</span>
-<a id="__codelineno-0-162" name="__codelineno-0-162"></a>            <span class="n">count</span> <span class="o">=</span> <span class="n">completion_mask</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="nb">min</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-0-163" name="__codelineno-0-163"></a>            <span class="n">seq_logp</span> <span class="o">=</span> <span class="n">seq_logp</span> <span class="o">/</span> <span class="n">count</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">seq_logp</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-<a id="__codelineno-0-164" name="__codelineno-0-164"></a>        <span class="k">return</span> <span class="n">seq_logp</span>
-<a id="__codelineno-0-165" name="__codelineno-0-165"></a>    <span class="n">logits</span> <span class="o">=</span> <span class="n">hidden_states</span> <span class="o">@</span> <span class="n">lm_head_weight</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-0-166" name="__codelineno-0-166"></a>    <span class="k">return</span> <span class="n">sequence_logp</span><span class="p">(</span>
-<a id="__codelineno-0-167" name="__codelineno-0-167"></a>        <span class="n">logits</span><span class="p">,</span> <span class="n">input_ids</span><span class="p">,</span> <span class="n">completion_mask</span><span class="p">,</span> <span class="n">length_normalized</span><span class="o">=</span><span class="n">length_normalized</span>
-<a id="__codelineno-0-168" name="__codelineno-0-168"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-168">168</a></span>
+<span class="normal"><a href="#__codelineno-0-169">169</a></span>
+<span class="normal"><a href="#__codelineno-0-170">170</a></span>
+<span class="normal"><a href="#__codelineno-0-171">171</a></span>
+<span class="normal"><a href="#__codelineno-0-172">172</a></span>
+<span class="normal"><a href="#__codelineno-0-173">173</a></span>
+<span class="normal"><a href="#__codelineno-0-174">174</a></span>
+<span class="normal"><a href="#__codelineno-0-175">175</a></span>
+<span class="normal"><a href="#__codelineno-0-176">176</a></span>
+<span class="normal"><a href="#__codelineno-0-177">177</a></span>
+<span class="normal"><a href="#__codelineno-0-178">178</a></span>
+<span class="normal"><a href="#__codelineno-0-179">179</a></span>
+<span class="normal"><a href="#__codelineno-0-180">180</a></span>
+<span class="normal"><a href="#__codelineno-0-181">181</a></span>
+<span class="normal"><a href="#__codelineno-0-182">182</a></span>
+<span class="normal"><a href="#__codelineno-0-183">183</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-123" name="__codelineno-0-123"></a><span class="k">def</span><span class="w"> </span><span class="nf">fused_sequence_logp</span><span class="p">(</span>
+<a id="__codelineno-0-124" name="__codelineno-0-124"></a>    <span class="n">hidden_states</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-125" name="__codelineno-0-125"></a>    <span class="n">lm_head_weight</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-126" name="__codelineno-0-126"></a>    <span class="n">input_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-127" name="__codelineno-0-127"></a>    <span class="n">completion_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-128" name="__codelineno-0-128"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-129" name="__codelineno-0-129"></a>    <span class="n">length_normalized</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="w">    </span><span class="sd">"""Memory-efficient :func:`sequence_logp` over hidden states (fused, per-example).</span>
+<a id="__codelineno-0-132" name="__codelineno-0-132"></a>
+<a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">    Mathematically ``sequence_logp(hidden_states @ lm_head_weight.T, input_ids,</span>
+<a id="__codelineno-0-134" name="__codelineno-0-134"></a><span class="sd">    completion_mask)``, but on CUDA + half precision with</span>
+<a id="__codelineno-0-135" name="__codelineno-0-135"></a><span class="sd">    ``opaque-alignment[patches]`` installed it computes the completion log-prob</span>
+<a id="__codelineno-0-136" name="__codelineno-0-136"></a><span class="sd">    via the patches fused linear-CE kernel — no ``(T, V)`` logits are</span>
+<a id="__codelineno-0-137" name="__codelineno-0-137"></a><span class="sd">    materialised and the LSE is recomputed in the backward. Otherwise it falls</span>
+<a id="__codelineno-0-138" name="__codelineno-0-138"></a><span class="sd">    back to the eager form.</span>
+<a id="__codelineno-0-139" name="__codelineno-0-139"></a>
+<a id="__codelineno-0-140" name="__codelineno-0-140"></a><span class="sd">    Since ``sequence_logp = Σ_completion log p = −Σ_completion CE``, the kernel is</span>
+<a id="__codelineno-0-141" name="__codelineno-0-141"></a><span class="sd">    the preference-logp kernel: encode the completion span as the kept labels</span>
+<a id="__codelineno-0-142" name="__codelineno-0-142"></a><span class="sd">    (everything else → ``-100``), take the kernel's CE sum, and negate.</span>
+<a id="__codelineno-0-143" name="__codelineno-0-143"></a>
+<a id="__codelineno-0-144" name="__codelineno-0-144"></a><span class="sd">    **Per-example.** Pass one sequence ``(T, H)`` and drive with</span>
+<a id="__codelineno-0-145" name="__codelineno-0-145"></a><span class="sd">    ``vmap(grad(...))`` (how ``train_dpo`` already computes logp inside</span>
+<a id="__codelineno-0-146" name="__codelineno-0-146"></a><span class="sd">    ``clipped_grad``); the kernel's merged vmap rules then make the chosen /</span>
+<a id="__codelineno-0-147" name="__codelineno-0-147"></a><span class="sd">    rejected microbatch one forward + one backward kernel. Unlike</span>
+<a id="__codelineno-0-148" name="__codelineno-0-148"></a><span class="sd">    :func:`sequence_logp`, it is *not* meant to be called directly on a batch</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149"></a><span class="sd">    axis. The LD-DPO ``ld_alpha`` split is not supported on the fused path; use</span>
+<a id="__codelineno-0-150" name="__codelineno-0-150"></a><span class="sd">    the eager :func:`sequence_logp` for that.</span>
+<a id="__codelineno-0-151" name="__codelineno-0-151"></a>
+<a id="__codelineno-0-152" name="__codelineno-0-152"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-153" name="__codelineno-0-153"></a><span class="sd">        hidden_states: Last-layer hidden states ``(T, H)`` for one sequence</span>
+<a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="sd">            (batched to ``(B, T, H)`` only by an outer ``vmap``).</span>
+<a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="sd">        lm_head_weight: LM-head weight ``(V, H)``; logits are</span>
+<a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="sd">            ``hidden_states @ lm_head_weight.T``.</span>
+<a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="sd">        input_ids: Token ids ``(T,)``.</span>
+<a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">        completion_mask: ``(T,)``; non-zero on completion-span tokens.</span>
+<a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">        length_normalized: Divide by the completion-token count for the per-token</span>
+<a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">            mean reward (SimPO / ORPO); matches ``sequence_logp``.</span>
+<a id="__codelineno-0-161" name="__codelineno-0-161"></a>
+<a id="__codelineno-0-162" name="__codelineno-0-162"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-163" name="__codelineno-0-163"></a><span class="sd">        Scalar completion log-prob (per-token mean when ``length_normalized``);</span>
+<a id="__codelineno-0-164" name="__codelineno-0-164"></a><span class="sd">        matches :func:`sequence_logp`.</span>
+<a id="__codelineno-0-165" name="__codelineno-0-165"></a><span class="sd">    """</span>
+<a id="__codelineno-0-166" name="__codelineno-0-166"></a>    <span class="k">if</span> <span class="n">lce_available</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">):</span>
+<a id="__codelineno-0-167" name="__codelineno-0-167"></a>        <span class="c1"># Completion tokens keep their id; everything else → ignore_index, so the</span>
+<a id="__codelineno-0-168" name="__codelineno-0-168"></a>        <span class="c1"># kernel's CE sum is exactly −Σ_completion logp. The kernel applies the</span>
+<a id="__codelineno-0-169" name="__codelineno-0-169"></a>        <span class="c1"># next-token shift internally, matching sequence_logp's shifted mask.</span>
+<a id="__codelineno-0-170" name="__codelineno-0-170"></a>        <span class="n">masked_labels</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+<a id="__codelineno-0-171" name="__codelineno-0-171"></a>            <span class="n">completion_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">),</span>
+<a id="__codelineno-0-172" name="__codelineno-0-172"></a>            <span class="n">input_ids</span><span class="p">,</span>
+<a id="__codelineno-0-173" name="__codelineno-0-173"></a>            <span class="n">torch</span><span class="o">.</span><span class="n">full_like</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="o">-</span><span class="mi">100</span><span class="p">),</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a>        <span class="p">)</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a>        <span class="n">seq_logp</span> <span class="o">=</span> <span class="o">-</span><span class="n">linear_nll_sum</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">,</span> <span class="n">lm_head_weight</span><span class="p">,</span> <span class="n">masked_labels</span><span class="p">)</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a>        <span class="k">if</span> <span class="n">length_normalized</span><span class="p">:</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a>            <span class="n">count</span> <span class="o">=</span> <span class="n">completion_mask</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="nb">min</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a>            <span class="n">seq_logp</span> <span class="o">=</span> <span class="n">seq_logp</span> <span class="o">/</span> <span class="n">count</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">seq_logp</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a>        <span class="k">return</span> <span class="n">seq_logp</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a>    <span class="n">logits</span> <span class="o">=</span> <span class="n">hidden_states</span> <span class="o">@</span> <span class="n">lm_head_weight</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a>    <span class="k">return</span> <span class="n">sequence_logp</span><span class="p">(</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a>        <span class="n">logits</span><span class="p">,</span> <span class="n">input_ids</span><span class="p">,</span> <span class="n">completion_mask</span><span class="p">,</span> <span class="n">length_normalized</span><span class="o">=</span><span class="n">length_normalized</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11508,9 +11540,10 @@ It is cast to the logits dtype before multiplying.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>LD-DPO (arXiv:2409.06411) length-desensitisation coefficient.
+                <p>LD-DPO (arXiv:2409.06411) length-desensitisation coefficient
+in <code>[0, 1]</code>.
 When set, completion tokens beyond <code>shared_prefix_len</code> are weighted
-by <code>ld_alpha</code> (typically <code>∈ [0, 1]</code>) instead of <code>1.0</code>, damping
+by <code>ld_alpha</code> instead of <code>1.0</code>, damping
 the verbose tail's contribution; <code>ld_alpha=1.0</code> recovers the plain
 masked sum. The fused path does not support it — LD-DPO needs the
 per-token log-probs, so use this eager <code>sequence_logp</code>.</p>
@@ -11529,9 +11562,12 @@ per-token log-probs, so use this eager <code>sequence_logp</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>LD-DPO shared-prefix length (an <code>int</code> or a
-per-example tensor broadcasting against the shifted position axis).
-Required when <code>ld_alpha</code> is set; ignored otherwise.</p>
+                <p>LD-DPO public length (the shorter completion length),
+retained under this compatibility name. An <code>int</code> or a per-example
+tensor broadcasting against the shifted position axis. Required when
+<code>ld_alpha</code> is set; ignored otherwise. This single-sequence helper
+cannot derive it: callers claiming LD-DPO must pass the minimum of
+the paired completion lengths.</p>
               </div>
             </td>
             <td>
@@ -11608,7 +11644,8 @@ the reference-free heads (SimPO / ORPO). Default <code>False</code> (plain sum).
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>ld_alpha</code> is set without <code>shared_prefix_len</code>.</p>
+                <p>If <code>ld_alpha</code> is outside <code>[0, 1]</code> or is set without
+<code>shared_prefix_len</code>.</p>
               </div>
             </td>
           </tr>
@@ -11618,13 +11655,7 @@ the reference-free heads (SimPO / ORPO). Default <code>False</code> (plain sum).
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/opaque-alignment/src/opaque/api/alignment/logprob/_sequence.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-32"> 32</a></span>
-<span class="normal"><a href="#__codelineno-0-33"> 33</a></span>
-<span class="normal"><a href="#__codelineno-0-34"> 34</a></span>
-<span class="normal"><a href="#__codelineno-0-35"> 35</a></span>
-<span class="normal"><a href="#__codelineno-0-36"> 36</a></span>
-<span class="normal"><a href="#__codelineno-0-37"> 37</a></span>
-<span class="normal"><a href="#__codelineno-0-38"> 38</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-38"> 38</a></span>
 <span class="normal"><a href="#__codelineno-0-39"> 39</a></span>
 <span class="normal"><a href="#__codelineno-0-40"> 40</a></span>
 <span class="normal"><a href="#__codelineno-0-41"> 41</a></span>
@@ -11691,80 +11722,104 @@ the reference-free heads (SimPO / ORPO). Default <code>False</code> (plain sum).
 <span class="normal"><a href="#__codelineno-0-102">102</a></span>
 <span class="normal"><a href="#__codelineno-0-103">103</a></span>
 <span class="normal"><a href="#__codelineno-0-104">104</a></span>
-<span class="normal"><a href="#__codelineno-0-105">105</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="k">def</span><span class="w"> </span><span class="nf">sequence_logp</span><span class="p">(</span>
-<a id="__codelineno-0-33" name="__codelineno-0-33"></a>    <span class="n">logits</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-34" name="__codelineno-0-34"></a>    <span class="n">input_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35"></a>    <span class="n">completion_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="n">ld_alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="n">shared_prefix_len</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39"></a>    <span class="n">length_normalized</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="w">    </span><span class="sd">"""Sum (or per-token mean) of completion-token log-probabilities per sequence.</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42"></a>
-<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">    Applies the causal-LM shift, computes per-token log-probs, multiplies by</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">    the (shifted) completion mask, and sums over the sequence (last remaining)</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">    axis.</span>
-<a id="__codelineno-0-46" name="__codelineno-0-46"></a>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">        logits: Float tensor of shape ``(..., T, V)``. The ``(...)`` leading</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">            dims may be empty (per-example under ``vmap``) or a batch axis.</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">        input_ids: Integer tensor of shape ``(..., T)`` (token ids).</span>
-<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">        completion_mask: Tensor of shape ``(..., T)``; non-zero where a token</span>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">            belongs to the completion span and should contribute to the logp.</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">            It is cast to the logits dtype before multiplying.</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">        ld_alpha: LD-DPO (arXiv:2409.06411) length-desensitisation coefficient.</span>
-<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">            When set, completion tokens beyond ``shared_prefix_len`` are weighted</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">            by ``ld_alpha`` (typically ``∈ [0, 1]``) instead of ``1.0``, damping</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">            the verbose tail's contribution; ``ld_alpha=1.0`` recovers the plain</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">            masked sum. The fused path does not support it — LD-DPO needs the</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">            per-token log-probs, so use this eager ``sequence_logp``.</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">        shared_prefix_len: LD-DPO shared-prefix length (an ``int`` or a</span>
-<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">            per-example tensor broadcasting against the shifted position axis).</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            Required when ``ld_alpha`` is set; ignored otherwise.</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">        length_normalized: Divide the per-sequence logp by its completion-token</span>
-<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">            count, giving the per-token mean reward ``(1/|y|)·log π(y)`` used by</span>
-<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">            the reference-free heads (SimPO / ORPO). Default ``False`` (plain sum).</span>
-<a id="__codelineno-0-66" name="__codelineno-0-66"></a>
-<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">        Float tensor of shape ``(...)`` (one logp per sequence; a per-token mean</span>
-<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">        when ``length_normalized``).</span>
-<a id="__codelineno-0-70" name="__codelineno-0-70"></a>
-<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">        ValueError: If ``ld_alpha`` is set without ``shared_prefix_len``.</span>
-<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">    """</span>
-<a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="c1"># Causal-LM shift: predict token t+1 from the logits at position t.</span>
-<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">shifted_logits</span> <span class="o">=</span> <span class="n">logits</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">target_ids</span> <span class="o">=</span> <span class="n">input_ids</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">target_mask</span> <span class="o">=</span> <span class="n">completion_mask</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span>
-<a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="n">target_weight</span> <span class="o">=</span> <span class="n">target_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">shifted_logits</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-<a id="__codelineno-0-79" name="__codelineno-0-79"></a>    <span class="n">per_token_logp</span> <span class="o">=</span> <span class="n">selective_log_softmax</span><span class="p">(</span><span class="n">shifted_logits</span><span class="p">,</span> <span class="n">target_ids</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-105">105</a></span>
+<span class="normal"><a href="#__codelineno-0-106">106</a></span>
+<span class="normal"><a href="#__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#__codelineno-0-112">112</a></span>
+<span class="normal"><a href="#__codelineno-0-113">113</a></span>
+<span class="normal"><a href="#__codelineno-0-114">114</a></span>
+<span class="normal"><a href="#__codelineno-0-115">115</a></span>
+<span class="normal"><a href="#__codelineno-0-116">116</a></span>
+<span class="normal"><a href="#__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#__codelineno-0-119">119</a></span>
+<span class="normal"><a href="#__codelineno-0-120">120</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="k">def</span><span class="w"> </span><span class="nf">sequence_logp</span><span class="p">(</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a>    <span class="n">logits</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a>    <span class="n">input_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="n">completion_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a>    <span class="n">ld_alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a>    <span class="n">shared_prefix_len</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a>    <span class="n">length_normalized</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="w">    </span><span class="sd">"""Sum (or per-token mean) of completion-token log-probabilities per sequence.</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">    Applies the causal-LM shift, computes per-token log-probs, multiplies by</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">    the (shifted) completion mask, and sums over the sequence (last remaining)</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">    axis.</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">        logits: Float tensor of shape ``(..., T, V)``. The ``(...)`` leading</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">            dims may be empty (per-example under ``vmap``) or a batch axis.</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">        input_ids: Integer tensor of shape ``(..., T)`` (token ids).</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">        completion_mask: Tensor of shape ``(..., T)``; non-zero where a token</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">            belongs to the completion span and should contribute to the logp.</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">            It is cast to the logits dtype before multiplying.</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">        ld_alpha: LD-DPO (arXiv:2409.06411) length-desensitisation coefficient</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">            in ``[0, 1]``.</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            When set, completion tokens beyond ``shared_prefix_len`` are weighted</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">            by ``ld_alpha`` instead of ``1.0``, damping</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">            the verbose tail's contribution; ``ld_alpha=1.0`` recovers the plain</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">            masked sum. The fused path does not support it — LD-DPO needs the</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">            per-token log-probs, so use this eager ``sequence_logp``.</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">        shared_prefix_len: LD-DPO public length (the shorter completion length),</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">            retained under this compatibility name. An ``int`` or a per-example</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">            tensor broadcasting against the shifted position axis. Required when</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">            ``ld_alpha`` is set; ignored otherwise. This single-sequence helper</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">            cannot derive it: callers claiming LD-DPO must pass the minimum of</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">            the paired completion lengths.</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">        length_normalized: Divide the per-sequence logp by its completion-token</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">            count, giving the per-token mean reward ``(1/|y|)·log π(y)`` used by</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">            the reference-free heads (SimPO / ORPO). Default ``False`` (plain sum).</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">        Float tensor of shape ``(...)`` (one logp per sequence; a per-token mean</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">        when ``length_normalized``).</span>
 <a id="__codelineno-0-80" name="__codelineno-0-80"></a>
-<a id="__codelineno-0-81" name="__codelineno-0-81"></a>    <span class="n">weight</span> <span class="o">=</span> <span class="n">target_weight</span>
-<a id="__codelineno-0-82" name="__codelineno-0-82"></a>    <span class="k">if</span> <span class="n">ld_alpha</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-83" name="__codelineno-0-83"></a>        <span class="k">if</span> <span class="n">shared_prefix_len</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84"></a>            <span class="k">raise</span> <span class="n">ConfigurationError</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="s2">"ld_alpha (LD-DPO) requires shared_prefix_len"</span><span class="p">,))</span>
-<a id="__codelineno-0-85" name="__codelineno-0-85"></a>        <span class="n">completion_pos</span> <span class="o">=</span> <span class="n">target_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-0-86" name="__codelineno-0-86"></a>        <span class="n">prefix_len</span> <span class="o">=</span> <span class="n">shared_prefix_len</span>
-<a id="__codelineno-0-87" name="__codelineno-0-87"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">prefix_len</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-<a id="__codelineno-0-88" name="__codelineno-0-88"></a>            <span class="k">while</span> <span class="n">prefix_len</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="n">completion_pos</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
-<a id="__codelineno-0-89" name="__codelineno-0-89"></a>                <span class="n">prefix_len</span> <span class="o">=</span> <span class="n">prefix_len</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-0-90" name="__codelineno-0-90"></a>        <span class="n">is_prefix</span> <span class="o">=</span> <span class="p">(</span><span class="n">completion_pos</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">completion_pos</span> <span class="o">&lt;=</span> <span class="n">prefix_len</span><span class="p">)</span>
-<a id="__codelineno-0-91" name="__codelineno-0-91"></a>        <span class="n">ld_weight</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
-<a id="__codelineno-0-92" name="__codelineno-0-92"></a>            <span class="n">is_prefix</span><span class="p">,</span>
-<a id="__codelineno-0-93" name="__codelineno-0-93"></a>            <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">per_token_logp</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">per_token_logp</span><span class="o">.</span><span class="n">device</span><span class="p">),</span>
-<a id="__codelineno-0-94" name="__codelineno-0-94"></a>            <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span>
-<a id="__codelineno-0-95" name="__codelineno-0-95"></a>                <span class="p">(),</span> <span class="n">ld_alpha</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">per_token_logp</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">per_token_logp</span><span class="o">.</span><span class="n">device</span>
-<a id="__codelineno-0-96" name="__codelineno-0-96"></a>            <span class="p">),</span>
-<a id="__codelineno-0-97" name="__codelineno-0-97"></a>        <span class="p">)</span>
-<a id="__codelineno-0-98" name="__codelineno-0-98"></a>        <span class="n">weight</span> <span class="o">=</span> <span class="n">target_weight</span> <span class="o">*</span> <span class="n">ld_weight</span>
-<a id="__codelineno-0-99" name="__codelineno-0-99"></a>
-<a id="__codelineno-0-100" name="__codelineno-0-100"></a>    <span class="n">acc_dtype</span> <span class="o">=</span> <span class="n">_compute_dtype</span><span class="p">(</span><span class="n">per_token_logp</span><span class="p">)</span>
-<a id="__codelineno-0-101" name="__codelineno-0-101"></a>    <span class="n">logp</span> <span class="o">=</span> <span class="p">(</span><span class="n">per_token_logp</span> <span class="o">*</span> <span class="n">weight</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">acc_dtype</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-0-102" name="__codelineno-0-102"></a>    <span class="k">if</span> <span class="n">length_normalized</span><span class="p">:</span>
-<a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="n">token_count</span> <span class="o">=</span> <span class="n">target_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="nb">min</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="n">logp</span> <span class="o">=</span> <span class="n">logp</span> <span class="o">/</span> <span class="n">token_count</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">acc_dtype</span><span class="p">)</span>
-<a id="__codelineno-0-105" name="__codelineno-0-105"></a>    <span class="k">return</span> <span class="n">logp</span>
+<a id="__codelineno-0-81" name="__codelineno-0-81"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="sd">        ValueError: If ``ld_alpha`` is outside ``[0, 1]`` or is set without</span>
+<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">            ``shared_prefix_len``.</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="sd">    """</span>
+<a id="__codelineno-0-85" name="__codelineno-0-85"></a>    <span class="c1"># Causal-LM shift: predict token t+1 from the logits at position t.</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86"></a>    <span class="n">shifted_logits</span> <span class="o">=</span> <span class="n">logits</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87"></a>    <span class="n">target_ids</span> <span class="o">=</span> <span class="n">input_ids</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span>
+<a id="__codelineno-0-88" name="__codelineno-0-88"></a>    <span class="n">target_mask</span> <span class="o">=</span> <span class="n">completion_mask</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="n">target_weight</span> <span class="o">=</span> <span class="n">target_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">shifted_logits</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="n">per_token_logp</span> <span class="o">=</span> <span class="n">selective_log_softmax</span><span class="p">(</span><span class="n">shifted_logits</span><span class="p">,</span> <span class="n">target_ids</span><span class="p">)</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91"></a>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a>    <span class="n">weight</span> <span class="o">=</span> <span class="n">target_weight</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a>    <span class="k">if</span> <span class="n">ld_alpha</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">ld_alpha</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">ld_alpha</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a>            <span class="k">raise</span> <span class="n">ConfigurationError</span><span class="p">(</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96"></a>                <span class="o">*</span><span class="p">(</span><span class="sa">f</span><span class="s2">"ld_alpha (LD-DPO) must be finite and in [0, 1], got </span><span class="si">{</span><span class="n">ld_alpha</span><span class="si">}</span><span class="s2">"</span><span class="p">,)</span>
+<a id="__codelineno-0-97" name="__codelineno-0-97"></a>            <span class="p">)</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98"></a>        <span class="k">if</span> <span class="n">shared_prefix_len</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99"></a>            <span class="k">raise</span> <span class="n">ConfigurationError</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="s2">"ld_alpha (LD-DPO) requires shared_prefix_len"</span><span class="p">,))</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100"></a>        <span class="n">completion_pos</span> <span class="o">=</span> <span class="n">target_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a>        <span class="n">prefix_len</span> <span class="o">=</span> <span class="n">shared_prefix_len</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">prefix_len</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a>            <span class="k">while</span> <span class="n">prefix_len</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="n">completion_pos</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>                <span class="n">prefix_len</span> <span class="o">=</span> <span class="n">prefix_len</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-105" name="__codelineno-0-105"></a>        <span class="n">is_prefix</span> <span class="o">=</span> <span class="p">(</span><span class="n">completion_pos</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">completion_pos</span> <span class="o">&lt;=</span> <span class="n">prefix_len</span><span class="p">)</span>
+<a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="n">ld_weight</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+<a id="__codelineno-0-107" name="__codelineno-0-107"></a>            <span class="n">is_prefix</span><span class="p">,</span>
+<a id="__codelineno-0-108" name="__codelineno-0-108"></a>            <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">per_token_logp</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">per_token_logp</span><span class="o">.</span><span class="n">device</span><span class="p">),</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109"></a>            <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span>
+<a id="__codelineno-0-110" name="__codelineno-0-110"></a>                <span class="p">(),</span> <span class="n">ld_alpha</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">per_token_logp</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">per_token_logp</span><span class="o">.</span><span class="n">device</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111"></a>            <span class="p">),</span>
+<a id="__codelineno-0-112" name="__codelineno-0-112"></a>        <span class="p">)</span>
+<a id="__codelineno-0-113" name="__codelineno-0-113"></a>        <span class="n">weight</span> <span class="o">=</span> <span class="n">target_weight</span> <span class="o">*</span> <span class="n">ld_weight</span>
+<a id="__codelineno-0-114" name="__codelineno-0-114"></a>
+<a id="__codelineno-0-115" name="__codelineno-0-115"></a>    <span class="n">acc_dtype</span> <span class="o">=</span> <span class="n">_compute_dtype</span><span class="p">(</span><span class="n">per_token_logp</span><span class="p">)</span>
+<a id="__codelineno-0-116" name="__codelineno-0-116"></a>    <span class="n">logp</span> <span class="o">=</span> <span class="p">(</span><span class="n">per_token_logp</span> <span class="o">*</span> <span class="n">weight</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">acc_dtype</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-117" name="__codelineno-0-117"></a>    <span class="k">if</span> <span class="n">length_normalized</span><span class="p">:</span>
+<a id="__codelineno-0-118" name="__codelineno-0-118"></a>        <span class="n">token_count</span> <span class="o">=</span> <span class="n">target_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="nb">min</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-119" name="__codelineno-0-119"></a>        <span class="n">logp</span> <span class="o">=</span> <span class="n">logp</span> <span class="o">/</span> <span class="n">token_count</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">acc_dtype</span><span class="p">)</span>
+<a id="__codelineno-0-120" name="__codelineno-0-120"></a>    <span class="k">return</span> <span class="n">logp</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

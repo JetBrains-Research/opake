@@ -3705,7 +3705,13 @@ uniform random subset of the selected indices is kept. That caps batch
 size (more stable training and memory) but <strong>weakens</strong> privacy relative to
 plain Poisson at the same <code>sample_rate</code> — account with
 <code>dpsgd_acc.poisson(..., truncated_batch_size=..., dataset_size=...)</code> so the
-PLD matches the cap.</p>
+PLD matches the cap. This is the mechanism analyzed by <a href="https://arxiv.org/abs/2508.15089">Ganesh (2025),
+Theorem 3.1</a>.</p>
+<p>That theorem uses directed, dataset-size-indexed add/remove adjacency: the
+larger neighbor has public size <span class="arithmatex">\(n\)</span>, and the smaller has size <span class="arithmatex">\(n-1\)</span>.
+Pass the sampler's exact pre-sampling size as <code>dataset_size</code>, and preserve that
+same <span class="arithmatex">\(n\)</span>-indexed interpretation when composing repeated releases or combining
+this accountant with another mechanism.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opaque.dpsgd.sampling</span><span class="w"> </span><span class="kn">import</span> <span class="n">PoissonSampler</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opaque.random</span><span class="w"> </span><span class="kn">import</span> <span class="n">key</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>

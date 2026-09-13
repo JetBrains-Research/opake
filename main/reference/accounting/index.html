@@ -4215,11 +4215,19 @@ or neither). This is the truncated-Poisson PLD for capped batches; it does
 <strong>not</strong> improve privacy versus plain Poisson at the same rate—use it when
 training actually truncates draws. The capped form accepts a Gaussian,
 AdaClip(Gaussian), or <code>nonprivate()</code> base.</p>
+<p>The guarantee is <a href="https://arxiv.org/abs/2508.15089">Ganesh (2025), Theorem
+3.1</a>. It assumes each over-cap provisional
+sample is replaced by a uniformly random subset of exactly the cap size.
+Its directed add/remove adjacency is indexed by the public size <span class="arithmatex">\(n\)</span> of the
+larger neighboring dataset. Therefore <code>dataset_size</code> must equal the sampler's
+pre-sampling size, and composition must preserve the same <span class="arithmatex">\(n\)</span>-indexed
+adjacency interpretation.</p>
 <ul>
 <li><code>inner</code> (Gaussian | AdaClip | NonPrivate): Base mechanism</li>
 <li><code>sample_rate</code> (float): Expected sampling rate, in (0, 1)</li>
 <li><code>truncated_batch_size</code> (int | None): Optional max batch-size cap</li>
-<li><code>dataset_size</code> (int | None): Required when <code>truncated_batch_size</code> is set</li>
+<li><code>dataset_size</code> (int | None): Public larger-neighbor size <span class="arithmatex">\(n\)</span>, required when
+  <code>truncated_batch_size</code> is set</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">n</span> <span class="o">=</span> <span class="mi">50_000</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">batch</span> <span class="o">=</span> <span class="mi">256</span>

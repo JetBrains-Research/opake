@@ -3888,7 +3888,8 @@ overwriting the seeded columns, and eval scores against the same reference.</p>
   The weight is detached and per-example, so per-example DP is preserved.</li>
 <li><strong>LD-DPO</strong> — <code>ld_alpha</code> (a float in <code>[0, 1]</code>, <code>None</code> ⇒ standard DPO)
   length-desensitizes the sequence log-prob by damping the verbose tail of each
-  completion beyond the shared-prefix length (arXiv:2409.06411).</li>
+  completion beyond the paper's public length (the shorter completion length;
+  arXiv:2409.06411).</li>
 <li><strong>f-divergence</strong> — <code>f_divergence_type</code> selects the regularizer:
   <code>"reverse_kl"</code> (default, standard DPO), <code>"forward_kl"</code>, <code>"js_divergence"</code>, or
   <code>"alpha_divergence"</code>. For the α-divergence, <code>f_alpha_divergence_coef</code>
