@@ -1,0 +1,26 @@
+# ALL OPEN issues across the three audit milestones, 2026-09-13. Reconsider scope: keep / close-no-go / restate.
+# milestone	issue	title	note
+Bazalt	764	Make accounting state fail closed across serialization, discretization, composition	umbrella (mine); ALL children closed
+Bazalt	767	Correct DP-SGD sampling, adaptive-clipping, and accounting validation	umbrella (mine); ALL children closed
+Bazalt	768	Correct engine clipping, precision, and RNG boundary behavior	umbrella (mine); ALL children closed
+Bazalt	769	Restore patched-model fidelity to upstream	umbrella (mine); open child #813
+Bazalt	773	Restore auditing statistical validity	umbrella (mine); open child #828
+Bazalt	774	Close CI fail-open gates and restore test integrity	umbrella (mine); ALL children closed
+Bazalt	775	Reconcile documentation and citations with post-remediation code	umbrella (mine); open child #845
+Bazalt	813	Convert parity skips to strict xfail and resolve gpt2 gradient mismatch	child; OPQ-339
+Bazalt	828	Bound v_k as a function of mu so strong audits converge	child; OPQ-350; needs-design
+Bazalt	845	Sweep C - verify every citation against its record and hypotheses	child; OPQ-371..376
+Bazalt	911	Monte Carlo calibration performance may be unusable	team-added; not from my audit
+Bazalt	956	Optimize patched-model memory and throughput end to end	team perf-audit umbrella
+Bazalt	958	Batch fused SDPA across the DP vmap dimension	team perf-audit
+Bazalt	963	Tune compact sliding-window attention and support padded batches	team perf-audit
+Bazalt	964	Reuse MoE route plans and redesign streamed weight gradients	team perf-audit
+Bazalt	966	Make MoE backend dispatch geometry- and evidence-driven	team perf-audit
+Bazalt	968	Pack LoRA QKV and MLP projections into fewer GEMMs	team perf-audit
+Bazalt	969	Make activation offload selective and overlap transfers	team perf-audit
+Bazalt	970	Optimize MoE expert casts and full-size FP32 accumulators	team perf-audit
+Slate	319	Restore DP-FTRL mechanism and strategy invariants	July umbrella; 7 children, 5 closed
+Slate	359	Define BandMF participation sensitivity and price second moments	July; blocked; needs-design; severity high
+Slate	376	Calibrate one-run auditing under the null	July; needs-design
+Slate	407	Implement proper JME second moments for DP-SGD	July; needs-design
+Slate	417	Add a reproducible benchmark harness for every published number	July; low

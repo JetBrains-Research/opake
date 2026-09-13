@@ -1,0 +1,438 @@
+{
+ "opaque.exceptions": {
+  "all": [
+   "CalibrationError",
+   "CheckpointError",
+   "ConfigurationError",
+   "InputTypeError",
+   "OpaqueError",
+   "OperationError",
+   "PrivacyBudgetError"
+  ],
+  "missing": []
+ },
+ "opaque.serialization": {
+  "all": [
+   "FromStateDictFn",
+   "SerializedState",
+   "Serializer",
+   "StateDictFn",
+   "from_state_dict",
+   "lookup_serializer",
+   "register_serializer",
+   "register_template_restored",
+   "resolve_serializer",
+   "state_dict"
+  ],
+  "missing": []
+ },
+ "opaque.types": {
+  "all": [
+   "ClipState",
+   "ClippedPytree",
+   "MaxNorm",
+   "NoiseState",
+   "NoiseStddev",
+   "NoisedPytree",
+   "ParamPath",
+   "PerGroup",
+   "SecondMomentClippingOutput",
+   "SecondMomentNoiseOutput",
+   "TensorPytree",
+   "clipped",
+   "noised"
+  ],
+  "missing": []
+ },
+ "opaque.pytree": {
+  "all": [
+   "ParamPath",
+   "global_norm",
+   "merge",
+   "param_path",
+   "param_path_display",
+   "partition",
+   "tree_flatten",
+   "tree_flatten_with_paths",
+   "tree_leaves",
+   "tree_map",
+   "tree_map_with_path",
+   "tree_structure",
+   "tree_unflatten"
+  ],
+  "missing": []
+ },
+ "opaque.random": {
+  "all": [
+   "fold_in",
+   "generator_from_key",
+   "key",
+   "random_key",
+   "set_reproducible_pytorch_seed",
+   "split"
+  ],
+  "missing": []
+ },
+ "opaque.distributed": {
+  "all": [
+   "all_reduce",
+   "barrier",
+   "gather_for_metrics",
+   "get_rank",
+   "get_world_size",
+   "is_distributed",
+   "is_main_process",
+   "local_shard",
+   "num_processes",
+   "process_index",
+   "reduce_pytree",
+   "reduce_pytree_",
+   "sum_gradients",
+   "sum_gradients_",
+   "sync",
+   "wait_for_everyone"
+  ],
+  "missing": []
+ },
+ "opaque.functional": {
+  "all": [
+   "empty_collate",
+   "make_functional",
+   "with_batch_dim"
+  ],
+  "missing": []
+ },
+ "opaque.scheduling": {
+  "all": [
+   "constant_schedule",
+   "cosine_schedule",
+   "exponential_schedule",
+   "inverse_sqrt_schedule",
+   "linear_schedule",
+   "one_minus_sqrt_schedule",
+   "polynomial_schedule",
+   "warmup_stable_decay",
+   "with_restarts",
+   "with_warmup"
+  ],
+  "missing": []
+ },
+ "opaque.profiling": {
+  "all": [
+   "PerfStage",
+   "PerfState",
+   "PerfTracker",
+   "StepPerf",
+   "empty_cache",
+   "get_memory_stats",
+   "perf_tracker",
+   "print_memory",
+   "reset_peak_memory",
+   "step_perf"
+  ],
+  "missing": []
+ },
+ "opaque.precision": {
+  "all": null,
+  "missing": []
+ },
+ "opaque.device": {
+  "all": [
+   "DeviceCapabilities",
+   "device_capabilities",
+   "fused_kernels_available",
+   "sdpa_autocast_under_vmap_broken"
+  ],
+  "missing": []
+ },
+ "opaque.optimizers": {
+  "all": [
+   "adadelta",
+   "adafactor",
+   "adagrad",
+   "adam",
+   "adamw",
+   "ademamix",
+   "lion",
+   "radam",
+   "rmsprop",
+   "schedule_free",
+   "sgd",
+   "types"
+  ],
+  "missing": []
+ },
+ "opaque.accounting": {
+  "all": [
+   "__version__",
+   "amplification",
+   "calibration",
+   "composition",
+   "discretization",
+   "mechanisms",
+   "Accountant",
+   "set_discretization",
+   "get_discretization",
+   "eps_delta",
+   "identity",
+   "nonprivate",
+   "repeat",
+   "compose",
+   "cached",
+   "epsilon_budget",
+   "delta_budget",
+   "advantage_budget",
+   "beta_budget",
+   "risk_budget",
+   "register_budget_serializer",
+   "calibrate"
+  ],
+  "missing": []
+ },
+ "opaque.dpsgd": {
+  "all": [
+   "__version__",
+   "accounting",
+   "clipping",
+   "noise",
+   "sampling",
+   "adaptive_clipped_grad",
+   "auto_clipped_grad",
+   "clipped_grad",
+   "per_group",
+   "gaussian_noise",
+   "PoissonSampler"
+  ],
+  "missing": []
+ },
+ "opaque.dpftrl": {
+  "all": [
+   "__version__",
+   "accounting",
+   "clipping",
+   "noise",
+   "sampling",
+   "clipped_grad",
+   "auto_clipped_grad",
+   "per_group",
+   "mf_gaussian_noise",
+   "band_mf_strategy",
+   "bisr_strategy",
+   "bsr_strategy",
+   "blt_strategy",
+   "identity_strategy",
+   "lambda_cgd_strategy",
+   "BallsInBinsSampler",
+   "BMinSepSampler",
+   "CyclicPoissonSampler",
+   "SequentialBatchSampler"
+  ],
+  "missing": []
+ },
+ "opaque.auditing": {
+  "all": [
+   "__version__",
+   "canary_scores",
+   "coin_flip",
+   "gradient_scores",
+   "loss_scores",
+   "one_run"
+  ],
+  "missing": []
+ },
+ "opaque.patches": {
+  "all": [
+   "apply_model_patches",
+   "apply_peft_model_patches",
+   "apply_runtime_patches",
+   "apply_transformers_model_patches",
+   "is_runtime_patched"
+  ],
+  "missing": []
+ },
+ "opaque.transformers": {
+  "all": [
+   "DPTrainer",
+   "TrainingArguments",
+   "__version__",
+   "trl"
+  ],
+  "missing": []
+ },
+ "opaque.alignment": {
+  "all": [
+   "__version__",
+   "data",
+   "dpo",
+   "metric",
+   "sft"
+  ],
+  "missing": []
+ },
+ "opaque.dpsgd.accounting": {
+  "all": [
+   "adaclip",
+   "gaussian",
+   "k_out_of_t",
+   "parallel_poisson",
+   "poisson"
+  ],
+  "missing": []
+ },
+ "opaque.dpsgd.clipping": {
+  "all": [
+   "adaptive_clipped_grad",
+   "auto_clipped_grad",
+   "clipped_grad",
+   "per_group"
+  ],
+  "missing": []
+ },
+ "opaque.dpsgd.noise": {
+  "all": [
+   "gaussian_noise"
+  ],
+  "missing": []
+ },
+ "opaque.dpsgd.sampling": {
+  "all": [
+   "KOutOfTSampler",
+   "PoissonSampler"
+  ],
+  "missing": []
+ },
+ "opaque.dpftrl.accounting": {
+  "all": [
+   "b_min_sep",
+   "balls_in_bins",
+   "mf_gaussian",
+   "poisson"
+  ],
+  "missing": []
+ },
+ "opaque.dpftrl.clipping": {
+  "all": [
+   "auto_clipped_grad",
+   "clipped_grad",
+   "per_group"
+  ],
+  "missing": []
+ },
+ "opaque.dpftrl.noise": {
+  "all": [
+   "band_mf_strategy",
+   "bisr_strategy",
+   "blt_strategy",
+   "bsr_strategy",
+   "identity_strategy",
+   "lambda_cgd_strategy",
+   "mf_gaussian_noise"
+  ],
+  "missing": []
+ },
+ "opaque.dpftrl.sampling": {
+  "all": [
+   "BMinSepSampler",
+   "BallsInBinsSampler",
+   "CyclicPoissonSampler",
+   "SequentialBatchSampler"
+  ],
+  "missing": []
+ },
+ "opaque.accounting.types": {
+  "all": [
+   "Accountant",
+   "AdvantageBudget",
+   "BetaBudget",
+   "Budget",
+   "CachedProcess",
+   "CalibrateResult",
+   "Composed",
+   "DeltaBudget",
+   "DiscretizationConfig",
+   "DpHorizonProcess",
+   "DpProcess",
+   "EpsDelta",
+   "EpsilonBudget",
+   "Identity",
+   "NonPrivate",
+   "Repeated",
+   "RiskBudget"
+  ],
+  "missing": []
+ },
+ "opaque.auditing.types": {
+  "all": [
+   "CanaryScores",
+   "CoinFlip",
+   "OneRunEstimate"
+  ],
+  "missing": []
+ },
+ "opaque.random.types": {
+  "all": [
+   "RngKey"
+  ],
+  "missing": []
+ },
+ "opaque.scheduling.types": {
+  "all": [
+   "ConstantSchedule",
+   "CosineSchedule",
+   "ExponentialSchedule",
+   "InverseSqrtSchedule",
+   "LinearSchedule",
+   "OneMinusSqrtSchedule",
+   "PolynomialSchedule",
+   "Schedule",
+   "WarmupStableDecay",
+   "WithRestarts",
+   "WithWarmup"
+  ],
+  "missing": []
+ },
+ "opaque.profiling.types": {
+  "all": [
+   "MemoryStats",
+   "PerfStage",
+   "PerfState",
+   "PerfTracker",
+   "StepPerf"
+  ],
+  "missing": []
+ },
+ "opaque.optimizers.types": {
+  "all": [
+   "AdEMAMixState",
+   "AdadeltaState",
+   "AdafactorState",
+   "AdagradState",
+   "AdamState",
+   "LionState",
+   "RAdamState",
+   "RMSpropState",
+   "ScheduleFreeState"
+  ],
+  "missing": []
+ },
+ "opaque.distributed.collectives": {
+  "all": [
+   "all_reduce",
+   "all_reduce_",
+   "barrier",
+   "get_rank",
+   "get_world_size",
+   "is_distributed"
+  ],
+  "missing": []
+ },
+ "opaque.distributed.gradients": {
+  "all": [
+   "reduce_pytree",
+   "reduce_pytree_",
+   "sum_gradients",
+   "sum_gradients_"
+  ],
+  "missing": []
+ }
+}

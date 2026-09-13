@@ -1,0 +1,359 @@
+{
+  "statuses": [
+    {
+      "issue": 553,
+      "opq": "n/a (Marble)",
+      "title": "docs: prepare public source-repository messaging",
+      "status": "fixed-with-caveats",
+      "note": "Repository IS public (GitHub API: \"private\": false, \"visibility\": \"public\", stars 2, forks 0). Public-facing messaging is largely in place: README.md:12-16 and docs/getting-started/installation.md:3-7 both carry the identical \"Work in progress ... do not rely on it for production or compliance-sensitive privacy guarantees\" disclaimer; repo description, homepage (https://jetbrains-research.github.io/opaque/, HTTP 200) and six topics are set; only two email addresses exist anywhere in tracked files (security@jetbrains.com in SECURITY.md:12, codeofconduct@jetbrains.com in CODE_OF_CONDUCT.md:8) - no employee handles, no internal mail. Caveats filed as findings: the README/installation \"Extras\" blocks omit the registry index and resolve to an unrelated PyPI project (finding 3); internal infrastructure identifiers survive in .teamcity/pom.xml:18 and .github/workflows/build-devcontainer.yaml:77 (finding 2); an orphan 60 KB internal research diary sits at the public repo root (finding 11)."
+    },
+    {
+      "issue": 554,
+      "opq": "n/a (Marble)",
+      "title": "docs: add a public vulnerability reporting policy",
+      "status": "fixed-with-caveats",
+      "note": "SECURITY.md exists at the repository root - the primary location GitHub scans (root, docs/, .github/) - added by 44a494c2 \"docs: add vulnerability reporting policy (#560)\" and unchanged in the 4b13d82..12146ec4 delta. It names a real private contact (security@jetbrains.com, SECURITY.md:12), links the JetBrains Coordinated Disclosure Policy (https://www.jetbrains.com/legal/docs/terms/coordinated-disclosure/ - verified HTTP 200) and the PGP key page (https://www.jetbrains.com/privacy-security/ - HTTP 200), states supported versions, required report contents, and an explicit \"what is not a security report\" split that routes ordinary DP-mechanism defects to the public tracker. Caveats: (a) no concrete disclosure window is stated - SECURITY.md:41-42 only says \"allow reasonable time for a fix or mitigation\" and delegates timing to the JetBrains policy; (b) GitHub's own private reporting channel is OFF (GET /repos/JetBrains-Research/opaque/private-vulnerability-reporting -> {\"enabled\": false}), so the \"Report a vulnerability\" button is absent and the email address is the only private route. Filed as finding 9."
+    },
+    {
+      "issue": 555,
+      "opq": "n/a (Marble)",
+      "title": "docs: add a code of conduct for public contributions",
+      "status": "fixed-verified",
+      "note": "CODE_OF_CONDUCT.md exists at the repository root (added by b5887f40 \"docs: add JetBrains code of conduct (#561)\", untouched in the delta). It adopts the JetBrains Open Source and Community Code of Conduct and names a working, real enforcement contact - codeofconduct@jetbrains.com (CODE_OF_CONDUCT.md:8) - which is JetBrains' published CoC reporting address. The policy link (https://github.com/JetBrains/.github/blob/main/profile/README.md#code-of-conduct) could not be fetched from this sandbox because the agent proxy returns 403 for all github.com HTML, not because it is dead; the JetBrains/.github org profile repo is the canonical location for that text."
+    },
+    {
+      "issue": 556,
+      "opq": "n/a (Marble)",
+      "title": "ci: harden repository controls before public visibility",
+      "status": "fixed-with-caveats",
+      "note": "Substantially in force and verified live via the API. Ruleset id 12831618 \"main\" is enforcement=active on ~DEFAULT_BRANCH with: deletion protection, non_fast_forward, required_linear_history, pull_request (required_approving_review_count 1, required_review_thread_resolution true, allowed_merge_methods [squash]), copilot_code_review, and 7 required status checks (Build documentation, Format Python, Format Rust, Conventional Commits PR title, Python tests, Rust tests, Qodana / Qodana). Workflow-side hardening is real: every third-party action is SHA-pinned with a version comment; no pull_request_target anywhere; .github/workflows/junie.yml:17-66 gates every comment/issue trigger on author_association in [OWNER, MEMBER, COLLABORATOR] and interpolates only literal constants into action inputs; junie-review.yml:19 and the three CUDA lanes in pr.yml:137-186 gate on head.repo.full_name == github.repository so fork PRs never reach the self-hosted GPU runner or a secret-bearing job; publish jobs use environment: release with contents: read. Caveats: (a) secret scanning / push protection / code scanning state is NOT verifiable from here - GET .../secret-scanning/alerts and .../vulnerability-alerts are blocked by the agent proxy (403 \"not permitted through this proxy\"), and repos.security_and_analysis came back null for this token, so that half of the issue is cannot-verify; (b) private vulnerability reporting is off (finding 9); (c) bypass_actors contains RepositoryRole actor_id 5 with bypass_mode \"always\" (repository admins bypass the whole ruleset); (d) the \"Qodana / Qodana\" required check can never report for a fork PR (finding 7)."
+    },
+    {
+      "issue": 557,
+      "opq": "n/a (Marble)",
+      "title": "docs: complete public repository metadata and community health",
+      "status": "fixed-with-caveats",
+      "note": "The GitHub community-profile checklist is essentially complete: description and homepage set, six topics (differential-privacy, dp-ftrl, dp-sgd, machine-learning, privacy-accounting, pytorch), README.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, LICENSE (GitHub resolves license.spdx_id = Apache-2.0), SECURITY.md, .github/pull_request_template.md, and three .github/ISSUE_TEMPLATE/*.yml forms, all at canonical paths. Gaps: .github/ISSUE_TEMPLATE/config.yml does not exist, so the new-issue chooser offers no contact links and blank issues stay enabled; CONTRIBUTING.md:87 and :445 route contributors to GitHub Discussions, which is disabled; CONTRIBUTING.md:85-86 links /labels/good-first-issue and /labels/help-wanted while the repository's actual labels are \"good first issue\" and \"help wanted\" (verified against the labels API: 45 labels, neither hyphenated slug present). Filed as finding 8."
+    },
+    {
+      "issue": 558,
+      "opq": "n/a (Marble)",
+      "title": "docs: perform a public-facing editorial review",
+      "status": "fixed-with-caveats",
+      "note": "The user-facing surface reads as a public project: consistent WIP disclaimer, no internal emails, no employee handles, no internal URLs in docs/ prose, and the delta's docs commits (12146ec4, ba39783d, 873de427) keep reference pages in step with breaking removals. But the editorial review did not hold after it closed: d09d7b9a (fix(dpftrl): bound BISR noise state by bandwidth (#886), 2026-09-02) added issue-795-research.md - a 60 KB development-diary research snapshot - at the repository ROOT, unreferenced by mkdocs.yml, README.md or any doc, containing stale assertions about an \"urgent\" defect (#789) that was closed 2026-09-04, and directly violating AGENTS.md's own \"keep user-facing docs and code comments diary-free\" rule. Filed as finding 11. The dead Discussions and label links (finding 8) are also editorial residue."
+    },
+    {
+      "issue": 559,
+      "opq": "n/a (Marble)",
+      "title": "build: migrate package publishing to a JetBrains-managed registry",
+      "status": "fixed-verified",
+      "note": "Both publish paths target the JetBrains-managed registry and reference credentials by name only. .github/workflows/ci.yml:200-241 (publish-dev-wheels, environment: release, permissions contents: read, gated on all 11 test jobs) and .github/workflows/release.yml:122-133 (publish, environment-gated, after a manifest reverify) both set TWINE_USERNAME: ${{ vars.JETBRAINS_PACKAGES_USERNAME }} and TWINE_PASSWORD: ${{ secrets.JETBRAINS_PACKAGES_TOKEN }} and upload to https://packages.jetbrains.team/pypi/p/fed/python/legacy/ via .github/scripts/twine_upload.py. A repo-wide grep for secrets./vars. shows exactly 4 named credentials (JUNIE_API_KEY, QODANA_TOKEN, JETBRAINS_PACKAGES_TOKEN/_USERNAME) plus GITHUB_TOKEN and two GCP workload-identity vars - no embedded token, password or key anywhere in tracked files. The registry is reachable anonymously (https://packages.jetbrains.team/pypi/p/fed/python/simple/ -> HTTP 200) and really serves opaque wheels (opaque-0.15.0-py3-none-any.whl and later listed), so the documented install command works for the public. The unregistered-name exposure this publishing choice creates is a separate finding (1)."
+    },
+    {
+      "issue": 564,
+      "opq": "n/a (Marble)",
+      "title": "docs: reconsider the license for public source publication",
+      "status": "fixed-verified",
+      "note": "Apache-2.0 was confirmed and is applied consistently everywhere the issue asked. LICENSE holds the full Apache-2.0 text (terms 1-9 + END OF TERMS AND CONDITIONS). All 11 project files - the root pyproject.toml:10,26 plus packages/opaque-{accounting,alignment,auditing,base,dpftrl,dpsgd,engine,optimizers,patches,transformers}/pyproject.toml - carry license = { text = \"Apache-2.0\" } and \"License :: OSI Approved :: Apache Software License\". Every package directory ships its own LICENSE and NOTICE. Verified IN THE WHEELS, not just in config: a local setuptools-84 build of opaque-base produced opaque_base-*.dist-info/licenses/LICENSE and .../NOTICE with METADATA carrying \"License: Apache-2.0\", the OSI classifier and \"License-File: LICENSE / NOTICE\"; the maturin-built target/wheels/opaque_accounting-0.0.0.dev0-cp311-abi3-linux_x86_64.whl likewise contains dist-info/licenses/LICENSE and NOTICE and METADATA with License: Apache-2.0. GitHub itself resolves the repo license to spdx_id Apache-2.0. Third-party compatibility is inventoried in NOTICE and third_party_provenance.toml and every file path in both resolves; the one defect there is an attribution URL, filed separately as finding 5."
+    },
+    {
+      "issue": 566,
+      "opq": "n/a (Marble)",
+      "title": "docs: configure GitHub Discussions for public participation",
+      "status": "not-fixed",
+      "note": "Deliberately abandoned - GitHub reports state_reason \"not_planned\" on #566, and the repository API confirms has_discussions: false. So the milestone entry is not a broken claim, it is a scope decision. The live defect is that the decision was never propagated: CONTRIBUTING.md:87 (\"Open Discussions\") and CONTRIBUTING.md:445 (\"**Questions**: Open a [Discussion]\") still point public contributors at https://github.com/JetBrains-Research/opaque/discussions, which cannot resolve to a discussions page while the feature is off, and no .github/ISSUE_TEMPLATE/config.yml offers an alternative contact link. Filed as finding 8."
+    },
+    {
+      "issue": 568,
+      "opq": "n/a (Marble)",
+      "title": "docs: add JetBrains Research and CI badges to the README",
+      "status": "fixed-verified",
+      "note": "README.md:17-21 carries five badges: License (Apache 2.0), Python 3.11-3.13, PyTorch 2.9+, JetBrains Research, and CI. The JetBrains Research badge image https://jb.gg/badges/research.svg returns HTTP 200 and its link target https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub redirects to https://github.com/JetBrains#jetbrains-on-github (the canonical JetBrains-on-GitHub destination). The CI badge points at .github/workflows/ci.yml, which exists and runs on push to main."
+    },
+    {
+      "issue": 574,
+      "opq": "n/a (Marble)",
+      "title": "build: remediate dependency security alerts before public visibility",
+      "status": "fixed-with-caveats",
+      "note": "The remediation machinery exists and is active: .github/dependabot.yml covers three ecosystems (github-actions, cargo at /packages/opaque-accounting, uv at / with versioning-strategy lockfile-only), and the delta shows it working - 9eabd4c6, b67dcc51, 066c4550, 91148fae, 9b096801 are all landed dependency bumps. Cargo.lock is clean: all 61 crates queried against OSV.dev return zero advisories. But the alert state was not maintained to the audited commit: the committed uv.lock pins accelerate 1.14.0, which OSV/GitHub flag as GHSA-4j2p-28q2-5m79 / CVE-2026-69112 / PYSEC-2026-3804 (path traversal + DoS in load_checkpoint_in_model / load_checkpoint_and_dispatch, CWE-22, MODERATE, github_reviewed 2026-09-08), last_affected 1.14.0 with 1.15.0 already released. 217 of 218 locked PyPI packages are clean; this is the one. Filed as finding 4."
+    },
+    {
+      "issue": 577,
+      "opq": "n/a (Marble)",
+      "title": "Modularize and reuse more in CI/CD",
+      "status": "fixed-with-caveats",
+      "note": "Modularization is real and did NOT drop lane coverage. Five reusable workflows (python-tests.yml, rust-tests.yml, qodana.yml, build-distributions.yml, validate-distributions.yml) plus four composite actions (setup-python, setup-rust, run-qodana, upload-python-coverage) are called from pr.yml and ci.yml. I compared every lane's marker expression against AGENTS.md's documented list and all 13 match exactly - PR linux-amd64 \"not cuda and not mps and not slow and not distributed\" (pr.yml:73), PR distributed \"distributed and not cuda\" (pr.yml:84), PR macOS \"not cuda and not slow and not distributed\" (pr.yml:114), main linux-amd64 drops \"and not slow\" (ci.yml:30), main CUDA locked is bare \"cuda\" (ci.yml:98), CUDA dependency-boundary lanes stay \"cuda and not slow\" (ci.yml:111,124). The authors deliberately added matrix-independent gate jobs \"Python tests\" (pr.yml:184-217) and \"Rust tests\" (pr.yml:221-235) for branch protection, and the Python gate's jq explicitly tolerates skipped python-tests-cuda* legs. Caveat: that same pattern was not applied to Qodana - \"Qodana / Qodana\" is required directly and its caller job is fork-guarded, so it cannot report on fork PRs (finding 7)."
+    },
+    {
+      "issue": 578,
+      "opq": "n/a (Marble)",
+      "title": "Remove JetBrains-internal specifics from documentation",
+      "status": "partial",
+      "note": "Prose documentation is clean: docs/, README.md, CONTRIBUTING.md, mkdocs.yml, the issue templates and the tutorials contain no internal hostnames, YouTrack/Space/TeamCity references, employee handles or internal process language; the only jetbrains.com URLs are the three public ones in SECURITY.md and CODE_OF_CONDUCT.md. But internal specifics survive in committed CONFIGURATION, which a public reader sees just as plainly: .teamcity/pom.xml:18 hardcodes the internal TeamCity server https://jbr-fed.teamcity.com (verified access-controlled - HTTP 401 anonymously) together with a 3-file, 100+-line Kotlin DSL pipeline prototype and a .teamcity/README.md describing an internal rollout that has not happened, and .github/workflows/build-devcontainer.yaml:77 hardcodes the internal Google Artifact Registry path europe-west4-docker.pkg.dev/gke-dev-dws-jbr/ml/opaque-devcontainer, naming an internal GCP project id. Filed as finding 2. Lower-grade residue in the same class: .github/CODEOWNERS:2-3 names the internal team @JetBrains-Research/federated-compute, and pr.yml:150,167 name the self-hosted runner GPU-runner-001."
+    },
+    {
+      "issue": 579,
+      "opq": "n/a (Marble)",
+      "title": "Remove .cadence configuration",
+      "status": "fixed-verified",
+      "note": "Complete and coherent removal. f8171322 \"delete(cadence): remove training configuration (#580)\" deleted the directory; .cadence does not exist in the working tree, `git grep -i cadence 12146ec4` returns only the ordinary English word in trainer comments and TR-DPO sync-cadence docs (docs/alignment/trainers.md:277, docs/reference/transformers.md:573, several _dp_trainer.py comments), and .gitignore carries no leftover cadence entry. No dangling references to the removed configuration anywhere in workflows, docs, or examples."
+    },
+    {
+      "issue": 586,
+      "opq": "n/a (Marble)",
+      "title": "Remove fragile import and package enumeration checks",
+      "status": "fixed-with-caveats",
+      "note": "864a6442 \"delete(contracts): replace fragile checks with Junie review (#587)\" removed 34 files' worth of AST-scanning and __all__-enumeration tests and replaced them with .junie/architecture-contracts.md + .github/workflows/junie-review.yml + docs/development/architecture-contracts.md. Most of the removal is a genuine upgrade: the two accounting test_namespace.py enumeration files were replaced by real behavioral test_end_to_end.py suites, and the deleted test_all_exports_match.py / test_import.py / test_soft_import.py files were exactly the structural proxies ARC-002/ARC-007/ARC-010 say not to enforce mechanically. Caveat - coverage did drop for one contract that was NOT a fragile enumeration check: tests/contracts/test_accounting_torch_free.py (deleted) scanned opaque-accounting's src and tests for `import torch` and enforced a documented installation guarantee (README.md:44, docs/getting-started/installation.md, packages/opaque-base/pyproject.toml:26-30, AGENTS.md). Nothing replaced it: no test in the tree enforces it today, and .github/workflows/validate-distributions.yml exercises only the opaque[all] cross-stack scenario - it never installs opaque-accounting alone without torch. ARC-004/ARC-005/ARC-011, which were supposed to take over, are still marked \"Planned\". I verified the property itself still HOLDS (grep for `import torch` / `from torch` across packages/opaque-accounting/{src,tests} returns nothing, and its only declared dependency is opaque-base), so this is an unguarded invariant rather than a live break. Filed as finding 10."
+    },
+    {
+      "issue": 844,
+      "opq": "OPQ-388",
+      "title": "Sweep B - AGENTS.md points @requires_hf_auth at a deleted helper file",
+      "status": "fixed-verified",
+      "note": "Verified only the OPQ-388 leg of this multi-OPQ issue, because it is a repository-root doc. AGENTS.md:241-242 at 12146ec4 now reads \"imported from the shared `tests/_support/opaque_test_support.py` module\"; that file exists (tests/_support/opaque_test_support.py) and is the real import source - every consumer does `from opaque_test_support import requires_hf_auth` (e.g. packages/opaque-patches/tests/transformers/components/test_mlp.py:4, tests/peft/test_fused_lora_mlp.py:4). The previously cited packages/opaque-transformers/tests/opaque_transformers/_helpers.py is gone and no longer referenced. The other OPQ ids under #844 (359, 360, 366, 369, 370) are reference-table docs outside this role's scope and were not verified here."
+    }
+  ],
+  "findings": [
+    {
+      "title": "Dependency-confusion defensive registration on PyPI covers only 4 of the 10 published distribution names; the other 6 are free for anyone to claim",
+      "file": "README.md",
+      "line": "34-45 (package table) and 66-81 (install commands); names defined in pyproject.toml:83-94 workspace.members",
+      "category": "supply-chain/publishing",
+      "severity": "high",
+      "claim": "Opaque publishes to a private-namespace index (packages.jetbrains.team) rather than PyPI, which is the classic dependency-confusion setup. The team recognised this and on 2026-08-12 published JetBrains security-tooling defensive stubs on PyPI at version 999.9.9 whose description reads verbatim \"This public copy of the package is a stub published on pypi.org designed to mitigate risks from Dependency Confusion\" - but only for opaque-accounting, opaque-auditing, opaque-dpftrl and opaque-optimizers. Querying pypi.org/pypi/<name>/json for every distribution the repo builds shows opaque-base, opaque-engine, opaque-dpsgd, opaque-patches, opaque-transformers and opaque-alignment all return 404, i.e. unregistered and claimable by any third party today. The umbrella name is worse: `opaque` on PyPI is already an unrelated third-party project (opaque 1.0.0, \"python libopaque wrapper\", author Stefan Marsiske), so it cannot be defensively held at all. The repository's public README table and import-layout block (README.md:34-45, 48-61) publish the exact unregistered names.",
+      "failure_scenario": "An attacker registers `opaque-engine` and `opaque-base` on PyPI (both currently 404) with malicious sdists. Any of these then executes attacker code: (a) a user who reads README.md's package table and types `pip install opaque-engine` without the JetBrains index - the documented per-package install surface in AGENTS.md's installation matrix uses exactly these bare names; (b) any environment that adds PyPI as an extra index (`pip install --extra-index-url https://packages.jetbrains.team/... opaque`) - pip merges candidates across indexes and picks the highest version, so a 999.9.9-style attacker release wins; (c) any uv configuration with index-strategy = \"unsafe-best-match\". Because opaque-base and opaque-engine are transitive dependencies of every other wheel, a single captured name reaches every Opaque install in that environment, inside a DP training pipeline that handles sensitive data.",
+      "evidence": [
+        "pypi.org/pypi/opaque-accounting/json -> version 999.9.9, single file opaque_accounting-999.9.9.tar.gz uploaded 2026-08-12T15:05:40, description: 'This public copy of the package is a stub published on pypi.org designed to mitigate risks from Dependency Confusion. ... contact us: security-tooling@jetbrains.com'; identical stubs for opaque-auditing (15:05:27), opaque-optimizers (15:05:34), opaque-dpftrl (15:05:46)",
+        "pypi.org/pypi/{opaque-base,opaque-engine,opaque-dpsgd,opaque-patches,opaque-transformers,opaque-alignment}/json -> HTTP 404 for all six",
+        "pypi.org/pypi/opaque/json -> {'name': 'opaque', 'version': '1.0.0', 'summary': 'python libopaque wrapper', 'author': 'Stefan Marsiske'} - an unrelated third-party project",
+        "pyproject.toml:83-94 workspace.members lists all ten package directories; README.md:34-45 publishes the ten distribution names in a table",
+        ".github/workflows/ci.yml:236-241 and release.yml:124-133 publish these names to https://packages.jetbrains.team/pypi/p/fed/python/legacy/, never to PyPI"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Ask JetBrains security-tooling (security-tooling@jetbrains.com, the address in the existing stubs) to publish the same 999.9.9 defensive stub for opaque-base, opaque-engine, opaque-dpsgd, opaque-patches, opaque-transformers and opaque-alignment, and to re-run that registration whenever a new opaque-* distribution is added (add it as a checklist item next to the workspace.members list). For the umbrella name, which is taken, state explicitly in README.md and docs/getting-started/installation.md that `opaque` on PyPI is a different project and that the index flag is mandatory, and never document a bare `pip install opaque*` without --index-url.",
+      "confidence": "high"
+    },
+    {
+      "title": "Internal JetBrains infrastructure identifiers are committed in the public repository: an access-controlled TeamCity server hostname and an internal GCP Artifact Registry project",
+      "file": ".teamcity/pom.xml",
+      "line": "18 (and .github/workflows/build-devcontainer.yaml:77)",
+      "category": "information-disclosure",
+      "severity": "high",
+      "claim": "Marble #578 (\"Remove JetBrains-internal specifics from documentation\") is closed, but two internal infrastructure identifiers remain in tracked configuration at origin/main, which is public. `.teamcity/pom.xml:18` hardcodes `<teamcity.server.url>https://jbr-fed.teamcity.com</teamcity.server.url>`; that host is access-controlled (anonymous GET returns HTTP 401), so this discloses the name of a non-public CI server plus, via `.teamcity/README.md` and `.teamcity/settings.kts`, its intended project layout, agent pool (`Linux-Large`, `teamcity.agent.jbHosted`) and pipeline id (`Opaque_LinuxAmd64Tests`). `.github/workflows/build-devcontainer.yaml:77` hardcodes `GAR_IMAGE: europe-west4-docker.pkg.dev/gke-dev-dws-jbr/ml/opaque-devcontainer`, disclosing an internal Google Cloud project id (`gke-dev-dws-jbr`) and repository (`ml`) that the GitHub Actions OIDC workload identity pushes images into. Neither is a secret in the credential sense, but both are precisely the kind of internal specific #578 and #553 claimed to have removed, and neither serves any public reader.",
+      "failure_scenario": "A public reader of the repository learns the hostname of an internal JetBrains TeamCity instance and the project/repository coordinates of an internal GCP Artifact Registry. That is reconnaissance input for credential-stuffing or phishing against the TeamCity instance and for probing/targeting the GAR path, and it widens the blast radius of any future leak of GCP_WORKLOAD_IDENTITY_PROVIDER / GCP_SERVICE_ACCOUNT_EMAIL because the attacker already knows where to push. The `.teamcity` prototype is additionally dead weight: nothing in .github/workflows references TeamCity, AGENTS.md documents GitHub Actions as the CI, and .teamcity/README.md forward-references a migration (\"replaces the GitHub Actions Linux amd64 test matrix\") that has not happened - itself a violation of AGENTS.md's \"forward-references to features that don't yet exist don't belong anywhere\".",
+      "evidence": [
+        ".teamcity/pom.xml:18  <teamcity.server.url>https://jbr-fed.teamcity.com</teamcity.server.url>",
+        "curl -o /dev/null -w '%{http_code}' https://jbr-fed.teamcity.com -> 401 (access-controlled, not a public service)",
+        ".teamcity/README.md:1-10 'TeamCity pipeline prototype ... Set `teamcity.server.url` in `pom.xml` to the TeamCity server that will import these settings'; .teamcity/settings.kts:10 private val pipelineId = \"Opaque_LinuxAmd64Tests\"; :92 equals(\"teamcity.agent.jbHosted\", \"true\")",
+        ".github/workflows/build-devcontainer.yaml:77  GAR_IMAGE: europe-west4-docker.pkg.dev/gke-dev-dws-jbr/ml/opaque-devcontainer (also referenced at :104 and :120)",
+        "GitHub API GET /repos/JetBrains-Research/opaque -> \"private\": false, \"visibility\": \"public\"",
+        "git grep over .github/workflows finds no TeamCity reference - the .teamcity tree is unused by any active pipeline"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Replace the literal TeamCity server URL in .teamcity/pom.xml with a Maven property supplied at generate time (`-Dteamcity.server.url=...`) or delete the `.teamcity` prototype entirely until the migration is real, and drop its forward-referencing README. In .github/workflows/build-devcontainer.yaml move the GAR image path to a repository variable (`${{ vars.GAR_IMAGE }}`) alongside the two GCP vars it already uses by name, so no internal project id is committed. Re-run a grep for internal host/project identifiers over ALL tracked files, not only docs prose, before declaring #578 complete.",
+      "confidence": "high"
+    },
+    {
+      "title": "Public install documentation's \"Extras\" commands omit the registry index and resolve to an unrelated PyPI project named `opaque`",
+      "file": "README.md",
+      "line": "78-81 (and docs/getting-started/installation.md:33-36)",
+      "category": "docs/supply-chain",
+      "severity": "medium",
+      "claim": "README.md:67-72 and docs/getting-started/installation.md:19-27 correctly teach `pip install opaque --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/`. The Extras blocks immediately below them then drop the flag entirely: README.md:78-81 and installation.md:33-36 show four bare commands (`pip install \"opaque[auditing]\"`, `\"opaque[dpftrl]\"`, `\"opaque[transformers]\"`, `\"opaque[all]\"`). `--index-url` does not persist across shell invocations, so a reader who copies these lines resolves `opaque` from PyPI, where `opaque` is a different project - version 1.0.0, \"python libopaque wrapper\" by Stefan Marsiske, which has none of these extras.",
+      "failure_scenario": "A new user follows the README top to bottom: the first command installs the real Opaque from the JetBrains index; the next line, `pip install \"opaque[all]\"`, silently downloads the unrelated libopaque wrapper from PyPI, warns only `WARNING: opaque 1.0.0 does not provide the extra 'all'`, and overwrites the installed `opaque` distribution. The user's `import opaque.dpsgd` then fails, or - worse in a CI image built from the docs - the wrong `opaque` ends up in the environment used to reason about differential privacy. The same hazard applies to `uv add` since the second block never re-specifies `--index`.",
+      "evidence": [
+        "README.md:78-81 — `pip install \"opaque[auditing]\"` / `\"opaque[dpftrl]\"` / `\"opaque[transformers]\"` / `\"opaque[all]\"`, no index flag",
+        "docs/getting-started/installation.md:33-36 — identical four commands, no index flag, directly under the `--index-url` block at :19-27",
+        "pypi.org/pypi/opaque/json -> {'version': '1.0.0', 'summary': 'python libopaque wrapper', 'author': 'Stefan Marsiske'}",
+        "https://packages.jetbrains.team/pypi/p/fed/python/simple/opaque/ lists opaque-0.15.0-py3-none-any.whl etc. — the real project is only on that index"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Repeat `--index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/` on every install command in README.md and docs/getting-started/installation.md, or restructure the pages to configure the index once persistently (a `pip config set global.index-url ...` / `[[tool.uv.index]]` snippet) and say so explicitly. Add a one-line warning that the `opaque` name on PyPI belongs to an unrelated project. Under ARC-011 these blocks are the tagged executable installation scenarios, so the post-build validator should run them verbatim in a clean environment - which would have caught this."
+    ,
+      "confidence": "high"
+    },
+    {
+      "title": "The committed uv.lock still resolves accelerate 1.14.0, which carries an open GitHub-reviewed advisory with a released fix",
+      "file": "uv.lock",
+      "line": "41-55 (package accelerate, version 1.14.0)",
+      "category": "dependency-security",
+      "severity": "medium",
+      "claim": "Marble #574 (\"remediate dependency security alerts before public visibility\") is closed, but the lockfile at origin/main pins a version with a live advisory. Querying every one of the 218 PyPI packages in uv.lock against OSV.dev returns exactly one hit: accelerate 1.14.0, affected by GHSA-4j2p-28q2-5m79 / CVE-2026-69112 / PYSEC-2026-3804 - path traversal and denial of service via unsanitised `weight_map` entries in sharded-checkpoint indexes consumed by `load_checkpoint_in_model` and `load_checkpoint_and_dispatch` (CWE-22, CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:H, MODERATE, github_reviewed 2026-09-08). The advisory's range is `last_affected: 1.14.0` and accelerate 1.15.0 is already published on PyPI, so a fix exists and was simply not taken. accelerate reaches the lock transitively through peft 0.20.0 and trl 1.12.0, i.e. through opaque-transformers / opaque-alignment / opaque-patches[transformers].",
+      "failure_scenario": "Anyone reproducing the project with the documented `uv sync --group dev --all-packages --extra all` - every contributor and every CI lane - gets accelerate 1.14.0. A DP fine-tuning run that loads a sharded checkpoint from an untrusted or partially-trusted source (an arbitrary Hugging Face Hub repo, which is exactly what examples/train_*.py do) can be made to read arbitrary files off the runner via `../` entries in the shard index, or to hang forever on a named pipe. On the self-hosted persistent GPU runner (`GPU-runner-001`) an arbitrary-file-read primitive is materially worse than on an ephemeral one.",
+      "evidence": [
+        "uv.lock:41-55 — name = \"accelerate\", version = \"1.14.0\", sdist accelerate-1.14.0.tar.gz",
+        "uv.lock:2862 and :4146 — accelerate is required by peft 0.20.0 and trl 1.12.0",
+        "OSV querybatch over all 218 locked PyPI packages: 1 hit, accelerate 1.14.0 -> ['GHSA-4j2p-28q2-5m79', 'PYSEC-2026-3804']; OSV vulns/GHSA-4j2p-28q2-5m79 -> aliases ['CVE-2026-69112','PYSEC-2026-3804'], ranges [{introduced 0, last_affected 1.14.0}], database_specific severity MODERATE, github_reviewed_at 2026-09-08",
+        "pypi.org/pypi/accelerate/json -> info.version 1.15.0 (fix available)",
+        "OSV querybatch over all 61 crates in Cargo.lock: zero hits",
+        ".github/dependabot.yml:47-66 — the uv ecosystem entry exists with versioning-strategy lockfile-only and groups all patterns into one PR"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Bump accelerate to >= 1.15.0 in uv.lock (`uv lock --upgrade-package accelerate`). Longer term, the `workspace-dependencies` group in .github/dependabot.yml batches every uv update into a single grouped PR, which makes a security bump wait on an unrelated failing update; give security updates their own ungrouped lane, and add a recurring OSV/`pip-audit` check over uv.lock and Cargo.lock to CI so #574 stays remediated instead of being a one-time sweep.",
+      "confidence": "high"
+    },
+    {
+      "title": "third_party_provenance.toml misattributes riskcal to a nonexistent google-research repository, and one upstream's homepage is prose rather than a URL",
+      "file": "third_party_provenance.toml",
+      "line": "126 (riskcal homepage) and 112 (random-allocation homepage)",
+      "category": "legal/attribution",
+      "severity": "medium",
+      "claim": "ARC-009 requires that \"repository provenance references resolve to real attributed sources\". Two entries fail. (1) The riskcal upstream declares `homepage = \"https://github.com/google-research/riskcal\"`; no such repository exists - a GitHub search for `riskcal in:name` returns the real project at `interpretable-dp/riskcal` (\"Measure and calibrate operational privacy risks for differentially private algorithms\"), and PyPI's riskcal metadata gives project_urls.Repository = https://github.com/interpretable-dp/riskcal.git with authors Bogdan Kulynych and Juan Felipe Gomez. The manifest therefore credits Google Research for work by other authors. (2) The \"Random-allocation reference implementation\" entry puts a sentence in the `homepage` field - `homepage = 'ICML 2026 reference implementation for \"Efficient privacy loss accounting for subsampling and random allocation\"'` - which is not a resolvable reference at all, for code the manifest marks `disposition = \"adapted\"`, `requires_notice = true` and whose derived files ship in opaque-dpsgd.",
+      "failure_scenario": "A downstream consumer performing an OSS license/attribution review of the published opaque-dpsgd and opaque-accounting wheels follows third_party_provenance.toml - the document ARC-009 designates as the machine-readable provenance source of truth that will generate or validate NOTICE - and cannot locate the riskcal upstream (404) to confirm its MIT terms, and cannot locate the random-allocation upstream at all to confirm its Apache-2.0 terms or satisfy the notice obligation the manifest itself asserts. On a public repository this is a live misstatement of the project's attribution posture, and it will propagate straight into NOTICE the moment the planned generator is built on top of this file.",
+      "evidence": [
+        "third_party_provenance.toml — [[upstreams]] name = \"riskcal\", homepage = \"https://github.com/google-research/riskcal\", license = \"MIT\", disposition = \"inspired\"",
+        "GitHub search `riskcal in:name` -> the DP project is interpretable-dp/riskcal (id 705259863, topics differential-privacy); no google-research/riskcal in the results",
+        "pypi.org/pypi/riskcal/json -> info.project_urls = {'Repository': 'https://github.com/interpretable-dp/riskcal.git'}, license_expression MIT, author 'Bogdan Kulynych <bogdan@kulyny.ch>, Juan Felipe Gomez <gomezjuan772@gmail.com>'",
+        "third_party_provenance.toml — [[upstreams]] name = \"Random-allocation reference implementation\", homepage = 'ICML 2026 reference implementation for \"Efficient privacy loss accounting for subsampling and random allocation\"'; a script that asserts every homepage startswith('http') flags exactly this one entry",
+        "All 24 file paths referenced across third_party_provenance.toml and NOTICE do exist - only the two homepage values are wrong",
+        "packages/opaque-dpsgd/tests/accounting/test_cross_validation.py:28-30 imports riskcal, confirming the dependency is real"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Change the riskcal homepage to https://github.com/interpretable-dp/riskcal. Give the random-allocation entry a resolvable `homepage` (the arXiv/proceedings URL or the reference implementation's repository) and, if only a paper exists, add a separate `citation` field rather than overloading `homepage`. Add a tiny validator to CI that parses third_party_provenance.toml and asserts every `files` path exists and every `homepage` is an absolute http(s) URL - the same script used here found both defects in one pass, and it is behavioural rather than an inventory check so it does not conflict with #586's intent."
+    ,
+      "confidence": "high"
+    },
+    {
+      "title": "The repository's squash setting discards every PR body, contradicting AGENTS.md and the PR template and disabling git-cliff's BREAKING CHANGE detection",
+      "file": "AGENTS.md",
+      "line": "97-118 (Pull requests section); config verified via the repository API",
+      "category": "process/release-notes",
+      "severity": "medium",
+      "claim": "AGENTS.md states \"The PR title becomes the commit subject; the PR body becomes the commit body (repo-level squash setting = `PR_TITLE` + `PR_BODY`). Both feed `git-cliff`\", and .github/pull_request_template.md:7-9 repeats \"On squash merge the body becomes the commit body that git-cliff reads.\" The repository is actually configured with `squash_merge_commit_title: \"PR_TITLE\"` but `squash_merge_commit_message: \"BLANK\"`. Every one of the 124 delta commits confirms it: their bodies are empty apart from GitHub-generated `Co-authored-by:` trailers. This is not only stale documentation - cliff.toml:36 contains `{ body = \".*BREAKING CHANGE\", group = \"Breaking\" }` and sets `protect_breaking_commits = true`, both of which read the commit BODY, and AGENTS.md:110-111 explicitly tells contributors that a breaking change may be declared with \"a `BREAKING CHANGE:` footer in the body\".",
+      "failure_scenario": "A contributor follows AGENTS.md and declares a breaking change with a `BREAKING CHANGE:` footer in the PR body instead of a `!` in the title (both are documented as equivalent). The squash merge drops the footer, so the commit body is empty; git-cliff's body parser never fires, the commit is categorised by its type prefix (e.g. `refactor` -> \"Changed\") instead of \"Breaking\", and the drafted GitHub Release for that version ships with no Breaking section. Downstream users upgrading on those notes hit an undeclared breaking change. Separately, every release's \"What's changed\" and permanent `git log` lose the 2-4 sentences of rationale the PR template asks for - exactly the 'why' AGENTS.md says to preserve for \"a future spelunker\".",
+      "evidence": [
+        "GitHub API GET /repos/JetBrains-Research/opaque -> {\"squash_merge_commit_title\": \"PR_TITLE\", \"squash_merge_commit_message\": \"BLANK\", \"allow_merge_commit\": false, \"allow_rebase_merge\": false}",
+        "AGENTS.md 'Pull requests': 'The PR title becomes the commit subject; the PR body becomes the commit body (repo-level squash setting = `PR_TITLE` + `PR_BODY`)'",
+        ".github/pull_request_template.md:7-9 'On squash merge the body becomes the commit body that git-cliff reads.'",
+        "git log 4b13d82..12146ec4 --pretty='%b' — every commit body is empty or contains only Co-authored-by trailers (e.g. 873de427, 026200fd, e44d6ab6, 79acf31d, 0a002a50 have entirely empty bodies)",
+        "cliff.toml:36 { body = \".*BREAKING CHANGE\", group = \"Breaking\" }; cliff.toml:40 protect_breaking_commits = true",
+        "AGENTS.md 'Breaking change: append `!` (`feat(dpsgd)!: …`) or include a `BREAKING CHANGE:` footer in the body.'"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Pick one and make config and docs agree. Either set the repository's squash commit message to PR_BODY (matching what AGENTS.md, CONTRIBUTING.md and the PR template already promise and what cliff.toml's body parser needs), or - if empty bodies are deliberate - remove the `body = \".*BREAKING CHANGE\"` parser from cliff.toml, drop the 'BREAKING CHANGE footer' option from AGENTS.md so `!` in the title is the only supported declaration, and rewrite .github/pull_request_template.md:7-9 accordingly. Setting PR_BODY is the smaller change and preserves the documented behaviour."
+    ,
+      "confidence": "high"
+    },
+    {
+      "title": "The required status check \"Qodana / Qodana\" can never report on a fork pull request, so the documented external-contribution path cannot merge",
+      "file": ".github/workflows/pr.yml",
+      "line": "252-257 (qodana job guard)",
+      "category": "ci/community-health",
+      "severity": "medium",
+      "claim": "The active main ruleset requires seven status checks, one of which is the context \"Qodana / Qodana\" produced by pr.yml's `qodana` job calling the reusable qodana.yml `scan` job (both named \"Qodana\"). That caller job is guarded by `github.event.pull_request.head.repo.full_name == github.repository`, so for a pull request opened from a fork the job is skipped, the reusable workflow is never instantiated, and the \"Qodana / Qodana\" check context is never created - a required check that never reports blocks merge. The authors clearly understood this hazard elsewhere: pr.yml:184-217 and :221-235 add matrix-independent gate jobs named \"Python tests\" and \"Rust tests\" with `if: always()` whose jq explicitly treats skipped `python-tests-cuda*` legs as success, with the comment \"Keep a stable, matrix-independent check name for branch protection rules\". No equivalent gate exists for Qodana. Meanwhile docs/development/index.md:3,10-11 documents the fork workflow and README.md:186 points contributors at it.",
+      "failure_scenario": "An external contributor forks the repository as docs/development/index.md instructs, opens a PR, and every check goes green except \"Qodana / Qodana\", which sits permanently as 'Expected - waiting for status to be reported'. The PR cannot be merged by anyone other than a repository admin using the ruleset's bypass. For a project that went public specifically to accept outside contributions (Marble #553/#557), the advertised contribution path is unmergeable by design. The same guard also means the fork PR receives no static-analysis coverage at all, which is the case where untrusted code most needs it.",
+      "evidence": [
+        "GitHub API GET /repos/JetBrains-Research/opaque/rulesets/12831618 -> required_status_checks includes {\"context\": \"Qodana / Qodana\"}; the pull_request rule requires 1 approving review; bypass_actors = [{actor_type: RepositoryRole, actor_id: 5, bypass_mode: always}]",
+        ".github/workflows/pr.yml:252-257 — qodana job `if: (success() || failure()) && !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository`, `name: Qodana`",
+        ".github/workflows/qodana.yml:29-31 — jobs.scan has `name: Qodana`, so the composed check context is 'Qodana / Qodana'",
+        ".github/workflows/pr.yml:182-186 — comment 'Keep a stable, matrix-independent check name for branch protection rules' above the `python-tests` gate job, and pr.yml:195-217 jq that tolerates skipped CUDA legs — the pattern deliberately applied to Python/Rust but not Qodana",
+        "docs/development/index.md:3,10-11 'This guide is for contributors working from a GitHub fork ... Fork JetBrains-Research/opaque, then clone your fork'; README.md:186 links it",
+        "Repository is public with allow_forking: true (GitHub API)"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Add a stable gate job to pr.yml in the same shape as `python-tests` / `rust-test-gate` - e.g. a job named \"Qodana\" with `if: always()` and `needs: [qodana]` that passes when the upstream result is `success` or `skipped` - and make the ruleset require that gate's context instead of the nested \"Qodana / Qodana\". Alternatively, run Qodana for forks without QODANA_TOKEN in a non-cloud mode, or drop it from the required set and keep it informational as ci.yml already does (ci.yml:132-135 marks the main-branch Qodana job continue-on-error: true). Whichever is chosen, confirm on a real fork PR that all seven required contexts report.",
+      "confidence": "medium"
+    },
+    {
+      "title": "Contributor documentation routes public users to GitHub Discussions (disabled) and to label URLs that do not match the repository's actual label names",
+      "file": "CONTRIBUTING.md",
+      "line": "85-87 and 445",
+      "category": "docs/community-health",
+      "severity": "low",
+      "claim": "Marble #566 was closed as `not_planned` and Discussions was never enabled (`has_discussions: false`), but the documentation that #566 was supposed to update was never reverted. CONTRIBUTING.md:87 offers \"[Open Discussions](https://github.com/JetBrains-Research/opaque/discussions)\" as a starting point and CONTRIBUTING.md:445 makes it the single answer for \"**Questions**\" - neither can resolve to a discussions page while the feature is off. In the same block, CONTRIBUTING.md:85-86 links `/labels/good-first-issue` and `/labels/help-wanted`, but the repository's 45 labels include \"good first issue\" and \"help wanted\" (with spaces) and neither hyphenated slug exists, so both links land on an empty/invalid label filter. Compounding it, `.github/ISSUE_TEMPLATE/config.yml` does not exist, so the new-issue chooser presents no contact links and offers no alternative route.",
+      "failure_scenario": "A first-time contributor arriving from the public README opens CONTRIBUTING.md to find something to work on: both 'good first issue' links show nothing, and the 'Questions' route 404s. With no config.yml contact links and Discussions off, the only remaining channel is a public issue - which is also where SECURITY.md tells people NOT to put a suspected vulnerability, so a confused reporter has no visible correct destination short of reading SECURITY.md in full.",
+      "evidence": [
+        "GitHub API GET /repos/JetBrains-Research/opaque -> \"has_discussions\": false; issue #566 state_reason \"not_planned\"",
+        "CONTRIBUTING.md:87 '- [Open Discussions](https://github.com/JetBrains-Research/opaque/discussions)'",
+        "CONTRIBUTING.md:445 '- **Questions**: Open a [Discussion](https://github.com/JetBrains-Research/opaque/discussions)'",
+        "CONTRIBUTING.md:85-86 link /labels/good-first-issue and /labels/help-wanted; GET /repos/.../labels?per_page=100 returns 45 labels containing 'good first issue' and 'help wanted', and neither 'good-first-issue' nor 'help-wanted'",
+        "ls .github/ISSUE_TEMPLATE/ -> bug_report.yml, documentation.yml, feature_request.yml only; no config.yml"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Either enable Discussions (reopening the #566 decision) or remove both Discussions links from CONTRIBUTING.md and point 'Questions' at the issue tracker with a `question` label. URL-encode the real label names in the two 'good starting points' links (`/labels/good%20first%20issue`, `/labels/help%20wanted`). Add .github/ISSUE_TEMPLATE/config.yml with `blank_issues_enabled` set deliberately and contact_links covering security reporting and questions, so the new-issue chooser routes people correctly.",
+      "confidence": "high"
+    },
+    {
+      "title": "GitHub private vulnerability reporting is disabled on the public repository and SECURITY.md states no concrete disclosure window",
+      "file": "SECURITY.md",
+      "line": "10-14 and 38-46",
+      "category": "security-policy",
+      "severity": "low",
+      "claim": "SECURITY.md tells reporters to use a private channel and explicitly forbids public issues or discussions for suspected vulnerabilities, but the GitHub-native private path is off: GET /repos/JetBrains-Research/opaque/private-vulnerability-reporting returns {\"enabled\": false}, so the repository's Security tab shows no 'Report a vulnerability' button and an outside researcher's only private route is the security@jetbrains.com mailto at SECURITY.md:12. The policy also never states a disclosure window; SECURITY.md:41-42 only asks reporters to 'allow reasonable time for a fix or mitigation before public disclosure' and delegates the timeline to the JetBrains Coordinated Disclosure Policy (SECURITY.md:38-40), which is a real, reachable document but is not the project-specific window Marble #554 framed.",
+      "failure_scenario": "A researcher who finds a privacy-accounting defect with material impact clicks the repository's Security tab, sees no reporting form (the standard 2026 workflow), and either discloses publicly in an issue - which SECURITY.md:14 forbids and which for a DP library means publishing an under-noising defect before a fix - or abandons the report. Because no window is stated, a reporter who does email has no basis for deciding when publication is fair, and neither side has a shared expectation.",
+      "evidence": [
+        "GitHub API GET /repos/JetBrains-Research/opaque/private-vulnerability-reporting -> HTTP 200, {\"enabled\": false}",
+        "GitHub API GET /repos/JetBrains-Research/opaque -> \"private\": false, \"visibility\": \"public\"",
+        "SECURITY.md:10-14 'Report suspected vulnerabilities privately to security@jetbrains.com ... Do not open a public issue or discussion for a suspected vulnerability.'",
+        "SECURITY.md:41-42 'Please allow reasonable time for a fix or mitigation before public disclosure.' — no number of days anywhere in the file",
+        "https://www.jetbrains.com/legal/docs/terms/coordinated-disclosure/ -> HTTP 200 (the delegated policy is real and reachable)"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Enable private vulnerability reporting in repository Settings -> Security (one toggle; it also unlocks draft GitHub Security Advisories for the published opaque-* distributions) and mention that route first in SECURITY.md alongside the email. Add a concrete acknowledgement and disclosure expectation - e.g. acknowledge within N business days, coordinate publication within 90 days or on fix release, whichever is first - or state explicitly that the JetBrains Coordinated Disclosure Policy's timeline governs and link the specific clause.",
+      "confidence": "high"
+    },
+    {
+      "title": "Removing the contract tests (#586) left the documented torch-free opaque-accounting guarantee with no automated enforcement, in the repository or post-build",
+      "file": ".github/workflows/validate-distributions.yml",
+      "line": "50-88 (the only artifact scenario)",
+      "category": "test-coverage",
+      "severity": "low",
+      "claim": "864a6442 (#587, closing Marble #586) deleted tests/contracts/test_accounting_torch_free.py and tests/contracts/test_accounting_factory_leakage.py along with the fragile enumeration checks. The torch-free test was not a structural proxy - it enforced a guarantee the project advertises as a supported installation option (README.md:44 'torch-free standalone'; docs/getting-started/installation.md; packages/opaque-base/pyproject.toml:26-30 'Adding any third-party dependency here would propagate into opaque-accounting ... and break the \"torch-free accounting\" guarantee'; AGENTS.md installation matrix 'pip install opaque-accounting  # PLD accounting (torch-free standalone)'). Nothing replaced it: a repo-wide grep finds no remaining test asserting the property, and .github/workflows/validate-distributions.yml runs exactly one scenario - install `opaque[all]` and compose a DP-SGD and a DP-FTRL process - never an opaque-accounting-only install in a torch-free environment. The ARC-004/ARC-005/ARC-011 post-build validation meant to take over is still marked 'Planned' in .junie/architecture-contracts.md.",
+      "failure_scenario": "A future change adds `import torch` (or a torch-importing helper) to packages/opaque-accounting/src or to its tests. Every CI lane passes, because the test runner's environment always has torch installed via the other workspace packages. The published opaque-accounting wheel then declares only opaque-base as a dependency but fails to import in the torch-free environment the README, AGENTS.md and installation docs promise - discovered only by an end user. I verified the property currently still holds (no torch import anywhere under packages/opaque-accounting/{src,tests}; its only dependency is opaque-base>=0.0.0.dev0), so this is an unguarded invariant, not a live break.",
+      "evidence": [
+        "git show 864a6442 --stat — deletes tests/contracts/test_accounting_torch_free.py (55 lines) and tests/contracts/test_accounting_factory_leakage.py (89 lines), plus 8 other enumeration/import tests",
+        "git show 864a6442^:tests/contracts/test_accounting_torch_free.py — AST-scanned packages/opaque-accounting/{src,tests} for `import torch` / `from torch...`",
+        ".github/workflows/validate-distributions.yml:50-88 — the single 'Run cross-stack scenario' step installs \"${opaque_wheels[0]}[all]\" and imports opaque.dpftrl/opaque.dpsgd; no torch-free install path",
+        "grep -rn 'torch_free|torch-free' over the tree returns only prose/comments (packages/opaque-base/pyproject.toml:26,30; two module docstrings) and one unrelated auditing test comment — no enforcement",
+        ".junie/architecture-contracts.md contract table — ARC-004 Backend-neutral distributions: Planned; ARC-005: Planned; ARC-011 Supported installation options: Planned",
+        "Current property verified holding: no `import torch` / `from torch` under packages/opaque-accounting/{src,tests}; packages/opaque-accounting/pyproject.toml:13-15 dependencies = [\"opaque-base>=0.0.0.dev0\"]"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Add one backend-neutral scenario to .github/workflows/validate-distributions.yml: create a venv, install only the built opaque_accounting and opaque_base wheels with --no-deps plus their real deps, assert `torch` is not importable in that venv, and run a minimal accounting operation (e.g. gaussian(1.0) composed and epsilon_at(1e-5)). That is behavioural post-build validation - what ARC-004/ARC-011 describe - so it restores the guard without reintroducing the source-scanning check #586 removed.",
+      "confidence": "high"
+    },
+    {
+      "title": "A 60 KB internal research diary sits at the public repository root, unreferenced by any documentation and carrying stale claims about defects",
+      "file": "issue-795-research.md",
+      "line": "1-60 and 45-47, 979, 1014",
+      "category": "docs/public-messaging",
+      "severity": "low",
+      "claim": "d09d7b9a (fix(dpftrl): bound BISR noise state by bandwidth (#886), 2026-09-02) committed issue-795-research.md - a 1000+ line, 60 KB 'Research snapshot' working document - to the root of the public repository. It is referenced by nothing: not mkdocs.yml, not README.md, not CONTRIBUTING.md, not docs/. Its content is exactly what AGENTS.md forbids in the tree ('Keep user-facing docs and code comments diary-free: describe the current API and behavior, not the development history ... Migration narrative belongs in PR bodies and the changelog'): rebase provenance, superseded recommendations, and running commentary on other issues. It is also already stale - lines 45-47, 979 and 1014 describe issue #789 as 'the separate, urgent calibrated-resume defect' that 'remains urgent', while #789 was closed as completed on 2026-09-04. Because Marble #558 ('perform a public-facing editorial review') closed on 2026-08-11, this landed three weeks after the editorial gate.",
+      "failure_scenario": "A prospective user or reviewer browsing the public repository root sees, next to README.md and LICENSE, a document that reads as an internal engineering memo and states that the library has an 'urgent' unfixed privacy-calibration defect. That misrepresents the current state of the project (the defect is fixed), and it is the single most prominent non-README file at the root. Every future reader of the repository root pays that cost, and the document will keep drifting because nothing builds or tests it.",
+      "evidence": [
+        "git log --oneline -- issue-795-research.md -> d09d7b9a (2026-09-02 13:40:17 +0200) 'fix(dpftrl): bound BISR noise state by bandwidth (#886)'",
+        "git ls-tree 12146ec4 --name-only — issue-795-research.md is a tracked root-level entry at origin/main; wc = 60100 bytes",
+        "grep -rn 'issue-795' over *.md/*.yml/*.toml outside the file itself returns nothing — it is orphaned (not in mkdocs.yml nav, not linked from README/CONTRIBUTING/docs)",
+        "issue-795-research.md:1-3 '# Issue 795: bounded-memory BISR noise execution / Research snapshot: 2026-08-31 UTC'; :5 '## Post-research implementation update (2026-09-01 UTC)'",
+        "issue-795-research.md:45-47 'Open [issue #789](...) is the separate, urgent calibrated-resume defect'; :979 'The calibrated-resume failure in #789 remains urgent'; GitHub API issue 789 -> state closed, state_reason completed, closed_at 2026-09-04T07:49:39Z",
+        "AGENTS.md '## Documentation' — 'Keep user-facing docs and code comments diary-free ... Migration narrative belongs in PR bodies and the changelog.'"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Delete issue-795-research.md from the tree; its durable content belongs in the #886 PR body, in the #795 issue thread, or - if the BISR bandwidth reasoning is worth keeping for users - condensed into docs/mechanisms/dp-ftrl/bisr.md where it is built and reviewed. If a research archive is genuinely wanted in-repo, move such documents under a clearly-labelled directory that mkdocs ignores and add a root-level rule to the editorial checklist so #558-class reviews catch the next one."
+    ,
+      "confidence": "high"
+    },
+    {
+      "title": "AGENTS.md's \"Accounting native module\" section is factually wrong on all three of its claims and contradicts AGENTS.md's own package table",
+      "file": "AGENTS.md",
+      "line": "191-200",
+      "category": "docs-drift",
+      "severity": "low",
+      "claim": "The \"### Accounting native module\" block states that the compiled artifact is `opaque/accounting/opaque_accounting.abi3.so`, that maturin is configured with `module-name = \"opaque.accounting.opaque_accounting\"` and `python-packages = [\"opaque.accounting\"]`, and that `opaque.accounting/__init__.py` does `from . import opaque_accounting as _native`. None of that is true at 12146ec4. packages/opaque-accounting/pyproject.toml:38-40 sets `module-name = \"opaque.api.accounting.core.opaque_accounting\"` and `python-packages = [\"opaque/accounting\", \"opaque/api/accounting/core\"]`; the built wheel contains exactly one .so at `opaque/api/accounting/core/opaque_accounting.abi3.so`; and the `_native` alias is bound in packages/opaque-accounting/src/opaque/api/accounting/core/__init__.py:16, not in the opaque.accounting facade, whose __init__.py contains no such import. AGENTS.md's own package table earlier in the file already says the extension is at `opaque.api.accounting.core.opaque_accounting`, so the file contradicts itself.",
+      "failure_scenario": "AGENTS.md is the loaded entry point for every Copilot/Claude agent working in this repository (per .junie/architecture-contracts.md's agent entry-point table). An agent asked to touch the native module follows this section, looks for or edits `opaque/accounting/opaque_accounting`, finds nothing, and either guesses or 'fixes' the maturin configuration back to a layout that does not build - a concrete failure mode given that these three lines are the only place the native layout is documented for agents. AGENTS.md was edited twice in the delta (873de427, ba39783d) without this section being reconciled.",
+      "evidence": [
+        "AGENTS.md:193-199 — 'compiled artifact is `opaque/accounting/opaque_accounting.abi3.so`'; 'maturin `module-name = \"opaque.accounting.opaque_accounting\"`, `python-packages = [\"opaque.accounting\"]`'; 'The Python facade at `opaque.accounting/__init__.py` does `from . import opaque_accounting as _native`'",
+        "packages/opaque-accounting/pyproject.toml:38-40 — module-name = \"opaque.api.accounting.core.opaque_accounting\"; python-source = \"src\"; python-packages = [\"opaque/accounting\", \"opaque/api/accounting/core\"]",
+        "target/wheels/opaque_accounting-0.0.0.dev0-cp311-abi3-linux_x86_64.whl — the only .so entry is 'opaque/api/accounting/core/opaque_accounting.abi3.so'",
+        "grep -rn 'as _native' packages/opaque-accounting/src/ -> packages/opaque-accounting/src/opaque/api/accounting/core/__init__.py:16 'from . import opaque_accounting as _native  # noqa: F401'; the same grep over packages/opaque-accounting/src/opaque/accounting/__init__.py returns nothing",
+        "AGENTS.md package table (opaque-accounting row) — 'PyO3 extension at `opaque.api.accounting.core.opaque_accounting`, aliased as `_native`' — contradicting lines 193-199 of the same file",
+        ".github/scripts/check_accounting_artifact_policy.py:23 NATIVE_MODULE_PATH = \"opaque/api/accounting/core/opaque_accounting.abi3.so\" — CI agrees with the code, not with AGENTS.md"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Rewrite AGENTS.md:193-199 to match the tree: artifact at `opaque/api/accounting/core/opaque_accounting.abi3.so`; `module-name = \"opaque.api.accounting.core.opaque_accounting\"` with `python-packages = [\"opaque/accounting\", \"opaque/api/accounting/core\"]`; `_native` bound in `opaque/api/accounting/core/__init__.py`. The single source of truth for the path already exists as NATIVE_MODULE_PATH in .github/scripts/check_accounting_artifact_policy.py - cite it from AGENTS.md instead of restating the layout, so the two cannot drift again."
+    ,
+      "confidence": "high"
+    }
+  ],
+  "delta_reviewed": "Scope: Marble public-release readiness — repository root, .github/, docs/, LICENSE/NOTICE/SECURITY/CODE_OF_CONDUCT, packaging and publishing config. First established the repository IS public (GitHub API: private=false, visibility=public, license Apache-2.0, 6 topics, homepage live, has_discussions=false), so every Marble claim was treated as a live exposure question rather than backlog. Verified all 15 closed Marble issues individually against the current tree plus live GitHub/PyPI/OSV state, and the OPQ-388 (AGENTS.md) leg of Bazalt #844. Also confirmed the local HEAD's .audit-checkpoint/ tree (full audit findings) is NOT on origin/main — it comes from four post-12146ec4 local chore(audit) commits — so it is not a disclosure finding.\n\nDelta reviewed in full for my paths (git log 4b13d82..12146ec4 -- .github/ docs/ examples/ README.md CONTRIBUTING.md AGENTS.md SECURITY.md CODE_OF_CONDUCT.md LICENSE NOTICE pyproject.toml packages/*/pyproject.toml mkdocs.yml cliff.toml third_party_provenance.toml .teamcity .idea .devcontainer): 56 commits touch these paths. Read in detail: all 13 workflows (pr.yml, ci.yml, python-tests.yml, rust-tests.yml, qodana.yml, docs.yml, release.yml, prepare-release*.yml, build-distributions.yml, validate-distributions.yml, autoformat.yml, junie.yml, junie-review.yml, build-devcontainer.yaml) including their triggers, permission blocks, fork guards, secret usage and action pinning; .github/scripts/{set_build_versions.sh, twine_upload.py, check_accounting_artifact_policy.py, release.py}; dependabot.yml, CODEOWNERS, issue/PR templates; .teamcity/{pom.xml,settings.kts,README.md}; .devcontainer, .idea, .ai, .air, .claude, .junie; qodana.yaml; the delta's CI commits (039fc012 CUDA preflight, 6de5f9ca matrix guard, 1d2159c4 concurrency removal, 65dc1287 macOS wheel policy, 8ae0a07a release notes, b67dcc51/066c4550/91148fae/9b096801/9eabd4c6 dependency bumps) and the docs delta (12146ec4, ba39783d, 873de427 and the doc legs of the three breaking removals).\n\nActive checks run, not just read: queried the GitHub API for repository visibility, security_and_analysis, private-vulnerability-reporting, rulesets (fetched ruleset 12831618 in full), and all 45 labels; probed 11 external URLs referenced from public docs (jb.gg badge, confluence/JetBrains-on-GitHub redirect, coordinated-disclosure, PGP page, docs site, packages.jetbrains.team index) and found jbr-fed.teamcity.com returns 401; enumerated the JetBrains Space index and confirmed it really serves opaque wheels anonymously; queried PyPI for all 11 distribution names and discovered the partial defensive-stub registration; ran every one of the 218 locked PyPI packages and all 61 Cargo.lock crates through OSV.dev querybatch (one hit: accelerate 1.14.0); parsed third_party_provenance.toml and NOTICE and confirmed all 24 referenced file paths exist while two homepages do not resolve; cross-checked riskcal's real upstream via GitHub search and PyPI metadata; built packages/opaque-base locally with setuptools 84 and inspected the resulting wheel's METADATA and dist-info/licenses, and inspected the prebuilt maturin opaque-accounting wheel the same way, to verify #564 in the artifacts rather than only in config; verified the torch-free property of opaque-accounting still holds by source scan after its guard test was deleted; and confirmed .cadence removal is complete via git grep over 12146ec4.\n\nNot verified (blocked): secret-scanning, push-protection, code-scanning and Dependabot-alert state — GET /repos/.../secret-scanning/alerts, /vulnerability-alerts and /automated-security-fixes are refused by the agent proxy (403 'not permitted through this proxy') and /dependabot/alerts and /branches/main/protection by token scope; repos.security_and_analysis returned null. That is the one part of #556 I could not confirm. github.com HTML is also 403 through the proxy, so external link checks used the API or PyPI metadata instead of page fetches. No files were modified.\n\nNo duplicates of bazalt-still-open.tsv (#813, #828, #845), milestones-open.tsv or other-open-issues.tsv: I grepped NEW-FINDINGS-MASTER-LIST.md for qodana/fork/pypi/dependency-confusion/teamcity/devcontainer/provenance/riskcal/squash/SECURITY/CODE_OF_CONDUCT and for OPQ-377..388 and confirmed none of the 12 findings overlaps an existing report; OPQ-377..387 (CI fail-open, umbrella #774) is adjacent but disjoint from all of them."
+}

@@ -1,0 +1,102 @@
+{
+  "statuses": [
+    {
+      "issue": 829,
+      "opq": "OPQ-351",
+      "title": "Raise the GDP grid floor so coarse grids cannot erase detectable leakage",
+      "status": "fixed-verified",
+      "note": "Fix commit 3ccf15ba. _MIN_GRID_SIZE is now 1_000 (packages/opaque-auditing/src/opaque/api/auditing/one_run/_estimate.py:44) and OneRunEstimate.gdp() rejects anything below it (:192-195, ConfigurationError which subclasses ValueError, so the documented `Raises: ValueError` still holds). gdp() is the only door to GdpMethod: GdpMethod is in no __all__ and is reachable only through estimate.gdp() / the epsilon_at/delta_at/beta_at/advantage shortcuts (_estimate.py:199-268), which all use the 10_000 default. Reproduced the finding and the fix on the shipped code (n_in=n_out=500): u=250 -> eps 0.0 at grid 16 vs 5.108 at 10_000 (pre-fix hazard), and the now-lowest accepted grid 1_000 gives 5.075; u=350 -> 0.0 at grids 16 and 64 (the finding's exact numbers, 2.298 at 10_000) vs 2.270 at grid 1_000. Checked the floor is not merely a bigger-but-still-too-coarse constant by sweeping larger audits: m=2000 u=700/850/900 -> 2.513/0.820/0.333 at grid 1000 vs 2.577/0.876/0.385 at 10_000; m=5000 u=1800/2100 and m=10000 u=4000/4400 are identical to 4 dp between grid 1_000 and 10_000 (6.4637, 2.3316, 4.2377, 1.7912); m=10000 u=4700 gives 0.693 vs 0.727; at the largest scale the guide tabulates, m=100000 u=48800, grid 1_000 and 10_000 return the identical 3.41397 (and both raise the same OperationError at u=45000/48000, the open-#828 truncation regime). The eps=0 boundary also agrees between the floor and the default (m=1000: both positive at u=455, both 0.0 at u=465/475/485), so the floor never erases a leak the default grid resolves in the range tested. Cost claim holds too (~1.2-1.7 s at grid 1_000 vs ~8-20 s at 10_000). Docs updated consistently (docs/user-guide/auditing.md:113-115, docs/reference/auditing.md:366-367, :436) and no doc/example/test passes a grid below the floor. #829 did not change the shape of open #828: the truncation failure is grid-independent (expected error count >= n_trunc/2 regardless of the grid; verified that m=100000 u=45000 raises OperationError identically at grid 1_000 and 10_000, and TestMuAtTermination still passes), so no workaround was removed by the higher floor. One residual, filed as a finding rather than a caveat because the behavior is correct: the justification comment at _estimate.py:35-43 cites a measurement that does not reproduce. Full opaque-auditing suite: 237 passed."
+    },
+    {
+      "issue": 830,
+      "opq": "OPQ-352",
+      "title": "Validate the scored CoinFlip dataset",
+      "status": "fixed-with-caveats",
+      "note": "Fix commits e6e3d478 (+ ff174f11 converting the two raises to ConfigurationError for the ruff TRY003 gate). CoinFlip now carries dataset_size (_coin_flip.py:168), the coin_flip() factory records it (:398), and _scoring_loader validates both length and canary-index bounds (attacks/_helpers.py:159-178) before building the loader. Both scoring call sites are covered: attacks/_loss.py:117 and attacks/_gradient.py:136 are the only callers, and both take coin_flip= and dataset= as required keyword arguments, so there is no unvalidated scoring mode. Reproduced the finding's exact scenario on the shipped code: cf = coin_flip(20-row TensorDataset, num_canaries=4/5) then loss_scores(..., dataset=cf.train_subset(ds)) now raises ConfigurationError('dataset length (19) does not match the dataset size (20) the CoinFlip was constructed from; scoring requires the full concatenated dataset, not a training subset or split') where it previously returned silently corrupted scores. No regression for the documented workflows: the crafted-canary recipe (docs/user-guide/auditing.md:256-268) and all four examples/train_*.py keep the full pre-selection dataset for scoring (e.g. examples/train_dpsgd.py:1240 'audit_dataset = train_dataset  # Keep reference before filtering'), so they still pass the new check. Caveats, both filed as findings: (1) only the length is compared, so an equal-length reordering (dataset.shuffle()/select(permutation)) is still scored silently - the fingerprint half of the fix sketch did not land; (2) the recorded dataset_size is not enforced on train_indices()/train_subset(), the sibling path that produces the training set, where an explicit size silently overrides it. A third, smaller gap: dataset_size defaults to None and the length check is skipped entirely for a directly constructed CoinFlip (_helpers.py:160), which the docs discourage but the type system permits."
+    },
+    {
+      "issue": 831,
+      "opq": "OPQ-353",
+      "title": "Remove the misleading Bonferroni label",
+      "status": "fixed-verified",
+      "note": "Fix commit 9a18aee6. packages/opaque-auditing/tests/auditing/test_integration.py:42-44 now reads '# Test epsilon with the threshold-free (Pareto-argmax) path' / eps_threshold_free / 'Threshold-free estimation should detect leakage', which names what _estimate.py:_best_r_u (the unadjusted argmax over thresholds, :159-170) and _eps_delta.py actually do. A repo-wide case-insensitive grep for 'bonferroni' over *.py/*.md/*.ipynb now returns only unrelated hits: packages/opaque-dpsgd/tests/sampling/test_poisson.py:18 (a real per-record alpha split) and docs/reference/accounting.md:163 (the Monte Carlo confidence allocation), plus the audit checkpoint files themselves. No computed value changed, and the underlying statistical issue (post-hoc threshold selection at raw significance) remains tracked by open Slate #376, which I did not re-report."
+    }
+  ],
+  "findings": [
+    {
+      "title": "The #895 dataset guard covers the scoring half only: train_subset()/train_indices() still accept a dataset the partition was not built from",
+      "file": "packages/opaque-auditing/src/opaque/api/auditing/_coin_flip.py",
+      "line": "189, 209",
+      "category": "incomplete-fix",
+      "severity": "low",
+      "claim": "e6e3d478 (#895, closing #830/OPQ-352) records dataset_size on CoinFlip (:168) and asserts it in _scoring_loader (attacks/_helpers.py:159-178), but the two methods that turn the partition into the training set are left unguarded. train_indices(dataset_size: int | None = None) resolves 'size = self.dataset_size if dataset_size is None else dataset_size' (:189) - an explicit argument silently overrides the recorded value with no consistency check - and train_subset() always supplies one: 'return Subset(dataset, self.train_indices(len(dataset)))' (:209), so the recorded size is never consulted on that path at all. train_subset() is the tutorial's training path (docs/tutorials/privacy_auditing.ipynb:153, :505) and train_indices(len(dataset)) is the user guide's (docs/user-guide/auditing.md:38, :151, :268). The wrong-dataset-object hazard OPQ-352 describes is therefore closed for scoring and open for training, in the same class whose two dataset objects (base vs concatenated 'audited') the finding named.",
+      "failure_scenario": "Reproduced on the shipped code. Following the documented crafted-canary layout, cf = coin_flip(audited_40rows, num_canaries=8, candidate_indices=range(32,40)) records dataset_size=40 with out_indices=[34 35 33 32 36]; calling cf.train_subset(base_32rows) - the pre-concatenation object, exactly the base-vs-audited mix-up the finding cites - returns all 32 rows with zero canaries excluded and raises nothing ('train_subset(base) len: 32 excluded: []'). The target model is then trained with no canary either in or out; the subsequent scoring pass runs against `audited`, passes the new length check, and the audit reports no detectable leakage for a mechanism it should flag - the same silent under-detection #829 was closed to prevent. The milder variant is equally silent: cf built on a 20-row dataset with out_indices=[2], cf.train_subset(a different 30-row dataset) returns 29 rows and excludes row 2 of the wrong dataset.",
+      "evidence": [
+        "packages/opaque-auditing/src/opaque/api/auditing/_coin_flip.py:189 'size = self.dataset_size if dataset_size is None else dataset_size' - no comparison when both are known",
+        "packages/opaque-auditing/src/opaque/api/auditing/_coin_flip.py:209 'return Subset(dataset, self.train_indices(len(dataset)))' - passes an explicit size, so the recorded one is bypassed",
+        "packages/opaque-auditing/src/opaque/api/auditing/attacks/_helpers.py:159-171 - the symmetric check that e6e3d478 did add, on the scoring path",
+        "repro output: 'cf_big CoinFlip(num_canaries=8, n_in=3, n_out=5) out [34 35 33 32 36] dataset_size 40' then 'train_subset(base) len: 32 excluded: []'",
+        "docs/tutorials/privacy_auditing.ipynb:153 'train_data = cf.train_subset(dataset)'"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "In train_subset, drop the explicit argument (call self.train_indices()) or compare len(dataset) with self.dataset_size and raise the same ConfigurationError message _scoring_loader uses; in train_indices, raise when an explicit dataset_size contradicts a recorded one instead of preferring the argument.",
+      "confidence": "high"
+    },
+    {
+      "title": "#895 compares dataset length only, so an equal-length reordering is still scored silently",
+      "file": "packages/opaque-auditing/src/opaque/api/auditing/attacks/_helpers.py",
+      "line": "159-178",
+      "category": "incomplete-fix",
+      "severity": "low",
+      "claim": "OPQ-352's fix sketch asked for 'dataset_size (and optionally a cheap content fingerprint of a few canary rows)'. Only the length comparison and the index-bounds check landed. _IndexedCanaries.__getitem__ (attacks/_helpers.py:88-89) still indexes whatever object it is handed with the partition's canary indices, so any same-length substitution - most realistically HuggingFace dataset.shuffle(seed=...) or select(permutation), which every training pipeline in the repo performs on the training split - passes both new checks and produces scores for different records than the ones the coin flips label.",
+      "failure_scenario": "Reproduced on a 20-row TensorDataset with 5 canaries. Correct scoring returns [-1, -36, -16, -64, -144]; scoring the same dataset under a random permutation of its rows (Subset(ds, perm)) returns [-100, -144, -49, -225, -25] with no error, and one_run accepts it: OneRunEstimate(n_in=3, n_out=2, auc=0.5000). The canary identifiers now name different records, so the audit measures nothing and reports that as 'no leakage' rather than as an error - the fail-open outcome the fix was meant to remove, just at a narrower entrance.",
+      "evidence": [
+        "packages/opaque-auditing/src/opaque/api/auditing/attacks/_helpers.py:159-162 - the only identity evidence compared is len(dataset)",
+        "packages/opaque-auditing/src/opaque/api/auditing/attacks/_helpers.py:88-89 '__getitem__: return position, self._dataset[int(self._canary_indices[position])]'",
+        "repro output: 'correct  : [  -1.  -36.  -16.  -64. -144.]' vs 'shuffled : [-100. -144.  -49. -225.  -25.]  <- NO ERROR' then 'estimate from wrong dataset: OneRunEstimate(n_in=3, n_out=2, auc=0.5000)'",
+        "commit e6e3d478 adds no fingerprint field to CoinFlip (_coin_flip.py:163-168)"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Record a cheap fingerprint at coin_flip() time (e.g. blake2b over the bytes/repr of a handful of canary rows drawn from the dataset it was constructed on) alongside dataset_size, and re-check it in _scoring_loader with the same 'full concatenated dataset' message; skip the check only when the rows are not cheaply hashable.",
+      "confidence": "high"
+    },
+    {
+      "title": "The grid-floor justification comment cites a measurement that does not reproduce, and the test validates the floor only at n=1",
+      "file": "packages/opaque-auditing/src/opaque/api/auditing/one_run/_estimate.py",
+      "line": "35-43",
+      "category": "comment-accuracy",
+      "severity": "low",
+      "claim": "The comment 3ccf15ba (#890) put above _MIN_GRID_SIZE says 'at grid_size=16 a fully separable 500/500 canary split audits as eps=0'. A fully separable 500/500 split is u=0, and on the shipped code GdpMethod(grid_size=16).epsilon_at(delta=1e-5) returns 32.80 for it (37.28 at grid 64) - not 0. The configuration that does collapse, and the one the commit's own regression test builds (test_gdp.py:293-297, 'best threshold makes exactly 250 errors'), is u=250, i.e. 75 % attack accuracy, not full separation. The same comment says the floor 'is validated against the v_k order-statistic identity (Xiang et al. 2025, Eq. 12)', but the test that landed with it (test_gdp.py:148-158) checks only the n=1 case v_1 = Phi(-mu/2); the n=1 identity constrains nothing about the high ranks of a 10^3-10^4-canary audit, which are what dominate the Chernoff sum the floor exists to resolve. The floor itself is adequate - I swept m=1000..10000 and grid 1_000 tracks grid 10_000 within 0.035 absolute and agrees on the eps=0 boundary - so this is the recorded justification being wrong, not the constant.",
+      "failure_scenario": "A maintainer revisiting the floor - when the ~1.2 s/query cost is questioned, or while working open #828, whose RuntimeError the floor makes slower to reach - reads the comment, checks the cited case (fully separable, grid 16), measures eps=32.8 instead of the claimed 0, concludes the floor rests on a mismeasurement and lowers it back toward 16. That reinstates the real collapse at u=250-350 (eps 0.0 instead of 5.11/2.30) which #829 closed. The n=1 'validation' offers no counter-argument, since it holds at grid 16 as well.",
+      "evidence": [
+        "packages/opaque-auditing/src/opaque/api/auditing/one_run/_estimate.py:35-43 (the comment) and :44 '_MIN_GRID_SIZE = 1_000'",
+        "measured on the shipped GdpMethod: u=0 grid 16 -> eps 32.801667; u=0 grid 64 -> 37.275869; u=250 grid 16 -> 0.0; u=250 grid 64 -> 2.700027 (n_in=n_out=500, delta=1e-5)",
+        "packages/opaque-auditing/tests/auditing/test_gdp.py:148-158 TestVKGridConvergence parametrises only _compute_v_k(1, 1, ...) - the n=1 Bayes error",
+        "packages/opaque-auditing/tests/auditing/test_gdp.py:290-297 - the regression test's own docstring describes the u=250 configuration, not a separable one"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Restate the comment with the configuration the regression test actually uses (500/500 with 250 errors at the best threshold: eps 0.0 at grid 16, 2.70 at 64, 5.08 at 1_000, 5.11 at 10_000) and cite the grid sweep across audit sizes rather than the n=1 identity; if the n=1 test is kept, add a high-rank case (e.g. compare _compute_v_k at grid 1_000 vs 10_000 for n=10_000, top ranks) so the floor has a test that could actually fail.",
+      "confidence": "high"
+    },
+    {
+      "title": "The #895 fix's new public field and new failure mode never reached the auditing reference",
+      "file": "docs/reference/auditing.md",
+      "line": "92-94, 148-150, 238-249",
+      "category": "docs-drift",
+      "severity": "low",
+      "claim": "e6e3d478 added a public CoinFlip attribute (dataset_size), made train_indices' parameter optional, and gave loss_scores/gradient_scores a new hard failure mode (dataset length mismatch, canary index out of bounds). None of the three reached the reference page the fix's own docs commit did not touch: the CoinFlip attribute table (:238-243) still lists four fields, the train_indices signature (:248) is still 'cf.train_indices(dataset_size) -> list[int]' with the argument presented as required and its body still says 'All indices except held-out canaries' with no mention of the recorded default, and both scorers' Raises blocks (:92-94, :148-150) still enumerate only batch_argnums / batch_size / collate_fn / reference_scores. The user guide was not updated either (docs/user-guide/auditing.md mentions neither the size check nor dataset_size).",
+      "failure_scenario": "A user whose pipeline hits 'ConfigurationError: dataset length (N) does not match the dataset size (M) the CoinFlip was constructed from' - now a routine outcome for anyone who scores a filtered or reordered split - finds nothing about it in the reference's Raises blocks and no documented way to see what size the partition recorded, because dataset_size is absent from the attribute table. The same gap hides the new convenience (train_indices() with no argument) that the fix introduced.",
+      "evidence": [
+        "docs/reference/auditing.md:238-243 - CoinFlip attribute table: num_canaries, canary_indices, in_indices, out_indices only",
+        "docs/reference/auditing.md:248 'cf.train_indices(dataset_size) -> list[int]'",
+        "docs/reference/auditing.md:92-94 and :148-150 - Raises blocks unchanged by e6e3d478",
+        "packages/opaque-auditing/src/opaque/api/auditing/_coin_flip.py:168 'dataset_size: int | None = None' and :176 'def train_indices(self, dataset_size: int | None = None)'",
+        "git show e6e3d478 --stat: touches no file under docs/"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Add dataset_size to the CoinFlip attribute table, show train_indices(dataset_size=None) with the recorded-size default, and extend both scorers' Raises blocks with the length-mismatch / out-of-bounds ConfigurationError and the 'full concatenated dataset, not a training subset' requirement.",
+      "confidence": "high"
+    }
+  ],
+  "delta_reviewed": "packages/opaque-auditing is touched by exactly five commits in 4b13d82..12146ec4, and I reviewed all five plus the two auditing docs commits and the in-repo consumers. (1) 3ccf15ba fix(auditing) #890 - the #829 grid floor: verified numerically (see status) including a sweep of m=1000/2000/5000/10000/100000 at grids 16..10000 to confirm the constant floor is adequate and not merely larger, plus the eps=0 boundary agreement; one finding on its justification comment. (2) e6e3d478 fix(auditing) #895 - the #830 dataset guard: traced both scoring call sites (_loss.py:117, _gradient.py:136 are the only callers of _scoring_loader), reproduced the original defect being blocked, checked the documented crafted-canary recipe and all four examples/train_*.py still pass the new check (they keep the pre-selection dataset in audit_dataset), and found two residual holes (train_subset/train_indices, equal-length substitution) plus a docs gap. (3) ff174f11 ci(auditing) #897 - converts the three raises #895 added to ConfigurationError for the ruff TRY003 gate; behaviour-preserving because ConfigurationError subclasses ValueError (opaque-base exceptions), so the documented ValueError contracts and existing except clauses still match. (4) 9a18aee6 test(auditing) #896 - the #831 comment rename, verified by repo-wide grep. (5) 7b26f655 feat(exceptions) #760 - a mechanical ValueError/TypeError/RuntimeError -> ConfigurationError/InputTypeError/OperationError sweep across _coin_flip.py, attacks/*, one_run/{_eps_delta,_estimate,_gdp,_roc,_stats}.py with no logic change; all three new classes are subclasses of the builtins they replace, and the accompanying docs/reference/auditing.md edits match the code. I also checked the two cross-cutting delta commits that reach auditing's RNG (e785a9f4 fix(random)! separate fold-in input domains, dd65957d) - auditing's two fold-in domains are already namespaced ('opaque.auditing.canary_selection', 'opaque.auditing.coin_flip') and remain distinct; the breaking hash change re-derives a different partition from the same key across the upgrade, but no CoinFlip serialization exists and every documented and example workflow holds the partition in memory for the whole audit, so I found no auditing-side defect to file. Ran the full package suite (uv run pytest packages/opaque-auditing/tests): 237 passed. Open #828 (mu-GDP v_k bound) and Slate #376 were confirmed unchanged in shape and are not re-reported; the >2000-guess limitation is still undocumented in docs/user-guide/auditing.md:215-241, which is part of #828's own fix sketch."
+}

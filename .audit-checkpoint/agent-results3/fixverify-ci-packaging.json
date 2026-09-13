@@ -1,0 +1,452 @@
+{
+  "statuses": [
+    {
+      "issue": 832,
+      "opq": "OPQ-377",
+      "title": "Restore the CUDA-availability preflight so GPU lanes cannot pass on a CPU host",
+      "status": "fixed-verified",
+      "note": "039fc012 (PR #876) added .github/scripts/assert_cuda_available.sh and wires it in twice: as the 'CUDA preflight' step at .github/workflows/python-tests.yml:141-143 and again at .github/scripts/run_python_test_package.sh:14 (so a workflow refactor cannot un-guard it). Reproduced by construction on this CPU-only host: PYTEST_MARKER='cuda and not slow' -> exit 1 with '::error::CUDA preflight failed'; PYTEST_MARKER='cuda' -> exit 1. All five non-CUDA lane markers actually used ('not cuda and not mps and not slow and not distributed', 'distributed and not cuda', 'not cuda and not slow and not distributed', 'not cuda and not mps and not distributed', 'not cuda and not distributed') -> exit 0, so the guard is a no-op where it should be. Every GPU lane in pr.yml:150/167/184, ci.yml:105/119/133 and prepare-release-implementation.yml:404/423/442 routes through python-tests.yml, so all nine are covered. The probe also reads a value back off the device rather than trusting is_available() alone.",
+      "fix_commits": ["039fc012"]
+    },
+    {
+      "issue": 833,
+      "opq": "OPQ-378",
+      "title": "Add statistical conformance tests tying realized noise to reported noise_stddev",
+      "status": "fixed-with-caveats",
+      "note": "31ffed65 (PR #871) added 1 conformance test for scalar gaussian_noise (packages/opaque-dpsgd/tests/noise/test_noise.py:129-139) and 6 parametrized cases for mf_gaussian_noise over identity/band_mf/blt/bisr/bsr/lambda_cgd (packages/opaque-dpftrl/tests/noise/test_realized_stddev.py:101-158), each drawing 1e6 coordinates at tolerance 6/sqrt(2n) ~= 0.42%. VERIFIED BY MUTATION as the brief asked: a pytest plugin scaling torch.randn/randn_like/normal by 0.97 turns the noise suites red -- 10 failed / 372 passed, including all 7 new conformance tests (baseline: 382 passed). CAVEAT: the per-group (PerGroup) Gaussian path named explicitly in the OPQ-378 fix sketch is NOT covered; a targeted mutation that makes only the per-group applied draws 3% low while leaving the reported PerGroup noise_stddev intact leaves the whole opaque-dpsgd + opaque-engine PR-gate suite green (1355 passed, 26 skipped, 0 failed). Filed as a finding.",
+      "fix_commits": ["31ffed65"]
+    },
+    {
+      "issue": 834,
+      "opq": "OPQ-379",
+      "title": "Restore a value-level regression test for the CachedProcess.repeated_pld bug",
+      "status": "fixed-with-caveats",
+      "note": "76fd4e3e (PR #885) added two tests: a mock-based relay test (packages/opaque-accounting/tests/test_cached.py:1-29) and the value-level correlated-strategy test the acceptance criteria asked for (test_cached_correlated_full_horizon_preserves_epsilon, band_mf bands=16, n_steps=128). VERIFIED BY MUTATION as the brief asked: a plugin doing 'del CachedProcess.repeated_pld' over the three accounting test trees gives 1 failed / 601 passed, and the one failure is the new mock test (assert 3.0 == 2.0). So the mutation does now go red -- criterion met. CAVEAT: the value-level test no longer exists. 87404a1b (PR #894, one day later) deleted packages/opaque-dpftrl/tests/accounting/test_per_step.py wholesale along with the acc.per_step API the test used. After #894 the only repeated_pld override in the tree is CachedProcess's own (grep 'def repeated_pld' -> _base.py:418 and _cached.py:84), so the relay is behaviourally inert on every shipped process and only a synthetic mock can detect its removal. Filed as a finding.",
+      "fix_commits": ["76fd4e3e", "87404a1b"]
+    },
+    {
+      "issue": 835,
+      "opq": "OPQ-380",
+      "title": "Guard the CI test-package matrix against silently omitted suites",
+      "status": "fixed-with-caveats",
+      "note": "6de5f9ca (PR #870) added the 'Verify package test matrix' step at .github/workflows/python-tests.yml:102-125, which awk-extracts the matrix's packages/* paths and comm-diffs them against 'find packages -mindepth 2 -maxdepth 2 -type d -name tests'. Verified by construction: today configured == found (10 packages, empty missing set); replicating the exact script against a tree with an extra packages/opaque-newpkg/tests directory prints 'Package test directories missing from the Python test matrix: packages/opaque-newpkg' and exits 1. The stale pyproject claim was also corrected (pyproject.toml:164-168 now says 'CI uses grouped explicit package paths ... and verifies that they cover every package test directory'). CAVEAT: OPQ-380 also named build-distributions.yml's hardcoded per-package build steps; those are untouched (10 literal 'uv build packages/opaque-*' steps at .github/workflows/build-distributions.yml:46-74) and have no equivalent guard. Filed as a finding.",
+      "fix_commits": ["6de5f9ca"]
+    },
+    {
+      "issue": 836,
+      "opq": "OPQ-381",
+      "title": "Replace allow-empty-test-selection with a per-suite expected minimum",
+      "status": "not-fixed",
+      "note": "Closed 2026-09-01 as state_reason='not_planned' with no comment and no code change; git diff 4b13d82..12146ec4 on .github/scripts/run_python_test_package.sh shows only the CUDA-preflight line added. The exit-5-to-success conversion is unchanged at .github/scripts/run_python_test_package.sh:43-46, and 'allow-empty-test-selection: true' is still set on pr.yml:81/145/160/177 and ci.yml:41/100/112/126. Re-measured collection under the distributed lane's exact marker ('distributed and not cuda'), one path at a time: opaque-base 0, opaque-accounting 0, opaque-auditing 0, opaque-patches 0, tests 0; opaque-dpsgd 6, opaque-dpftrl 5, opaque-engine 10, opaque-optimizers 2, opaque-alignment 1, opaque-transformers 10. So the 'Foundation' and 'Integration tests' legs of the distributed lane still report green having executed nothing. The CUDA half of the fail-open is now mitigated by the #832 preflight, but the distributed half is not. Filed as a low finding since the closure leaves an untracked live fail-open."
+    },
+    {
+      "issue": 837,
+      "opq": "OPQ-382",
+      "title": "Mark the Gloo process-group test distributed so it leaves the parallel lane",
+      "status": "fixed-verified",
+      "note": "abfceed5 (PR #892). Both acceptance criteria met: test_dpo_brings_up_the_process_group_before_precomputing now carries @pytest.mark.slow + @pytest.mark.distributed + @pytest.mark.usefixtures('_isolated_process_group'), and the 'if torch.distributed.is_initialized(): pytest.skip(...)' fail-open was replaced by a fixture that asserts no group is live at setup and destroys any leftover at teardown. Verified by collection: selected under 'distributed and not cuda' (appears in the 10/1049 collected for opaque-transformers), and 0 hits under the parallel lane marker 'not cuda and not mps and not slow and not distributed'. The try/finally around DPOTrainer was also removed in favour of the fixture, so a leaked group now fails the next test instead of being swallowed.",
+      "fix_commits": ["abfceed5"]
+    },
+    {
+      "issue": 838,
+      "opq": "OPQ-383",
+      "title": "Restore PR-gate coverage for the BallsInBins + IdentityMf composition case",
+      "status": "fixed-by-removal",
+      "note": "Closed with the comment 'superseded by #894'. 87404a1b (PR #894) deleted packages/opaque-dpftrl/tests/accounting/test_per_step_invariants.py together with the acc.per_step API whose composition the skipped test exercised, so the construct 'per_step(BallsInBins(IdentityMf)) * K1 | ... * K2' no longer exists. The removal is coherent: 'grep -rn per_step docs/ examples/ README.md AGENTS.md CONTRIBUTING.md' and 'grep -rn acc.per_step packages/*/src' both return nothing, and 'per_step' in dir(opaque.accounting) is False. Residual worth noting (not filed separately): under the PR marker the BallsInBins+IdentityMf pair now collects only test_identity_mf.py::TestBallsInBinsIdentity::test_zero_noise_non_private (an isinf check) plus three rejection tests and test_balls_in_bins_identity_cache.py::test_equivalent_horizons_share_one_epoch_transform (a self-consistency epsilon equality); every finite-epsilon amplification assertion for that pair (test_pld_agrees_with_generic_bnb_mc, test_factory_path_finite, test_strictly_tighter_than_unamplified_composition at test_identity_mf.py:221/256/264) is still @pytest.mark.slow and therefore deselected on PRs.",
+      "fix_commits": ["87404a1b"]
+    },
+    {
+      "issue": 839,
+      "opq": "OPQ-384",
+      "title": "Correct the stale PLD cache-contamination comment",
+      "status": "fixed-verified",
+      "note": "The misleading comment is gone: 'grep -rn \"lru_cache keys on\\|resolved global config\\|must not have been populated\"' over packages/ and tests/ returns nothing. It was first rewritten by 8f8903b7 (#864) and then eb6da40b (PR #882) added the property assertion 'assert pld_per_call is pld_global'; 87404a1b (#894) subsequently deleted the whole file. The property the comment concerned is still covered: packages/opaque-accounting/tests/test_pld_cache.py:86-96 asserts that an explicit-kwargs pld() and a set_discretization()-then-pld() resolve to the same cached Pld object and that a changed config resolves to a different one.",
+      "fix_commits": ["8f8903b7", "eb6da40b", "87404a1b"]
+    },
+    {
+      "issue": 840,
+      "opq": "OPQ-385",
+      "title": "Make Ruff actually check the root tests tree",
+      "status": "fixed-verified",
+      "note": "7af01101 (PR #847) removed \"tests/**\" from [tool.ruff.lint].exclude; the list is now only .github/scripts/**, benchmarks/**, conftest.py, docs/**, examples/** (pyproject.toml:227-233), and the per-file-ignores for the tests trees are retained at pyproject.toml:299-300. Reproduced the original probe: piping 'import os\\n\\nx = undefined_name' through 'ruff check --no-cache --stdin-filename tests/_ruff_probe_tmp.py -' now reports F401 + F821 and exits 1, where OPQ-385 measured 'All checks passed!' / exit 0; the same probe under packages/opaque-engine/tests/ behaves identically. The gate command in autoformat.yml:32-33 ('ruff format --check packages/ tests/' and 'ruff check packages/ tests/') is therefore no longer a no-op for the root tree. Both commands are green on the current tree (808 files formatted, all checks passed).",
+      "fix_commits": ["7af01101"]
+    },
+    {
+      "issue": 841,
+      "opq": "OPQ-386",
+      "title": "Test the Python 3.12 runtime that every wheel advertises",
+      "status": "not-fixed",
+      "note": "Closed 2026-09-01 as state_reason='not_planned' with no comment. Re-measured at 12146ec4: 'grep -rn \"3\\.12\" .github/' still returns zero hits, validate-distributions.yml:19 still matrixes only [\"3.11\",\"3.13\"], python-tests.yml:37 still defaults to 3.11, and 'Programming Language :: Python :: 3.12' is still declared in the root pyproject.toml:28 and in all ten packages/*/pyproject.toml. The issue's alternative acceptance branch ('If endpoint-only testing is the intended policy, it is documented as a policy') is also unmet: AGENTS.md's CI-lane list and CONTRIBUTING.md's 'Test Markers and Filtering' section say nothing about 3.12. Filed as a low finding."
+    },
+    {
+      "issue": 842,
+      "opq": "OPQ-387",
+      "title": "Extend noise-stream continuity coverage to every noise-state shape",
+      "status": "fixed-verified",
+      "note": "1794504b (PR #901). Criterion 1: _NOISE_CASES at packages/opaque-transformers/tests/opaque_transformers/test_checkpoint_helpers.py:344-439 now has eight parametrizations -- gaussian, mf-identity, mf-band-per-group, mf-blt, mf-bisr, mf-bsr, mf-lambda-cgd and a paired second-moment case (mf-paired-band-lambda-cgd) -- i.e. all seven shapes OPQ-387 enumerated plus the paired SecondMomentMFNoiseState. TestNoiseStreamContinuity::test_continues_after_resume (:493-583) round-trips through save_dp_runtime_state/load_dp_runtime_state/opaque_from_state_dict and asserts bit-exact tensor equality of both the restored state and every subsequent draw against the uninterrupted run, in two restore modes including a deliberately 'poisoned' template. Criterion 2: the trainer-level test in test_dpftrl_trainer_smoke.py was strengthened from 'global_step >= 8' + approximate epsilon to 'global_step == max_steps' plus torch.testing.assert_close(rtol=0.0, atol=0.0) over every named parameter of a straight-through run versus a checkpoint+resume run.",
+      "fix_commits": ["1794504b"]
+    },
+    {
+      "issue": 843,
+      "opq": "OPQ-355,357,358,361,362,363,364,365,367,368",
+      "title": "Sweep A - regenerate and execute every documented accounting snippet",
+      "status": "fixed-with-caveats",
+      "note": "The ten named sites are genuinely fixed. OPQ-355: docs/getting-started/quickstart.md:11 now transcludes '--8<-- \"examples/quickstart.py:4:\"', and examples/quickstart.py drives a real PoissonSampler over exactly num_steps and asserts 'abs(final_epsilon - result.achieved) < 1e-9'; it runs clean here (final epsilon 3.00). dp_sgd_training.ipynb cells 9/13 likewise use PoissonSampler + matching accounting. OPQ-357: the module docstring at packages/opaque-accounting/src/opaque/accounting/__init__.py:1-23 now names only real factories and carries an executable doctest ('python -m doctest' passes; verified it exits 1 when the expected output is perturbed). OPQ-358/360: the training-arguments.md mechanism table (:148-155) matches _training_arguments.py:204-262 exactly, including max_buffers=10. OPQ-361: 'hypergeometric' no longer appears anywhere in docs/. OPQ-362: every gaussian_noise call in reference/rng.md is keyword-form and binds a 2-tuple. OPQ-363: clipping.md:236 now imports dpsgd_acc. OPQ-364: the dp-sgd.md loop iterates a DataLoader, terminates, composes the accountant and calls optimizer.update(...)/torchopt.apply_updates. OPQ-367/368: the adamw_torch_fused claim is gone and chunked_nll is documented. An AST scan of all 369 python fences across 46 markdown files found zero imports or module attributes that do not exist in the shipped API. CAVEATS (filed as findings): (a) the new CI step at .github/workflows/pr.yml:290-301 executes only examples/quickstart.py, one module docstring and 3 of the 7 tutorial notebooks -- no Markdown snippet is executed at all, so the issue's 'Every documented accounting and training snippet executes as written, in CI' is unmet; (b) docs/tutorials/privacy_auditing.ipynb, one of the four notebooks the step does not execute, still contains the exact OPQ-355 defect; (c) docs/reference/rng.md:325 calls optimizer.step(), which does not exist.",
+      "fix_commits": ["12146ec4", "4287fc33"]
+    },
+    {
+      "issue": 844,
+      "opq": "OPQ-359,360,366,369,370,388",
+      "title": "Sweep B - reconcile trainer reference tables and docstrings against the dataclasses",
+      "status": "fixed-with-caveats",
+      "note": "All six sites verified fixed against the current code. OPQ-359: 'grep -rni squarechipo' over docs/, packages/*/src and README.md returns nothing. OPQ-360: the accepted-sampler table at docs/user-guide/huggingface/training-arguments.md:148-165 matches _MECHANISM_SAMPLERS / _ALLOWED_SAMPLING_MODES at packages/opaque-transformers/src/opaque/api/transformers/trainer/_training_arguments.py:189-210 exactly (gaussian: poisson|k_out_of_t; mf_identity: poisson|balls_in_bins; mf_band: cyclic_poisson|b_min_sep; blt/bisr/bsr/lambda_cgd: balls_in_bins). OPQ-366: training-arguments.md:78-90 now states the crossing step is predicted before the loop and enforced independently of logging_strategy/logging_steps and that horizon mechanisms reject the combination, which matches the rejection at _training_arguments.py:1252-1255. OPQ-369: docs/user-guide/huggingface/training-arguments.md:50 and docs/reference/transformers.md:188 both say '1 / dataset_size**1.1', matching _DEFAULT_PRIVACY_DELTA_EXPONENT = 1.1 at _training_arguments.py:265-270. OPQ-370: AGENTS.md:245-269 now lists all fourteen lane marker expressions and each one matches pr.yml/ci.yml literally, and the advisory-minimum claim is replaced by 'Every selected test, dependency resolution, and workflow failure blocks its caller', which matches the pr.yml:210-228 aggregate gate (only python-tests-cuda* may be 'skipped'). OPQ-388: AGENTS.md:241-242 now points at tests/_support/opaque_test_support.py, where requires_hf_auth is defined at line 143. CAVEAT (filed as a finding): the issue's structural criterion 'Every published default and accepted-value list is generated from, or checked against, its dataclass in CI' is unmet -- no generator or check exists; the only tests that mention docs/ paths are two unrelated prose comments.",
+      "fix_commits": ["ba39783d", "87404a1b", "029cc45f"]
+    },
+    {
+      "issue": 553,
+      "opq": "n/a (Marble)",
+      "title": "docs: prepare public source-repository messaging",
+      "status": "partial",
+      "note": "The work-in-progress notice landed (README.md:11-15, docs/getting-started/installation.md:3-7) and the JetBrains Packages index is genuinely publicly reachable (curl of https://packages.jetbrains.team/pypi/p/fed/python/simple/ -> 200, .../simple/opaque/ -> 200). But the issue's core requirement 'ensure install instructions are usable by the intended public audience' is unmet for the extras: README.md:78-81 and docs/getting-started/installation.md:33-36 publish 'pip install \"opaque[auditing]\"' etc. with no --index-url, which resolves on PyPI to an unrelated project. Reproduced. Filed as a medium finding."
+    },
+    {
+      "issue": 554,
+      "opq": "n/a (Marble)",
+      "title": "docs: add a public vulnerability reporting policy",
+      "status": "fixed-verified",
+      "note": "SECURITY.md exists (2260 bytes) with supported versions, a private reporting address (security@jetbrains.com), PGP guidance, an explicit 'what is not a security report' section that routes ordinary DP/accounting defects to the public tracker, and coordinated-disclosure handling. Both external policy links resolve (https://www.jetbrains.com/legal/docs/terms/coordinated-disclosure/ -> 200, https://www.jetbrains.com/privacy-security/ -> 200). GitHub metadata confirms the repo is public, so the policy is discoverable."
+    },
+    {
+      "issue": 555,
+      "opq": "n/a (Marble)",
+      "title": "docs: add a code of conduct for public contributions",
+      "status": "fixed-with-caveats",
+      "note": "CODE_OF_CONDUCT.md exists and delegates to the JetBrains Open Source and Community Code of Conduct with a confidential reporting address (codeofconduct@jetbrains.com). Caveat: the whole substance is one outbound deep link to https://github.com/JetBrains/.github/blob/main/profile/README.md#code-of-conduct. The target repository exists and is public (GitHub API: JetBrains/.github, private=false), but every curl of that URL from this environment returns 403 while an equivalent blob URL in JetBrains-Research/opaque returns 200, so I could not independently confirm the '#code-of-conduct' anchor still exists. Not filed as a finding - the evidence is inconclusive, not negative."
+    },
+    {
+      "issue": 556,
+      "opq": "n/a (Marble)",
+      "title": "ci: harden repository controls before public visibility",
+      "status": "cannot-verify",
+      "note": "The parts visible from the repository are in good shape: every external action in .github/workflows and .github/actions is pinned to a full commit SHA (no floating tags anywhere), workflows declare explicit least-privilege 'permissions:' blocks (ci.yml:7-8 contents: read, with writes scoped to the jobs that need them), there is no pull_request_target trigger, and the self-hosted GPU lanes carry a job-level fork guard at pr.yml:140-142/155-157/172-174 so fork PRs never allocate the persistent runner. What I cannot verify from here: branch protection on main, required-check configuration, secret scanning / push protection / validity checks, and code scanning are all repository settings, and no tool in this session exposes them."
+    },
+    {
+      "issue": 557,
+      "opq": "n/a (Marble)",
+      "title": "docs: complete public repository metadata and community health",
+      "status": "fixed-verified",
+      "note": "GitHub API for JetBrains-Research/opaque shows description 'Functional DP-SGD and DP-FTRL for PyTorch.', homepage https://jetbrains-research.github.io/opaque/, topics [differential-privacy, dp-ftrl, dp-sgd, machine-learning, privacy-accounting, pytorch], license apache-2.0, visibility public. The homepage is live: / redirects to /latest/ (mike) and /latest/ returns 200, as do deep pages such as /latest/getting-started/installation/ and /latest/getting-started/quickstart/. Community-health files present: README.md, LICENSE, CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md, .github/ISSUE_TEMPLATE/{bug_report,feature_request,documentation}.yml, .github/pull_request_template.md, .github/CODEOWNERS. Social-preview image is not inspectable via the API fields available here."
+    },
+    {
+      "issue": 558,
+      "opq": "n/a (Marble)",
+      "title": "docs: perform a public-facing editorial review",
+      "status": "partial",
+      "note": "The editorial pass clearly happened (consistent WIP framing, no internal hosts: grep for confluence/youtrack/jetbrains.team/buildserver/teamcity across tracked non-lockfile files finds only the public JetBrains Packages index, the public jb.gg research badge, and the .teamcity/ pipeline prototype directory). Two live public-facing defects survived it and are filed as findings: the extras install commands resolve to an unrelated PyPI package, and CONTRIBUTING.md links twice to GitHub Discussions, which is disabled."
+    },
+    {
+      "issue": 559,
+      "opq": "n/a (Marble)",
+      "title": "build: migrate package publishing to a JetBrains-managed registry",
+      "status": "fixed-verified",
+      "note": "Dev wheels publish from ci.yml:200-242 ('Publish dev wheels to JetBrains Packages', environment: release, TWINE_* from vars/secrets, twine_upload.py against https://packages.jetbrains.team/pypi/p/fed/python/legacy/) and releases from release.yml:132-133 with the same repository plus --simple-url. The publish job is gated on merge-wheels plus all nine python-test lanes and rust-tests, so the #832 CUDA preflight now fails the publish path when the GPU runner loses CUDA. The index is publicly readable (200 for both the simple index and the opaque project page)."
+    },
+    {
+      "issue": 564,
+      "opq": "n/a (Marble)",
+      "title": "docs: reconsider the license for public source publication",
+      "status": "fixed-verified",
+      "note": "LICENSE is Apache-2.0 (9154 bytes), the root pyproject.toml declares license = { text = \"Apache-2.0\" } with the matching OSI classifier at :26, GitHub metadata reports license.spdx_id 'Apache-2.0', and README.md:17 carries the Apache-2.0 badge. NOTICE (6749 bytes) and third_party_provenance.toml (4149 bytes) are present alongside it."
+    },
+    {
+      "issue": 566,
+      "opq": "n/a (Marble)",
+      "title": "docs: configure GitHub Discussions for public participation",
+      "status": "not-fixed",
+      "note": "Closed as state_reason='not_planned' - a legitimate decision. But the issue's own scope included updating README.md/CONTRIBUTING.md 'and verify links and permissions from an external-user perspective', and that half was not done in the declining direction either: CONTRIBUTING.md:87 and :445 still link to https://github.com/JetBrains-Research/opaque/discussions. GitHub API reports has_discussions=false and the URL returns 403 to an anonymous client while .../issues returns 200 from the same client. Filed as a low finding."
+    },
+    {
+      "issue": 568,
+      "opq": "n/a (Marble)",
+      "title": "docs: add JetBrains Research and CI badges to the README",
+      "status": "fixed-verified",
+      "note": "README.md:17-21 carries five badges: Apache-2.0, Python 3.11-3.13, PyTorch 2.9+, JetBrains Research (https://jb.gg/badges/research.svg -> 200), and the CI workflow badge pointing at .github/workflows/ci.yml, which exists."
+    },
+    {
+      "issue": 574,
+      "opq": "n/a (Marble)",
+      "title": "build: remediate dependency security alerts before public visibility",
+      "status": "partial",
+      "note": "The two advisories the issue named by version are resolved in the current lockfiles: uv.lock pins jupyter-server 2.20.0 (the fixed version named in the issue, up from 2.17.0) and packages/opaque-accounting/Cargo.toml:29 requires pyo3 '0.29' with Cargo.lock at 0.29.2 (well past the 0.23.5 the issue flagged). Dependabot stays configured for github-actions, cargo and uv with weekly grouped updates (.github/dependabot.yml), and the delta contains four accepted bump PRs (9eabd4c6, b67dcc51, 066c4550, 91148fae, 9b096801, e64846c9). I cannot enumerate the current open alert set - no tool in this session exposes the Dependabot alerts endpoint - so 'every open alert is inventoried' and 'remaining accepted alerts have owners and rationale' are unverified."
+    },
+    {
+      "issue": 577,
+      "opq": "n/a (Marble)",
+      "title": "Modularize and reuse more in CI/CD",
+      "status": "fixed-verified",
+      "note": "The pipeline is now built from five reusable workflow_call workflows (python-tests.yml, rust-tests.yml, build-distributions.yml, validate-distributions.yml, qodana.yml, docs.yml) plus four composite actions (.github/actions/{setup-rust,setup-python,upload-python-coverage,run-qodana}) and nine shared scripts under .github/scripts/. pr.yml, ci.yml and prepare-release-implementation.yml all call the same python-tests.yml with different inputs rather than duplicating matrices, which is exactly what made the single-point #832 preflight fix possible."
+    },
+    {
+      "issue": 578,
+      "opq": "n/a (Marble)",
+      "title": "Remove JetBrains-internal specifics from documentation",
+      "status": "fixed-with-caveats",
+      "note": "A case-insensitive grep for confluence.jetbrains.com / youtrack / jetbrains.team / buildserver / teamcity / space.jetbrains across all tracked files (excluding lockfiles and the audit checkpoint) returns only: the public jb.gg research badge target in README.md:20, the public packages.jetbrains.team index in README.md:68/72, packages/opaque-accounting/README.md:19, ci.yml:241 and release.yml:132-133, and the tracked .teamcity/ prototype. Caveat: .teamcity/README.md and .teamcity/settings.kts are tracked and describe an internal TeamCity server, versioned-settings import and 'Linux-Large' hosted agent pools - infrastructure detail that has no meaning for an external contributor. The issue's scope was documentation, so this is a judgement call rather than a clear miss; not filed as a finding."
+    },
+    {
+      "issue": 579,
+      "opq": "n/a (Marble)",
+      "title": "Remove .cadence configuration",
+      "status": "fixed-verified",
+      "note": "'ls -a' at the repository root and 'git ls-files | grep -i cadence' both return nothing; no .cadence directory or file exists at 12146ec4."
+    },
+    {
+      "issue": 586,
+      "opq": "n/a (Marble)",
+      "title": "Remove fragile import and package enumeration checks",
+      "status": "regressed",
+      "note": "The removal itself happened (PR #587 replaced the contract tests with Junie review, and .junie/architecture-contracts.md now says deterministic checks must not rely on hand-maintained distribution-to-module maps). But its acceptance criterion 'Routine package additions, removals, and reorganizations do not require updating hard-coded inventories' was reversed three weeks later by 6de5f9ca (PR #870, closing #835), which reintroduced an enumeration check as a CI step: python-tests.yml:102-125 globs packages/*/tests and fails the lane when any directory is missing from the hardcoded five-block suite matrix. Adding a package now requires editing python-tests.yml (and, unguarded, build-distributions.yml:46-74). This is arguably the better trade -- failing loudly beats silently running zero tests -- but the two closed issues are in direct contradiction and nothing in the repository records which one governs. Not filed separately; the actionable half (the unguarded build matrix) is filed as a finding."
+    }
+  ],
+  "findings": [
+    {
+      "title": "Published install instructions install an unrelated PyPI project instead of Opaque",
+      "file": "docs/getting-started/installation.md",
+      "line": "33-36 (also README.md:78-81)",
+      "category": "packaging/public-release",
+      "severity": "medium",
+      "claim": "The repository is public and its documentation site is live. The 'From JetBrains Packages' commands correctly pass --index-url (installation.md:20, :27; README.md:68, :72), but the 'Extras' block immediately below them drops it: `pip install \"opaque[auditing]\"`, `\"opaque[dpftrl]\"`, `\"opaque[transformers]\"`, `\"opaque[all]\"`. With no index override pip resolves `opaque` from PyPI, where that name belongs to a different project entirely - `opaque` 1.0.0, 'python libopaque wrapper' by Stefan Marsiske (https://github.com/stef/libopaque). The extras are silently ignored (pip only warns about unknown extras), so the user ends up with an unrelated cryptography binding and no Opaque at all. The Opaque distribution names are largely unclaimed on PyPI: `opaque-dpsgd` 404s, and `opaque-accounting` resolves to a metadata-less 999.9.9 placeholder, so the namespace is not defensively held.",
+      "failure_scenario": "A reader of https://jetbrains-research.github.io/opaque/latest/getting-started/installation/ (live, verified 200) wants DP-FTRL. They copy `pip install \"opaque[dpftrl]\"` from the Extras block. pip downloads opaque-1.0.0.tar.gz from PyPI and installs a libopaque wrapper; `import opaque.dpftrl` then fails with ModuleNotFoundError and the user concludes the library is broken. Reproduced verbatim in a clean venv: `pip install --dry-run --no-deps \"opaque[auditing]\"` prints 'Downloading opaque-1.0.0.tar.gz (10 kB)' and 'Would install opaque-1.0.0'. Because `opaque-dpsgd` is an unclaimed name on PyPI, the same missing-index pattern is also the shape a dependency-confusion upload would exploit.",
+      "evidence": [
+        "docs/getting-started/installation.md:31-37 - Extras fenced block with four bare `pip install \"opaque[...]\"` lines, directly under the --index-url block at :18-28",
+        "README.md:76-82 - identical Extras block under the --index-url block at :66-73",
+        "curl https://jetbrains-research.github.io/opaque/latest/getting-started/installation/ -> 200, page contains opaque[auditing], opaque[dpftrl], opaque[transformers], opaque[all]",
+        "pip install --dry-run --no-deps \"opaque[auditing]\" in a fresh python3 -m venv -> 'Downloading opaque-1.0.0.tar.gz (10 kB)' ... 'Would install opaque-1.0.0'",
+        "https://pypi.org/pypi/opaque/json -> name 'opaque', version '1.0.0', summary 'python libopaque wrapper', author 'Stefan Marsiske', home_page https://github.com/stef/libopaque",
+        "https://pypi.org/pypi/opaque-dpsgd/json -> 404; https://pypi.org/pypi/opaque-accounting/json -> 200 with version '999.9.9', summary null, author null",
+        "GitHub API for JetBrains-Research/opaque: visibility 'public', homepage https://jetbrains-research.github.io/opaque/"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Carry the index into every documented command - either append `--index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/` to each extras line, or restructure the section as one `pip install --index-url <jb> \"opaque[all]\"` with a note that the extras names are `auditing`, `dpftrl`, `alignment`, `transformers`, `trl`. Do the same in README.md and packages/opaque-accounting/README.md. Separately, register the `opaque*` distribution names on PyPI (even as placeholders that point at the real index) so the public names cannot be claimed by someone else, and consider an ARC-011 post-build scenario that runs each documented install command verbatim in a clean container and asserts `import opaque.dpsgd` succeeds.",
+      "confidence": "high"
+    },
+    {
+      "title": "privacy_auditing tutorial prices a shuffled fixed-batch loop with Poisson amplification and uses the result as the audit ceiling",
+      "file": "docs/tutorials/privacy_auditing.ipynb",
+      "line": "code cell 13 (theoretical bound); training loop in code cell 9",
+      "category": "docs-drift-epsilon",
+      "severity": "medium",
+      "claim": "This is the exact OPQ-355 defect, alive in a sibling notebook that #843's fix did not touch and that the new CI step does not execute. Cell 9 trains with `DataLoader(train_data, batch_size=batch_size, shuffle=True)` - fixed-size shuffled batches, not Poisson sampling. Cell 13 then computes `process = dpsgd_acc.poisson(dpsgd_acc.gaussian(noise_multiplier), sample_rate) * total_steps` and prints it as 'Theoretical epsilon'. Poisson subsampling amplification does not hold for shuffled fixed-size batches; the conservative analysis for that loop is unamplified composition. The notebook then compares the audited epsilon against this understated ceiling and prints 'OK: audited epsilon is within the theoretical bound', which is precisely the sanity check .junie/differential-privacy-review.md says must be sound ('treat an empirical lower bound above the theoretical upper bound as a likely defect'). Cell 9 additionally divides the noised sum by the realised batch size (`p - (lr / bs) * g`) rather than a fixed expected batch size, so the released update is a function of a data-dependent quantity the mechanism never noised - the fixed dp_sgd_training.ipynb explicitly comments the opposite ('Gradients are already normalized by the fixed expected batch size').",
+      "failure_scenario": "With the notebook's own parameters (noise_multiplier=0.5, batch_size=64, n_epochs=200, ~250 training examples after the coin flip, so total_steps=600 and sample_rate=0.256) the published 'Theoretical epsilon' is 253.2 while the conservative no-amplification bound for the same 600 releases is 1408.9 - a 5.6x understatement. A reader who copies this pattern (shuffled DataLoader + Poisson-amplified accountant) into their own run reports an epsilon 5.6x smaller than anything they can justify, and the notebook's audit 'OK' line actively confirms the wrong number. The same notebook is what the auditing guide points readers at.",
+      "evidence": [
+        "docs/tutorials/privacy_auditing.ipynb code cell 9: `train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)` then `params = tuple(p - (lr / bs) * g for p, g in zip(params, noisy_grads.pytree))`",
+        "docs/tutorials/privacy_auditing.ipynb code cell 13: `sample_rate = batch_size / len(train_data)`; `total_steps = n_epochs * (len(train_data) // batch_size)`; `process = dpsgd_acc.poisson(dpsgd_acc.gaussian(noise_multiplier), sample_rate) * total_steps`; `theoretical_eps = process.epsilon_at(1e-5)`; `if audited_eps <= theoretical_eps: print(\"OK: ...\")`",
+        "docs/tutorials/privacy_auditing.ipynb code cell 7: noise_multiplier = 0.5, batch_size = 64, n_epochs = 200; cell 3: n_samples = 500; cell 5: coin_flip over all 500 leaves ~250 in-canaries",
+        "Computed with the shipped accountant at n_train=250: poisson-amplified eps = 253.222, unamplified (dpsgd_acc.gaussian(0.5) * 600) eps = 1408.936, ratio 5.6x",
+        ".github/workflows/pr.yml:294-301 executes only accounting_and_calibration.ipynb, dp_sgd_training.ipynb and dp_ftrl_training.ipynb; privacy_auditing.ipynb, sampling_and_microbatching.ipynb, distributed_training.ipynb and llm_finetuning.ipynb are in the mkdocs nav (mkdocs.yml:135-145) but are never executed",
+        "Contrast: docs/tutorials/dp_sgd_training.ipynb cell 13 was fixed by 12146ec4 to use PoissonSampler with n_steps=total_steps and comments 'The sampler and accountant use the same independent-inclusion process.'",
+        "docs/tutorials/sampling_and_microbatching.ipynb code cell 9 has the same realised-batch-size normalisation (`p - (lr / bs) * g` with no normalize_by on clipped_grad)"
+      ],
+      "affects_epsilon": true,
+      "fix_sketch": "Replace the shuffled DataLoader in cell 9 with `PoissonSampler(dataset, sample_rate=..., n_steps=total_steps, key=...)` behind a `DataLoader(..., batch_sampler=sampler)` so the runtime matches the accountant, exactly as dp_sgd_training.ipynb now does; pass `normalize_by=batch_size` to `clipped_grad` and drop the `/ bs` from the update. Then add privacy_auditing.ipynb (and the other three) to the notebook loop in pr.yml:294-301 so the pattern cannot come back.",
+      "confidence": "high"
+    },
+    {
+      "title": "Sweep A's executable-docs gate executes no Markdown snippet and only 3 of 7 notebooks",
+      "file": ".github/workflows/pr.yml",
+      "line": "290-301",
+      "category": "ci-coverage/docs",
+      "severity": "medium",
+      "claim": "Issue #843's acceptance criteria were 'Every documented accounting and training snippet executes as written, in CI' and 'The executable-docs check runs on every PR, so this class cannot recur silently'. The step 12146ec4 added executes exactly three things: `examples/quickstart.py`, `python -m doctest packages/opaque-accounting/src/opaque/accounting/__init__.py`, and three of the seven tutorial notebooks. It executes zero of the 369 ```python fences spread across 46 Markdown files under docs/ - including every snippet the ten Sweep A findings were about. The one page that is genuinely protected (quickstart.md) is protected because it was rewritten to transclude the executed script, which is the right pattern but was applied to exactly one page. Nothing prevents the next accounting snippet from drifting, which is the recurrence the issue set out to stop. The same gap exists on main: docs.yml deploys the public site on every push with `mike deploy` (a non-strict mkdocs build) and no doc-execution step at all, so the strict build and the execution step exist only on the PR path.",
+      "failure_scenario": "A future PR changes an accounting factory signature and updates the reference table but not the snippet in docs/user-guide/accounting.md. `mkdocs build --strict` still passes (it does not execute code), the three notebooks and quickstart.py still pass (they do not use that snippet), and the drifted snippet ships to the public docs site. This is the same mechanism that produced OPQ-357, OPQ-361, OPQ-362, OPQ-363, OPQ-364 and OPQ-365 in the first place. The residual `optimizer.step()` call in reference/rng.md (filed separately) is a live instance that survived Sweep A itself.",
+      "evidence": [
+        ".github/workflows/pr.yml:290-301 - 'Execute accounting documentation' runs `uv run python examples/quickstart.py`, `uv run python -m doctest packages/opaque-accounting/src/opaque/accounting/__init__.py`, and a loop over accounting_and_calibration.ipynb / dp_sgd_training.ipynb / dp_ftrl_training.ipynb only",
+        "AST scan of docs/**/*.md at 12146ec4: 46 files contain ```python fences, 369 fences total; none is referenced by any CI step",
+        "mkdocs.yml:135-145 lists 7 tutorial notebooks; 4 of them (sampling_and_microbatching, llm_finetuning, privacy_auditing, distributed_training) are never executed",
+        "docs/getting-started/quickstart.md:11 - `--8<-- \"examples/quickstart.py:4:\"`; verified live at https://jetbrains-research.github.io/opaque/latest/getting-started/quickstart/ (renders the real source, no leaked snippet marker)",
+        ".github/workflows/docs.yml:50-74 - the main/release deploy runs only `uv sync --group docs` then `mike deploy`; no --strict, no examples group, no execution step, and the job does not depend on ci.yml",
+        "grep -rln 'docs/' over packages/*/tests and tests/ finds only two unrelated prose comments - there is no test that reads a docs file"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Extend the pattern quickstart.md already uses: move each epsilon-publishing snippet into a runnable file under examples/ or docs/_snippets/ and transclude it with pymdownx.snippets, then execute those files in CI. For the remainder, add a pytest collector (e.g. under tests/docs/) that extracts every ```python fence tagged as runnable and execs it in a fresh namespace, so the fence list grows automatically. Add the four unexecuted notebooks to the pr.yml loop, and mirror the strict build plus the execution step into docs.yml so a direct push to main cannot deploy an unchecked site.",
+      "confidence": "high"
+    },
+    {
+      "title": "Per-group Gaussian noise has no realized-vs-reported conformance test; a 3% shortfall passes the whole suite",
+      "file": "packages/opaque-dpsgd/tests/noise/test_per_group_noise.py",
+      "line": "27-50",
+      "category": "test-integrity/mutation-coverage",
+      "severity": "low",
+      "claim": "OPQ-378's fix sketch named three shapes: 'gaussian_noise, per-group gaussian_noise and mf_gaussian_noise'. PR #871 delivered scalar gaussian_noise and six mf_gaussian_noise strategies but not the per-group path, and no other test binds realized per-group noise magnitude to the reported PerGroup noise_stddev. The only magnitude assertion for per-group noise is a ratio check on 100 samples (`mlp_var > attn_var * 2.5`), which is invariant to a uniform scale error, and test_gaussian_second_moment.py / test_paired_noise_stddevs.py only assert that the reported metadata is a PerGroup of the right values. The paired second-moment streams have the same gap.",
+      "failure_scenario": "Verified by targeted mutation. With a plugin that makes only the per-group lookup inside gaussian_noise's `_add_noise_tree` return 0.97x its value - so the drawn noise is 3% low while `output.noise_stddev` still reports the correct PerGroup and the accountant is still charged `gaussian(nm)` - the entire PR-gate suite for opaque-dpsgd plus opaque-engine passes: 1355 passed, 26 skipped, 148 deselected, 0 failed. The same 3% shortfall applied globally (scaling torch.randn) is caught by 10 tests. So a regression in the per-group cast/lookup path - an fp32/bf16 round trip, a wrong ParamPath resolution, a recomputed group bound - ships green while users at a reported nm are charged for noise they did not receive.",
+      "evidence": [
+        "packages/opaque-dpsgd/tests/noise/test_per_group_noise.py:44-49 - the only magnitude assertion is `attn_var = ...; mlp_var = ...; assert mlp_var > attn_var * 2.5` over 100-element tensors",
+        "packages/opaque-dpsgd/tests/noise/test_noise.py:129-139 and packages/opaque-dpftrl/tests/noise/test_realized_stddev.py:41-48,101-158 - the seven new conformance tests, all scalar-stddev",
+        "Mutation A (global, torch.randn * 0.97) over packages/opaque-dpsgd/tests/noise + packages/opaque-dpftrl/tests/noise: 10 failed, 372 passed (baseline 382 passed) - failures include all 7 conformance cases",
+        "Mutation B (PerGroup.for_path * 0.97 only when the caller frame is `_add_noise_tree`) over packages/opaque-dpsgd + packages/opaque-engine under the PR marker: 1355 passed, 26 skipped, 0 failed",
+        "packages/opaque-dpsgd/src/opaque/api/dpsgd/noise/_gaussian.py:206-228 - the per-group branch of `_add_noise_tree` that the mutation targets; :340 sets `noise_stddev=effective_stddev` from `_clipped_stddev`, so applied and reported can diverge only inside `_sample`/the path lookup"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Add two cases to the existing `_assert_realized_stddev_matches_reported` helper: one `gaussian_noise` call with a PerGroup max_norm over two 5e5-element leaves, asserting each leaf's realized RMS against `output.noise_stddev.for_path(path)` at 6/sqrt(2n); and one paired `SecondMomentClippingOutput` case checking both `noisy_grads` and `noisy_squared_grads` against their respective reported stddevs. Both are cheap and belong in the same file as the scalar case.",
+      "confidence": "high"
+    },
+    {
+      "title": "TRY003 was enabled in the same commit that introduced a 179-site idiom Ruff cannot see, so the new lint rule enforces nothing",
+      "file": "pyproject.toml",
+      "line": "220, 248, 299-300",
+      "category": "ci-fail-open",
+      "severity": "low",
+      "claim": "7b26f655 (PR #760, 'feat(exceptions): add public exception taxonomy') moved TRY003 from `ignore` into `select` and, in the same commit, rewrote 158 raise sites into the form `raise SomeError(*(\"message\",))`. Ruff's TRY003 matches a long message passed as a positional argument to the exception constructor; a starred tuple is not matched, so every one of those sites is invisible to the rule. The count is now 179 across packages/*/src and was 0 at 4b13d82. The same commit also added TRY003 to the per-file-ignores for `**/tests/**` and `tests/**`, so the rule is disabled in every test tree as well. The result is a lint rule that is nominally part of the merge gate and cannot fire. The comment block that documents the choice still lists TRY003 under 'Omitted only when they fight intentional design', contradicting the `select` entry three lines below it. ff174f11 (PR #897), whose subject is 'restore the lint gate by fixing three TRY003 violations', converted its three findings into exactly this splat form rather than into message-carrying exception classes.",
+      "failure_scenario": "A contributor writes `raise ConfigurationError(f\"bands must be >= 1, got {bands}\")` the obvious way. Ruff flags TRY003 and the autoformat gate fails. The contributor greps the codebase, finds 179 examples of `raise ConfigurationError(*(\"...\",))`, copies that, and the gate goes green - having changed nothing about the property the rule exists to enforce, while making the call site harder to read and defeating any type checker's arity check on the constructor. Meanwhile the repository carries a merge-gate rule whose violation count is structurally pinned at zero. Verified: `ruff check --select TRY003 packages/ tests/` -> 'All checks passed!'.",
+      "evidence": [
+        "pyproject.toml:248 - \"TRY003\" in [tool.ruff.lint].select; pyproject.toml:261-267 - `ignore` no longer contains it",
+        "pyproject.toml:215-223 - the 'Omitted only when they fight intentional design' comment block still lists TRY003 with the rationale 'public semantic categories carry stable catch contracts without a bespoke exception class per diagnostic message'",
+        "pyproject.toml:299-300 - `\"**/tests/**\" = [\"INP001\", \"D\", \"PLR2004\", \"TRY003\"]` and the same for `\"tests/**\"`",
+        "git grep -E 'raise [A-Za-z_]+(Error|Exception)\\(\\*\\(' -- packages : 0 hits at 4b13d82, 179 hits at 12146ec4",
+        "git show 7b26f655 -- pyproject.toml shows the select/per-file-ignores change; the same commit adds 158 `(*(` raise sites across 170 files",
+        "git show ff174f11 converts `raise ValueError(\"dataset_size must be provided ...\")` into `raise ConfigurationError(*(\"dataset_size must be provided ...\",))`",
+        "Reproduced: `raise E(f\"n_steps must be >= 1, got {n}\")` piped through `ruff check --select TRY003 --stdin-filename packages/opaque-engine/src/.../probe.py -` -> TRY003, exit 1; the identical code as `raise E(*(f\"...\",))` -> 'All checks passed!', exit 0",
+        "`ruff check --no-cache --select TRY003 packages/ tests/` on the current tree -> 'All checks passed!'"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Decide which it is and make the config say so. Either keep TRY003 in `ignore` with the existing rationale and revert the 179 splats to plain string arguments (they read better and type-check), or keep the rule and give the exception taxonomy message-carrying constructors so the splat is unnecessary. Either way, fix the comment at pyproject.toml:215-223 so it no longer documents TRY003 as omitted while selecting it.",
+      "confidence": "high"
+    },
+    {
+      "title": "The per-package wheel build inventory in build-distributions.yml has no coverage guard",
+      "file": ".github/workflows/build-distributions.yml",
+      "line": "46-74",
+      "category": "ci-fail-open/packaging",
+      "severity": "low",
+      "claim": "OPQ-380 named two hand-maintained inventories: the test-package matrix in python-tests.yml and the per-package build steps in build-distributions.yml. PR #870 guarded the first and left the second untouched. build-distributions.yml still has ten literal `uv build packages/opaque-<name> --wheel --out-dir dist` steps (plus opaque-accounting in the separate native job) and nothing checks that list against `packages/*`. This is the higher-stakes of the two inventories: a package missing from the test matrix runs no tests, while a package missing here is never built and never published. The downstream checks do not close it either - `validate-distributions.yml:68` asserts only `len(opaque_versions) > 1`, and `check_wheel_internal_pins.py` validates pins on the wheels that exist rather than checking that all expected wheels do.",
+      "failure_scenario": "A contributor adds `packages/opaque-<new>/` with a tests/ tree and a pyproject. The new #870 guard correctly fails the lane until they add it to python-tests.yml, so the tests get wired up. Nothing forces the corresponding edit to build-distributions.yml. If the umbrella `opaque` distribution does not depend on the new package (the common case for an optional stack), no wheel is ever built, `validate-distributions` still passes (`len(opaque_versions) > 1` holds), and both the dev-wheel publish on main and the release publish ship a set that silently omits it. Users installing from the JetBrains index get an ImportError for a package the repository documents.",
+      "evidence": [
+        ".github/workflows/build-distributions.yml:46-74 - ten hardcoded 'Build opaque-*' steps; opaque-accounting is built separately at :141-163",
+        ".github/workflows/python-tests.yml:102-125 - the guard added by 6de5f9ca, scoped to the suite matrix only, reading its own file",
+        ".github/workflows/validate-distributions.yml:61-69 - `assert len(opaque_versions) > 1` is the only completeness check on the published set",
+        ".github/scripts/check_wheel_internal_pins.py:188-195 - iterates `args.wheel_dir.glob(\"*.whl\")`, i.e. only the wheels that were built",
+        "OPQ-380 evidence line: '`build-distributions.yml:73-74` hardcodes per-package build steps the same way'"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Either replace the ten steps with a loop over `packages/*/pyproject.toml` (excluding opaque-accounting, which maturin builds), or add the same comm-based guard used in python-tests.yml as a first step of build-python-wheels. A stronger alternative: have check_wheel_internal_pins.py additionally assert that the set of dist names found in --wheel-dir equals the set of `project.name` values across the root and packages/*/pyproject.toml.",
+      "confidence": "high"
+    },
+    {
+      "title": "The value-level CachedProcess.repeated_pld regression test was deleted one day after it landed, leaving only a mock with no real implementor",
+      "file": "packages/opaque-accounting/tests/test_cached.py",
+      "line": "9-29",
+      "category": "test-integrity/regression-coverage",
+      "severity": "low",
+      "claim": "OPQ-379 asked for a value-level epsilon assertion on a correlated strategy because the surviving guards used the one strategy where the buggy and correct answers coincide. PR #885 added exactly that (`test_cached_correlated_full_horizon_preserves_epsilon`, band_mf bands=16, n_steps=128) on 2026-09-02. 87404a1b (PR #894) deleted packages/opaque-dpftrl/tests/accounting/test_per_step.py in full on 2026-09-03, taking that test with the acc.per_step API it depended on. What remains is the mock test in test_cached.py, which patches `repeated_pld` onto an `eps_delta` process to manufacture a divergence. After #894 there is no subclass in the tree that overrides `repeated_pld` other than CachedProcess itself, so the relay is a no-op on every shipped process and the mock is guarding a contract nothing currently implements - while `DpProcess.repeated_pld`'s own docstring still invites subclasses to override it.",
+      "failure_scenario": "Verified by mutation: `del CachedProcess.repeated_pld` over packages/opaque-accounting/tests + packages/opaque-dpftrl/tests/accounting + packages/opaque-dpsgd/tests/accounting gives 1 failed / 601 passed, and the single failure is the mock test. The exposure is forward-looking: when a future mechanism reintroduces a count-sensitive `repeated_pld` override (the docstring at _base.py:428-433 explicitly anticipates 'DP-FTRL per-step adapters, where K steps' joint PLD depends on the deployed N-step strategy's correlation matrix'), the only thing standing between that and a silent reversion to `pld().self_compose(K)` is a mock that will still pass because it patches its own stub. OPQ-005 measured that divergence at 2.17x epsilon for band_mf(bands=16), n=128, K=128.",
+      "evidence": [
+        "git show 76fd4e3e - adds test_cached_correlated_full_horizon_preserves_epsilon to packages/opaque-dpftrl/tests/accounting/test_per_step.py:181-192 and test_cached_process_preserves_repeated_pld_override to packages/opaque-accounting/tests/test_cached.py",
+        "git log --diff-filter=D 4b13d82..12146ec4 -- packages/opaque-dpftrl/tests/accounting/test_per_step.py -> 87404a1b",
+        "grep -rn 'test_cached_correlated_full_horizon_preserves_epsilon' over the whole tree -> no hits at 12146ec4",
+        "grep -rn 'def repeated_pld' packages/*/src -> only _base.py:418 (the default) and composition/_cached.py:84 (the relay)",
+        "Mutation `del CachedProcess.repeated_pld` over the three accounting test trees under the PR marker: 1 failed, 601 passed; the failure is test_cached.py::test_cached_process_preserves_repeated_pld_override with 'assert 3.0 == 2.0'",
+        "packages/opaque-accounting/src/opaque/api/accounting/core/_base.py:428-433 - docstring still says subclasses whose K-fold behaviour differs 'override this to compute the true K-step PLD directly'"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Keep the mock test, and add a real one next to it: define a two-line DpProcess subclass in the test file whose `repeated_pld(count)` returns a demonstrably different PLD from `pld().self_compose(count)`, wrap it in `acc.cached(...)`, and assert `(cached * n).epsilon_at(delta) == (inner * n).epsilon_at(delta)` while `inner.pld().self_compose(n).epsilon_at(delta)` differs. That guards the relay against both deletion and a wrong-count relay without depending on any mechanism that may later be removed.",
+      "confidence": "high"
+    },
+    {
+      "title": "allow-empty-test-selection still lets two distributed-lane legs report green on zero collected tests",
+      "file": ".github/scripts/run_python_test_package.sh",
+      "line": "43-46",
+      "category": "ci-fail-open",
+      "severity": "low",
+      "claim": "Issue #836 (OPQ-381) was closed as not_planned with no code change, so the exit-5-to-success conversion and the four lanes that enable it are exactly as reported. The CUDA half of the original exposure is now covered by the #832 preflight, which fails a `cuda`-marker lane on a host without CUDA regardless of how many tests were collected. The distributed half is not: nothing asserts that a lane whose marker is expected to select tests actually selected any, and two of the five suite legs still select nothing today, so their green check carries no information.",
+      "failure_scenario": "Re-measured at 12146ec4 under the distributed lane's exact marker `distributed and not cuda`: opaque-base 0, opaque-accounting 0, opaque-auditing 0 (the whole 'Foundation' leg), opaque-patches 0, and `tests` 0 (the whole 'Integration tests' leg). Both legs exit 5 on every path and are converted to success. If a refactor drops or renames the `distributed` marker, or moves the spawn tests, all five legs collect nothing, all five convert to success, and the collective-desync regression class this lane exists to block relands with a green 'Python tests' check - which is also a `needs` of publish-dev-wheels in ci.yml:201-215.",
+      "evidence": [
+        ".github/scripts/run_python_test_package.sh:43-46 - `if [[ \"$status\" -eq 5 && \"$ALLOW_EMPTY_TEST_SELECTION\" == \"true\" ]]; then echo \"::notice::No tests matched ...\"; exit 0; fi`",
+        "git diff 4b13d82..12146ec4 -- .github/scripts/run_python_test_package.sh shows only the three-line CUDA preflight addition; no change to the exit-5 path",
+        ".github/workflows/pr.yml:81,145,160,177 and .github/workflows/ci.yml:41,100,112,126 - `allow-empty-test-selection: true` still set on the distributed lane and all three CUDA lanes",
+        "Measured collection, one path at a time, `-m 'distributed and not cuda' --collect-only`: opaque-base 0/15, opaque-accounting 0/118, opaque-auditing 0/237, opaque-patches 0/857, tests 0/190; opaque-dpsgd 6, opaque-dpftrl 5, opaque-engine 10, opaque-optimizers 2, opaque-alignment 1, opaque-transformers 10",
+        "GitHub issue #836: state 'closed', state_reason 'not_planned', zero comments, closed_by_pull_requests total_count 0"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "The preflight added for #832 is the pattern that works: key the assertion on the marker expression rather than on a per-lane boolean. Add a sibling `assert_marker_selects_tests.sh` that, for a lane whose marker positively selects a marker name, runs `pytest --collect-only -q` across the lane's paths once and fails if the lane-wide total is zero - per lane, not per path, so the legitimately empty Foundation leg does not need an exception. Or, minimally, record the collected count in TEST_RESULTS_FILE and have the aggregate 'Python tests' job assert a nonzero total per lane.",
+      "confidence": "high"
+    },
+    {
+      "title": "Python 3.12 is claimed by eleven pyproject classifiers with zero CI coverage and no documented endpoints-only policy",
+      "file": ".github/workflows/validate-distributions.yml",
+      "line": "19",
+      "category": "ci-coverage/packaging",
+      "severity": "low",
+      "claim": "Issue #841 (OPQ-386) was closed as not_planned. Neither of its two acceptance branches was taken: there is still no 3.12 leg anywhere, and the endpoints-only choice is not written down as a policy in AGENTS.md or CONTRIBUTING.md, both of which enumerate the lanes in detail. `grep -rn '3\\.12' .github/` returns zero hits across all fourteen workflows, four composite actions and nine scripts, while `requires-python = \">=3.11,<3.14\"` resolves 3.12 and every distribution ships the 3.12 classifier. The repository is public and the wheels are published to a publicly readable index, so the claim is now made to external users.",
+      "failure_scenario": "A 3.12-only regression - a dependency that resolves to a different wheel on 3.12, or interpreter-specific behaviour in the torch.func/optree layer - reaches a published release whose metadata explicitly advertises 3.12 support, with no CI signal having ever existed. Bounded in practice because 3.11 and 3.13 bracket most interpreter-sensitive behaviour, and nothing here changes a privacy guarantee. The second-order cost is that the next reader of the lane list cannot tell whether 3.12 is untested by decision or by the accident of the #665 version bump that retargeted the 3.12 lanes to 3.13.",
+      "evidence": [
+        "grep -rn '3\\.12' .github/ at 12146ec4 -> no output",
+        ".github/workflows/validate-distributions.yml:19 - `python-version: [\"3.11\", \"3.13\"]`",
+        ".github/workflows/python-tests.yml:34-38 - the python-version input defaults to \"3.11\"; callers pass only \"3.11\" or \"3.13\"",
+        "pyproject.toml:28 plus all ten packages/*/pyproject.toml (opaque-accounting:23, opaque-alignment:26, opaque-auditing:21, opaque-base:21, opaque-dpftrl:21, opaque-dpsgd:21, opaque-engine:21, opaque-optimizers:21, opaque-patches:21, opaque-transformers:28) - 'Programming Language :: Python :: 3.12'",
+        "AGENTS.md:245-269 lists all fourteen lane marker expressions and their Python versions; 3.12 appears nowhere. CONTRIBUTING.md:162-166 likewise names only 3.11 and 3.13",
+        "GitHub issue #841: state_reason 'not_planned', no comment"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Cheapest close: add \"3.12\" to the validate-distributions.yml matrix at :19 - it installs the built wheels and runs one cross-stack scenario, so it is a few minutes of runner time and exercises the resolver on the advertised interpreter. If the team prefers endpoints-only, drop the 3.12 classifier from all eleven pyprojects and add one sentence to the AGENTS.md lane list saying 3.11 and 3.13 are tested as the supported endpoints.",
+      "confidence": "high"
+    },
+    {
+      "title": "CONTRIBUTING.md routes contributors to GitHub Discussions, which is disabled on the public repository",
+      "file": "CONTRIBUTING.md",
+      "line": "87, 445",
+      "category": "docs/public-release",
+      "severity": "low",
+      "claim": "Issue #566 ('configure GitHub Discussions for public participation') was closed as not_planned, which is a legitimate decision - but its scope explicitly included 'update README.md, CONTRIBUTING.md, and issue templates to route non-actionable questions to Discussions; and verify links and permissions from an external-user perspective'. Declining the feature should have removed the routing, not left it. CONTRIBUTING.md still sends contributors to Discussions in two places, including the 'Getting Help' section that is the first thing a new contributor reads.",
+      "failure_scenario": "An external contributor reads 'Questions: Open a Discussion' (CONTRIBUTING.md:445), clicks through to https://github.com/JetBrains-Research/opaque/discussions, and gets a 403/not-found page. Their question either goes to the issue tracker as noise or is never asked. Verified anonymously: that URL returns 403 while https://github.com/JetBrains-Research/opaque/issues returns 200 from the same client, and the GitHub API reports has_discussions=false for the repository.",
+      "evidence": [
+        "CONTRIBUTING.md:87 - '- [Open Discussions](https://github.com/JetBrains-Research/opaque/discussions)' in the 'where to start' list",
+        "CONTRIBUTING.md:445 - '- **Questions**: Open a [Discussion](https://github.com/JetBrains-Research/opaque/discussions)' under '## Getting Help'",
+        "GitHub API for JetBrains-Research/opaque: `has_discussions: false`, `visibility: \"public\"`",
+        "curl -s -o /dev/null -w '%{http_code}' https://github.com/JetBrains-Research/opaque/discussions -> 403; the same for .../issues -> 200",
+        "GitHub issue #566: state_reason 'not_planned'"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Either enable Discussions as the issue originally proposed, or replace both links: make CONTRIBUTING.md:87 point at the issue tracker's good-first-issue label (already linked on the line above) and rewrite the Getting Help entry to 'Questions: open an Issue with the question template', keeping the SECURITY.md private route for anything sensitive.",
+      "confidence": "high"
+    },
+    {
+      "title": "docs/reference/rng.md calls optimizer.step(), which the functional optimizer does not have",
+      "file": "docs/reference/rng.md",
+      "line": "325",
+      "category": "docs-drift-api",
+      "severity": "low",
+      "claim": "reference/rng.md was one of the pages Sweep A (#843) covered - OPQ-362 was specifically about this file, and 12146ec4 changed 22 lines in it, correcting every gaussian_noise call to keyword form. The determinism example a few lines above those fixes still ends with `optimizer.step(noisy_grads)`. `opaque.optimizers.sgd(...)` returns a `torchopt.base.GradientTransformation` whose public members are `chain, count, index, init, update`; there is no `step`. Every other end-to-end snippet in the docs uses the correct `updates, opt_state = optimizer.update(...)` then `torchopt.apply_updates(...)` pair. This is a concrete instance of the gap in the previous finding: the page was hand-edited and the wrong line survived because nothing executes it.",
+      "failure_scenario": "A reader following the RNG reference to wire per-step keys into a training loop copies the block and gets `AttributeError: 'GradientTransformation' object has no attribute 'step'` at the first step. The surrounding lines are correct, so the natural conclusion is that the optimizer import is wrong rather than the doc. The same block also calls an undefined `compute_dp_grads(model, batch)`, so it cannot run as written in any case.",
+      "evidence": [
+        "docs/reference/rng.md:305-325 - the fenced example ending `noisy_grads, state = noise_fn(grads, state)` then `optimizer.step(noisy_grads)`",
+        "`from opaque.optimizers import sgd; o = sgd(lr=0.01)` -> `<class 'torchopt.base.GradientTransformation'>`, public members ['chain', 'count', 'index', 'init', 'update'], `hasattr(o, 'step')` is False",
+        "grep -rn 'optimizer\\.step' docs/ examples/ -> exactly one hit, docs/reference/rng.md:325",
+        "Contrast docs/user-guide/dp-sgd.md:148-149 and examples/quickstart.py:88-89, which both use `updates, opt_state = optimizer.update(...)` + `torchopt.apply_updates(params, updates)`",
+        "git show 12146ec4 -- docs/reference/rng.md - 22 lines changed in this file by the Sweep A commit, none of them line 325"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Replace line 325 with the standard pair (`updates, opt_state = optimizer.update(noisy_grads, opt_state); params = torchopt.apply_updates(params, updates)`) and either define or drop the `compute_dp_grads` placeholder so the block is runnable, then bring the page under whatever snippet-execution mechanism closes the previous finding.",
+      "confidence": "high"
+    },
+    {
+      "title": "Sweep B's structural criterion is unmet: no generator or CI check ties published defaults and accepted-value lists to their dataclasses",
+      "file": "docs/user-guide/huggingface/training-arguments.md",
+      "line": "148-165",
+      "category": "ci-coverage/docs",
+      "severity": "low",
+      "claim": "Issue #844 opened by observing that '#419 reconciled the tables once by hand; they drifted again, so the fix needs to be a generator or a check rather than another pass', and its first acceptance criterion was 'Every published default and accepted-value list is generated from, or checked against, its dataclass in CI'. PR #1026 performed another hand pass. The tables are correct today - I checked the mechanism/sampler/default-kwargs table line by line against _training_arguments.py:189-262 and the delta default at :265-270 - but no generator and no check exists, so the same drift mechanism that produced OPQ-358, OPQ-360 and OPQ-369 is untouched.",
+      "failure_scenario": "The next change to `_MECHANISM_DEFAULT_KWARGS` or `_ALLOWED_SAMPLING_MODES` - for instance the follow-up to #1010 that already changed mf_band's default sampler to cyclic_poisson - updates the dataclass and forgets the table. Nothing in CI notices; `mkdocs build --strict` does not read Python, and the only tests that mention a docs path are two unrelated prose comments. A user then configures `sampling_mode` from a stale accepted-value list and gets a construction error, or copies a stale default and silently trains a different mechanism than the docs describe. OPQ-369's half of this family was epsilon-affecting (a documented target delta that did not match the computed one).",
+      "evidence": [
+        "docs/user-guide/huggingface/training-arguments.md:148-155 - the hand-written mechanism/sampler/default-kwargs table; :159-165 the prose accepted-value list",
+        "packages/opaque-transformers/src/opaque/api/transformers/trainer/_training_arguments.py:189-210 (_MECHANISM_SAMPLERS, allowed sampling modes) and :254-262 (default kwargs) - the source of truth the table duplicates",
+        "grep -rln 'docs/' over packages/*/tests and tests/ -> packages/opaque-patches/tests/torch/test_cpu_offload.py:106 and tests/integration/alignment/test_mechanism_agnostic.py:3, both prose comments; no test reads a docs file",
+        "git show ba39783d (PR #1026, closing #844) - a documentation-only edit; no generator, no test, no CI step added",
+        "docs/reference/transformers.md:188,192 - a second hand-maintained copy of the same defaults, which must now be kept in sync with both the dataclass and training-arguments.md"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Add one package-local test in packages/opaque-transformers/tests that imports `_MECHANISM_SAMPLERS`, `_ALLOWED_SAMPLING_MODES`, `_MECHANISM_DEFAULT_KWARGS` and `_DEFAULT_PRIVACY_DELTA_EXPONENT`, parses the Markdown table out of docs/user-guide/huggingface/training-arguments.md, and asserts equality both ways (no documented mechanism missing, no undocumented mechanism present, kwargs dicts identical). That is a structural check on machine-readable content, not prose pinning, so it is consistent with the repository's test-design rule. Alternatively generate the table into a partial and transclude it with pymdownx.snippets, the way quickstart.md now transcludes its script.",
+      "confidence": "high"
+    }
+  ],
+  "delta_reviewed": "Scope: .github/** (14 workflows, 4 composite actions, 9 scripts, dependabot.yml, ISSUE_TEMPLATE, CODEOWNERS), the root and all ten packages/*/pyproject.toml, uv.lock/Cargo.lock version spot-checks, mkdocs.yml, all of docs/ (46 markdown files with 369 python fences, 7 tutorial notebooks), examples/, and the repository-level public-release artifacts (README.md, CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md, LICENSE, NOTICE, third_party_provenance.toml, AGENTS.md, cliff.toml). Commit range 4b13d82..12146ec4: 57 commits touch these paths and I read every one of them, in depth for the fix commits (039fc012/#876, 6de5f9ca/#870, 7af01101/#847, 31ffed65/#871, 76fd4e3e/#885, eb6da40b/#882, abfceed5/#892, 1794504b/#901, ba39783d/#1026, 12146ec4/#1034) and at diff level for the rest (1d2159c4/#936 concurrency removal, 8ae0a07a/#955 release-notes base tag, 65dc1287/#926 macOS wheel strip + artifact policy, ff174f11/#897 TRY003, 7b26f655/#760 exception taxonomy + TRY003 enablement, the six dependency-bump commits, and the three breaking removals 873de427/#1021, 87404a1b/#894, 7f55aae5/#889). Working tree is 12146ec4 plus four chore(audit) commits that add only .audit-checkpoint/ files. Environment note: the installed opaque_accounting.abi3.so predates the delta's 2128-line Rust diff, which makes two bisr tests fail spuriously; I ran everything through a fresh-build overlay (PYTHONPATH into a current .so) after confirming that overlay turns test_bisr_noise.py from 2 failed to 75 passed, and those two failures are an environment artifact, not a repo defect. Verified by execution or construction: the CUDA preflight fails on a CPU host for both real CUDA markers and no-ops for all five non-CUDA markers; the package-matrix guard passes today and fails on an injected extra package; the ruff root-tests probe now errors where it previously passed; a 3% global noise mutation reddens 10 tests; a per-group-only 3% mutation reddens none of 1355; `del CachedProcess.repeated_pld` reddens exactly one test; the distributed-lane collection counts per path; examples/quickstart.py and the accounting doctest both run clean and the doctest exits 1 when perturbed; `ruff check`/`ruff format --check packages/ tests/` are green; TRY003 is unenforceable against the splat idiom; `pip install --dry-run \"opaque[auditing]\"` installs the wrong project; the public docs site, the JetBrains package index, the Discussions URL and the policy links were fetched directly. Not covered: repository settings I cannot read (branch protection, required checks, secret scanning, code scanning, social preview) and the current Dependabot alert inventory - no tool in this session exposes them, so Marble #556 is cannot-verify and #574 is partial. I also did not run mkdocs (not installed in the shared venv, and syncing the docs group would have disturbed other agents), so `mkdocs build --strict` behaviour is inferred from the live published site rather than executed."
+}

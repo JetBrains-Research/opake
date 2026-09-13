@@ -1,0 +1,16 @@
+# Marble milestone (#3) - PUBLIC RELEASE READINESS - all 15 CLOSED, never independently verified
+553	docs: prepare public source-repository messaging
+554	docs: add a public vulnerability reporting policy
+555	docs: add a code of conduct for public contributions
+556	ci: harden repository controls before public visibility
+557	docs: complete public repository metadata and community health
+558	docs: perform a public-facing editorial review
+559	build: migrate package publishing to a JetBrains-managed registry
+564	docs: reconsider the license for public source publication
+566	docs: configure GitHub Discussions for public participation
+568	docs: add JetBrains Research and CI badges to the README
+574	build: remediate dependency security alerts before public visibility
+577	Modularize and reuse more in CI/CD
+578	Remove JetBrains-internal specifics from documentation
+579	Remove .cadence configuration
+586	Remove fragile import and package enumeration checks

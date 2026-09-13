@@ -1,0 +1,298 @@
+{
+  "findings": [
+    {
+      "title": "Published LLM fine-tuning tutorial reports epsilon 1.09 for an adaptively-clipped run whose true cost is 8.99 — the adaptive-clipping quantile release is never accounted",
+      "file": "docs/tutorials/llm_finetuning.ipynb",
+      "line": "cell 11 (nb JSON lines 420-429, `expected_eps = ...`) and cell 13 (`dp_step = ...`); published output at nb JSON line 377",
+      "category": "docs-drift-epsilon",
+      "severity": "high",
+      "claim": "The flagship 'Fine-tuning an LLM' tutorial trains with `adaptive_clipped_grad(..., target_quantile=0.80, ...)` (default `fraction_noise_std=0.05`, i.e. a noisy clip-rate query released every step) but prices the run with `dpsgd_acc.poisson(dpsgd_acc.gaussian(NOISE_MULTIPLIER), sample_rate, truncated_batch_size=MAX_BATCH_SIZE, dataset_size=len(train_dataset)) * NUM_STEPS` — the plain Gaussian chain, with no `dpsgd_acc.adaclip(...)` wrapper. The string `adaclip` does not appear anywhere in the notebook (`grep -c adaclip docs/tutorials/llm_finetuning.ipynb` -> 0). Opaque's own user guide mandates the opposite: docs/user-guide/clipping.md:230-249, 'Adaptive clipping introduces an additional privacy cost (the noisy clipping rate query). Account for it using `dpsgd_acc.adaclip()`', and examples/train_dpsgd.py:1553 does exactly that. The notebook therefore publishes a privacy number that omits NUM_STEPS noisy-quantile releases.",
+      "failure_scenario": "A reader follows the tutorial (the only published LLM example, linked from docs/tutorials/README.md:18 and mkdocs.yml:140), adopts its accounting line for their own adaptive-clipping run, and reports an epsilon roughly 8x below the guarantee their mechanism actually provides. Measured at the notebook's own constants (nm=1.5, q=8/500, truncated_batch_size=12, dataset_size=500, 20 steps, delta=1e-5): the notebook's chain gives epsilon=1.0944 (matching its published 'Expected final epsilon: 1.09'); the same chain with `dpsgd_acc.adaclip(dpsgd_acc.gaussian(1.5), fraction_noise_std=0.05, expected_batch_size=8)` as inner gives epsilon=8.9928 — an 8.2x understatement. The notebook is not in the CI execution list, and executing it would not catch this anyway: the wrong formula runs without error.",
+      "evidence": [
+        "docs/tutorials/llm_finetuning.ipynb cell 11: `grad_fn, clip_state = adaptive_clipped_grad(per_example_loss, argnums=0, batch_argnums=(2,3,4), initial_clipping_norm=CLIP_NORM, target_quantile=0.80, ... key=key(0), normalize_by=BATCH_SIZE)` — `fraction_noise_std` left at its 0.05 default (signature: packages/opaque-dpsgd/src/opaque/api/dpsgd/clipping/_adaptive.py, `fraction_noise_std: float = 0.05`)",
+        "Same cell: `expected_eps = (dpsgd_acc.poisson(dpsgd_acc.gaussian(NOISE_MULTIPLIER), sample_rate, truncated_batch_size=MAX_BATCH_SIZE, dataset_size=len(train_dataset)) * NUM_STEPS).epsilon_at(TARGET_DELTA)` ; stored output `Expected final epsilon: 1.09`",
+        "docs/user-guide/clipping.md:230-249 prescribes `dpsgd_acc.poisson(dpsgd_acc.adaclip(dpsgd_acc.gaussian(noise_multiplier), fraction_noise_std=0.05, expected_batch_size=expected_batch_size), sample_rate)`",
+        "examples/train_dpsgd.py:1553 `mechanism = lambda nm, ebs=args.batch_size, ng=_num_groups: dpsgd_acc.adaclip(...)` — the example script does account for it; only the tutorial does not",
+        "Measured with the repo venv: notebook chain -> 1.0944 ; adaclip-wrapped chain -> 8.9928 (delta=1e-5)",
+        ".github/workflows/pr.yml:290-302 executes only accounting_and_calibration.ipynb, dp_sgd_training.ipynb and dp_ftrl_training.ipynb; llm_finetuning.ipynb is not executed"
+      ],
+      "affects_epsilon": true,
+      "fix_sketch": "Wrap the inner mechanism in `dpsgd_acc.adaclip(dpsgd_acc.gaussian(NOISE_MULTIPLIER), fraction_noise_std=0.05, expected_batch_size=BATCH_SIZE)` in both cell 11 and cell 13, re-execute the notebook in place so the published outputs carry the honest number, and add llm_finetuning.ipynb to the pr.yml execution list. Longer term, add an assertion inside the notebook (as examples/quickstart.py:99 does) that ties the reported epsilon to the mechanism actually constructed.",
+      "confidence": "high"
+    },
+    {
+      "title": "API reference defines `dpftrl_acc.poisson`'s `sample_rate` as the whole-dataset per-round probability; the implementation requires the per-active-band conditional rate (up to 100x optimistic epsilon)",
+      "file": "docs/reference/accounting.md",
+      "line": "468 (`- \\`sample_rate\\` (float): Poisson sampling probability per round.`); same omission in docs/user-guide/accounting.md:327-340 and 495-512, docs/user-guide/dp-ftrl.md:73-80 and 103-112, docs/index.md:84-89",
+      "category": "docs-drift-epsilon",
+      "severity": "high",
+      "claim": "`dpftrl_acc.poisson(inner, sample_rate, *, n_steps)` treats `sample_rate` as the inclusion probability *conditional on the active band*, not as the whole-dataset rate. The implementation says so only in a module docstring (packages/opaque-dpftrl/src/opaque/api/accounting/dpftrl/amplification/_poisson.py:50-54, 'BandMF requires cyclic sampling over fixed dataset partitions; `sample_rate` is conditional on the active partition'), and the trainer converts explicitly (packages/opaque-transformers/src/opaque/api/transformers/trainer/_dpftrl.py:154, `group_rate = float(sample_rate) * local_size / group_size`, i.e. roughly q_global * bands). The API reference bullet says the opposite in plain global terms, and neither docs/user-guide/accounting.md nor docs/user-guide/dp-ftrl.md nor docs/index.md mentions the conversion anywhere. The only correct statement in the docs tree is a Tips bullet at the bottom of a different page, docs/mechanisms/dp-ftrl/band-mf.md:321-325.",
+      "failure_scenario": "A user computes `sample_rate = expected_batch_size / dataset_size` — the convention used by every DP-SGD example on the very same pages, and the exact quantity DPTrainer takes — sizes `CyclicPoissonSampler(sample_rate=q_cond, bands=B)` so the realized batch matches, and passes the global q to `dpftrl_acc.poisson`. Nothing raises (q_global < q_cond is always in range), and the reported epsilon is far below the truth. Measured on the configuration published at docs/user-guide/accounting.md:506-510 (band_mf_strategy(bands=64), n_steps=15_624, nm=1.0, delta=1e-5): sample_rate=0.01 gives epsilon=0.9857, while the conditional rate that actually realizes a 1%-of-dataset batch (0.64) gives epsilon=102.1295 — a 104x understatement. At the bands=10 / n_steps=1000 configuration on docs/index.md and docs/reference/accounting.md, 0.7181 vs 7.0469 (9.8x).",
+      "evidence": [
+        "docs/reference/accounting.md:468: `- \\`sample_rate\\` (float): Poisson sampling probability per round.`",
+        "packages/opaque-dpftrl/src/opaque/api/accounting/dpftrl/amplification/_poisson.py:50-54 class docstring: 'BandMF requires cyclic sampling over fixed dataset partitions; ``sample_rate`` is conditional on the active partition.'",
+        "packages/opaque-transformers/src/opaque/api/transformers/trainer/_dpftrl.py:130-163 `_cyclic_poisson_group_rate` — 'Per-active-group conditional rate'; `group_rate = float(sample_rate) * local_size / group_size`",
+        "Measured: `dpftrl_acc.poisson(dpftrl_acc.mf_gaussian(1.0, band_mf_strategy(bands=64)), sample_rate=0.01, n_steps=15624).epsilon_at(1e-5)` = 0.9857 ; with sample_rate=0.64 = 102.1295",
+        "Measured: bands=10, n_steps=1000, nm=1.0 -> q=0.01 gives 0.7181, q=0.1 gives 7.0469",
+        "The correct semantics appear only at docs/mechanisms/dp-ftrl/band-mf.md:321-325 ('both take the per-active-group conditional rate (`q` above), not a whole-dataset rate')"
+      ],
+      "affects_epsilon": true,
+      "fix_sketch": "Change the reference bullet to 'per-active-band conditional inclusion probability; for BandMF with `bands` groups this is `expected_batch_size / floor(dataset_size / bands)`, i.e. roughly `bands x` the whole-dataset rate', repeat it in docs/user-guide/accounting.md's `dpftrl_acc.poisson` section and in docs/user-guide/dp-ftrl.md, and make the worked examples derive the rate from batch size and bands the way docs/tutorials/dp_ftrl_training.ipynb cell 5 already does (`sample_rate = batch_size * bands / n_samples`).",
+      "confidence": "high"
+    },
+    {
+      "title": "Sampling reference states CyclicPoissonSampler has no batch-size cap and that `dpftrl_acc.poisson` matches uncapped draws only — both are false, and the cap silently applies for bands>1 where no accountant supports it",
+      "file": "docs/reference/sampling.md",
+      "line": "194-196",
+      "category": "docs-vs-behavior",
+      "severity": "medium",
+      "claim": "The page asserts 'There is no batch-size cap on this sampler; `dpftrl_acc.poisson` matches uncapped Poisson draws only.' Both halves are false at HEAD. `CyclicPoissonSampler.__init__` accepts `truncated_batch_size: int | None = None` and applies it, and `dpftrl_acc.poisson` accepts `truncated_batch_size` and `dataset_size`. The parameter table at docs/reference/sampling.md:184-190 and docs/user-guide/sampling.md:164-172 both omit the parameter, while the mkdocstrings block on the very same reference page (`::: opaque.dpftrl.sampling.CyclicPoissonSampler`, docs/reference/sampling.md:258) renders the class docstring, which documents the cap ('truncated_batch_size: Optional cap on per-step batch size ... Only the ``bands == 1`` / ``IdentityMf`` combination is supported in :func:`opaque.dpftrl.accounting.poisson`'). The rendered page therefore contradicts itself.",
+      "failure_scenario": "Library users (the trainer path is fail-closed) can construct `CyclicPoissonSampler(ds, sample_rate=0.5, bands=4, n_steps=20, truncated_batch_size=60, key=...)`; verified, every batch comes back at exactly 60 where the uncapped sampler yields 112-136. `dpftrl_acc.poisson` rejects truncated arguments for BandMfStrategy (ConfigurationError, 'truncated Poisson is only supported for IdentityStrategy inner'), so the user's only option is to account with the plain-Poisson PLD — which is optimistic for a capped sampler. In the DP-SGD analogue on the same docs (docs/user-guide/sampling.md:487) truncation is priced at roughly 2.4x plain Poisson (measured 9.2359 vs 3.8333 at nm=1.1, q=0.032, 500 steps), so the understatement is large. A reader who trusts the reference sentence also never learns that `dpftrl_acc.poisson(..., truncated_batch_size=, dataset_size=)` exists for identity MF.",
+      "evidence": [
+        "docs/reference/sampling.md:194-196: 'account with `dpftrl_acc.poisson(mechanism, sample_rate, n_steps=...)`. There is no batch-size cap on this sampler; `dpftrl_acc.poisson` matches uncapped Poisson draws only.'",
+        "`inspect.signature(CyclicPoissonSampler.__init__)` -> `(self, data_source, sample_rate, bands=1, n_steps=1, partition_type=PartitionType.EQUAL_SPLIT, truncated_batch_size: int | None = None, *, key)`",
+        "`inspect.signature(opaque.dpftrl.accounting.poisson)` -> `(inner, sample_rate, *, n_steps, truncated_batch_size: int | None = None, dataset_size: int | None = None)`",
+        "Executed: `CyclicPoissonSampler(ds, sample_rate=0.5, bands=4, n_steps=20, truncated_batch_size=60, key=key(0))` -> all 20 batch sizes == 60; same sampler without the cap -> [112, 120, 121, 133, 136, ...]",
+        "packages/opaque-dpftrl/src/opaque/api/dpftrl/sampling/_poisson.py:15-18 and 68-73 document the cap; packages/opaque-dpftrl/src/opaque/api/accounting/dpftrl/amplification/_poisson.py:120-130 rejects it for BandMfStrategy",
+        "packages/opaque-transformers/src/opaque/api/transformers/trainer/_dpftrl.py:229-236 rejects the combination in the trainer, so the exposure is the direct library surface only"
+      ],
+      "affects_epsilon": true,
+      "fix_sketch": "Replace the two sentences with the true statement: the sampler accepts `truncated_batch_size`, and it may only be used with `bands == 1` / IdentityStrategy, where `dpftrl_acc.poisson(..., truncated_batch_size=, dataset_size=)` supplies the matching truncated-Poisson PLD; add the parameter to both tables. Separately, make `CyclicPoissonSampler.__init__` raise when `truncated_batch_size is not None and bands > 1`, so the unaccountable configuration cannot be constructed at all.",
+      "confidence": "high"
+    },
+    {
+      "title": "Privacy-auditing tutorial prices a shuffled fixed-batch DataLoader with Poisson amplification and under-counts its own steps — the exact OPQ-355 defect, surviving in the sibling notebook the sweep did not touch",
+      "file": "docs/tutorials/privacy_auditing.ipynb",
+      "line": "cell 9 (nb JSON line 271, `train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)`) and cell 13 (nb JSON lines 372-373)",
+      "category": "docs-drift-epsilon",
+      "severity": "medium",
+      "claim": "OPQ-355 ('the Quick Start and the DP-SGD tutorial publish a Poisson-amplified epsilon for a `torch.randperm` shuffled fixed-batch loop, and both under-count steps') was closed as part of sweep #843. It is fixed in docs/getting-started/quickstart.md (now an include of the runnable examples/quickstart.py, which uses PoissonSampler) and in docs/tutorials/dp_sgd_training.ipynb (cell 13 now iterates a PoissonSampler and composes step-exactly). The identical pattern survives untouched in docs/tutorials/privacy_auditing.ipynb, which trains with a shuffled fixed-batch `DataLoader` and then computes its 'Theoretical epsilon' with `sample_rate = batch_size / len(train_data)` and `total_steps = n_epochs * (len(train_data) // batch_size)` fed into `dpsgd_acc.poisson(...)`. Shuffled fixed-size batching is not Poisson subsampling, and the floor division under-counts the batches the loader actually yields (`drop_last` defaults to False).",
+      "failure_scenario": "Reproduced with the notebook's own constants (n_samples=500, batch_size=64, n_epochs=200, nm=0.5, delta=1e-5): `cf.train_subset` yields 252 rows at HEAD, so the loader yields 4 batches/epoch = 800 steps, while the notebook computes `200 * (252 // 64) = 600`. Poisson-amplified epsilon at the documented 600 steps is 250.89; at the 800 steps actually run, 314.46; and with no amplification at all (the honest model for a deterministic shuffled partition in which each record participates once per epoch, 200 participations) 519.70. The published number the reader sees is the smallest of the three. The notebook then prints 'OK: audited epsilon is within the theoretical bound', teaching that this is the way to compute the bound an audit is checked against. It is not executed by CI.",
+      "evidence": [
+        "docs/tutorials/privacy_auditing.ipynb cell 9: `train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)` — fixed-size shuffled batches, no Opaque sampler",
+        "Same notebook cell 13: `sample_rate = batch_size / len(train_data)` ; `total_steps = n_epochs * (len(train_data) // batch_size)` ; `process = dpsgd_acc.poisson(dpsgd_acc.gaussian(noise_multiplier), sample_rate) * total_steps`",
+        "Measured at HEAD: len(cf.train_subset(dataset)) = 252 (the notebook's stored output says 263), len(train_loader) = 4, documented total_steps = 600, actual = 800",
+        "Measured epsilons: 600 steps -> 250.89 ; 800 steps -> 314.46 ; unamplified 200 participations -> 519.70",
+        "Contrast docs/tutorials/dp_sgd_training.ipynb cell 13, which was fixed: `sampler = PoissonSampler(dataset, sample_rate=sample_rate, n_steps=total_steps, key=key(43))` with the comment 'The sampler and accountant use the same independent-inclusion process.'",
+        ".github/workflows/pr.yml:293-302 does not include privacy_auditing.ipynb"
+      ],
+      "affects_epsilon": true,
+      "fix_sketch": "Switch the tutorial's training loop to `PoissonSampler(train_data, sample_rate=..., n_steps=total_steps, key=...)` as dp_sgd_training.ipynb now does, or keep the shuffled loader and price it without Poisson amplification; either way derive `total_steps` from `len(train_loader) * n_epochs` rather than floor division, and add the notebook to the pr.yml execution list.",
+      "confidence": "high"
+    },
+    {
+      "title": "\"Documented privacy examples execute in CI\" is a partial check: zero of 369 markdown snippets run, 4 of 7 tutorials are never executed, and no executed notebook's published output is ever compared to a fresh run",
+      "file": ".github/workflows/pr.yml",
+      "line": "286-302",
+      "category": "ci-coverage",
+      "severity": "medium",
+      "claim": "HEAD (12146ec4, 'docs(accounting): execute documented privacy examples (#1034)') added one CI step. What it actually covers: `examples/quickstart.py`; `python -m doctest packages/opaque-accounting/src/opaque/accounting/__init__.py`; and `jupyter execute` on copies of 3 of the 7 tutorial notebooks. What it does not cover: (a) the 369 fenced ```python blocks across 46 docs/*.md pages — nothing executes them (`grep -n doctest pyproject.toml conftest.py` finds nothing, there is no doctest-glob, no markdown plugin); (b) distributed_training.ipynb, llm_finetuning.ipynb, privacy_auditing.ipynb and sampling_and_microbatching.ipynb, all four in the mkdocs nav (mkdocs.yml:139-145), three of which carry stored outputs that are published verbatim; (c) the other 7 `examples/*.py`; (d) any numeric assertion in the doctest — running it with `-v` shows '4 tests in 1 items, 4 passed', and all four are bare statements with no expected output, so it is an import smoke test. Finally, the notebooks are copied to `$RUNNER_TEMP` before `--inplace`, while mkdocs.yml:60-61 sets `mkdocs-jupyter: execute: false`, so the docs site serves the committed outputs and CI never compares them to a fresh run. And `.github/workflows/ci.yml` (push to main) has no docs job at all, so this check exists only on PRs.",
+      "failure_scenario": "Published numbers and published code drift from the library without any gate noticing. Demonstrated: docs/tutorials/sampling_and_microbatching.ipynb publishes 'Poisson -- mean: 32.0, std: 5.5, max: 47' where HEAD produces 32.4 / 6.1 / 51, and publishes 'Poisson: epsilon = 3.8331' where HEAD gives 3.8333; docs/tutorials/privacy_auditing.ipynb publishes a 263-row training subset where HEAD produces 252. Separately, four markdown snippets that would raise on the first line were found by executing them (docs/mechanisms/dp-ftrl/bsr.md, docs/user-guide/rng-key.md — reported separately), none of which any CI job can see.",
+      "evidence": [
+        ".github/workflows/pr.yml:286-302 — the complete 'Execute accounting documentation' step",
+        "`grep -rc '^```python' docs --include=*.md | awk -F: '{s+=$2} END{print s}'` -> 369 across 46 files; `grep -n doctest pyproject.toml conftest.py .github/workflows/*.yml` -> only the pr.yml line",
+        "`ls docs/tutorials/*.ipynb` -> 7 notebooks; pr.yml names 3",
+        "`.venv/bin/python -m doctest packages/opaque-accounting/src/opaque/accounting/__init__.py -v` -> '4 tests in 1 items. 4 passed and 0 failed.'; every one is 'Expecting nothing'",
+        "mkdocs.yml:60-61 `- mkdocs-jupyter:` / `include_source: true` / `execute: false`",
+        "pr.yml:298-300 `cp \"docs/tutorials/$notebook\" \"$RUNNER_TEMP/$notebook\"` then `uv run jupyter execute \"$RUNNER_TEMP/$notebook\" --inplace` — the repo copy is never written back or diffed",
+        "`grep -n '^  [a-z-]*:' .github/workflows/ci.yml` -> no docs job",
+        "Measured drift: sampling_and_microbatching.ipynb stored 32.0/5.5/47 vs 32.4/6.1/51 measured; stored epsilon 3.8331 vs 3.8333 measured"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Execute all 7 notebooks, execute them in place in the checkout and fail the job if `git diff --stat docs/tutorials` is non-empty after normalizing execution counts (that is the only way a published number is ever checked), and add an executable-snippet harness for docs/*.md (pytest with `--doctest-glob` on converted blocks, or a small extractor that runs each tagged block and skips the ones deliberately marked as fragments). Also run the docs job on pushes to main, not only on PRs.",
+      "confidence": "high"
+    },
+    {
+      "title": "BSR mechanism page's accounting snippet raises TypeError and its parameter table documents three strategy parameters that do not exist — while the noise snippet on the same page uses the correct signature",
+      "file": "docs/mechanisms/dp-ftrl/bsr.md",
+      "line": "21-27 (snippet) and 40-46 (Strategy parameters table)",
+      "category": "docs-drift-api",
+      "severity": "medium",
+      "claim": "`bsr_strategy` is `(*, bandwidth: int, alpha: float, beta: float)`. The accounting snippet calls `bsr_strategy(bandwidth=8, n_steps=total_steps, min_sep=steps_per_epoch, max_participations=num_epochs, alpha=1.0, beta=0.95)` and the 'Strategy parameters' table lists `n_steps`, `min_sep` and `max_participations` as strategy parameters. None of the three is accepted. The page contradicts itself: the noise snippet at bsr.md:63-67 uses the correct `bsr_strategy(bandwidth=8, alpha=1.0, beta=0.95)` and passes the horizon to `mf_gaussian_noise` instead, which is the design the sibling pages state explicitly (docs/mechanisms/dp-ftrl/bisr.md:17-20 and lambda-cgd.md:16-22: 'the strategy is a recipe; the amplifier supplies the participation pattern and horizon'). Sweep #843 ('executable snippets') and #844 ('reference tables') are both closed; neither touched this page.",
+      "failure_scenario": "A reader copies the only accounting recipe on the BSR page and gets `TypeError: bsr_strategy() got an unexpected keyword argument 'n_steps'` on the first statement. Reproduced verbatim. Having removed the three arguments to get past the error, they also have no guidance that the participation geometry must now be supplied to the amplifier — the table told them the strategy owns it.",
+      "evidence": [
+        "`inspect.signature(opaque.dpftrl.noise.bsr_strategy)` -> `(*, bandwidth: 'int', alpha: 'float', beta: 'float') -> 'BsrStrategy'`",
+        "Executed: `bsr_strategy(bandwidth=8, n_steps=100, min_sep=10, max_participations=5, alpha=1.0, beta=0.95)` -> `TypeError: bsr_strategy() got an unexpected keyword argument 'n_steps'`",
+        "docs/mechanisms/dp-ftrl/bsr.md:21-27 is the offending call; bsr.md:63-67 on the same page is correct",
+        "docs/mechanisms/dp-ftrl/bsr.md:43-45 table rows `n_steps` / `min_sep` / `max_participations`",
+        "Corrected form verified end to end: `bsr_strategy(bandwidth=8, alpha=1.0, beta=0.95)` then `dpftrl_acc.balls_in_bins(dpftrl_acc.mf_gaussian(1.0, s), num_bins=100, n_steps=500)` -> epsilon 37.93 at delta=1e-5, so only the strategy call is wrong",
+        "The 'Accounting parameters' table at bsr.md:50-55 also lists `sensitivity` and `gram_matrix` as parameters of the accounting call; `balls_in_bins(inner, *, num_bins, n_steps)` takes neither, and `strategy.gram_matrix` is a method, not an attribute"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Drop `n_steps` / `min_sep` / `max_participations` from the `bsr_strategy(...)` call and from the strategy table, move them to the amplifier as bisr.md and lambda-cgd.md already do, and delete the `sensitivity` / `gram_matrix` rows from the accounting table (they are derived internally, not passed).",
+      "confidence": "high"
+    },
+    {
+      "title": "Paired second-moment accounting is documented as unconditionally equal to the first-moment mechanism; the equality only holds when the second-moment strategy's participation blow-up does not exceed the first's, which is neither documented nor enforced",
+      "file": "docs/reference/accounting.md",
+      "line": "336-338 ('privacy accounting is exactly the underlying first-moment mechanism'); same claim at docs/reference/noise.md:85-90; docs/limitations.md:8-9 repeats the benign framing",
+      "category": "docs-vs-behavior",
+      "severity": "medium",
+      "claim": "The Mahalanobis allocation argument the docs give is correct as far as it goes: `paired_noise_stddevs` sets sigma^i_g = nm*sqrt(Delta^i_g * S) with S = sum(Delta^1 + Delta^2), and sum_{g,i} (Delta^i_g/sigma^i_g)^2 = 1/nm^2 exactly (verified numerically to 1e-16 for scalar and PerGroup). But for DP-FTRL the runtime sizes both streams from SINGLE-participation column norms — packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_second_moment.py:140-145 computes `c1` and `c2` with `min_sep=n_steps, max_participations=1` — while the accountant prices the first stream at the actual multi-participation sensitivity. Writing rho_i = sens_multi_i / sens_single_i, the joint Mahalanobis sensitivity equals the accounted one iff rho_2 <= rho_1; when rho_2 > rho_1 the realized release exceeds the accounted budget by sqrt((D1*rho_1^2 + D2*rho_2^2)/(rho_1^2*(D1+D2))). Nothing enforces rho_2 <= rho_1: `mf_gaussian_noise(..., second_moment_strategy=...)` accepts an arbitrary, different-family strategy. This is the delta on open issue #359 ('Define BandMF participation sensitivity and price second moments', blocked/needs-design): the docs assert as settled exactly what that issue tracks as unresolved, and give a BandMF code sample for it.",
+      "failure_scenario": "A user follows docs/mechanisms/dp-ftrl/lambda-cgd.md:71 ('auto-deriving the second-moment strategy is not supported for lambdaCGD. Pass `second_moment_strategy` explicitly') and passes a second-moment strategy whose multi-participation blow-up is larger than the first stream's. Verified accepted with no warning: `mf_gaussian_noise(params, band_mf_strategy(bands=10), second_moment_strategy=bisr_strategy(bandwidth=4), n_steps=1000, min_sep=100, max_participations=10, noise_multiplier=1.0, key=key(0))` constructs successfully. Measured blow-ups at n_steps=1000, min_sep=100, max_participations=10: band_mf(bands=10) rho=3.1623, bisr(bandwidth=4) rho=3.8106. With D1 ~ D2 that is a ~11% higher realized sensitivity than accounted, i.e. an effective noise multiplier about 10% below the one epsilon was computed from — silently, under a documentation sentence that says accounting 'is exactly the underlying first-moment mechanism'.",
+      "evidence": [
+        "docs/reference/accounting.md:336-338: 'The Mahalanobis budget collapses to a single sensitivity-1 Gaussian release at the same noise multiplier, so **privacy accounting is exactly the underlying first-moment mechanism**' followed by a `dpftrl_acc.poisson(dpftrl_acc.mf_gaussian(1.0, strategy), ...)` sample",
+        "packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_second_moment.py:140-149 — `c1 = first_strategy.sensitivity(n_steps=n_steps, min_sep=n_steps, max_participations=1)`, `c2 = second_strategy.sensitivity(... max_participations=1)`, then `paired_noise_stddevs(noise_multiplier / c1, first=max_norm * c1, second=squared_max_norm * c2)`",
+        "Identity verified numerically: PerGroup budget 0.5917159763313611 vs target 1/nm^2 = 0.5917159763313609 (nm=1.3); scalar 0.5917159763313612",
+        "Measured rho = sensitivity(n=1000, min_sep=100, max_part=10)/sensitivity(n=1000, min_sep=1000, max_part=1): identity 1.0000, band_mf(10) 3.1623, band_mf(200) 3.7932, lambda_cgd(0.9) 3.1624, bisr(4) 3.8106",
+        "Mixed-family pairing accepted with no validation (executed, printed 'mixed-family second_moment_strategy ACCEPTED')",
+        "Open issue #359 'Define BandMF participation sensitivity and price second moments' (Slate, blocked, severity high)"
+      ],
+      "affects_epsilon": true,
+      "fix_sketch": "Qualify the claim in docs/reference/accounting.md:336-338 and docs/reference/noise.md:85-90 to the case where both streams share the same participation blow-up (identical strategy family and parameters), and state the open question for mismatched strategies with a pointer to #359. In the code, either compute `c1`/`c2` at the actual `(min_sep, max_participations)` rather than at single participation, or raise from `mf_gaussian_noise` when `second_strategy.sensitivity(...)/second_strategy.sensitivity(single) > first` at the configured horizon.",
+      "confidence": "medium"
+    },
+    {
+      "title": "BLT parameter table publishes a non-existent `error` knob and a `max_buffers` range whose upper half is hard-rejected — the half of OPQ-358 that the closed sweeps did not fix",
+      "file": "docs/mechanisms/dp-ftrl/blt.md",
+      "line": "195-196 (and the Tips bullet at 200)",
+      "category": "docs-drift-defaults",
+      "severity": "medium",
+      "claim": "OPQ-358 cited two locations: docs/user-guide/huggingface/training-arguments.md:129,143 and docs/mechanisms/dp-ftrl/blt.md:190-191. The training-arguments half is fixed (the mf_blt default is now `{\"max_buffers\": 10}` at training-arguments.md:150, matching _training_arguments.py:259; `noise_calibration_kwargs` defaults now read `{\"min\": 0.11, \"max\": 10.0, \"tolerance\": 1e-3}`, matching _training_arguments.py:1048). The blt.md half is not. The table still lists `error | \"max\" or \"mean\" | Error metric to optimize`, but `error` is not a parameter of `blt_strategy` or of anything on the public BLT surface — it is hard-coded to `\"max\"` at packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_blt.py:83. And it still publishes `max_buffers | 1 - 20 (default 10)` where values above 15 are rejected outright. The table also omits the two parameters `blt_strategy` really takes besides `max_buffers`: `momentum` and `lr_schedule`.",
+      "failure_scenario": "A reader following the table's advice bullet ('`error = \"max\"` is the safe choice for worst-case guarantees. `\"mean\"` optimizes average error ... but gives worse worst-case behavior') looks for a knob that does not exist, and concludes the library is silently choosing one of them. A reader who picks a value from the published `1 - 20` range above 15 gets `ConfigurationError: max_buffers > 15 will likely cause numerical issues` at the first epsilon query — reproduced for 16 and 25.",
+      "evidence": [
+        "docs/mechanisms/dp-ftrl/blt.md:195 `| \\`error\\` | \\`\"max\"\\` or \\`\"mean\"\\` | Error metric to optimize. \\`\"max\"\\` is conservative. |`",
+        "docs/mechanisms/dp-ftrl/blt.md:196 `| \\`max_buffers\\` | 1 - 20 (default 10) | ... |`",
+        "`inspect.signature(blt_strategy)` -> `(*, max_buffers: 'int' = 10, momentum: 'float' = 1.0, lr_schedule: 'Schedule | None' = None)` — no `error`",
+        "packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_blt.py:83 `error=\"max\",` hard-coded inside `_blt_optimize_cached`",
+        "Executed: `blt_strategy(max_buffers=16)` then `mf_gaussian(1.0, s, n_steps=500, min_sep=100, max_participations=5).epsilon_at(1e-5)` -> `ConfigurationError: max_buffers > 15 will likely cause numerical issues.` (same for 25)",
+        "Fixed sibling: docs/user-guide/huggingface/training-arguments.md:150 `mf_blt | balls_in_bins | {\"max_buffers\": 10}` matches _training_arguments.py:259"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Delete the `error` row and its Tips bullet (or expose the parameter if it is meant to be user-selectable), change the `max_buffers` range to `1 - 15 (default 10)` to match the validator, and add the `momentum` and `lr_schedule` rows that the signature actually has.",
+      "confidence": "high"
+    },
+    {
+      "title": "The README and installation guide's extras block installs an unrelated PyPI project named `opaque`; six of the ten distribution names are unclaimed on PyPI",
+      "file": "README.md",
+      "line": "77-81; identical block at docs/getting-started/installation.md:31-36; AGENTS.md:127-137",
+      "category": "docs-vs-behavior",
+      "severity": "medium",
+      "claim": "The documented primary install correctly pins the JetBrains index (`pip install opaque --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/` — verified reachable anonymously, HTTP 200, serving opaque 0.15.x wheels and all ten sub-distributions). But the 'Extras' block immediately below it drops the index: `pip install \"opaque[auditing]\"`, `\"opaque[dpftrl]\"`, `\"opaque[transformers]\"`, `\"opaque[all]\"`. Those resolve against PyPI, where the name `opaque` belongs to a different project (version 1.0.0, author Stefan Marsiske, homepage https://github.com/stef/libopaque, summary 'python libopaque wrapper'). pip only warns about an unknown extra, so the copy-pasted command installs that package. AGENTS.md's installation matrix (lines 127-137) is index-less too: `pip install opaque-base`, `opaque-engine`, `opaque-dpsgd`, `opaque-patches`, `opaque-transformers` are all unregistered on PyPI (HTTP 404), so those names are open to takeover. Defensive dependency-confusion stubs at version 999.9.9 were published on 2026-08-12 for only four of the ten names (opaque-accounting, opaque-auditing, opaque-dpftrl, opaque-optimizers). Marble #559 ('migrate package publishing to a JetBrains-managed registry') and #574 ('remediate dependency security alerts before public visibility') are both closed; neither covered this.",
+      "failure_scenario": "A user reads the install page top to bottom, runs `pip install \"opaque[all]\"` from the extras block, gets a WARNING about an unprovided extra, and ends up with `libopaque` installed under the `opaque` import name — every `import opaque.dpsgd...` then fails, or (worse, if they already installed the real wheels) the foreign distribution replaces the namespace root. For the six unregistered sub-names, anyone can claim `opaque-dpsgd` on PyPI and be installed by anybody following AGENTS.md's matrix or by any resolver that falls back to PyPI.",
+      "evidence": [
+        "README.md:77-81 and docs/getting-started/installation.md:31-36 — four `pip install \"opaque[...]\"` commands with no `--index-url`, directly under a block that does pin it",
+        "`curl https://pypi.org/pypi/opaque/json` -> name opaque, version 1.0.0, author 'Stefan Marsiske', home_page 'https://github.com/stef/libopaque', summary 'python libopaque wrapper'",
+        "PyPI presence of the ten distribution names: opaque-base 404, opaque-engine 404, opaque-dpsgd 404, opaque-patches 404, opaque-transformers 404, opaque-alignment 404; opaque-dpftrl/opaque-accounting/opaque-auditing/opaque-optimizers all 200 at version 999.9.9 with description 'This public copy of the package is a stub published on pypi.org designed to mitigate risks from Dependency Confusion.' uploaded 2026-08-12",
+        "JetBrains index carries all ten (HTTP 200 for each `.../simple/<name>/`), so the pinned command is sound",
+        "AGENTS.md:127-137 'Installation matrix' — index-less `pip install opaque-base` ... `pip install \"opaque[all]\"`"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Repeat `--index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/` on every command in the extras blocks of README.md and docs/getting-started/installation.md (or show a `pip.conf` / `[tool.uv.index]` snippet once and reference it), do the same in AGENTS.md's matrix, and register the remaining six defensive stubs on PyPI alongside the four already published.",
+      "confidence": "high"
+    },
+    {
+      "title": "The RNG-key guide's reproducibility snippet raises InputTypeError — the sibling page of the OPQ-362 fix",
+      "file": "docs/user-guide/rng-key.md",
+      "line": "275-289",
+      "category": "docs-drift-api",
+      "severity": "low",
+      "claim": "OPQ-362 ('`docs/reference/rng.md` calls `gaussian_noise` positionally and binds its 2-tuple to a single name') was closed in sweep #843, and HEAD does rewrite docs/reference/rng.md. The 'Reproducibility' snippet in the companion user-guide page still passes a bare dict to the noise function, which HEAD rejects. Every other `noise_fn(grads, ...)` call site in the docs feeds a `ClippedPytree` returned by `grad_fn`, so this is the only remaining instance.",
+      "failure_scenario": "The snippet is a self-contained reproducibility demonstration — the one block on the page a reader would actually paste. Executed verbatim it fails at line 8 with `opaque.api.base.exceptions.InputTypeError: gaussian_noise expects ClippedPytree inputs. Wrap manual values with opaque.types.clipped(...).` The page's stated point (identical keys reproduce identical noise) is never demonstrated.",
+      "evidence": [
+        "docs/user-guide/rng-key.md:279 `grads = {\"w\": torch.randn(100)}` then :282 `noisy1, _ = noise_fn(grads, s1)`",
+        "Executed verbatim -> traceback into packages/opaque-dpsgd/src/opaque/api/dpsgd/noise/_gaussian.py:322 `raise InputTypeError(... 'gaussian_noise expects ClippedPytree inputs. Wrap manual values with opaque.types.clipped(...).')`",
+        "`grep -n 'noise_fn(' docs/user-guide/rng-key.md docs/reference/rng.md docs/user-guide/noise.md` — all other call sites pass a `grads` produced by `grad_fn`"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Wrap the manual value: `grads = clipped({\"w\": torch.randn(100)}, max_norm=1.0)` (importing `clipped` from `opaque.types`), which is exactly what the raised error instructs.",
+      "confidence": "high"
+    },
+    {
+      "title": "Published tutorial output embeds a maintainer's absolute local path, username and internal branch name on the public documentation site",
+      "file": "docs/tutorials/llm_finetuning.ipynb",
+      "line": "nb JSON lines 153, 455, 464",
+      "category": "public-release-hygiene",
+      "severity": "low",
+      "claim": "Three stored warning outputs in the notebook contain `/Users/evgeny.grigorenko/Workspaces/copilot-worktrees/opaque/evgri243-issue-416-execute-documentation-examples-and-valid-38f84f/.venv/lib/python3.12/site-packages/...`. Because mkdocs.yml:61 sets `execute: false`, mkdocs-jupyter renders the committed outputs verbatim, so these strings are served on the public docs site. They disclose a maintainer's OS username, local workspace layout, the agent-worktree convention, and an internal branch name tied to an issue number. Marble #578 ('Remove JetBrains-internal specifics from documentation') is closed; this is the only notebook affected (`grep -rn 'Users/\\|/home/[a-z]' docs/tutorials/*.ipynb` returns exactly these three lines).",
+      "failure_scenario": "Anyone browsing the 'Fine-tuning an LLM' tutorial page reads the maintainer's home-directory path and internal branch naming. Nothing breaks, but it is exactly the class of internal detail Marble #578 claimed to have removed, and it is durable — nothing in CI strips or normalizes notebook outputs.",
+      "evidence": [
+        "`grep -rn 'Users/' docs/tutorials/*.ipynb` -> docs/tutorials/llm_finetuning.ipynb lines 153, 455, 464, all containing `/Users/evgeny.grigorenko/Workspaces/copilot-worktrees/opaque/evgri243-issue-416-execute-documentation-examples-and-valid-38f84f/.venv/lib/python3.12/site-packages/`",
+        "mkdocs.yml:59-61 `- mkdocs-jupyter:` / `include_source: true` / `execute: false` — committed outputs are what is published",
+        "mkdocs.yml:140 `- Fine-tuning an LLM: tutorials/llm_finetuning.ipynb` — the notebook is in the published nav",
+        "Marble milestone issue #578 'Remove JetBrains-internal specifics from documentation' (closed)"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Re-execute the notebook in a clean checkout so the warning paths are neutral, or strip `outputs` warning text with an nbstripout/`nbconvert --ClearOutputPreprocessor` filter for warning streams; add a CI grep that fails on absolute `/Users/` or `/home/` paths in docs/tutorials/*.ipynb.",
+      "confidence": "high"
+    },
+    {
+      "title": "The published LLM tutorial is built on distilgpt2, a model family the documentation elsewhere declares unsupported and whose gradient mismatch is still open (#813)",
+      "file": "docs/tutorials/llm_finetuning.ipynb",
+      "line": "cell 3, `MODEL_NAME = \"distilgpt2\"`",
+      "category": "docs-vs-support-matrix",
+      "severity": "low",
+      "claim": "The only published tutorial that fine-tunes a real Hugging Face model pins `distilgpt2` and runs `apply_model_patches(model)` on it (with the PEFT warning 'fan_in_fan_out is set to False but the target module is `Conv1D`' preserved in the stored output). GPT-2 is not in any supported-family list: README.md's feature bullet names LLaMA, Mistral, Qwen2/3, Phi-3, Gemma/Gemma2, Granite, Cohere/Cohere2, and AGENTS.md's 'Supported HF model families' section names the same set plus Ministral/SmolLM3/OLMo2-3/GLM4/Gemma3/Exaone4/DeepSeek — GPT-2 appears nowhere. This is the delta on open issue #813 ('Convert parity skips to strict xfail and resolve gpt2 gradient mismatch'), which is scoped to test skips: the same unresolved mismatch also underwrites a published, non-CI-executed tutorial that teaches users to patch a GPT-2 model.",
+      "failure_scenario": "A reader takes the tutorial as evidence that GPT-2-family models are supported and patches one in production, on a code path whose gradient parity against upstream is the subject of an open issue. Because llm_finetuning.ipynb is not in the pr.yml execution list, no CI signal exists for this notebook at all.",
+      "evidence": [
+        "docs/tutorials/llm_finetuning.ipynb cell 3: `MODEL_NAME = \"distilgpt2\"`; cell 5: `model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)` ... `apply_model_patches(model)`",
+        "README.md 'Hugging Face compatibility: automatic `vmap` patching for LLaMA, Mistral, Qwen2/3, Phi-3, Gemma/Gemma2, Granite, Cohere/Cohere2' — no GPT-2",
+        "AGENTS.md 'Supported HF model families' section — no GPT-2",
+        "Open issue #813 (Bazalt, OPQ-339) 'Convert parity skips to strict xfail and resolve gpt2 gradient mismatch'",
+        ".github/workflows/pr.yml:293-302 does not execute llm_finetuning.ipynb"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Retarget the tutorial to a model in the supported list (a tiny Qwen2 or LLaMA config keeps runtime comparable), or add an explicit admonition on the page that GPT-2 is outside the supported families and used here only for download size, with a link to #813.",
+      "confidence": "high"
+    },
+    {
+      "title": "Distributed reference names `opaque.distributed._state.register_sync_type`, a module path that does not exist",
+      "file": "docs/reference/distributed.md",
+      "line": "82",
+      "category": "docs-drift-api",
+      "severity": "low",
+      "claim": "The page tells readers that 'clipping and noise states register themselves with `opaque.distributed._state.register_sync_type`' and that 'Lower-level scalar reductions, tensor gathers, and object syncs live in `_state.py`'. `import opaque.distributed._state` raises `ModuleNotFoundError: No module named 'opaque.distributed._state'`; the real symbol lives at `opaque.api.engine.distributed._state.register_sync_type` (imported that way by every registrant, e.g. packages/opaque-dpsgd/src/opaque/api/dpsgd/noise/_distributed.py:14). The nearby `::: opaque.distributed.collectives...` and `::: opaque.distributed.gradients...` references do resolve, so this is a single stale path rather than a page-wide problem.",
+      "failure_scenario": "A contributor extending the sync registry follows the documented path, gets an ImportError, and has to reverse-engineer the correct one from an implementation traceback — the practice the installation guide explicitly warns against (docs/getting-started/installation.md, 'avoid copying `opaque.api.*` paths from implementation tracebacks').",
+      "evidence": [
+        "docs/reference/distributed.md:81-83: 'register themselves with `opaque.distributed._state.register_sync_type`'",
+        "`import opaque.distributed._state` -> `ModuleNotFoundError: No module named 'opaque.distributed._state'`; `dir(opaque.distributed)` has no `_state` and no `register_sync_type`",
+        "`grep -rn register_sync_type packages/*/src` -> all importers use `from opaque.api.engine.distributed._state import register_sync_type` (e.g. packages/opaque-dpsgd/src/opaque/api/dpsgd/noise/_distributed.py:14, packages/opaque-dpftrl/.../noise/_distributed.py:20)",
+        "The file exists at packages/opaque-engine/src/opaque/api/engine/distributed/_state.py"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Correct the path to `opaque.api.engine.distributed._state.register_sync_type` and note that it is contributor-internal, which ARC-003 permits in implementation discussion.",
+      "confidence": "high"
+    },
+    {
+      "title": "Two user-guide pages point 'runnable reference' readers at test files that do not exist at the given paths",
+      "file": "docs/user-guide/dp-sgd.md",
+      "line": "172 (`tests/integration/test_dpsgd_pipeline.py`); docs/user-guide/dp-ftrl.md:249 (`tests/integration/test_dpftrl_pipeline.py`)",
+      "category": "docs-drift",
+      "severity": "low",
+      "claim": "Both 'Runnable references' sections name integration tests as the canonical executable version of the guide's pipeline. Neither path exists; the files live one directory deeper, at `tests/integration/transformers/test_dpsgd_pipeline.py` and `tests/integration/transformers/test_dpftrl_pipeline.py`. OPQ-370 ('workflow documentation re-drifted ... test-path claims are stale') was closed in sweep #844 and did fix docs/user-guide/distributed-trainer.md:92-96 (all four paths there now resolve); these two were not in its evidence list and remain stale.",
+      "failure_scenario": "`uv run pytest tests/integration/test_dpsgd_pipeline.py` errors with 'file or directory not found', and the reader has no runnable counterpart to the guide's end-to-end loop.",
+      "evidence": [
+        "docs/user-guide/dp-sgd.md:172 '`tests/integration/test_dpsgd_pipeline.py` — minimal smoke test exercising the same flow'",
+        "docs/user-guide/dp-ftrl.md:249 same shape for test_dpftrl_pipeline.py",
+        "`ls tests/integration/` -> README.md, accounting, alignment, conftest.py, ddp, noise, rng, sampling, transformers (no test_*.py at that level)",
+        "`find . -name test_dpsgd_pipeline.py` -> ./tests/integration/transformers/test_dpsgd_pipeline.py ; `find . -name test_dpftrl_pipeline.py` -> ./tests/integration/transformers/test_dpftrl_pipeline.py",
+        "Fixed sibling: docs/user-guide/distributed-trainer.md:92-96 paths all resolve (e.g. packages/opaque-transformers/tests/opaque_transformers/test_config.py)"
+      ],
+      "affects_epsilon": false,
+      "fix_sketch": "Insert the missing `transformers/` segment in both paths, and consider a CI grep that resolves every `tests/...py` and `examples/...py` path mentioned in docs/*.md against the working tree.",
+      "confidence": "high"
+    }
+  ],
+  "clean_areas": [
+    "OPQ-354 (bare MfGaussian defaulting to a 1-step single-participation price) is genuinely fixed: `_bare_n_steps` at packages/opaque-dpftrl/src/opaque/api/accounting/dpftrl/mechanisms/_mf_gaussian.py:78-86 raises ConfigurationError when n_steps is None, verified by calling `dpftrl_acc.mf_gaussian(1.0, blt_strategy(max_buffers=10)).epsilon_at(1e-5)` (raises). The guard is lazy, so every nested `balls_in_bins(mf_gaussian(1.0, strategy), ...)` in the docs still constructs — verified by executing the nested forms. docs/mechanisms/dp-ftrl/blt.md:163-171 now passes n_steps=5000, min_sep=100, max_participations=5, matching the noise example directly above it; docs/reference/accounting.md:414-420 and docs/user-guide/accounting.md:274-280 likewise.",
+    "Every epsilon and noise-multiplier value stored in docs/tutorials/accounting_and_calibration.ipynb was recomputed against HEAD and matches to the published precision: 0.7181 / 6.67e-07 (cell 3), 1.2656 / 3.0000 (cell 7), 1.8283 / 2.61e-03 / 0.1612 (cell 11), 0.1898 / 2.3995 / 2.4074 (cell 13), 0.4062 (cell 15). The multi-target calibration table in cell 9 was spot-checked at eps=3.0.",
+    "docs/tutorials/dp_ftrl_training.ipynb's published numbers were recomputed: single-participation sensitivity 1.0000, calibrated noise multiplier 4.1981, achieved epsilon 3.00 — all match. Its sample-rate derivation (`sample_rate = batch_size * bands / n_samples`, cell 5) is the correct conditional-rate form, in contrast to the reference pages flagged above.",
+    "docs/tutorials/dp_sgd_training.ipynb is the fixed version of OPQ-355: cell 13 drives the loop from `PoissonSampler(dataset, sample_rate=..., n_steps=total_steps, key=...)` and composes `dpsgd_acc.poisson(...) * step` at the actual step count. I read every cell and found no residual shuffled/fixed-batch pricing.",
+    "The k-out-of-t 'block bound dominates total allocation' claim (docs/reference/sampling.md:120-124, docs/user-guide/sampling.md:245-247) is mathematically sound, and I derived it independently rather than taking the comment's word: with iid per-step observations, the add/remove likelihood ratio is E_S[prod_{i in S} Z_i] with Z_i iid and E[Z_i]=1; symmetrizing any distribution on k-subsets over a uniform permutation of [t] gives the uniform distribution on k-subsets (S_t acts transitively), so the total-allocation ratio is the pi-average of block-allocation ratios; the hockey-stick functional (x - e^eps)_+ is convex and the reference measure is exchangeable, so Jensen gives H_eps(total) <= H_eps(block). The argument survives unequal blocks, and packages/opaque-accounting/src/amplification/random_allocation.rs:186-194 splits t into m_f blocks of floor(t/k) and m_c of ceil(t/k) rather than assuming divisibility.",
+    "The paired second-moment Mahalanobis identity published at docs/reference/noise.md:56-90 is exact, verified both algebraically (sum_{g,i} (Delta/sigma)^2 = sum Delta/(nm^2 S) = 1/nm^2) and numerically through `paired_noise_stddevs` for scalar and PerGroup bounds (0.5917159763313611 vs 1/1.3^2 = 0.5917159763313609). The worst case is attainable (a 1-sparse clipped gradient makes ||g^2||_2 = ||g||^2), so the reduction to a sensitivity-1 Gaussian is tight, not merely an upper bound — for the single-participation case. The multi-participation DP-FTRL caveat is reported as a finding above.",
+    "The RNG domain-separation table at docs/reference/rng.md:218-232 is accurate: all twelve published tags were matched against the string constants in the source (GAUSSIAN_STREAM_FOLD, ADAPTIVE_CLIPPING_STREAM_FOLD, POISSON_STREAM_FOLD, K_OUT_OF_T_STREAM_FOLD, MF_GAUSSIAN_STREAM_FOLD, SECOND_MOMENT_FIRST/SECOND_STREAM_FOLD, CYCLIC_POISSON_STREAM_FOLD, B_MIN_SEP_STREAM_FOLD, BALLS_IN_BINS_STREAM_FOLD, PAIRED_FIRST/SECOND_STREAM_FOLD, _CANARY_SELECTION_DOMAIN, _COIN_FLIP_DOMAIN, IGNORE_DATA_SKIP_STREAM_FOLD), each present verbatim.",
+    "docs/user-guide/precision.md was rewritten by 7f55aae5 and every checkable claim holds: `clipped_grad` defaults to `compute_dtype=None`; `gaussian_noise` and `mf_gaussian_noise` both default to `compute_dtype=torch.float32` (verified via inspect.signature). The `opaque.precision` facade is genuinely gone from the tree (only an untracked empty directory remains locally), and no doc, README, AGENTS.md or mkdocs nav entry still advertises it.",
+    "The three breaking removals leave no stale user-facing references to the removed capability: `grep -rni 'bounded_gaussian|bounded gaussian|bounded noise'` over docs/, README.md, all package READMEs, examples/, AGENTS.md and CONTRIBUTING.md returns nothing; `grep -rni 'per_step|PerStep|random_allocation|loss_scal|GradScaler|dynamic loss'` returns only unrelated hits (the surviving `Accountant(prefix=)` / `calibrate(prefix=)` feature, whose signatures I confirmed still exist, and prose uses of 'prefix' in alignment/BISR/BLT). training-arguments.md's horizon story ('every privacy metric reported during the run is the conservative full-horizon epsilon') matches the post-#894 behavior.",
+    "OPQ-356/357/358/359/364/365/367/368/369 spot-checks all passed at HEAD: `dpsgd_acc.adaclip` now exposes `num_groups` and it is documented at docs/reference/accounting.md:321-323; the `opaque.accounting` module docstring names only factories that exist (verified by importing each of gaussian/adaclip/poisson/parallel_poisson/k_out_of_t and mf_gaussian/poisson/b_min_sep/balls_in_bins); mf_blt default `{\"max_buffers\": 10}` and `noise_calibration_kwargs` `{\"min\": 0.11, \"max\": 10.0, \"tolerance\": 1e-3}` match _training_arguments.py:259 and :1048; `privacy_target_delta` is documented and implemented as `1/dataset_size**1.1` (_training_arguments.py:265-270); SquareChiPO is gone from docs and `chunked_nll` is documented; docs/user-guide/dp-sgd.md:143-164 now terminates, composes the accountant, and calls `optimizer.update(noised, opt_state, params=params)`.",
+    "A static kwarg/positional checker run over all 370 extracted docs snippets against the real signatures found exactly one drift (the bsr.md case reported above); no snippet imports a name that does not exist, and no `alias.attr` reference in any snippet fails to resolve. A separate scan of all 14 distinct backticked `opaque.*` dotted names in docs prose found only the one bad path (docs/reference/distributed.md:82) plus the RNG tag strings, which are not API names.",
+    "Executing all 370 extracted snippets in isolation produced 296 failures, of which every one except the four reported was either a NameError on a deliberate placeholder, a signature-fragment SyntaxError in a reference API block, or an environment precondition (torch.distributed not initialized, a checkpoint file absent, bf16 unavailable). I triaged the full list rather than sampling.",
+    "The lr_schedule deprecation claims in docs/mechanisms/dp-ftrl/bisr.md:47 and lambda-cgd.md:50 ('Deprecated compatibility argument; only `None` is accepted') are accurate: passing a real schedule to either factory raises ConfigurationError ('BisrStrategy/LambdaCgdStrategy does not support lr_schedule').",
+    "The auditing canary-ceiling table at docs/user-guide/auditing.md:226-230 is internally consistent with its own formula eps <~ ln(m / -ln(alpha)) at alpha=0.05: 5.81, 8.11, 10.42, 12.72 for m = 1e3..1e6, matching the published 5.8 / 8.1 / 10.4 / 12.7. `estimate.attack_auc(confidence=, num_samples=, key=)` matches the documented signature and the documented requirement that `key` is mandatory when `confidence` is given.",
+    "docs/mechanisms/dp-sgd/gaussian.md's mathematics is correct: the privacy loss l(x) = (Delta/sigma^2)(Delta/2 - x) is the correct log-ratio of the two normal densities, and the hockey-stick expression delta(eps) = Phi(Delta/2sigma - eps*sigma/Delta) - e^eps*Phi(-Delta/2sigma - eps*sigma/Delta) is the standard analytic Gaussian mechanism formula. The one soft spot is the pedagogical line 'a sample rate of 1% makes the mechanism behave as if noise were 100x larger' — true in the RDP/moments sense but not at the (eps, delta) level, where a single step of poisson(gaussian(1.0), 0.01) gives eps=0.1995 against gaussian(100)'s eps=0.0272 at delta=1e-5 (7.3x apart; 1.83 vs 1.20 after 1000 compositions). It is hedged with 'roughly' and drives no published value, so I did not file it.",
+    "examples/quickstart.py, the file the Quick Start page now includes (`--8<-- \"examples/quickstart.py:4:\"` with pymdownx.snippets enabled at mkdocs.yml:70), runs green end to end in this environment, reaches exactly epsilon=3.00 at step 310, and carries two real assertions (`assert step == num_steps` and `abs(final_epsilon - result.achieved) < 1e-9`) that tie the reported epsilon to the calibration. Its sampler (PoissonSampler at q = 32/1000) and accountant (`poisson(gaussian(nm), q) * num_steps`) are the same process.",
+    "The documented JetBrains package index is genuinely public and complete: `https://packages.jetbrains.team/pypi/p/fed/python/simple/` returns 200 anonymously and carries all ten distribution names plus `opaque` 0.15.x wheels, so the pinned `--index-url` form of the install instructions works as written (the index-less extras block is the defect, reported above).",
+    "docs/user-guide/sampling.md's b-min-sep section does document the sampler/accountant conversion the reference page omits: lines 190-213 give `p = p_0 / (1 - p_0 * (bands - 1))` and it matches `participation_p_from_per_example_rate` in packages/opaque-dpftrl/src/opaque/api/accounting/dpftrl/amplification/_b_min_sep/__init__.py:38-59 exactly, including the bands==1 special case.",
+    "The trainer's sampler allow-lists match their documentation: `_ALLOWED_SAMPLERS`, `_SAMPLING_KWARGS`, `_CLIPPING_KWARGS` and `_SAMPLER_BY_MECHANISM` in _training_arguments.py:195-240 agree row for row with the tables in docs/user-guide/huggingface/training-arguments.md:134-165, including the claim that modes other than poisson and k_out_of_t accept no sampling kwargs, and the rejection of plain `poisson` for mf_band. (`_MECHANISM_KWARGS['gaussian']` still contains the dead `\"bound\"` key, but __post_init__ raises on it first, so it is unreachable rather than a documentation defect.)",
+    "A 200-trial null-calibration study of the one-run auditor (random scores independent of membership, m=1000, both the mu-GDP and eps-delta methods) was started but did not finish within the session budget, so I am making no claim about the calibration of `OneRunEstimate.epsilon_at` under the null. That question is tracked by open issues #376 and #828 and I deliberately did not file a duplicate; the observation I would flag if it were confirmed is that neither docs/user-guide/auditing.md nor docs/limitations.md carries any caveat about it, while auditing.md:1-6 presents the result as an 'empirical lower bound' whose excess over the theoretical epsilon indicates 'a bug in the implementation'."
+  ]
+}
