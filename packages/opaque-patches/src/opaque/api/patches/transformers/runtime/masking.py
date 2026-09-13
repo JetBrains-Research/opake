@@ -471,6 +471,20 @@ def vmap_create_recurrent_attention_mask(
     return attention_mask[..., -query_length:].contiguous()
 
 
+def vmap_update_linear_attention_mask(
+    self, attention_mask: torch.Tensor | None, cache_position: torch.Tensor
+) -> torch.Tensor | None:
+    """Compatibility shim for Qwen3-Next before the shared mask helper existed."""
+    if attention_mask is None:
+        return None
+    # Cache continuation carries a mask wider than the current query positions.
+    # Its recurrent state is already initialized, so preserve upstream's no-mask
+    # behavior without inspecting tensor values in Python control flow.
+    if attention_mask.shape[-1] != cache_position.shape[-1]:
+        return None
+    return attention_mask
+
+
 def _vmap_safe_ignore_causal_mask_sdpa(*args, **kwargs) -> bool:
     """vmap-safe ``_ignore_causal_mask_sdpa``.
 

@@ -10,6 +10,7 @@ from opaque.api.patches.transformers.runtime.masking import (
     vmap_create_compact_sdpa_sliding_window_causal_mask,
     vmap_create_recurrent_attention_mask,
     vmap_create_sliding_window_causal_mask,
+    vmap_update_linear_attention_mask,
 )
 from opaque.patches import apply_runtime_patches
 
@@ -175,6 +176,29 @@ def test_recurrent_attention_mask_preserves_per_example_padding_under_vmap():
     )(masks)
 
     assert torch.equal(result, masks[:, -inputs_embeds.shape[0] :])
+
+
+def test_legacy_linear_attention_mask_preserves_prefill_and_skips_cache():
+    padded = torch.tensor([[0, 1, 1]])
+    prefill = vmap_update_linear_attention_mask(
+        object(), padded, cache_position=torch.arange(3)
+    )
+    cached = vmap_update_linear_attention_mask(
+        object(), torch.ones(1, 4), cache_position=torch.tensor([3])
+    )
+
+    assert prefill is padded
+    assert cached is None
+
+
+def test_legacy_linear_attention_mask_is_vmap_safe():
+    masks = torch.tensor([[1, 1, 1], [0, 1, 1], [1, 0, 1]])
+    result = torch.vmap(
+        lambda mask: vmap_update_linear_attention_mask(
+            object(), mask, cache_position=torch.arange(3)
+        )
+    )(masks)
+    assert torch.equal(result, masks)
 
 
 class TestSlidingWindowCausalMask:
