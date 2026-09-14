@@ -23,6 +23,7 @@ Tolerances are dtype-specific:
 
 from __future__ import annotations
 
+import gc
 import importlib
 import importlib.util
 import sys
@@ -302,6 +303,9 @@ def _isolate_parity_family_state(request):
         # The restored globals may differ from what the idempotency cache recorded
         # during the parity case. Force later tests to inspect and patch them anew.
         _reset_patched_families()
+        if torch.backends.mps.is_available():
+            gc.collect()
+            torch.mps.empty_cache()
 
 
 _FORWARD_PARITY_CASES = [
