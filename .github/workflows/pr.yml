@@ -117,7 +117,7 @@ jobs:
     with:
       environment-name: mps
       pytest-marker: not cuda and not slow and not distributed
-      pytest-xdist: -n 1 --dist loadscope
+      pytest-xdist: -n 1 --dist loadscope -o faulthandler_timeout=120
       report-durations: true
       runner: macos-latest
       timeout-minutes: 40
