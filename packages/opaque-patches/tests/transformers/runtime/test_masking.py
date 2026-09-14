@@ -12,6 +12,7 @@ from opaque.api.patches.transformers.runtime.masking import (
     vmap_create_sliding_window_causal_mask,
     vmap_update_linear_attention_mask,
 )
+from opaque.exceptions import ConfigurationError
 from opaque.patches import apply_runtime_patches
 
 
@@ -199,6 +200,58 @@ def test_legacy_linear_attention_mask_is_vmap_safe():
         )
     )(masks)
     assert torch.equal(result, masks)
+    "builder",
+    [
+        vmap_create_causal_mask,
+        vmap_create_sliding_window_causal_mask,
+        vmap_create_compact_sdpa_sliding_window_causal_mask,
+    ],
+    ids=["causal", "sliding", "compact-sliding"],
+)
+@pytest.mark.parametrize("hook_name", ["or_mask_function", "and_mask_function"])
+def test_mask_hooks_fail_closed_before_fast_paths(builder, hook_name):
+    config = type(
+        "Cfg",
+        (),
+        {
+            "_attn_implementation": "sdpa",
+            "sliding_window": 16,
+            "attention_dropout": 0.0,
+        },
+    )()
+
+    def hook(*_):
+        raise AssertionError("mask hooks must not run")
+
+    with pytest.raises(
+        ConfigurationError,
+        match=rf"`{hook_name}` cannot be combined with vmap masking",
+    ):
+        builder(
+            config,
+            inputs_embeds=torch.randn(1, 8, 8),
+            attention_mask=None,
+            past_key_values=None,
+            **{hook_name: hook},
+        )
+
+
+def test_mask_hook_error_names_all_present_hooks():
+    config = type("Cfg", (), {"_attn_implementation": "sdpa"})()
+
+    def hook(*_):
+        return True
+
+    with pytest.raises(ConfigurationError) as error:
+        vmap_create_causal_mask(
+            config,
+            inputs_embeds=torch.randn(1, 8, 8),
+            or_mask_function=hook,
+            and_mask_function=hook,
+        )
+
+    assert "`or_mask_function`" in str(error.value)
+    assert "`and_mask_function`" in str(error.value)
 
 
 class TestSlidingWindowCausalMask:

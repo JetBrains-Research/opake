@@ -5,6 +5,25 @@
 import torch
 
 from opaque.api.patches.transformers.components.attention import vmap_repeat_kv
+from opaque.exceptions import ConfigurationError
+
+
+def _reject_unsupported_mask_hooks(or_mask_function, and_mask_function) -> None:
+    """Reject custom mask composition that the replacement cannot preserve."""
+    hooks = [
+        name
+        for name, hook in (
+            ("or_mask_function", or_mask_function),
+            ("and_mask_function", and_mask_function),
+        )
+        if hook is not None
+    ]
+    if hooks:
+        names = ", ".join(f"`{name}`" for name in hooks)
+        ConfigurationError.raise_(
+            f"opaque: {names} cannot be combined with vmap masking; "
+            "refusing to ignore custom mask composition"
+        )
 
 
 def _active_mask_dtype(input_embeds: torch.Tensor) -> torch.dtype:
@@ -82,8 +101,6 @@ def _can_use_compact_sdpa_sliding_window(
     past_key_values,
     cache_position: torch.Tensor | None,
     allow_is_causal_skip: bool,
-    or_mask_function,
-    and_mask_function,
     block_sequence_ids: torch.Tensor | None,
 ) -> bool:
     """Whether a patched SDPA forward can apply the window in query chunks."""
@@ -96,8 +113,6 @@ def _can_use_compact_sdpa_sliding_window(
         and getattr(config, "_attn_implementation", None) == "sdpa"
         and _safe_seq_length(past_key_values) == 0
         and cache_position is None
-        and or_mask_function is None
-        and and_mask_function is None
         and block_sequence_ids is None
         and (
             not torch.is_grad_enabled()
@@ -128,6 +143,7 @@ def vmap_create_compact_sdpa_sliding_window_causal_mask(
     implementation consumes ``sliding_window``. Other callers retain
     :func:`vmap_create_sliding_window_causal_mask` and its dense fallback.
     """
+    _reject_unsupported_mask_hooks(or_mask_function, and_mask_function)
     input_embeds = inputs_embeds if inputs_embeds is not None else input_embeds
     if _can_use_compact_sdpa_sliding_window(
         config,
@@ -136,8 +152,6 @@ def vmap_create_compact_sdpa_sliding_window_causal_mask(
         past_key_values,
         cache_position,
         allow_is_causal_skip,
-        or_mask_function,
-        and_mask_function,
         block_sequence_ids,
     ):
         return None
@@ -147,8 +161,6 @@ def vmap_create_compact_sdpa_sliding_window_causal_mask(
         attention_mask=attention_mask,
         past_key_values=past_key_values,
         position_ids=position_ids,
-        or_mask_function=or_mask_function,
-        and_mask_function=and_mask_function,
         cache_position=cache_position,
         allow_is_causal_skip=allow_is_causal_skip,
         block_sequence_ids=block_sequence_ids,
@@ -183,6 +195,7 @@ def vmap_create_causal_mask(
     ``block_sequence_ids``. All callers use keywords, so the flexible signature
     handles both.
     """
+    _reject_unsupported_mask_hooks(or_mask_function, and_mask_function)
     input_embeds = inputs_embeds if inputs_embeds is not None else input_embeds
     # When no padding mask is provided AND the attention backend handles
     # causality internally (SDPA uses is_causal=True, flash uses masking
@@ -349,6 +362,7 @@ def vmap_create_sliding_window_causal_mask(
     Signature is version-agnostic: v4 uses ``input_embeds`` + ``cache_position``,
     v5 renames to ``inputs_embeds`` and drops ``cache_position``.
     """
+    _reject_unsupported_mask_hooks(or_mask_function, and_mask_function)
     input_embeds = inputs_embeds if inputs_embeds is not None else input_embeds
     sliding_window = getattr(config, "sliding_window", None)
     attn_impl = getattr(config, "_attn_implementation", None)
@@ -386,8 +400,6 @@ def vmap_create_sliding_window_causal_mask(
         attention_mask=attention_mask,
         past_key_values=past_key_values,
         position_ids=position_ids,
-        or_mask_function=or_mask_function,
-        and_mask_function=and_mask_function,
         cache_position=cache_position,
         allow_is_causal_skip=allow_is_causal_skip,
     )
