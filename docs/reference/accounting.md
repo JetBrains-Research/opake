@@ -741,10 +741,19 @@ When the process uses a Monte Carlo PLD, calibration divides the configured
 failure probability across the two endpoint probes and at most
 `max_iterations` interior probes. `result.mc_confidence` therefore covers the
 adaptive search as a whole rather than only its selected final parameter.
-Balls-in-Bins calibration also reuses its seeded, sigma-independent projected
-draws across probes when they fit the bounded native cache. Set
-`OPAQUE_BNB_TRANSCRIPT_CACHE_MAX_BYTES` to control its memory cap (4 GiB by
-default), or to `0` to use the lower-memory one-shot path for every probe.
+
+Balls-in-Bins accounting for correlated noise reuses seeded projected draws
+across noise multipliers. The shared cache also serves standalone `pld()` and
+`epsilon_at()` calls; entries are released on eviction, when `calibrate()`
+exits, or when the Python process ends. Set
+`OPAQUE_BNB_TRANSCRIPT_CACHE_MAX_BYTES` before querying to control the cache
+budget (4 GiB by default), or to `0` to disable reuse.
+
+For `N` samples per adjacency direction and `b` bins, the projected draws alone
+occupy `16 * N * b` bytes. For example, calibrating a single Balls-in-Bins process
+at `delta=1e-5` with default settings requires about 7 million samples per
+direction; a 100-bin corpus needs about 10.5 GiB. If a corpus exceeds the cap,
+each probe regenerates its draws through the lower-memory one-shot path.
 
 Calibrating a second stage against the remaining budget (see
 [Seeding with a prior process](#seeding-with-a-prior-process)): pass the
