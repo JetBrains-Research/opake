@@ -150,6 +150,9 @@ def auto_clipped_fun(
         ``(*args, state, **kwargs) -> ((value, aux), state)`` when
         ``return_aux=True``.
 
+    Raises:
+        ConfigurationError: If the batch is empty.
+
     Formal guarantee:
         Under add/remove or zero-out DP, the L2 sensitivity of the first
         output with respect to the batch arguments is the returned

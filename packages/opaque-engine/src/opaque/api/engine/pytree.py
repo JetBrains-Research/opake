@@ -13,7 +13,8 @@ Key functions:
   sqrt(sum(||leaf||^2)).
 
 Notes
-- Only tensor leaves are considered for `tree_leaves` and `global_norm`.
+- Only tensor leaves are considered by `tree_leaves` and `global_norm`; DP
+  metadata wrappers are rejected rather than silently ignored.
 - `tree_map` applies `fn` to all leaves, passing through non-tensor leaves
   unchanged unless `fn` handles them explicitly.
 - Supports mixed dtypes and complex numbers, returning complex norm for complex tensors.
@@ -117,14 +118,49 @@ def tree_leaves(tree: Any) -> list[torch.Tensor]:
     Returns:
         List of all tensor leaves in the tree (non-tensor leaves are ignored).
 
+    Raises:
+        InputTypeError: If ``tree`` contains a DP metadata wrapper.
+
     Example:
         >>> tree = {'a': torch.tensor([1, 2]), 'b': {'c': torch.tensor([3])}}
         >>> leaves = tree_leaves(tree)
         >>> len(leaves)
         2
     """
-    flat, _ = _ot.tree_flatten(tree)
-    return [x for x in flat if isinstance(x, torch.Tensor)]
+    from opaque.api.engine.types import (
+        ClippedPytree,
+        NoisedPytree,
+        SecondMomentClippingOutput,
+        SecondMomentNoiseOutput,
+    )
+
+    wrapper_types = (
+        ClippedPytree,
+        NoisedPytree,
+        SecondMomentClippingOutput,
+        SecondMomentNoiseOutput,
+    )
+    flat, _ = _ot.tree_flatten(
+        tree, is_leaf=lambda leaf: isinstance(leaf, wrapper_types)
+    )
+    wrapper = next((leaf for leaf in flat if isinstance(leaf, wrapper_types)), None)
+
+    if wrapper is not None:
+        if isinstance(wrapper, SecondMomentClippingOutput):
+            view = "`.grads.pytree` or `.squared_grads.pytree`"
+        elif isinstance(wrapper, SecondMomentNoiseOutput):
+            view = "`.noisy_grads.pytree` or `.noisy_squared_grads.pytree`"
+        else:
+            view = "`.pytree`"
+        raise InputTypeError(
+            *(
+                f"{type(wrapper).__name__} is unsupported because this operation "
+                f"accepts raw tensor pytrees. Pass {view} for an explicit "
+                "numerical-only view.",
+            )
+        )
+
+    return [leaf for leaf in flat if isinstance(leaf, torch.Tensor)]
 
 
 def tree_map(fn: Callable[..., Any], *trees: Any) -> Any:
@@ -374,30 +410,6 @@ def global_norm(
         This function is commonly used in gradient clipping for deep learning.
         See: Pascanu et al. 2013, "On the difficulty of training RNNs"
     """
-    from opaque.api.engine.types import (
-        ClippedPytree,
-        NoisedPytree,
-        SecondMomentClippingOutput,
-        SecondMomentNoiseOutput,
-    )
-
-    if isinstance(
-        tree,
-        (
-            ClippedPytree,
-            NoisedPytree,
-            SecondMomentClippingOutput,
-            SecondMomentNoiseOutput,
-        ),
-    ):
-        raise InputTypeError(
-            *(
-                f"{type(tree).__name__} global norm is unsupported because "
-                "global_norm() operates on raw tensor pytrees. Use `.pytree` "
-                "for an explicit numerical-only view.",
-            )
-        )
-
     if compute_dtype is not None and not torch.is_floating_point(
         torch.empty((), dtype=compute_dtype)
     ):

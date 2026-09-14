@@ -132,33 +132,67 @@ def test_global_norm_complex_uses_squared_magnitude(device):
     assert math.isclose(float(got), expected, rel_tol=0, abs_tol=1e-6)
 
 
-@pytest.mark.parametrize(
-    "tree",
-    [
-        clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
-        NoisedPytree(
-            pytree={"w": torch.tensor([3.0, 4.0])},
-            max_norm=1.0,
-            noise_stddev=0.5,
+@pytest.fixture(
+    params=[
+        (
+            clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
+            "`.pytree`",
         ),
-        SecondMomentClippingOutput(
-            grads=clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
-            squared_grads=clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
-        ),
-        SecondMomentNoiseOutput(
-            noisy_grads=NoisedPytree(
+        (
+            NoisedPytree(
                 pytree={"w": torch.tensor([3.0, 4.0])},
                 max_norm=1.0,
                 noise_stddev=0.5,
             ),
-            noisy_squared_grads=NoisedPytree(
-                pytree={"w": torch.tensor([3.0, 4.0])},
-                max_norm=1.0,
-                noise_stddev=0.5,
+            "`.pytree`",
+        ),
+        (
+            SecondMomentClippingOutput(
+                grads=clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
+                squared_grads=clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
             ),
+            "`.grads.pytree` or `.squared_grads.pytree`",
+        ),
+        (
+            SecondMomentNoiseOutput(
+                noisy_grads=NoisedPytree(
+                    pytree={"w": torch.tensor([3.0, 4.0])},
+                    max_norm=1.0,
+                    noise_stddev=0.5,
+                ),
+                noisy_squared_grads=NoisedPytree(
+                    pytree={"w": torch.tensor([3.0, 4.0])},
+                    max_norm=1.0,
+                    noise_stddev=0.5,
+                ),
+            ),
+            "`.noisy_grads.pytree` or `.noisy_squared_grads.pytree`",
         ),
     ],
+    ids=lambda case: type(case[0]).__name__,
 )
-def test_global_norm_rejects_dp_pytree_wrappers(tree):
+def dp_wrapper_case(request):
+    return request.param
+
+
+def test_tree_leaves_rejects_dp_pytree_wrappers(dp_wrapper_case):
+    wrapper, view = dp_wrapper_case
+    with pytest.raises(TypeError, match="raw tensor pytrees") as error:
+        pu.tree_leaves(wrapper)
+    assert view in str(error.value)
+
+
+def test_tree_leaves_rejects_nested_dp_pytree_wrappers(dp_wrapper_case):
+    wrapper, view = dp_wrapper_case
+    with pytest.raises(TypeError, match="raw tensor pytrees") as error:
+        pu.tree_leaves({"wrapped": wrapper})
+    assert view in str(error.value)
+
+
+@pytest.mark.parametrize("nested", [False, True], ids=["root", "nested"])
+def test_global_norm_rejects_dp_pytree_wrappers(dp_wrapper_case, nested):
+    wrapper, _ = dp_wrapper_case
+    tree = {"wrapped": wrapper} if nested else wrapper
+
     with pytest.raises(TypeError, match="raw tensor pytrees"):
         pu.global_norm(tree)
