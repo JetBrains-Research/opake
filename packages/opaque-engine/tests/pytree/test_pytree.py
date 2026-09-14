@@ -1,15 +1,16 @@
 import math
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import torch
 
 from opaque import pytree as pu
+from opaque.exceptions import InputTypeError
 from opaque.types import (
-    NoisedPytree,
     SecondMomentClippingOutput,
     SecondMomentNoiseOutput,
     clipped,
+    noised,
 )
 
 
@@ -132,33 +133,71 @@ def test_global_norm_complex_uses_squared_magnitude(device):
     assert math.isclose(float(got), expected, rel_tol=0, abs_tol=1e-6)
 
 
+def _dp_wrapper_cases():
+    payload = {"w": torch.tensor([3.0, 4.0])}
+    clipped_value = clipped(payload, max_norm=1.0)
+    noised_value = noised(payload, max_norm=1.0, noise_stddev=0.5)
+    return [
+        pytest.param(clipped_value, id="clipped"),
+        pytest.param(noised_value, id="noised"),
+        pytest.param(
+            SecondMomentClippingOutput(
+                grads=clipped_value,
+                squared_grads=clipped_value,
+            ),
+            id="second_moment_clipped",
+        ),
+        pytest.param(
+            SecondMomentNoiseOutput(
+                noisy_grads=noised_value,
+                noisy_squared_grads=noised_value,
+            ),
+            id="second_moment_noised",
+        ),
+    ]
+
+
 @pytest.mark.parametrize(
-    "tree",
+    "operation",
     [
-        clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
-        NoisedPytree(
-            pytree={"w": torch.tensor([3.0, 4.0])},
-            max_norm=1.0,
-            noise_stddev=0.5,
-        ),
-        SecondMomentClippingOutput(
-            grads=clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
-            squared_grads=clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
-        ),
-        SecondMomentNoiseOutput(
-            noisy_grads=NoisedPytree(
-                pytree={"w": torch.tensor([3.0, 4.0])},
-                max_norm=1.0,
-                noise_stddev=0.5,
-            ),
-            noisy_squared_grads=NoisedPytree(
-                pytree={"w": torch.tensor([3.0, 4.0])},
-                max_norm=1.0,
-                noise_stddev=0.5,
-            ),
-        ),
+        pytest.param(pu.tree_leaves, id="tree_leaves"),
+        pytest.param(pu.global_norm, id="global_norm"),
     ],
 )
-def test_global_norm_rejects_dp_pytree_wrappers(tree):
-    with pytest.raises(TypeError, match="raw tensor pytrees"):
+@pytest.mark.parametrize("tree", _dp_wrapper_cases())
+def test_tensor_leaf_operations_reject_dp_pytree_wrappers(operation, tree):
+    with pytest.raises(InputTypeError) as exc_info:
+        operation(tree)
+
+    message = str(exc_info.value)
+    assert "raw tensor pytrees" in message
+    assert "`.pytree`" in message
+    if isinstance(tree, (SecondMomentClippingOutput, SecondMomentNoiseOutput)):
+        assert "select a stream" in message
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        pytest.param(pu.tree_leaves, id="tree_leaves"),
+        pytest.param(pu.global_norm, id="global_norm"),
+    ],
+)
+def test_tensor_leaf_operations_reject_nested_dp_pytree_wrapper(operation):
+    tree = {
+        "wrapped": clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0),
+        "plain": torch.tensor([12.0]),
+    }
+
+    with pytest.raises(InputTypeError, match="raw tensor pytrees"):
+        operation(tree)
+
+
+def test_global_norm_rejects_paired_output_with_raw_fields():
+    tree = SecondMomentClippingOutput(
+        grads=cast("Any", torch.tensor([3.0])),
+        squared_grads=cast("Any", torch.tensor([4.0])),
+    )
+
+    with pytest.raises(InputTypeError, match="raw tensor pytrees"):
         pu.global_norm(tree)

@@ -30,6 +30,12 @@ import torch
 
 from opaque.exceptions import ConfigurationError, InputTypeError
 
+_RAW_TENSOR_PYTREE_ERROR = (
+    "Tensor-leaf operations require raw tensor pytrees. Pass a single-stream "
+    "wrapper's `.pytree`; for paired output, select a stream and pass that "
+    "stream's `.pytree`."
+)
+
 ParamPath = tuple[str | int, ...]
 """Optree leaf path: nested dict keys (``str``) and sequence indices (``int``).
 
@@ -117,6 +123,9 @@ def tree_leaves(tree: Any) -> list[torch.Tensor]:
     Returns:
         List of all tensor leaves in the tree (non-tensor leaves are ignored).
 
+    Raises:
+        InputTypeError: If ``tree`` contains a DP wrapper.
+
     Example:
         >>> tree = {'a': torch.tensor([1, 2]), 'b': {'c': torch.tensor([3])}}
         >>> leaves = tree_leaves(tree)
@@ -124,7 +133,16 @@ def tree_leaves(tree: Any) -> list[torch.Tensor]:
         2
     """
     flat, _ = _ot.tree_flatten(tree)
-    return [x for x in flat if isinstance(x, torch.Tensor)]
+    tensor_leaves = [leaf for leaf in flat if isinstance(leaf, torch.Tensor)]
+    if len(tensor_leaves) == len(flat):
+        return tensor_leaves
+
+    # Local import avoids the types -> pytree cycle.
+    from opaque.api.engine.types import ClippedPytree
+
+    if any(isinstance(leaf, ClippedPytree) for leaf in flat):
+        raise InputTypeError(_RAW_TENSOR_PYTREE_ERROR)
+    return tensor_leaves
 
 
 def tree_map(fn: Callable[..., Any], *trees: Any) -> Any:
@@ -363,6 +381,10 @@ def global_norm(
         tensor leaf (or CPU if the tree is empty).  Output dtype matches
         the resolved compute dtype.
 
+    Raises:
+        InputTypeError: If ``tree`` contains a DP wrapper or ``compute_dtype``
+            is not a real floating-point dtype.
+
     Example:
         >>> tree = {'w': torch.tensor([3.0, 4.0]), 'b': torch.tensor([0.0, 12.0])}
         >>> norm = global_norm(tree)
@@ -390,13 +412,7 @@ def global_norm(
             SecondMomentNoiseOutput,
         ),
     ):
-        raise InputTypeError(
-            *(
-                f"{type(tree).__name__} global norm is unsupported because "
-                "global_norm() operates on raw tensor pytrees. Use `.pytree` "
-                "for an explicit numerical-only view.",
-            )
-        )
+        raise InputTypeError(_RAW_TENSOR_PYTREE_ERROR)
 
     if compute_dtype is not None and not torch.is_floating_point(
         torch.empty((), dtype=compute_dtype)
