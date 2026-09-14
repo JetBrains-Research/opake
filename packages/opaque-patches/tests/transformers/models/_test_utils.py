@@ -513,6 +513,8 @@ def assert_parity_vmap_grad(
     label: str = "",
     apply_model_patches_kwargs: dict | None = None,
     dtype: torch.dtype | None = None,
+    batch: int = 4,
+    seq: int = 12,
 ):
     """Compare vmap gradients against an upstream runtime-compatible reference."""
     torch.manual_seed(0)
@@ -530,7 +532,7 @@ def assert_parity_vmap_grad(
 
     unpatched.train()
     patched.train()
-    batch, seq, vocab = 4, 12, unpatched.config.vocab_size
+    vocab = unpatched.config.vocab_size
     input_ids = torch.randint(0, vocab, (batch, seq), device=device)
     attention_mask = torch.ones(batch, seq, dtype=torch.long, device=device)
     labels = input_ids.clone()

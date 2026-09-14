@@ -74,6 +74,7 @@ _MOE_FAMILIES = {
     "mixtral",
     "qwen3_moe",
     "qwen3_5_moe",
+    "qwen3_next",
     "hunyuan_v1_moe",
 }
 
@@ -589,6 +590,8 @@ def test_vmap_grad_parity(family, device):
             softcapping=softcapping,
             label=f"{family}",
             dtype=_parity_dtype(device),
+            batch=2 if family in _MOE_FAMILIES else 4,
+            seq=4 if family in _MOE_FAMILIES else 12,
         )
     except Exception as e:
         raise AssertionError(f"{family} vmap grad parity failed") from e
