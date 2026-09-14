@@ -126,7 +126,7 @@ Hugging Face Transformers (https://github.com/huggingface/transformers),
 distributed under the Apache License, Version 2.0, and then modified for
 Opaque's functional per-example DP training flow:
 
-  packages/opaque-transformers/src/opaque/api/transformers/trainer/_dp_trainer.py
+  packages/opaque-transformers/src/opaque/api/transformers/trainer/_trainer.py
   packages/opaque-transformers/src/opaque/api/transformers/trainer/_training_arguments.py
 
 

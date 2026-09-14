@@ -6,7 +6,7 @@
 # https://github.com/huggingface/transformers), then constrained to the
 # DP-meaningful subset used by Opaque's trainer stack.
 # See ../../../../../NOTICE in this package for the full attribution.
-"""DP training arguments — standalone dataclass for :class:`DPTrainer`.
+"""DP training arguments — standalone dataclass for :class:`Trainer`.
 
 ``TrainingArguments`` is a plain ``@dataclass`` (no
 ``transformers.TrainingArguments`` inheritance). The field surface is the
@@ -51,7 +51,7 @@ DP-correct invariants worth flagging:
   ``per_device_train_batch_size * world_size`` (the ``train_batch_size``
   HF property). Internal microbatch chunking under OOM retry never
   changes the logical batch — privacy accounting is unaffected.
-- ``optim`` accepts the torchopt-backed names DPTrainer wires
+- ``optim`` accepts the torchopt-backed names Trainer wires
   (``adam``, ``adamw``, ``adamw-bc`` = DP bias-corrected AdamW, ``sgd``,
   ``lion``, ``ademamix``, ``adafactor``, ``rmsprop``, ``adagrad``,
   ``radam``, ``adadelta``, ``schedule_free``) plus HF aliases that map
@@ -144,7 +144,7 @@ _DICT_FIELDS: tuple[str, ...] = (
 # Privacy noise mechanism surface.  ``"gaussian"`` is the DP-SGD baseline;
 # ``"mf_*"`` are DP-FTRL matrix-factorization mechanisms from
 # :mod:`opaque.dpftrl.noise`, dispatched through ``_dpftrl.build_strategy``
-# in :meth:`DPTrainer._setup_training`.
+# in :meth:`Trainer._setup_training`.
 _MECHANISMS_DPFTRL: frozenset[str] = frozenset(
     {"mf_band", "mf_blt", "mf_bisr", "mf_bsr", "mf_lambda_cgd", "mf_identity"}
 )
@@ -297,10 +297,10 @@ _DP_OPTIMIZERS: tuple[str, ...] = _supported_optimizer_names()
 
 @dataclasses.dataclass
 class TrainingArguments:
-    """Standalone training arguments for :class:`DPTrainer`.
+    """Standalone training arguments for :class:`Trainer`.
 
     Field surface mirrors HF ``TrainingArguments`` for the subset
-    DPTrainer honours, plus DPTrainer-specific fields. Unsupported HF
+    Trainer honours, plus Trainer-specific fields. Unsupported HF
     knobs are intentionally omitted from this class surface.
 
     Batch-size contract (DP-correct interpretation):
@@ -449,7 +449,7 @@ class TrainingArguments:
     dataloader_persistent_workers: bool = False
     dataloader_pin_memory: bool = True
     dataloader_prefetch_factor: int | None = None
-    # Mirrors HF: None selects the platform default, except DPTrainer uses
+    # Mirrors HF: None selects the platform default, except Trainer uses
     # ``fork`` for MPS with multiple workers. Explicit values take precedence.
     dataloader_multiprocessing_context: str | None = None
     # Batch order follows the sampler order. Out-of-order delivery is not

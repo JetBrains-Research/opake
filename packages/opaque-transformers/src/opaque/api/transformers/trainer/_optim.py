@@ -1,4 +1,4 @@
-"""Optimizer resolution for DPTrainer.
+"""Optimizer resolution for Trainer.
 
 Two-layer surface, both routed through the same builder:
 
@@ -18,7 +18,7 @@ Two-layer surface, both routed through the same builder:
    cleanly onto an opaque factory (``adamw_torch`` → ``adamw``,
    ``adafactor`` → ``adafactor``, ``lion_32bit`` → ``lion``, …).  These
    accept the same HF fields and route to the same factories.
-   Aliases are silently rewritten — DPTrainer never substitutes a
+   Aliases are silently rewritten — Trainer never substitutes a
    different update rule for what the alias names; the HF spelling is
    honoured by selecting the opaque factory whose math matches.
 
@@ -131,7 +131,7 @@ def resolve_optimizer_name(optim: Any) -> tuple[str, dict[str, Any]]:
         return canonical, dict(base)
     raise ConfigurationError(
         *(
-            f"optim={optim!r} is not supported by DPTrainer; "
+            f"optim={optim!r} is not supported by Trainer; "
             f"expected one of {supported_names()}.",
         )
     )
@@ -247,7 +247,7 @@ def build_optimizer(
 def validate_functional_optimizer_cls_and_kwargs(
     optimizer_cls_and_kwargs: tuple[Any, ...],
 ) -> tuple[Callable[..., GradientTransformation], dict[str, Any]]:
-    """Validate ``(factory, kwargs)`` for DPTrainer's functional optimizer path.
+    """Validate ``(factory, kwargs)`` for Trainer's functional optimizer path.
 
     The factory must **not** be a :class:`torch.optim.Optimizer` subclass and
     must be callable as ``factory(lr=lr_schedule, **kwargs)`` (same
@@ -274,7 +274,7 @@ def validate_functional_optimizer_cls_and_kwargs(
     if isinstance(factory, type) and issubclass(factory, torch_optim.Optimizer):
         raise OperationError(
             *(
-                "DPTrainer.optimizer_cls_and_kwargs rejects torch.optim.Optimizer "
+                "Trainer.optimizer_cls_and_kwargs rejects torch.optim.Optimizer "
                 "subclasses: use a callable that returns a torchopt "
                 "GradientTransformation (e.g. opaque.optimizers.adamw).",
             )

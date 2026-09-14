@@ -1,10 +1,10 @@
-"""Precision helpers for DPTrainer.
+"""Precision helpers for Trainer.
 
 Eval-time full-cast: HF parity for ``bf16_full_eval=True`` casts the model
 in place for the eval scope and restores it on exit.  This is distinct
 from training-time precision, where ``bf16=True`` enables autocast (no
 model cast) — see
-:meth:`opaque.transformers.trainer.DPTrainer._setup_precision`.
+:meth:`opaque.transformers.trainer.Trainer._setup_precision`.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def eval_dtype(
         model: The model to cast.  Mutated in place (and restored on exit).
         args: Training arguments; reads ``bf16_full_eval``.
         train_dtype: The dtype the model should be in *outside* this
-            context — captured by ``DPTrainer.__init__`` so nested calls
+            context — captured by ``Trainer.__init__`` so nested calls
             and the no-op case behave correctly.
 
     Yields:

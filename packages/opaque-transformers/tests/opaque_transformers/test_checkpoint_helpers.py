@@ -653,7 +653,7 @@ class TestDriftDispositionResolution:
     """``_resolve_drift_disposition`` picks the right rule per mechanism."""
 
     def test_string_disposition_passthrough(self):
-        from opaque.api.transformers.trainer._dp_trainer import (
+        from opaque.api.transformers.trainer._trainer import (
             _resolve_drift_disposition,
         )
 
@@ -662,7 +662,7 @@ class TestDriftDispositionResolution:
         assert _resolve_drift_disposition(meta, "mf_band") == "shape"
 
     def test_dict_disposition_per_mechanism(self):
-        from opaque.api.transformers.trainer._dp_trainer import (
+        from opaque.api.transformers.trainer._trainer import (
             _resolve_drift_disposition,
         )
 
@@ -677,7 +677,7 @@ class TestDriftDispositionResolution:
         assert _resolve_drift_disposition(meta, "mf_blt") == "dp_relevant"
 
     def test_default_disposition_when_missing(self):
-        from opaque.api.transformers.trainer._dp_trainer import (
+        from opaque.api.transformers.trainer._trainer import (
             _resolve_drift_disposition,
         )
 
@@ -688,7 +688,7 @@ class TestDriftDispositionResolution:
 class TestResumeDrift:
     @pytest.fixture
     def drift_case(self, monkeypatch):
-        from opaque.api.transformers.trainer._dp_trainer import DPTrainer
+        from opaque.api.transformers.trainer._trainer import Trainer
 
         runtime = ckpt.RuntimeCheckpoint(
             version=ckpt.DP_STATE_BUNDLE_VERSION,
@@ -703,7 +703,7 @@ class TestResumeDrift:
             total_steps=16,
         )
         current = {"expected_steps_per_epoch": 16}
-        trainer = DPTrainer.__new__(DPTrainer)
+        trainer = Trainer.__new__(Trainer)
         trainer.args = SimpleNamespace()
         trainer._ctx = SimpleNamespace(is_horizon_process=False)
         monkeypatch.setattr(trainer, "_current_values_for_drift", lambda *_: current)

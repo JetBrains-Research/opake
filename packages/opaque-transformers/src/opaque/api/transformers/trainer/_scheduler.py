@@ -1,4 +1,4 @@
-"""HuggingFace-style LR scheduler dispatch for DPTrainer.
+"""HuggingFace-style LR scheduler dispatch for Trainer.
 
 Translates :attr:`TrainingArguments.lr_scheduler` plus
 ``lr_scheduler_kwargs`` into a ``Callable[[int], float]`` built from
@@ -148,7 +148,7 @@ def build_lr_schedule(
     if name in _DEFERRED:
         raise NotImplementedError(
             f"lr_scheduler={name!r} is a recognized HuggingFace scheduler "
-            f"that DPTrainer doesn't implement yet. If you need it, please open "
+            f"that Trainer doesn't implement yet. If you need it, please open "
             f"an issue at https://github.com/JetBrains-Research/opaque/issues. "
             f"Currently supported: {sorted(_ALLOWED_KWARGS)}."
         )

@@ -484,7 +484,7 @@ class TestHFParity:
             # uses a real-valued cycle length).  This manual composition,
             # however, pins the inner half-cosine span to the *integer*
             # ``(N-W)//num_cycles``; matching HF for a non-divisible window
-            # needs the fractional span the DPTrainer dispatch builds (see
+            # needs the fractional span the Trainer dispatch builds (see
             # test_scheduler_dispatch.test_cosine_with_restarts_non_divisible).
             pytest.skip(
                 f"integer inner-cosine span needs num_cycles | (N-W); "

@@ -7,14 +7,14 @@
 # See ../../../../../NOTICE in this package for the full attribution.
 """DP-SGD Trainer for HuggingFace models.
 
-Provides :class:`DPTrainer` — a differentially private, HF-Trainer-parity
+Provides :class:`Trainer` — a differentially private, HF-Trainer-parity
 trainer built on Opaque primitives.  See the class docstring for the
 public method layout.
 
 The trainer is shape-agnostic: any HF-style ``data_collator`` whose output
 the model's forward accepts will work.  Domain-specific training that
 builds on this trainer (SFT / DPO / KTO) should subclass it and override
-:meth:`DPTrainer.compute_per_example_loss` — the single DP-correct
+:meth:`Trainer.compute_per_example_loss` — the single DP-correct
 extension point that both training (vmap → grad → clip → noise) and
 eval (vmap when ``include_for_metrics=['loss']``) route through.
 """
@@ -105,12 +105,12 @@ from ._callback import (
 from ._eval import EvalPrediction
 from ._precision import eval_dtype
 from ._scheduler import build_lr_schedule
-from ._state import DPTrainerState
+from ._state import TrainerState
 from ._training_arguments import TrainingArguments, _default_privacy_delta
 from .types import EvaluationResult, TrainOutput
 
 __all__ = [
-    "DPTrainer",
+    "Trainer",
     "EvaluationResult",
     "TrainOutput",
     "TrainingArguments",
@@ -168,7 +168,7 @@ def _disable_tokenizers_parallelism_before_fork() -> None:
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     log.debug(
         "Set TOKENIZERS_PARALLELISM=false before training; set it explicitly "
-        "to override this DPTrainer default."
+        "to override this Trainer default."
     )
 
 
@@ -376,7 +376,7 @@ def _deep_json_recursion(limit: int = 30_000):
         sys.setrecursionlimit(old)
 
 
-class DPTrainer:
+class Trainer:
     """Differentially private trainer for HuggingFace models.
 
     Method decomposition mirrors HF Trainer:
@@ -435,7 +435,7 @@ class DPTrainer:
         else:
             set_seed(args.seed)
         if model is None:
-            raise OperationError(*("`DPTrainer` requires a `model` argument",))
+            raise OperationError(*("`Trainer` requires a `model` argument",))
         self._functional_optimizer_factory: (
             tuple[Callable[..., Any], dict[str, Any]] | None
         ) = None
@@ -443,7 +443,7 @@ class DPTrainer:
         if any(item is not None for item in optimizers):
             raise ConfigurationError(
                 *(
-                    "Passing `optimizers` is not supported by DPTrainer: the DP path "
+                    "Passing `optimizers` is not supported by Trainer: the DP path "
                     "uses a functional torchopt optimizer built after per-example "
                     "gradient clipping/noising is configured.",
                 )
@@ -541,7 +541,7 @@ class DPTrainer:
             raise CheckpointError(
                 *(
                     f"You have set `args.eval_strategy` to {args.eval_strategy} but "
-                    "didn't pass an `eval_dataset` to `DPTrainer`. Either set "
+                    "didn't pass an `eval_dataset` to `Trainer`. Either set "
                     "`eval_strategy='no'` or pass an eval_dataset.",
                 )
             )
@@ -559,7 +559,7 @@ class DPTrainer:
         if self._device.type not in _SUPPORTED_DEVICE_TYPES:
             raise ConfigurationError(
                 *(
-                    f"DPTrainer only supports cpu, cuda, and mps devices; "
+                    f"Trainer only supports cpu, cuda, and mps devices; "
                     f"got device={self._device!r}. "
                     f"Other backends (xpu, npu, mlu, musa, hpu, ...) are not supported.",
                 )
@@ -616,7 +616,7 @@ class DPTrainer:
         # are handled exactly as HF does — and so callbacks running at
         # ``on_init_end`` see the post-resolution cadence rather than
         # zeros from a premature ``int(...)`` truncation.
-        self.state = DPTrainerState()
+        self.state = TrainerState()
         self.state.max_steps = self._predict_total_steps()
         self.state.compute_steps(args)
         self._stamp_ddp_flags(self.state)
@@ -790,18 +790,18 @@ class DPTrainer:
         """Whether this is the world-rank-0 process (HF parity)."""
         return self._ddp.is_world_zero
 
-    def _stamp_ddp_flags(self, state: DPTrainerState) -> None:
+    def _stamp_ddp_flags(self, state: TrainerState) -> None:
         """Stamp per-rank ``is_*_process_zero`` flags onto ``state``.
 
         The flags are per-rank metadata (not part of the durable
         checkpoint contract), so any newly-constructed or
-        freshly-deserialized ``DPTrainerState`` needs them set.
+        freshly-deserialized ``TrainerState`` needs them set.
         """
         state.is_world_process_zero = self._ddp.is_world_zero
         state.is_local_process_zero = self._ddp.is_local_zero
 
     def _reset_state_for_new_run(self) -> None:
-        self.state = DPTrainerState()
+        self.state = TrainerState()
         self.state.max_steps = self._predict_total_steps()
         self.state.compute_steps(self.args)
         self._stamp_ddp_flags(self.state)
@@ -1027,7 +1027,7 @@ class DPTrainer:
     ) -> TrainOutput:
         """Inner dispatch."""
         if self._train_dataset is None:
-            raise ConfigurationError(*("DPTrainer.train() requires a train_dataset.",))
+            raise ConfigurationError(*("Trainer.train() requires a train_dataset.",))
 
         # ``microbatch_size`` controls the vmap chunk and defaults to
         # ``per_device_train_batch_size`` (one chunk per rank).
@@ -1052,7 +1052,7 @@ class DPTrainer:
 
         initial_microbatch_size = effective_microbatch_size
         current_microbatch_size = initial_microbatch_size
-        state_snapshot = DPTrainerState.from_json(self.state.to_json())
+        state_snapshot = TrainerState.from_json(self.state.to_json())
         model_snapshot = {
             k: v.detach().to("cpu").clone() for k, v in self._model.state_dict().items()
         }
@@ -1180,7 +1180,7 @@ class DPTrainer:
             self._validate_horizon_resume_calibration(runtime_payload)
             trainer_state_json = self._read_trainer_state(resume_path)
             if trainer_state_json is not None:
-                self.state = DPTrainerState.from_json(trainer_state_json)
+                self.state = TrainerState.from_json(trainer_state_json)
                 self._stamp_ddp_flags(self.state)
                 # Re-bind callback handler to the new state object.
                 self._callback_handler.state = self.state
@@ -1358,8 +1358,8 @@ class DPTrainer:
         torch.distributed.all_reduce(flag, op=torch.distributed.ReduceOp.MAX)
         return bool(flag.item() > 0.0)
 
-    def _reset_state_for_batch_size_retry(self, snapshot: DPTrainerState) -> None:
-        self.state = DPTrainerState.from_json(snapshot.to_json())
+    def _reset_state_for_batch_size_retry(self, snapshot: TrainerState) -> None:
+        self.state = TrainerState.from_json(snapshot.to_json())
         self._stamp_ddp_flags(self.state)
         self._callback_handler.state = self.state
         self._control = TrainerControl()
@@ -1477,12 +1477,12 @@ class DPTrainer:
         )
 
         if self._train_dataset is None:
-            raise ConfigurationError(*("DPTrainer.train() requires a train_dataset.",))
+            raise ConfigurationError(*("Trainer.train() requires a train_dataset.",))
         dataset_size = self._effective_train_dataset_size()
         if dataset_size <= 0:
             raise ConfigurationError(
                 *(
-                    "DPTrainer requires a non-empty train_dataset: DP-SGD needs "
+                    "Trainer requires a non-empty train_dataset: DP-SGD needs "
                     "at least one example to build the per-example loss surface "
                     "and calibrate Poisson sampling.",
                 )
@@ -1504,7 +1504,7 @@ class DPTrainer:
         if sample_rate > 1.0:
             raise ConfigurationError(
                 *(
-                    "DPTrainer requires expected_batch_size <= len(train_dataset) "
+                    "Trainer requires expected_batch_size <= len(train_dataset) "
                     "for Poisson sampling; got expected_batch_size="
                     f"{expected_batch_size} and len(train_dataset)={dataset_size}.",
                 )
@@ -2152,7 +2152,7 @@ class DPTrainer:
             raise OperationError(
                 *(
                     "training_step called outside an active training run; "
-                    "DPTrainer's functional context is not initialised.",
+                    "Trainer's functional context is not initialised.",
                 )
             )
         inputs = self._prepare_input(inputs)
@@ -2459,7 +2459,7 @@ class DPTrainer:
         if loss is None:
             raise OperationError(
                 *(
-                    "DPTrainer.compute_per_example_loss: model forward returned no "
+                    "Trainer.compute_per_example_loss: model forward returned no "
                     "`loss` field.  Pass `compute_loss_func=` for a custom loss, "
                     "or override `compute_per_example_loss` in a subclass.",
                 )
@@ -2530,7 +2530,7 @@ class DPTrainer:
         """Whether a subclass overrides :meth:`compute_per_example_loss_and_metrics`."""
         return (
             type(self).compute_per_example_loss_and_metrics
-            is not DPTrainer.compute_per_example_loss_and_metrics
+            is not Trainer.compute_per_example_loss_and_metrics
         )
 
     def prediction_step(
@@ -2577,7 +2577,7 @@ class DPTrainer:
 
         ``ignore_keys`` filters keys out of ``ModelOutput`` containers
         before logits are extracted.  Defaults to ``[]``; the kv_cache
-        patch (always-on under DPTrainer) already prevents
+        patch (always-on under Trainer) already prevents
         ``past_key_values`` from landing in outputs, so there's nothing
         to filter by default.
 
@@ -2765,7 +2765,7 @@ class DPTrainer:
         if not isinstance(output, Mapping):
             raise InputTypeError(
                 *(
-                    "DPTrainer requires model.forward to return a dict-like "
+                    "Trainer requires model.forward to return a dict-like "
                     "ModelOutput (or Mapping). "
                     f"Got {type(output).__name__}; wrap forward to return a dict.",
                 )
@@ -3146,9 +3146,7 @@ class DPTrainer:
         """
         dataset = eval_dataset if eval_dataset is not None else self._eval_dataset
         if dataset is None:
-            raise ConfigurationError(
-                *("DPTrainer.evaluate() requires an eval_dataset.",)
-            )
+            raise ConfigurationError(*("Trainer.evaluate() requires an eval_dataset.",))
 
         # Multi-dataset eval: recurse per split with a namespaced prefix and
         # merge (mirrors transformers.Trainer.evaluate).
@@ -4658,7 +4656,7 @@ class DPTrainer:
         if unexpected:
             raise ConfigurationError(
                 *(
-                    "DPTrainer._restore_params: trainable_params contains keys not "
+                    "Trainer._restore_params: trainable_params contains keys not "
                     f"present in the model: {sorted(unexpected)}",
                 )
             )
@@ -5120,7 +5118,7 @@ class DPTrainer:
         if ctx is None:
             raise OperationError(
                 *(
-                    "DPTrainer._save_checkpoint called with no active training "
+                    "Trainer._save_checkpoint called with no active training "
                     "context. Checkpoints carry DP accountant + sampler RNG + "
                     "optimizer state, which only exist while ``train()`` is "
                     "running.",
@@ -5362,9 +5360,9 @@ class DPTrainer:
         )
 
     def _save_trainer_state(self, ckpt_dir: str) -> None:
-        """Serialize :class:`DPTrainerState` to ``trainer_state.json``.
+        """Serialize :class:`TrainerState` to ``trainer_state.json``.
 
-        Round-trips through ``DPTrainerState.to_json`` / ``from_json``.
+        Round-trips through ``TrainerState.to_json`` / ``from_json``.
         Callback state is collected via HF's ``ExportableState`` protocol
         (modern shape ``{"args": {...}, "attributes": {...}}`` produced
         by ``cb.state()``); callbacks that don't implement ``state()`` are
@@ -5601,7 +5599,7 @@ class DPTrainer:
         """Restore each callback's state when ``restore_callback_states_from_checkpoint`` is set.
 
         Reads from ``self.state.stateful_callbacks`` — the dataclass field
-        populated by ``DPTrainerState.from_json`` during resume.  The
+        populated by ``TrainerState.from_json`` during resume.  The
         payload uses HF's ``ExportableState`` shape ``{"args": {...},
         "attributes": {...}}``; saved attributes are set back onto the
         live callback instance so its identity is preserved

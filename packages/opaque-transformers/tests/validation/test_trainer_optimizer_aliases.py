@@ -1,6 +1,6 @@
 """Optimizer name validation, HF-alias remapping, and the opaque set.
 
-DPTrainer's optimizer surface has two layers:
+Trainer's optimizer surface has two layers:
 
 1. Canonical opaque names (``adam``, ``adamw``, ``sgd``, ``rmsprop``,
    ``adagrad``, ``adafactor``, ``ademamix``, ``lion``, ``radam``,
@@ -9,7 +9,7 @@ DPTrainer's optimizer surface has two layers:
    with HF-canonical ``TrainingArguments`` fields forwarded.
 2. HF compat aliases (``adamw_torch``, ``adamw_torch_fused``,
    ``adamw_hf``, ``adafactor``, ``ademamix``, ``lion_32bit``,
-   ``schedule_free_radam``) route to the same opaque factories — DPTrainer
+   ``schedule_free_radam``) route to the same opaque factories — Trainer
    honours the HF name by selecting the matching DP-aware update math,
    not by substituting a different one.
 
@@ -27,7 +27,7 @@ from opaque.api.transformers.trainer._optim import (
     build_optimizer,
     canonical_optimizer_names,
 )
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 
 def _args(tmp_path, **overrides) -> TrainingArguments:
@@ -70,7 +70,7 @@ ACCEPTED_HF_ALIASES = (
 )
 
 
-# Names that DPTrainer cannot honour even with a remap: 8-bit / paged /
+# Names that Trainer cannot honour even with a remap: 8-bit / paged /
 # GaLore / Apex-fused / XLA / NPU / opaque primitives without DP-aware
 # modes.  Construction must raise ``ValueError`` with a redirect.
 REJECTED_OPTIMIZER_NAMES = (
@@ -127,9 +127,7 @@ class TestOptimRejectsUnsupportedNames:
 
     @pytest.mark.parametrize("name", REJECTED_OPTIMIZER_NAMES)
     def test_unsupported_optim_raises(self, tmp_path, name):
-        with pytest.raises(
-            ValueError, match="is not supported by DPTrainer"
-        ) as exc_info:
+        with pytest.raises(ValueError, match="is not supported by Trainer") as exc_info:
             _args(tmp_path, optim=name)
         message = str(exc_info.value)
         assert name in message, (
@@ -149,7 +147,7 @@ class TestOptimRejectsUnsupportedNames:
 # ---------------------------------------------------------------------------
 
 
-# Canonical opaque names DPTrainer ships.  ``schedule_free`` is not in
+# Canonical opaque names Trainer ships.  ``schedule_free`` is not in
 # the smoke set because it requires an inner ``base=`` optim_args entry.
 SUPPORTED_OPTIMIZERS = (
     "adam",
@@ -234,7 +232,7 @@ class TestSgdWeightDecay:
 
 
 class _TinyLogitsModel(torch.nn.Module):
-    """HF-shaped minimal module for DPTrainer constructor smoke tests."""
+    """HF-shaped minimal module for Trainer constructor smoke tests."""
 
     main_input_name = "x"
 
@@ -249,11 +247,11 @@ class _TinyLogitsModel(torch.nn.Module):
 class TestOptimizerClsAndKwargsFunctional:
     """``optimizer_cls_and_kwargs`` accepts opaque/torchopt-style factories only."""
 
-    def test_dp_trainer_constructor_stores_functional_factory(self, tmp_path):
+    def test_trainer_constructor_stores_functional_factory(self, tmp_path):
         import opaque.optimizers as opaque_opt
 
         args = _args(tmp_path, eval_strategy="no", save_strategy="no")
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLogitsModel(),
             args=args,
             optimizer_cls_and_kwargs=(opaque_opt.adamw, {"weight_decay": 0.01}),

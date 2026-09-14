@@ -1,6 +1,6 @@
 """``use_performance_kernels`` / ``performance_kernels_config`` integration.
 
-DPTrainer drives opaque-patches via two split umbrellas:
+Trainer drives opaque-patches via two split umbrellas:
 
 * ``use_compat_patches`` → ``compat`` (vmap-safety: ``eager_attention``,
   ``batchify``, vmap-safe masking / collator / checkpoint hooks).
@@ -41,7 +41,7 @@ def apply_performance_kernels_via_opaque_patches(
     supported kernel for the model family is enabled (full performance
     set) while compat wrappers stay on.
 
-    **DPTrainer** applies the same stack internally — callers rarely
+    **Trainer** applies the same stack internally — callers rarely
     need this function directly.
     """
     from opaque.patches import apply_model_patches

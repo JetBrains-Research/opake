@@ -1,4 +1,4 @@
-"""Tests for compute-precision flags on DPTrainer.
+"""Tests for compute-precision flags on Trainer.
 
 Covers the full-cast precision path:
 - ``bf16=True`` casts the model to ``torch.bfloat16`` at ``__init__``.
@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 
 def _args(tmp_path, **overrides) -> TrainingArguments:
@@ -36,10 +36,10 @@ def _args(tmp_path, **overrides) -> TrainingArguments:
     return TrainingArguments(**defaults)
 
 
-def _tiny_trainer(tmp_path, **arg_overrides) -> tuple[DPTrainer, torch.nn.Module]:
+def _tiny_trainer(tmp_path, **arg_overrides) -> tuple[Trainer, torch.nn.Module]:
     model = torch.nn.Linear(4, 2)
     args = _args(tmp_path, **arg_overrides)
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=[{"x": torch.zeros(4)}],
@@ -73,7 +73,7 @@ def test_bf16_preserves_pre_cast_model(tmp_path):
     but we don't undo their cast."""
     model = torch.nn.Linear(4, 2).to(dtype=torch.bfloat16)
     args = _args(tmp_path, bf16=True)
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=[{"x": torch.zeros(4)}],
@@ -140,7 +140,7 @@ def test_tf32_flips_flags_on_cuda(tmp_path, tf32_value):
         torch.backends.cudnn.allow_tf32 = not tf32_value
         model = torch.nn.Linear(4, 2)
         args = _args(tmp_path, tf32=tf32_value, use_cpu=False)
-        DPTrainer(
+        Trainer(
             model=model,
             args=args,
             train_dataset=[{"x": torch.zeros(4)}],

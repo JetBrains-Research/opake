@@ -6,7 +6,7 @@ Contains pure-Python utilities (``MODEL_CONFIGS``, ``STANDARD_LORA_CONFIG``,
 ``run_dp_training_step``) used by tests under ``validation/`` and
 ``distributed/``.  Session-scoped fixtures live in the sibling ``conftest.py``,
 which calls ``opaque.patches.apply_runtime_patches(compat=True)`` so global HF
-runtime compat shims are active for the whole test tree (DPTrainer also applies
+runtime compat shims are active for the whole test tree (Trainer also applies
 them on construction).
 """
 
@@ -101,7 +101,7 @@ def build_lm_dataset(
     for HF's ``default_data_collator``, which simply stacks the
     pre-shaped tensors by key without any further padding.
 
-    Used by DPTrainer integration tests to build minimal HF-shaped
+    Used by Trainer integration tests to build minimal HF-shaped
     datasets without inventing trainer-side abstractions.
     """
     from datasets import Dataset  # local import: optional dep at module level.
@@ -131,7 +131,7 @@ def build_lm_dataset(
 # Lightweight GPT-2 factory for CPU mechanics tests
 # =============================================================================
 #
-# The DPTrainer validation suite exercises *training / eval / checkpoint
+# The Trainer validation suite exercises *training / eval / checkpoint
 # mechanics*, not pretrained-GPT-2 semantics — assertions are of the form
 # ``training_loss > 0``, ``generate() runs``, checkpoints round-trip, runs are
 # bit-identical, DP noise is applied, etc. None of that needs the 124M-param

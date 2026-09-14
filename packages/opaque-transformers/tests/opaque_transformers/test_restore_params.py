@@ -24,7 +24,7 @@ from opaque.exceptions import ConfigurationError
 from opaque.optimizers.types import ScheduleFreeState
 from opaque.random import key
 from opaque.serialization import state_dict as opaque_state_dict
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 from opaque.transformers.trainer.types import EvaluationResult
 
 
@@ -41,7 +41,7 @@ def _trainer(tmp_path, **overrides):
     }
     kwargs.update(overrides)
     args = TrainingArguments(**kwargs)
-    return DPTrainer(
+    return Trainer(
         model=model,
         args=args,
         train_dataset=[{"x": torch.zeros(4)}],

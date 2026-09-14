@@ -2,7 +2,7 @@
 
 Opaque's recommended training dtypes are `bfloat16` and `float32`. Low-level
 primitives can process `float16` tensors, but Opaque does not provide dynamic
-loss scaling and `DPTrainer` does not support fp16 training.
+loss scaling and `Trainer` does not support fp16 training.
 
 Two independent knobs control numerical precision:
 

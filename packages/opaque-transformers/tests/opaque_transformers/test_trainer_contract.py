@@ -1,4 +1,4 @@
-"""HF Trainer contract regressions for DPTrainer."""
+"""HF Trainer contract regressions for Trainer."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import torch
 from transformers.trainer_callback import DefaultFlowCallback, TrainerCallback
 
 import opaque.api.transformers.trainer._callback as callback_module
-import opaque.api.transformers.trainer._dp_trainer as trainer_impl
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+import opaque.api.transformers.trainer._trainer as trainer_impl
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 
 class _LogitsOnlyModel(torch.nn.Module):
@@ -117,7 +117,7 @@ def test_constructor_accepts_hf_positional_model_and_optional_datasets(tmp_path)
     model = _LogitsOnlyModel()
     args = _args(tmp_path)
 
-    trainer = DPTrainer(model, args)
+    trainer = Trainer(model, args)
 
     assert trainer.model is model
     assert trainer.train_dataset is None
@@ -126,7 +126,7 @@ def test_constructor_accepts_hf_positional_model_and_optional_datasets(tmp_path)
 
 def test_label_less_predict_returns_logits_not_loss(tmp_path):
     args = _args(tmp_path, per_device_eval_batch_size=2)
-    trainer = DPTrainer(model=_LogitsOnlyModel(), args=args)
+    trainer = Trainer(model=_LogitsOnlyModel(), args=args)
     dataset = [{"x": torch.zeros(4)}, {"x": torch.ones(4)}]
 
     output = trainer.predict(dataset)
@@ -137,7 +137,7 @@ def test_label_less_predict_returns_logits_not_loss(tmp_path):
 
 
 def test_callback_returned_control_is_preserved(tmp_path):
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LogitsOnlyModel(),
         args=_args(tmp_path),
         callbacks=[_StopOnInitCallback()],
@@ -159,7 +159,7 @@ def test_reporting_callbacks_precede_user_callbacks_and_see_functional_slots(
         fake_reporting_callbacks,
     )
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LogitsOnlyModel(),
         args=_args(tmp_path, report_to="tensorboard"),
         callbacks=[_UserCallback()],
@@ -203,7 +203,7 @@ def test_full_determinism_uses_hf_deterministic_seed_helper(tmp_path, monkeypatc
     )
     monkeypatch.setattr(trainer_impl, "set_seed", fake_set_seed)
 
-    DPTrainer(
+    Trainer(
         model=_LogitsOnlyModel(),
         args=_args(tmp_path, full_determinism=True, seed=123),
     )
@@ -224,7 +224,7 @@ def test_supported_causal_lm_installs_inert_fused_wrapper_automatically(tmp_path
         max_position_embeddings=32,
     )
     config._attn_implementation = "eager"
-    trainer = DPTrainer(model=LlamaForCausalLM(config), args=_args(tmp_path))
+    trainer = Trainer(model=LlamaForCausalLM(config), args=_args(tmp_path))
     input_ids = torch.randint(0, config.vocab_size, (1, 6))
 
     eager = trainer.model(input_ids=input_ids, labels=input_ids, return_dict=True)
@@ -251,7 +251,7 @@ def test_unsupported_causal_lm_does_not_install_generic_fused_wrapper(tmp_path):
         n_head=2,
         n_positions=32,
     )
-    trainer = DPTrainer(model=GPT2LMHeadModel(config), args=_args(tmp_path))
+    trainer = Trainer(model=GPT2LMHeadModel(config), args=_args(tmp_path))
     input_ids = torch.randint(0, config.vocab_size, (1, 6))
 
     output = trainer.model(input_ids=input_ids, labels=input_ids, return_dict=True)
@@ -262,7 +262,7 @@ def test_unsupported_causal_lm_does_not_install_generic_fused_wrapper(tmp_path):
 
 
 def test_model_native_per_example_loss_requests_fused_loss_only(tmp_path):
-    trainer = DPTrainer(model=_FusedAwareModel(), args=_args(tmp_path))
+    trainer = Trainer(model=_FusedAwareModel(), args=_args(tmp_path))
     requests = []
 
     def fmodel(params, **inputs):
@@ -283,7 +283,7 @@ def test_model_native_per_example_loss_requests_fused_loss_only(tmp_path):
 
 
 def test_custom_per_example_loss_keeps_logits_available(tmp_path):
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_FusedAwareModel(),
         args=_args(tmp_path),
         compute_loss_func=lambda output, labels: output["logits"].sum() + labels * 0,
@@ -305,7 +305,7 @@ def test_custom_per_example_loss_keeps_logits_available(tmp_path):
 
 def test_prediction_step_requests_fused_loss_only_only_without_predictions(tmp_path):
     model = _FusedAwareModel()
-    trainer = DPTrainer(model=model, args=_args(tmp_path))
+    trainer = Trainer(model=model, args=_args(tmp_path))
     batch = {"x": torch.randn(2, 4), "labels": torch.tensor([0, 1])}
 
     loss, predictions, labels = trainer.prediction_step(
@@ -336,7 +336,7 @@ def test_default_eval_uses_same_custom_objective_as_training(tmp_path):
     def custom_loss(output, labels):
         return 3.0 * torch.nn.functional.cross_entropy(output["logits"], labels)
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=_args(tmp_path, per_device_eval_batch_size=2),
         eval_dataset=dataset,
@@ -360,7 +360,7 @@ def test_default_eval_uses_same_custom_objective_as_training(tmp_path):
 
 def test_default_eval_applies_label_smoothing(tmp_path):
     model = _FusedAwareModel()
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=_args(tmp_path, label_smoothing_factor=0.2),
     )
@@ -387,7 +387,7 @@ def test_default_eval_applies_label_smoothing(tmp_path):
 
 def test_default_eval_does_not_shift_token_classification_labels(tmp_path):
     model = _TokenClassifierModel()
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=_args(tmp_path, label_smoothing_factor=0.2),
     )
@@ -415,7 +415,7 @@ def test_default_eval_does_not_shift_token_classification_labels(tmp_path):
 
 def test_default_eval_shifts_causal_language_model_labels(tmp_path):
     model = _CausalLMModel()
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=_args(tmp_path, label_smoothing_factor=0.2),
     )
@@ -443,7 +443,7 @@ def test_default_eval_shifts_causal_language_model_labels(tmp_path):
 
 def test_custom_loss_takes_precedence_over_label_smoothing(tmp_path):
     model = _FusedAwareModel()
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=_args(tmp_path, label_smoothing_factor=0.2),
         compute_loss_func=lambda output, labels: output["loss"],
@@ -477,7 +477,7 @@ def test_custom_loss_takes_precedence_over_label_smoothing(tmp_path):
 
 
 def test_label_smoothing_recomputes_loss_from_logits_for_vector_case(tmp_path):
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LogitsOnlyModel(),
         args=_args(tmp_path, label_smoothing_factor=0.2),
     )
@@ -512,7 +512,7 @@ def test_label_smoothing_recomputes_loss_from_logits_for_vector_case(tmp_path):
 
 
 def test_public_save_model_writes_training_args(tmp_path):
-    trainer = DPTrainer(model=_LogitsOnlyModel(), args=_args(tmp_path))
+    trainer = Trainer(model=_LogitsOnlyModel(), args=_args(tmp_path))
 
     trainer.save_model()
 
@@ -525,21 +525,22 @@ def test_train_signature_keeps_hf_subset():
     HPO is removed (``trial`` not accepted, ``hyperparameter_search`` gone)
     and the deprecated ``model_path`` kwarg is dropped along with ``**kwargs``.
     """
-    from transformers import Trainer
+    from transformers import Trainer as HFTrainer
 
-    trainer_train = inspect.signature(Trainer.train)
-    dp_train = inspect.signature(DPTrainer.train)
+    trainer_train = inspect.signature(HFTrainer.train)
+    opaque_train = inspect.signature(Trainer.train)
     for name in ["resume_from_checkpoint", "ignore_keys_for_eval"]:
-        assert name in dp_train.parameters
+        assert name in opaque_train.parameters
         assert name in trainer_train.parameters
     assert not any(
-        p.kind is inspect.Parameter.VAR_KEYWORD for p in dp_train.parameters.values()
+        p.kind is inspect.Parameter.VAR_KEYWORD
+        for p in opaque_train.parameters.values()
     )
-    assert not hasattr(DPTrainer, "hyperparameter_search")
+    assert not hasattr(Trainer, "hyperparameter_search")
 
 
 def test_process_helpers_are_single_process_true(tmp_path):
-    trainer = DPTrainer(model=_LogitsOnlyModel(), args=_args(tmp_path))
+    trainer = Trainer(model=_LogitsOnlyModel(), args=_args(tmp_path))
 
     assert trainer.is_world_process_zero()
     assert trainer.is_local_process_zero()

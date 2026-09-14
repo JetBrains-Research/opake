@@ -1,4 +1,4 @@
-"""Conftest for Transformers / DPTrainer integration tests.
+"""Conftest for Transformers / Trainer integration tests.
 
 Re-exports shared Qwen2 fixtures used by compatibility tests.
 

@@ -13,7 +13,7 @@ import dataclasses
 import pytest
 import torch
 
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 
 class _TinyEvalModel(torch.nn.Module):
@@ -52,7 +52,7 @@ def _trainer(tmp_path, **overrides):
         use_cpu=True,
         **overrides,
     )
-    return DPTrainer(model=_TinyEvalModel(), args=args, eval_dataset=_dataset())
+    return Trainer(model=_TinyEvalModel(), args=args, eval_dataset=_dataset())
 
 
 def test_eval_oom_halves_eval_batch_size(tmp_path, monkeypatch):
@@ -126,7 +126,7 @@ def test_eval_oom_at_batch_size_one_raises(tmp_path, monkeypatch):
         use_cpu=True,
         auto_find_microbatch_size=True,
     )
-    trainer = DPTrainer(model=_TinyEvalModel(), args=args, eval_dataset=_dataset())
+    trainer = Trainer(model=_TinyEvalModel(), args=args, eval_dataset=_dataset())
 
     def always_oom(loader, **kwargs):
         raise torch.OutOfMemoryError("CUDA out of memory (simulated)")

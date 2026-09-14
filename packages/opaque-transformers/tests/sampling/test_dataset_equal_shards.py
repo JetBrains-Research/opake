@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Opaque Authors
 # SPDX-License-Identifier: Apache-2.0
-"""``DPTrainer`` population sizing under DDP.
+"""``Trainer`` population sizing under DDP.
 
 Divisible dataset sizes shard evenly. Non-divisible sizes are trimmed to the
 nearest lower multiple, and the trimmed length is used as the accounting
@@ -17,7 +17,7 @@ import torch
 from torch.utils.data import Dataset
 
 from opaque.exceptions import ConfigurationError
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 pytest.importorskip("transformers")
 
@@ -45,8 +45,8 @@ def _trainer_with_ddp(
     dataset_size: int,
     world_size: int,
     rank: int = 0,
-) -> DPTrainer:
-    """Build a ``DPTrainer`` and pin ``_ddp`` to ``(rank, world_size)``."""
+) -> Trainer:
+    """Build a ``Trainer`` and pin ``_ddp`` to ``(rank, world_size)``."""
     model = torch.nn.Linear(2, 2)
     dataset = _IdentityDataset(dataset_size)
     args = TrainingArguments(
@@ -60,7 +60,7 @@ def _trainer_with_ddp(
         report_to=[],
         use_cpu=True,
     )
-    trainer = DPTrainer(model=model, args=args, train_dataset=dataset)
+    trainer = Trainer(model=model, args=args, train_dataset=dataset)
     trainer._ddp = dataclasses.replace(
         trainer._ddp,
         is_distributed=world_size > 1,

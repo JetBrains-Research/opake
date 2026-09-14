@@ -1369,9 +1369,9 @@ def main():
     def per_example_loss_fn(trainable, input_ids):
         # Mask pad positions to ``-100`` so training CE scores only real
         # tokens — same masking contract the eval path uses and the same
-        # convention DPTrainer's ``DataCollatorForLanguageModeling`` applies.
+        # convention Trainer's ``DataCollatorForLanguageModeling`` applies.
         # Without this, the manual DP-FTRL loop trains on unmasked labels
-        # while DPTrainer trains on masked labels, producing systematically
+        # while Trainer trains on masked labels, producing systematically
         # different ``train/loss`` curves under identical DP math. ``vmap``-safe.
         labels = torch.where(input_ids == pad_token_id, -100, input_ids)
         output = fmodel(merged_params(trainable), input_ids, labels=labels)

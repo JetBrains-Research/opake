@@ -1,4 +1,4 @@
-"""Public result types for :class:`DPTrainer` — façade over
+"""Public result types for :class:`Trainer` — façade over
 :mod:`opaque.api.transformers.trainer.types`.
 """
 

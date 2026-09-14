@@ -1,6 +1,6 @@
-# DPTrainer
+# Trainer
 
-`DPTrainer` mirrors Hugging Face's `Trainer` interface: construct with
+`Trainer` mirrors Hugging Face's `Trainer` interface: construct with
 `(model, args, datasets, …)`, call `train()` / `evaluate()` /
 `predict()`, and query the result. Under the surface, the loop runs DP-SGD
 with `vmap(grad(...))` over per-example losses; the public API is
@@ -9,14 +9,14 @@ that.
 
 This page covers the common usage patterns. For the full constructor
 signature, every method's parameters / return type, and the public
-state objects (`EvaluationResult`, `DPTrainerState`, `TrainOutput`),
+state objects (`EvaluationResult`, `TrainerState`, `TrainOutput`),
 see [API reference — transformers](../../reference/transformers.md).
 
 ## Minimal training loop
 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from opaque.transformers import DPTrainer, TrainingArguments
+from opaque.transformers import Trainer, TrainingArguments
 
 tok = AutoTokenizer.from_pretrained("gpt2")
 tok.pad_token = tok.eos_token
@@ -32,7 +32,7 @@ args = TrainingArguments(
     clipping_norm=1.0,
 )
 
-trainer = DPTrainer(
+trainer = Trainer(
     model=model,
     args=args,
     train_dataset=train_ds,
@@ -161,9 +161,9 @@ noise turned off — `privacy_noise_multiplier=0.0` — keeping everything else
 ```python
 import math
 
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
-trainer = DPTrainer(
+trainer = Trainer(
     model=model,
     args=TrainingArguments(
         privacy_noise_multiplier=0.0,   # σ = 0 → no noise added
@@ -191,5 +191,5 @@ for the full contract.
 - [Model patches](model-patches.md) — what the trainer auto-applies
   and how to opt parts in or out.
 - [API reference — transformers](../../reference/transformers.md) —
-  full parameter inventory for `DPTrainer`, `TrainingArguments`, and
+  full parameter inventory for `Trainer`, `TrainingArguments`, and
   the public state objects.

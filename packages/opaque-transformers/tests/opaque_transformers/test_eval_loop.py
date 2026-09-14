@@ -3,7 +3,7 @@
 Covers ``_PredictionAccumulator`` and the reporting helpers without
 instantiating a model.  Evaluation cadence comes from HF's
 ``DefaultFlowCallback`` and is covered end-to-end in
-``tests/validation/test_dp_trainer.py``.
+``tests/validation/test_trainer.py``.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Public result types for :class:`DPTrainer`.
+"""Public result types for :class:`Trainer`.
 
 ``EvaluationResult`` and ``TrainOutput`` are the return shapes of the trainer's
 ``evaluate`` / ``predict`` / ``evaluation_loop`` and ``train`` methods. They
@@ -16,8 +16,8 @@ __all__ = ["EvaluationResult", "TrainOutput"]
 
 @dataclasses.dataclass
 class EvaluationResult:
-    """Output of :meth:`DPTrainer.evaluation_loop` /
-    :meth:`DPTrainer.evaluate` / :meth:`DPTrainer.predict`.
+    """Output of :meth:`Trainer.evaluation_loop` /
+    :meth:`Trainer.evaluate` / :meth:`Trainer.predict`.
 
     Fields mirror HF's ``EvalLoopOutput`` (``predictions``, ``label_ids``,
     ``metrics``, ``num_samples``); ``predict`` returns the same shape
@@ -31,7 +31,7 @@ class EvaluationResult:
 
 
 class TrainOutput(NamedTuple):
-    """Return type of ``DPTrainer.train()``, mirroring HF's TrainOutput."""
+    """Return type of ``Trainer.train()``, mirroring HF's TrainOutput."""
 
     global_step: int
     training_loss: float

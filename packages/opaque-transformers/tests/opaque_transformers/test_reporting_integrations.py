@@ -1,4 +1,4 @@
-"""Reporting integration compatibility tests for DPTrainer."""
+"""Reporting integration compatibility tests for Trainer."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from transformers.trainer_callback import DefaultFlowCallback, TrainerCallback
 
 import opaque.api.transformers.trainer._callback as callback_module
 import opaque.api.transformers.trainer._checkpoint as ckpt
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 
 class _LossModel(torch.nn.Module):
@@ -88,7 +88,7 @@ def test_train_sets_tokenizers_parallelism_default_before_callbacks(
         def on_train_begin(self, args, state, control, **kwargs):
             records.append(os.environ.get("TOKENIZERS_PARALLELISM"))
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LossModel(),
         args=_args(tmp_path, save_strategy="no"),
         train_dataset=_dataset(),
@@ -103,7 +103,7 @@ def test_train_sets_tokenizers_parallelism_default_before_callbacks(
 def test_train_preserves_explicit_tokenizers_parallelism(tmp_path, monkeypatch):
     monkeypatch.setenv("TOKENIZERS_PARALLELISM", "true")
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LossModel(),
         args=_args(tmp_path, save_strategy="no"),
         train_dataset=_dataset(),
@@ -174,7 +174,7 @@ def test_reporting_callbacks_receive_privacy_logs_and_functional_slots(
         fake_reporting_callbacks,
     )
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LossModel(),
         args=_args(tmp_path, report_to="tensorboard"),
         train_dataset=_dataset(),
@@ -251,7 +251,7 @@ def test_reporting_callbacks_receive_raw_per_group_privacy_logs(tmp_path, monkey
         fake_reporting_callbacks,
     )
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LossModel(),
         args=_args(
             tmp_path,
@@ -333,7 +333,7 @@ def test_wandb_reporting_callback_rewrites_privacy_logs(tmp_path, monkeypatch):
         fake_reporting_callbacks,
     )
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LossModel(),
         args=_args(
             tmp_path,
@@ -407,7 +407,7 @@ def test_artifact_callback_sees_complete_dp_checkpoint_after_save(
         fake_reporting_callbacks,
     )
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LossModel(),
         args=_args(tmp_path, report_to="wandb"),
         train_dataset=_dataset(),
@@ -454,7 +454,7 @@ def test_artifact_callback_save_only_model_still_sees_privacy_metadata(
         fake_reporting_callbacks,
     )
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LossModel(),
         args=_args(tmp_path, report_to="mlflow", save_only_model=True),
         train_dataset=_dataset(),
@@ -477,7 +477,7 @@ def test_artifact_callback_save_only_model_still_sees_privacy_metadata(
 def test_tensorboard_callback_smoke_logs_without_optimizer_or_scheduler(tmp_path):
     pytest.importorskip("tensorboard")
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_LossModel(),
         args=_args(
             tmp_path, report_to="tensorboard", logging_dir=str(tmp_path / "runs")

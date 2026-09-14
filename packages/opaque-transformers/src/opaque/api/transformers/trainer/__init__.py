@@ -7,11 +7,11 @@ symbols re-exported from :mod:`opaque.transformers`.
 from __future__ import annotations
 
 from . import types
-from ._dp_trainer import DPTrainer
+from ._trainer import Trainer
 from ._training_arguments import TrainingArguments
 
 __all__ = [
-    "DPTrainer",
+    "Trainer",
     "TrainingArguments",
     "types",
 ]

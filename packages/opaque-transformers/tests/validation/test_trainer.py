@@ -1,6 +1,6 @@
-"""End-to-end tests for DPTrainer with GPT-2 + LoRA.
+"""End-to-end tests for Trainer with GPT-2 + LoRA.
 
-Exercises DPTrainer's HF-Trainer-parity surface: ``train()``, param
+Exercises Trainer's HF-Trainer-parity surface: ``train()``, param
 restoration, ``evaluate()``, ``get_train_dataloader()``, callback
 dispatch, checkpoint round-trip, and resume.  Datasets are HF-shaped
 (pre-padded ``input_ids`` / ``labels`` / ``attention_mask``) and feed
@@ -19,10 +19,10 @@ from peft import LoraConfig, TaskType, get_peft_model
 from transformers import TrainerCallback as _HFTrainerCallback
 
 from opaque.api.transformers.trainer import _dpftrl
-from opaque.api.transformers.trainer._state import DPTrainerState
+from opaque.api.transformers.trainer._state import TrainerState
 from opaque.exceptions import CheckpointError, ConfigurationError
 from opaque.random import fold_in, key, split
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 from opaque.transformers.trainer.types import EvaluationResult, TrainOutput
 
 
@@ -76,7 +76,7 @@ def gpt2_with_lora(gpt2_model_and_tokenizer):
 
 @pytest.fixture
 def tiny_lm_dataset(gpt2_model_and_tokenizer):
-    """Eight pre-padded causal-LM examples for DPTrainer integration tests."""
+    """Eight pre-padded causal-LM examples for Trainer integration tests."""
     _, tokenizer = gpt2_model_and_tokenizer
     texts = [
         "def fibonacci(n): return n",
@@ -98,16 +98,16 @@ def _isolate_default_trainer_output(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# DPTrainer tests
+# Trainer tests
 # ---------------------------------------------------------------------------
 
 
-class TestDPTrainerInit:
-    """Test DPTrainer construction and basic interface."""
+class TestTrainerInit:
+    """Test Trainer construction and basic interface."""
 
     def test_constructor(self, gpt2_with_lora, tiny_lm_dataset):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(),
             processing_class=tokenizer,
@@ -121,7 +121,7 @@ class TestDPTrainerInit:
 
     def test_get_train_dataloader(self, gpt2_with_lora, tiny_lm_dataset):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(),
             processing_class=tokenizer,
@@ -143,7 +143,7 @@ class TestDPTrainerInit:
     ):
         model, tokenizer = gpt2_with_lora
         context = multiprocessing.get_all_start_methods()[0]
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 dataloader_num_workers=1,
@@ -234,7 +234,7 @@ class TestStopAtEpsilon:
     def test_stops_when_target_epsilon_reached(self, gpt2_with_lora, tiny_lm_dataset):
         """A very small target_epsilon halts training before max_steps."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=20,
@@ -269,7 +269,7 @@ class TestStopAtEpsilon:
 
         def _run(logging_steps: int) -> int:
             model, tokenizer = gpt2_with_lora
-            trainer = DPTrainer(
+            trainer = Trainer(
                 model=model,
                 args=_default_args(
                     max_steps=20,
@@ -297,8 +297,8 @@ class TestStopAtEpsilon:
         the flag (the predicted-step check precedes the total_steps ceiling)."""
         model, tokenizer = gpt2_with_lora
 
-        def _make(max_steps: int) -> DPTrainer:
-            return DPTrainer(
+        def _make(max_steps: int) -> Trainer:
+            return Trainer(
                 model=model,
                 args=_default_args(
                     max_steps=max_steps,
@@ -333,7 +333,7 @@ class TestStopAtEpsilon:
         from opaque.api.transformers.trainer import _checkpoint as ckpt
 
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 output_dir=str(tmp_path),
@@ -361,7 +361,7 @@ class TestStopAtEpsilon:
     ):
         """A target that's never reached at max_steps lets training finish."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=5,
@@ -382,7 +382,7 @@ class TestStopAtEpsilon:
     def test_no_stop_when_only_nm_set(self, gpt2_with_lora, tiny_lm_dataset):
         """NM-only path runs to max_steps regardless of accumulated ε."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=4,
@@ -401,7 +401,7 @@ class TestStopAtEpsilon:
         assert trainer.state.privacy_target_epsilon_reached is False
 
 
-class TestDPTrainerTrain:
+class TestTrainerTrain:
     """Test the full DP-SGD training loop."""
 
     def test_train_few_steps(self, gpt2_with_lora, tiny_lm_dataset):
@@ -412,7 +412,7 @@ class TestDPTrainerTrain:
             n: p.clone() for n, p in model.named_parameters() if p.requires_grad
         }
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 clipping_norm=1.0,
@@ -451,7 +451,7 @@ class TestDPTrainerTrain:
         """Verify model.generate() works after param restoration."""
         model, tokenizer = gpt2_with_lora
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=2,
@@ -473,13 +473,13 @@ class TestDPTrainerTrain:
         assert len(decoded) > 0
 
 
-class TestDPTrainerEvaluate:
+class TestTrainerEvaluate:
     """Test the evaluation method."""
 
     def test_evaluate_returns_loss(self, gpt2_with_lora, tiny_lm_dataset):
         model, tokenizer = gpt2_with_lora
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(),
             processing_class=tokenizer,
@@ -496,7 +496,7 @@ class TestDPTrainerEvaluate:
     def test_evaluate_custom_prefix(self, gpt2_with_lora, tiny_lm_dataset):
         model, tokenizer = gpt2_with_lora
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(),
             processing_class=tokenizer,
@@ -509,7 +509,7 @@ class TestDPTrainerEvaluate:
         assert "test_loss" in metrics
 
 
-class TestDPTrainerCallbacks:
+class TestTrainerCallbacks:
     """Test that callbacks are fired at the right points."""
 
     def test_callbacks_are_invoked(self, gpt2_with_lora, tiny_lm_dataset):
@@ -533,7 +533,7 @@ class TestDPTrainerCallbacks:
             def on_train_end(self, args, state, control, **kwargs):
                 fired.append("on_train_end")
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=2,
@@ -555,14 +555,14 @@ class TestDPTrainerCallbacks:
         assert "on_evaluate" in fired
 
 
-class TestDPTrainerTrainerContractFlags:
+class TestTrainerContractFlags:
     """Focused tests for trainer-contract flags."""
 
     def test_explicit_train_ignores_do_train_flag(
         self, gpt2_with_lora, tiny_lm_dataset
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=2,
@@ -579,7 +579,7 @@ class TestDPTrainerTrainerContractFlags:
 
     def test_predict_returns_prediction_output(self, gpt2_with_lora, tiny_lm_dataset):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(eval_strategy="no"),
             processing_class=tokenizer,
@@ -597,7 +597,7 @@ class TestDPTrainerTrainerContractFlags:
         tiny_lm_dataset,
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(eval_strategy="no"),
             processing_class=tokenizer,
@@ -615,7 +615,7 @@ class TestDPTrainerTrainerContractFlags:
         tiny_lm_dataset,
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(debug="underflow_overflow"),
             processing_class=tokenizer,
@@ -633,7 +633,7 @@ class TestDPTrainerTrainerContractFlags:
         self, gpt2_with_lora, tiny_lm_dataset, monkeypatch
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 auto_find_microbatch_size=True,
@@ -671,7 +671,7 @@ class TestDPTrainerTrainerContractFlags:
         ``auto_find_microbatch_size=False`` — it's the primary knob, not a
         side-effect of auto-find."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 auto_find_microbatch_size=False,
@@ -706,7 +706,7 @@ class TestDPTrainerTrainerContractFlags:
         ``microbatch_size`` is the starting point — auto-find halves
         from there, not from ``per_device_train_batch_size``."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 auto_find_microbatch_size=True,
@@ -743,7 +743,7 @@ class TestDPTrainerTrainerContractFlags:
         monkeypatch,
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 auto_find_microbatch_size=True,
@@ -781,7 +781,7 @@ class TestPrivacyDefaults:
         self, gpt2_with_lora, tiny_lm_dataset
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(max_steps=1),
             processing_class=tokenizer,
@@ -793,7 +793,7 @@ class TestPrivacyDefaults:
         assert ctx.target_delta == pytest.approx(1 / len(tiny_lm_dataset) ** 1.1)
 
 
-class TestDPTrainerAdaptiveClipping:
+class TestTrainerAdaptiveClipping:
     """Test adaptive clipping mode."""
 
     def test_quantile_and_gradient_noise_use_split_keys(
@@ -801,7 +801,7 @@ class TestDPTrainerAdaptiveClipping:
     ):
         model, tokenizer = gpt2_with_lora
         seed = 123
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 clipping_mode="adaptive",
@@ -830,7 +830,7 @@ class TestDPTrainerAdaptiveClipping:
         ``x -> 1 - x`` and cannot distinguish the two conventions.
         """
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 clipping_mode="adaptive",
@@ -853,7 +853,7 @@ class TestDPTrainerAdaptiveClipping:
     def test_adaptive_clipping_runs(self, gpt2_with_lora, tiny_lm_dataset):
         model, tokenizer = gpt2_with_lora
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 clipping_mode="adaptive",
@@ -872,7 +872,7 @@ class TestDPTrainerAdaptiveClipping:
         assert output.metrics["privacy_epsilon"] > 0
 
 
-class TestDPTrainerLRScheduling:
+class TestTrainerLRScheduling:
     """Test that ``lr_scheduler`` and warmup actually take effect."""
 
     def test_fractional_epochs_use_fractional_step_horizon(
@@ -880,7 +880,7 @@ class TestDPTrainerLRScheduling:
     ):
         """A partial final epoch drives training, scheduling, and accounting."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=-1,
@@ -910,7 +910,7 @@ class TestDPTrainerLRScheduling:
     def test_sub_epoch_training_runs_one_step(self, gpt2_with_lora, tiny_lm_dataset):
         """A positive fraction below one does not truncate to zero steps."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=-1,
@@ -933,7 +933,7 @@ class TestDPTrainerLRScheduling:
         """lr_scheduler='constant' logs base_lr at every step."""
         model, tokenizer = gpt2_with_lora
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 clipping_norm=1.0,
@@ -966,7 +966,7 @@ class TestDPTrainerLRScheduling:
         """Warmup ramp + linear decay produces the expected lr_schedule(step) series."""
         model, tokenizer = gpt2_with_lora
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 clipping_norm=1.0,
@@ -1023,7 +1023,7 @@ class TestDPTrainerLRScheduling:
             "logging_steps": 999,
         }
 
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model_const,
             args=_default_args(lr_scheduler="constant", **common),
             processing_class=tok,
@@ -1042,7 +1042,7 @@ class TestDPTrainerLRScheduling:
             if n in init_params:
                 p.data.copy_(init_params[n])
 
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model_const,
             args=_default_args(lr_scheduler="linear", **common),
             processing_class=tok,
@@ -1063,7 +1063,7 @@ class TestDPTrainerLRScheduling:
         assert diverged, "constant vs linear+warmup produced identical params"
 
 
-class TestDPTrainerCheckpointing:
+class TestTrainerCheckpointing:
     """End-to-end checkpoint save / rotation / final-save tests."""
 
     def _common_args(self, output_dir, **overrides):
@@ -1086,7 +1086,7 @@ class TestDPTrainerCheckpointing:
 
     def test_save_at_step_intervals(self, gpt2_with_lora, tiny_lm_dataset, tmp_path):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path),
             processing_class=tokenizer,
@@ -1123,7 +1123,7 @@ class TestDPTrainerCheckpointing:
     ):
         """save_safetensors=False writes the legacy .bin format, and we can resume from it."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path, max_steps=2, save_steps=2, save_safetensors=False
@@ -1142,7 +1142,7 @@ class TestDPTrainerCheckpointing:
 
         # Resume from this .bin checkpoint to confirm load works for both formats.
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(
                 tmp_path, max_steps=4, save_steps=2, save_safetensors=False
@@ -1158,7 +1158,7 @@ class TestDPTrainerCheckpointing:
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path, save_only_model=True, max_steps=2, save_steps=2
@@ -1195,7 +1195,7 @@ class TestDPTrainerCheckpointing:
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path, max_steps=6, save_steps=2, save_total_limit=2
@@ -1214,7 +1214,7 @@ class TestDPTrainerCheckpointing:
     def test_final_save_when_unaligned(self, gpt2_with_lora, tiny_lm_dataset, tmp_path):
         """Final step saves a checkpoint even if it doesn't align with save_steps."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=3, save_steps=2),
             processing_class=tokenizer,
@@ -1233,7 +1233,7 @@ class TestDPTrainerCheckpointing:
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, save_strategy="no"),
             processing_class=tokenizer,
@@ -1247,7 +1247,7 @@ class TestDPTrainerCheckpointing:
 
     def test_save_strategy_epoch(self, gpt2_with_lora, tiny_lm_dataset, tmp_path):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path,
@@ -1273,7 +1273,7 @@ class TestDPTrainerCheckpointing:
     ):
         """save_steps in (0, 1) is treated as a fraction of total_steps."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=4, save_steps=0.5),
             processing_class=tokenizer,
@@ -1290,11 +1290,11 @@ class TestDPTrainerCheckpointing:
     def test_trainer_state_json_round_trips(
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
-        """Saved trainer_state.json deserializes to an equivalent DPTrainerState."""
+        """Saved trainer_state.json deserializes to an equivalent TrainerState."""
         import json
 
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=2, save_steps=2),
             processing_class=tokenizer,
@@ -1310,14 +1310,14 @@ class TestDPTrainerCheckpointing:
         assert data["max_steps"] == 2
         assert isinstance(data["log_history"], list)
 
-        restored = DPTrainerState.from_json(data)
+        restored = TrainerState.from_json(data)
         assert restored.global_step == 2
 
     def test_save_model_public_api(self, gpt2_with_lora, tiny_lm_dataset, tmp_path):
         """save_model() writes weights, training args, and accountant.json."""
         model, tokenizer = gpt2_with_lora
         out = tmp_path / "final"
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, save_strategy="no", max_steps=2),
             processing_class=tokenizer,
@@ -1338,7 +1338,7 @@ class TestDPTrainerCheckpointing:
     # ------------------------------------------------------------------
 
     def _trained_trainer(self, model, tokenizer, dataset, tmp_path, **overrides):
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path, save_strategy="no", max_steps=2, **overrides
@@ -1412,7 +1412,7 @@ class TestDPTrainerCheckpointing:
     ):
         """No training run means no accounting to serialise — report, don't guess."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, save_strategy="no", max_steps=2),
             processing_class=tokenizer,
@@ -1463,7 +1463,7 @@ class TestDPTrainerCheckpointing:
         # ``greater_is_better`` defaults to ``False`` for loss-suffixed metrics.
         assert args.greater_is_better is False
         # Construction still succeeds with the auto-default in place.
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=args,
             processing_class=tokenizer,
@@ -1476,7 +1476,7 @@ class TestDPTrainerCheckpointing:
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path,
@@ -1500,7 +1500,7 @@ class TestDPTrainerCheckpointing:
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path,
@@ -1521,7 +1521,7 @@ class TestDPTrainerCheckpointing:
     def test_best_metric_tracking_runs(self, gpt2_with_lora, tiny_lm_dataset, tmp_path):
         """state.best_* is populated after training when eval is enabled."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path,
@@ -1546,7 +1546,7 @@ class TestDPTrainerCheckpointing:
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path,
@@ -1613,7 +1613,7 @@ class TestDPTrainerCheckpointing:
 
         # --- continuous baseline ---
         model_c, tokenizer_c = gpt2_with_lora
-        trainer_c = DPTrainer(
+        trainer_c = Trainer(
             model=model_c,
             args=self._common_args(
                 tmp_path / "continuous", save_strategy="no", **common
@@ -1633,7 +1633,7 @@ class TestDPTrainerCheckpointing:
         # --- phase 1: same args, stop+save at step 5 via callback ---
         chain_dir = tmp_path / "chain"
         model_1, tokenizer_1 = gpt2_with_lora
-        trainer_1 = DPTrainer(
+        trainer_1 = Trainer(
             model=model_1,
             args=self._common_args(chain_dir, save_strategy="no", **common),
             processing_class=tokenizer_1,
@@ -1647,7 +1647,7 @@ class TestDPTrainerCheckpointing:
 
         # --- phase 2: resume same args, run to step 10 ---
         model_2, tokenizer_2 = gpt2_with_lora
-        trainer_2 = DPTrainer(
+        trainer_2 = Trainer(
             model=model_2,
             args=self._common_args(chain_dir, save_strategy="no", **common),
             processing_class=tokenizer_2,
@@ -1685,7 +1685,7 @@ class TestDPTrainerCheckpointing:
             def on_save(self, args, state, control, **kwargs):
                 live_consumed_at_save.append(trainer._ctx.current_sampler.consumed)
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path,
@@ -1714,7 +1714,7 @@ class TestDPTrainerCheckpointing:
         assert payload.sampler_state["consumed"] == 2
 
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(
                 tmp_path,
@@ -1738,7 +1738,7 @@ class TestDPTrainerCheckpointing:
 
         batches: list[torch.Tensor] = []
 
-        class _CaptureBatches(DPTrainer):
+        class _CaptureBatches(Trainer):
             def training_step(self, model, inputs):
                 batches.append(inputs["input_ids"].detach().clone())
                 return super().training_step(model, inputs)
@@ -1789,7 +1789,7 @@ class TestDPTrainerCheckpointing:
 
         # Phase 1: plain run to checkpoint-2 (global_step=2).
         model1, tokenizer1 = gpt2_with_lora
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model1,
             args=self._common_args(tmp_path, max_steps=2, save_steps=2),
             processing_class=tokenizer1,
@@ -1801,7 +1801,7 @@ class TestDPTrainerCheckpointing:
         # Phase 2: resume with ignore_data_skip=True (rebases the sampler
         # stream at global_step=2) plus prefetch, 2 more steps to checkpoint-4.
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(
                 tmp_path,
@@ -1828,7 +1828,7 @@ class TestDPTrainerCheckpointing:
         # Phase 3: normal resume to completion; the offset must carry
         # forward so a further checkpoint under prefetch still clamps right.
         model3, tokenizer3 = gpt2_with_lora
-        trainer3 = DPTrainer(
+        trainer3 = Trainer(
             model=model3,
             args=self._common_args(
                 tmp_path,
@@ -1856,7 +1856,7 @@ class TestDPTrainerCheckpointing:
         """Resume from a saved checkpoint advances global_step instead of restarting."""
         model, tokenizer = gpt2_with_lora
         # Initial run: 2 steps, save at step 2.
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=2, save_steps=2),
             processing_class=tokenizer,
@@ -1870,7 +1870,7 @@ class TestDPTrainerCheckpointing:
 
         # Resume: max_steps=4 → run 2 more steps starting at global_step=2.
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(tmp_path, max_steps=4, save_steps=2),
             processing_class=tokenizer2,
@@ -1886,7 +1886,7 @@ class TestDPTrainerCheckpointing:
     def test_resume_true_finds_latest(self, gpt2_with_lora, tiny_lm_dataset, tmp_path):
         """resume_from_checkpoint=True picks the latest checkpoint under output_dir."""
         model, tokenizer = gpt2_with_lora
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=2, save_steps=2),
             processing_class=tokenizer,
@@ -1896,7 +1896,7 @@ class TestDPTrainerCheckpointing:
         trainer1.train()
 
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(tmp_path, max_steps=4, save_steps=2),
             processing_class=tokenizer2,
@@ -1910,7 +1910,7 @@ class TestDPTrainerCheckpointing:
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, save_strategy="no"),
             processing_class=tokenizer,
@@ -1930,7 +1930,7 @@ class TestDPTrainerCheckpointing:
         "resume if you can, else start fresh" — without probing the filesystem.
         """
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, save_strategy="no"),
             processing_class=tokenizer,
@@ -1949,7 +1949,7 @@ class TestDPTrainerCheckpointing:
 
         # Produce a checkpoint, then delete its accountant.json.
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=2, save_steps=2),
             processing_class=tokenizer,
@@ -1961,7 +1961,7 @@ class TestDPTrainerCheckpointing:
         (ckpt_dir / "accountant.json").unlink()
 
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(tmp_path, max_steps=4, save_steps=2),
             processing_class=tokenizer2,
@@ -1978,7 +1978,7 @@ class TestDPTrainerCheckpointing:
         construction (model=), not a resume.  The new run begins with a zero
         accountant and trains to its own target."""
         model, tokenizer = gpt2_with_lora
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path, max_steps=2, save_steps=2, save_only_model=True
@@ -1993,7 +1993,7 @@ class TestDPTrainerCheckpointing:
         # the supported "start from these weights" path — no resume, fresh ε.
         out2_dir = tmp_path / "fresh"
         out2_dir.mkdir()
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=trainer.model,
             args=self._common_args(out2_dir, max_steps=2, save_steps=2),
             processing_class=tokenizer,
@@ -2008,7 +2008,7 @@ class TestDPTrainerCheckpointing:
     ):
         """epsilon at end of resumed run reflects total composition (incl. saved steps)."""
         model, tokenizer = gpt2_with_lora
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=2, save_steps=2),
             processing_class=tokenizer,
@@ -2019,7 +2019,7 @@ class TestDPTrainerCheckpointing:
         eps_after_2 = out1.metrics["privacy_epsilon"]
 
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(tmp_path, max_steps=4, save_steps=2),
             processing_class=tokenizer2,
@@ -2041,7 +2041,7 @@ class TestDPTrainerCheckpointing:
         import pytest
 
         model, tokenizer = gpt2_with_lora
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=self._common_args(
                 tmp_path, max_steps=2, save_steps=2, save_only_model=True
@@ -2060,7 +2060,7 @@ class TestDPTrainerCheckpointing:
         model2, tokenizer2 = gpt2_with_lora
         out2_dir = tmp_path / "resumed"
         out2_dir.mkdir()
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(
                 out2_dir,
@@ -2081,7 +2081,7 @@ class TestDPTrainerCheckpointing:
     ):
         """Use a distinct Poisson stream."""
         model, tokenizer = gpt2_with_lora
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=2, save_steps=2),
             processing_class=tokenizer,
@@ -2100,7 +2100,7 @@ class TestDPTrainerCheckpointing:
         monkeypatch.setattr(_dpftrl, "build_sampler", record_sampler_key)
 
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(
                 tmp_path, max_steps=4, save_steps=2, ignore_data_skip=True
@@ -2143,7 +2143,7 @@ class TestDPTrainerCheckpointing:
                 self.value += 1
 
         cb = StatefulCallback()
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=self._common_args(tmp_path, max_steps=2, save_steps=2),
             processing_class=tokenizer,
@@ -2164,7 +2164,7 @@ class TestDPTrainerCheckpointing:
 
         cb2 = StatefulCallback()
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=self._common_args(
                 tmp_path,
@@ -2221,11 +2221,11 @@ def _hf_evaluates_at_end_of_training() -> bool:
     return bool(control.should_evaluate)
 
 
-class TestDPTrainerEvalControls:
+class TestTrainerEvalControls:
     """``eval_on_start``, evaluation cadence, ``prediction_loss_only``.
 
     Cadence comes from HF's ``DefaultFlowCallback``, which sets
-    ``control.should_evaluate``; ``DPTrainer._maybe_log_save_evaluate`` acts
+    ``control.should_evaluate``; ``Trainer._maybe_log_save_evaluate`` acts
     on it.  The cadence tests assert the ``on_evaluate`` events a real
     training run emits.
     """
@@ -2236,7 +2236,7 @@ class TestDPTrainerEvalControls:
         model, tokenizer = gpt2_with_lora
         rec = _EvalRecorder()
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=2,
@@ -2261,7 +2261,7 @@ class TestDPTrainerEvalControls:
         model, tokenizer = gpt2_with_lora
         rec = _EvalRecorder()
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=2,
@@ -2292,7 +2292,7 @@ class TestDPTrainerEvalControls:
         model, tokenizer = gpt2_with_lora
 
         # First run: produce a checkpoint at step 2.
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=_default_args(
                 output_dir=str(tmp_path),
@@ -2312,7 +2312,7 @@ class TestDPTrainerEvalControls:
         # baseline eval at the start.
         rec = _EvalRecorder()
         model2, tokenizer2 = gpt2_with_lora
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model2,
             args=_default_args(
                 output_dir=str(tmp_path),
@@ -2354,7 +2354,7 @@ class TestDPTrainerEvalControls:
         model, tokenizer = gpt2_with_lora
         rec = _EvalRecorder()
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=max_steps,
@@ -2380,7 +2380,7 @@ class TestDPTrainerEvalControls:
         model, tokenizer = gpt2_with_lora
         rec = _EvalRecorder()
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 max_steps=6,
@@ -2403,7 +2403,7 @@ class TestDPTrainerEvalControls:
         model, tokenizer = gpt2_with_lora
         rec = _EvalRecorder()
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 num_train_epochs=3,
@@ -2427,7 +2427,7 @@ class TestDPTrainerEvalControls:
         model, tokenizer = gpt2_with_lora
         rec = _EvalRecorder()
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 num_train_epochs=3,
@@ -2461,7 +2461,7 @@ class TestDPTrainerEvalControls:
             "eval_steps": 3,
         }
 
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=_default_args(max_steps=2, **cadence),
             processing_class=tokenizer,
@@ -2471,7 +2471,7 @@ class TestDPTrainerEvalControls:
         trainer1.train()
 
         rec = _EvalRecorder()
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model,
             args=_default_args(max_steps=6, **cadence),
             processing_class=tokenizer,
@@ -2498,7 +2498,7 @@ class TestDPTrainerEvalControls:
             "eval_strategy": "epoch",
         }
 
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=model,
             args=_default_args(num_train_epochs=1, **cadence),
             processing_class=tokenizer,
@@ -2508,7 +2508,7 @@ class TestDPTrainerEvalControls:
         trainer1.train()
 
         rec = _EvalRecorder()
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=model,
             args=_default_args(num_train_epochs=3, **cadence),
             processing_class=tokenizer,
@@ -2533,7 +2533,7 @@ class TestDPTrainerEvalControls:
             cm_calls.append(eval_pred)
             return {"acc": 0.0}
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(prediction_loss_only=True),
             processing_class=tokenizer,
@@ -2556,7 +2556,7 @@ class TestDPTrainerEvalControls:
 # ---------------------------------------------------------------------------
 
 
-class TestDPTrainerEvalMemory:
+class TestTrainerEvalMemory:
     """Phase 3b: memory-management flags."""
 
     def test_eval_accumulation_steps_engages_cpu_flushes(
@@ -2579,7 +2579,7 @@ class TestDPTrainerEvalMemory:
 
         _eval_mod._PredictionAccumulator.flush_to_cpu = counting_flush
         try:
-            trainer = DPTrainer(
+            trainer = Trainer(
                 model=model,
                 args=_default_args(
                     per_device_eval_batch_size=2,  # 8 examples / 2 = 4 batches
@@ -2611,7 +2611,7 @@ class TestDPTrainerEvalMemory:
             captured["label_ids"] = eval_pred.label_ids
             return {"shape_marker": 1.0}
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 per_device_eval_batch_size=4,  # 8 examples / 4 = 2 batches
@@ -2634,7 +2634,7 @@ class TestDPTrainerEvalMemory:
 # ---------------------------------------------------------------------------
 
 
-class TestDPTrainerEvalMetrics:
+class TestTrainerEvalMetrics:
     """Phase 3c: ``include_for_metrics`` and the dropped deprecated alias."""
 
     def test_compute_metrics_receives_eval_prediction(
@@ -2653,7 +2653,7 @@ class TestDPTrainerEvalMetrics:
             seen["label_ids"] = eval_pred.label_ids
             return {"acc": 0.42}
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(),
             processing_class=tokenizer,
@@ -2699,7 +2699,7 @@ class TestDPTrainerEvalMetrics:
             correct = int(((top1 == labels) & mask).sum())
             return {"top1_acc": correct / denom}
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(),
             processing_class=tokenizer,
@@ -2721,7 +2721,7 @@ class TestDPTrainerEvalMetrics:
             seen["losses"] = eval_pred.losses
             return {"acc": 0.0}
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(include_for_metrics=["inputs"]),
             processing_class=tokenizer,
@@ -2757,7 +2757,7 @@ class TestDPTrainerEvalMetrics:
             seen["losses"] = eval_pred.losses
             return {"acc": 0.0}
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 per_device_eval_batch_size=4,  # 8 examples / 4 = 2 batches
@@ -2785,7 +2785,7 @@ class TestDPTrainerEvalMetrics:
             seen["losses"] = eval_pred.losses
             return {"acc": 1.0}
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(include_for_metrics=["inputs", "loss"]),
             processing_class=tokenizer,
@@ -2803,7 +2803,7 @@ class TestDPTrainerEvalMetrics:
         """Unknown entries in include_for_metrics raise at __init__ time."""
         model, tokenizer = gpt2_with_lora
         with pytest.raises(ValueError, match="include_for_metrics"):
-            DPTrainer(
+            Trainer(
                 model=model,
                 args=_default_args(include_for_metrics=["foo"]),
                 processing_class=tokenizer,
@@ -2835,7 +2835,7 @@ def _accuracy_fn(eval_pred):
     return {"acc": float(int(correct.sum()) / int(mask.sum()))}
 
 
-class TestDPTrainerEvalIntegration:
+class TestTrainerEvalIntegration:
     """End-to-end: train() with eval_on_start, eval_delay, compute_metrics."""
 
     def test_full_eval_flow_through_train(
@@ -2844,7 +2844,7 @@ class TestDPTrainerEvalIntegration:
         """eval_on_start + eval_delay + compute_metrics + load_best_model_at_end."""
         model, tokenizer = gpt2_with_lora
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(
                 output_dir=str(tmp_path),
@@ -2876,7 +2876,7 @@ class TestDPTrainerEvalIntegration:
         assert trainer.state.best_metric is not None
 
 
-class TestDPTrainerEvalParity:
+class TestTrainerEvalParity:
     """Functional ↔ nn.Module parity for compute_metrics."""
 
     def test_compute_metrics_path_agnostic(self, gpt2_with_lora, tiny_lm_dataset):
@@ -2890,7 +2890,7 @@ class TestDPTrainerEvalParity:
             captured.append(r["acc"])
             return r
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_default_args(max_steps=1, eval_strategy="no"),
             processing_class=tokenizer,
@@ -2932,7 +2932,7 @@ class TestDeepJsonRecursionGuard:
         import json
         import sys
 
-        from opaque.api.transformers.trainer._dp_trainer import (
+        from opaque.api.transformers.trainer._trainer import (
             _deep_json_recursion,
         )
 
@@ -2959,7 +2959,7 @@ class TestPredictStopStep:
         return dacc.poisson(dacc.gaussian(1.0), 0.02)
 
     def test_matches_linear_scan(self):
-        from opaque.api.transformers.trainer._dp_trainer import predict_stop_step
+        from opaque.api.transformers.trainer._trainer import predict_stop_step
 
         step, delta, horizon = self._step(), 1e-5, 30
         eps = [(step * k).epsilon_at(delta) for k in range(1, horizon + 1)]
@@ -2971,7 +2971,7 @@ class TestPredictStopStep:
         assert got == expected
 
     def test_unreachable_returns_none(self):
-        from opaque.api.transformers.trainer._dp_trainer import predict_stop_step
+        from opaque.api.transformers.trainer._trainer import predict_stop_step
 
         step, delta, horizon = self._step(), 1e-5, 10
         unreachable = (step * horizon).epsilon_at(delta) * 2.0
@@ -2990,7 +2990,7 @@ class TestPredictStopStep:
     def test_resume_prefix_preserves_absolute_step(self):
         """A resumed run (prefix = k0 accrued steps) predicts the same
         absolute crossing step as the fresh run."""
-        from opaque.api.transformers.trainer._dp_trainer import predict_stop_step
+        from opaque.api.transformers.trainer._trainer import predict_stop_step
 
         step, delta, horizon = self._step(), 1e-5, 30
         eps = [(step * k).epsilon_at(delta) for k in range(1, horizon + 1)]

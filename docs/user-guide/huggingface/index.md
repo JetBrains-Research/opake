@@ -1,6 +1,6 @@
 # Hugging Face Integration
 
-Opaque ships a Hugging Face–style trainer (`opaque.transformers.DPTrainer`)
+Opaque ships a Hugging Face–style trainer (`opaque.transformers.Trainer`)
 plus a per-model patch surface (`opaque.patches`) so existing
 `transformers` models can be trained under DP-SGD with the familiar
 `Trainer.train()` / `evaluate()` / `predict()` interface.
@@ -10,7 +10,7 @@ you're trying to do.
 
 ## What's covered
 
-- **[DPTrainer](dptrainer.md)** — common training / eval / predict
+- **[Trainer](trainer.md)** — common training / eval / predict
   usage. Start here if you have a model and a dataset and want to
   train.
 - **[TrainingArguments](training-arguments.md)** — the most-used DP
@@ -21,7 +21,7 @@ you're trying to do.
   compatibility matrix, the Triton kernel surface (including fused
   LoRA), and how to bring your own model.
 - **[API reference — transformers](../../reference/transformers.md)** —
-  full parameter inventory for `DPTrainer`, `TrainingArguments`, and
+  full parameter inventory for `Trainer`, `TrainingArguments`, and
   the public state objects.
 
 LoRA and other PEFT setups use the standard `peft` library workflow;
@@ -34,7 +34,7 @@ the only Opaque-specific piece is
 ```
 Have a model + dataset, want to train?
 │
-├─ Yes ── start with dptrainer.md
+├─ Yes ── start with trainer.md
 │         then training-arguments.md for tuning
 │
 └─ No ─── Something else
@@ -44,25 +44,25 @@ Have a model + dataset, want to train?
 
 ## Quick start
 
-A minimal DPTrainer run looks like a Hugging Face `Trainer` run with a
+A minimal Trainer run looks like a Hugging Face `Trainer` run with a
 few DP-specific fields on `TrainingArguments`:
 
 ```python
 from transformers import AutoModelForCausalLM
-from opaque.transformers import DPTrainer, TrainingArguments
+from opaque.transformers import Trainer, TrainingArguments
 
 model = AutoModelForCausalLM.from_pretrained("gpt2")
 args = TrainingArguments(
     output_dir="run-0",
     per_device_train_batch_size=8,
     num_train_epochs=3.0,
-    # DPTrainer-specific privacy knobs:
+    # Trainer-specific privacy knobs:
     privacy_target_epsilon=8.0,
     privacy_target_delta=1e-5,
     clipping_norm=1.0,
 )
 
-trainer = DPTrainer(
+trainer = Trainer(
     model=model,
     args=args,
     train_dataset=train_ds,

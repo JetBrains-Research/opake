@@ -1,6 +1,6 @@
 # Transformers Integration
 
-API reference for `opaque.transformers` — `DPTrainer`,
+API reference for `opaque.transformers` — `Trainer`,
 `TrainingArguments`, and the public state objects. For task-shaped
 usage guides, see [Hugging Face Integration](../user-guide/huggingface/index.md).
 
@@ -9,29 +9,29 @@ usage guides, see [Hugging Face Integration](../user-guide/huggingface/index.md)
 The `opaque.transformers` namespace re-exports the trainer surface:
 
 ```python
-from opaque.transformers import DPTrainer, TrainingArguments
+from opaque.transformers import Trainer, TrainingArguments
 from opaque.transformers.trainer.types import EvaluationResult, TrainOutput
 from opaque.transformers.trl import SFTConfig, SFTTrainer, DPOConfig, DPOTrainer
 
-# Global HF runtime shims (only needed when using HF primitives without DPTrainer):
+# Global HF runtime shims (only needed when using HF primitives without Trainer):
 from opaque.patches import apply_runtime_patches
 ```
 
 | Symbol | Purpose |
 |---|---|
-| `DPTrainer` | DP-SGD trainer mirroring the Hugging Face `Trainer` interface. |
-| `TrainingArguments` | Standalone dataclass — full HF parity for the subset DPTrainer honors, plus DP-specific fields. |
+| `Trainer` | DP-SGD trainer mirroring the Hugging Face `Trainer` interface. |
+| `TrainingArguments` | Standalone dataclass — full HF parity for the subset Trainer honors, plus DP-specific fields. |
 | `opaque.transformers.trainer.types.EvaluationResult` | Return type for `evaluation_loop` / `evaluate` / `predict`. |
 | `opaque.transformers.trainer.types.TrainOutput` | NamedTuple returned by `train()` — `(global_step, training_loss, metrics)`. |
 | `opaque.transformers.trl` | TRL-style configs/trainers: `SFTConfig`, `SFTTrainer`, `DPOConfig`, `DPOTrainer`. |
-| `opaque.patches.apply_runtime_patches` | Install the global HF runtime shims (only needed when using HF primitives without `DPTrainer`). |
+| `opaque.patches.apply_runtime_patches` | Install the global HF runtime shims (only needed when using HF primitives without `Trainer`). |
 
-## `DPTrainer`
+## `Trainer`
 
 ### Construction
 
 ```python
-DPTrainer(
+Trainer(
     model: PreTrainedModel | None = None,
     args: TrainingArguments | None = None,
     data_collator: Callable | None = None,
@@ -58,8 +58,8 @@ DPTrainer(
 | `compute_loss_func` | `Callable[[outputs, labels], Tensor] \| None` | Loss override; called under vmap per example during training and per-example-loss evaluation, and once on batched outputs/labels on the default reduced eval path. It takes precedence over label smoothing. Not HF's `(outputs, labels, num_items_in_batch) -> scalar` signature. |
 | `compute_metrics` | `Callable[[EvalPrediction], dict] \| None` | Standard HF callback over concatenated predictions / label_ids / inputs / losses. |
 | `callbacks` | `list[TrainerCallback] \| None` | User callbacks; `DefaultFlowCallback` is auto-prepended. |
-| `optimizers` | `tuple[Any \| None, Any \| None]` | **Not supported.** Passing non-`None` raises `ConfigurationError`: DPTrainer owns the functional torchopt optimizer. |
-| `optimizer_cls_and_kwargs` | `tuple[Callable, dict] \| None` | DPTrainer-specific.  Override the default torchopt factory.  Validated against the functional contract at construction. |
+| `optimizers` | `tuple[Any \| None, Any \| None]` | **Not supported.** Passing non-`None` raises `ConfigurationError`: Trainer owns the functional torchopt optimizer. |
+| `optimizer_cls_and_kwargs` | `tuple[Callable, dict] \| None` | Trainer-specific.  Override the default torchopt factory.  Validated against the functional contract at construction. |
 | `preprocess_logits_for_metrics` | `Callable \| None` | Vmap-batched.  Lets `compute_metrics` consume a reduced representation of logits. |
 
 The constructor seeds Python / NumPy / torch global RNGs from
@@ -135,7 +135,7 @@ trainer.is_world_process_zero()  # True on global rank-0
 trainer.is_local_process_zero()  # True on each node's rank-0
 ```
 
-`DPTrainerState` mirrors these flags
+`TrainerState` mirrors these flags
 (`state.is_world_process_zero`, `state.is_local_process_zero`) so
 callbacks can rank-gate side effects.
 
@@ -424,7 +424,7 @@ Returned by `train()`.  Mirrors HF's `TrainOutput`.
 
 ## `opaque.transformers.trl` — SFT/DPO trainers
 
-TRL-style class trainers built on `DPTrainer`.  Import the stable façade:
+TRL-style class trainers built on `Trainer`.  Import the stable façade:
 
 ```python
 from opaque.transformers.trl import (
@@ -484,7 +484,7 @@ SFTTrainer(
 | `peft_config` | When set, wraps the model with `get_peft_model`; chat-template-added tokens are marked trainable. |
 | `formatting_func` | `example -> str`, rendered into `dataset_text_field` before tokenization. |
 
-`optimizers` (non-`None`) is rejected — `DPTrainer` owns the functional
+`optimizers` (non-`None`) is rejected — `Trainer` owns the functional
 optimizer.
 
 ### `SFTConfig`
@@ -595,8 +595,8 @@ from opaque.patches import apply_runtime_patches
 apply_runtime_patches(compat=True)  # install the global HF shims once
 ```
 
-`DPTrainer` applies these (and the per-model patches) during construction, so
-you only need this when driving DP-SGD over HF models **without** `DPTrainer`.
+`Trainer` applies these (and the per-model patches) during construction, so
+you only need this when driving DP-SGD over HF models **without** `Trainer`.
 
 For per-model patches and the kernel surface, see
 [Model Patches and Kernels](../user-guide/huggingface/model-patches.md).

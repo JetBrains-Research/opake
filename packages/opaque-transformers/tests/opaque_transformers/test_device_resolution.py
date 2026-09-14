@@ -10,7 +10,7 @@ Covered:
   device on a CUDA-available host, an MPS-only host, and a CPU-only host.
 - ``_n_gpu`` is 0 for CPU/MPS, 1 for CUDA.
 - ``no_cuda`` is rejected (standalone ``TrainingArguments``; use ``use_cpu``).
-- ``DPTrainer.__init__`` actually moves the model to the resolved device
+- ``Trainer.__init__`` actually moves the model to the resolved device
   (HF parity: args wins over wherever the user pre-placed).
 """
 
@@ -115,16 +115,16 @@ def test_no_cuda_is_rejected():
 
 
 # ----------------------------------------------------------------------------
-# DPTrainer actually places the model on the resolved device
+# Trainer actually places the model on the resolved device
 # ----------------------------------------------------------------------------
 
 
 def _build_tiny_trainer_inputs(tmp_path):
-    """A bare DPTrainer-friendly model + args pair for placement smoke tests."""
-    from opaque.transformers.trainer import DPTrainer
+    """A bare Trainer-friendly model + args pair for placement smoke tests."""
+    from opaque.transformers.trainer import Trainer
 
     model = torch.nn.Linear(4, 2)
-    # Tiny ``Dataset``-like list of dicts: DPTrainer accepts any iterable
+    # Tiny ``Dataset``-like list of dicts: Trainer accepts any iterable
     # whose items the data_collator can handle; for these placement smoke
     # tests we never call .train(), so the contents don't matter.
     dummy_dataset = [{"x": torch.zeros(4)}]
@@ -135,7 +135,7 @@ def _build_tiny_trainer_inputs(tmp_path):
         save_strategy="no",
         use_cpu=True,  # force cpu so test is host-independent
     )
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=dummy_dataset,

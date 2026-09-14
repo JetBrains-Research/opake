@@ -21,7 +21,7 @@ from datasets import concatenate_datasets
 from peft import LoraConfig, TaskType, get_peft_model
 
 from opaque.api.transformers.trainer._eval import speed_metrics
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 # ---------------------------------------------------------------------------
 # Pure-helper tests (no DP run required).
@@ -68,7 +68,7 @@ def time_at_t_minus(seconds: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# DP-trainer integration: per-example losses, speed_metrics in eval output.
+# Trainer integration: per-example losses, speed_metrics in eval output.
 # ---------------------------------------------------------------------------
 
 
@@ -97,7 +97,7 @@ def lora_model(small_model_and_tokenizer):
 
 @pytest.fixture
 def tiny_dataset(small_model_and_tokenizer):
-    """Eight pre-padded causal-LM examples for DPTrainer eval tests."""
+    """Eight pre-padded causal-LM examples for Trainer eval tests."""
     _, tokenizer = small_model_and_tokenizer
     return build_lm_dataset(
         [f"sample {i}" for i in range(8)],
@@ -131,7 +131,7 @@ class TestEvalSpeedMetrics:
 
     def test_default_prefix(self, lora_model, tiny_dataset, tmp_path):
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path),
             processing_class=tokenizer,
@@ -157,7 +157,7 @@ class TestEvalSpeedMetrics:
 
     def test_custom_prefix(self, lora_model, tiny_dataset, tmp_path):
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path),
             processing_class=tokenizer,
@@ -197,7 +197,7 @@ class TestDataCollatorWiring:
             called["n"] += 1
             return default_data_collator(examples)
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path),
             processing_class=tokenizer,
@@ -207,6 +207,6 @@ class TestDataCollatorWiring:
         )
         trainer.train()
         assert called["n"] > 0, (
-            "User-supplied data_collator was never called — DPTrainer is "
+            "User-supplied data_collator was never called — Trainer is "
             "still using its default collator instead"
         )

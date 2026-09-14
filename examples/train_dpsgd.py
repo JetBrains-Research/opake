@@ -1361,8 +1361,8 @@ def main():
     # Define per-example loss
     def per_example_loss_fn(trainable, input_ids):
         # Mask pad positions to ``-100`` so training CE scores only real tokens —
-        # same masking the eval path and DPTrainer's collator apply. Without it the
-        # manual loop trains on unmasked labels while DPTrainer trains on masked
+        # same masking the eval path and Trainer's collator apply. Without it the
+        # manual loop trains on unmasked labels while Trainer trains on masked
         # ones, drifting ``train/loss`` under identical DP math. ``vmap``-safe.
         labels = torch.where(input_ids == pad_token_id, -100, input_ids)
         output = fmodel(merged_params(trainable), input_ids, labels=labels)

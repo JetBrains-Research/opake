@@ -17,9 +17,9 @@ from torch._dynamo.testing import CompileCounterWithBackend
 from transformers import PretrainedConfig, PreTrainedModel
 
 from opaque.api.transformers.trainer._distributed import DDPState
-from opaque.api.transformers.trainer._dp_trainer import _compile_strict_chunk
+from opaque.api.transformers.trainer._trainer import _compile_strict_chunk
 from opaque.exceptions import ConfigurationError
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 # ----------------------------------------------------------------------------
 # Tiny shared trainer helper
@@ -41,10 +41,10 @@ def _args(tmp_path, **overrides) -> TrainingArguments:
     return TrainingArguments(**defaults)
 
 
-def _tiny_trainer(tmp_path, **arg_overrides) -> tuple[DPTrainer, nn.Module]:
+def _tiny_trainer(tmp_path, **arg_overrides) -> tuple[Trainer, nn.Module]:
     model = nn.Linear(4, 2)
     args = _args(tmp_path, **arg_overrides)
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=[{"x": torch.zeros(4)}],
@@ -82,7 +82,7 @@ class _UnregisteredHFModel(PreTrainedModel):
 def test_default_trainer_rejects_unregistered_hf_family(tmp_path):
     """The default compatibility path must not skip an unknown HF family."""
     with pytest.raises(ConfigurationError, match="require a registered"):
-        DPTrainer(
+        Trainer(
             model=_UnregisteredHFModel(),
             args=_args(tmp_path),
             train_dataset=[{"x": torch.zeros(4)}],
@@ -129,7 +129,7 @@ def test_torch_compile_runs_poisson_training_strictly(tmp_path):
         logging_strategy="no",
         disable_tqdm=True,
     )
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_TinyLM(),
         args=args,
         train_dataset=dataset,
@@ -186,7 +186,7 @@ def test_torch_compile_rejects_model_with_checkpointing_already_enabled(tmp_path
     model.is_gradient_checkpointing = True
 
     with pytest.raises(ConfigurationError, match="already has gradient checkpointing"):
-        DPTrainer(
+        Trainer(
             model=model,
             args=_args(tmp_path, torch_compile=True),
             train_dataset=[{"input_ids": torch.zeros(4, dtype=torch.long)}],

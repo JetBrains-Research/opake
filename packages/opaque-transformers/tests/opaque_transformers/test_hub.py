@@ -1,4 +1,4 @@
-"""Tests for the (minimal) Hub publishing surface in DPTrainer.
+"""Tests for the (minimal) Hub publishing surface in Trainer.
 
 Covers the publish-only surface (no in-training auto-push):
 
@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 import torch
 
 import opaque.api.transformers.trainer._hub as _hub
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -44,12 +44,12 @@ def _args(tmp_path, **overrides) -> TrainingArguments:
     return TrainingArguments(**defaults)
 
 
-def _tiny_trainer(tmp_path, **arg_overrides) -> DPTrainer:
+def _tiny_trainer(tmp_path, **arg_overrides) -> Trainer:
     model = torch.nn.Linear(4, 2)
     # TrainingSummary.from_trainer expects trainer.model.config._name_or_path.
     model.config = type("DummyConfig", (), {"_name_or_path": "dummy/local-model"})()
     args = _args(tmp_path, **arg_overrides)
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=[{"x": torch.zeros(4)}],
@@ -271,7 +271,7 @@ class TestCreateModelCard:
         assert "1.0" in content  # clipping_norm=1.0
 
 
-def _tiny_trainer_with_hub(tmp_path) -> DPTrainer:
+def _tiny_trainer_with_hub(tmp_path) -> Trainer:
     model_url = MagicMock()
     model_url.repo_id = "org/repo"
     with patch(

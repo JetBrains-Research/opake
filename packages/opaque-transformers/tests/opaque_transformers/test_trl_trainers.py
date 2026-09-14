@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Opaque Authors
 # SPDX-License-Identifier: Apache-2.0
-"""Smoke + contract tests for the TRL-style DP trainers (SFT / DPO).
+"""Smoke + contract tests for the TRL-style trainers (SFT / DPO).
 
 Hermetic: builds a tiny Llama from an in-code config (no network) and runs a
 couple of DP-SGD steps through ``SFTTrainer`` / ``DPOTrainer``. The autouse
@@ -456,7 +456,7 @@ def test_sft_log_completion_metrics_false_skips_completion_keys(tmp_path):
 
 def test_sft_activation_offloading_inherited_base_field(tmp_path):
     # ``activation_offloading`` is inherited from the base ``TrainingArguments``
-    # — the config accepts it on ``SFTConfig`` and the base ``DPTrainer`` reader
+    # — the config accepts it on ``SFTConfig`` and the base ``Trainer`` reader
     # sees the same flag; no SFT-side override.
     args = _args(
         SFTConfig, tmp_path, max_length=8, loss_type="nll", activation_offloading=True
@@ -469,7 +469,7 @@ def test_sft_activation_offloading_inherited_base_field(tmp_path):
         train_dataset=_sft_dataset(),
         processing_class=_stub_tokenizer(),
     )
-    # The reader in DPTrainer._setup_training reads ``args.activation_offloading``.
+    # The reader in Trainer._setup_training reads ``args.activation_offloading``.
     assert trainer.args.activation_offloading is True
     out = trainer.train()
     assert out.global_step == 2

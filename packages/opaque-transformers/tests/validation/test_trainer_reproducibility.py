@@ -1,6 +1,6 @@
 """Reproducibility & contract foundations (Stage 2 of the de-SFT plan).
 
-Verifies the three foundations DPTrainer now wires:
+Verifies the three foundations Trainer now wires:
 
 - ``set_seed(args.seed)`` runs at construction so non-DP randomness
   (model init, ``compute_metrics`` ``torch.randn`` calls, …) is
@@ -9,7 +9,7 @@ Verifies the three foundations DPTrainer now wires:
   :meth:`TrainingArguments._setup_devices`) so ``use_cpu`` /
   ``use_mps_device`` / ``no_cuda`` actually take effect.
 - ``TrainingArguments.__post_init__`` is idempotent so a single args
-  instance can be passed to multiple ``DPTrainer`` constructions
+  instance can be passed to multiple ``Trainer`` constructions
   (sweep parity).
 """
 
@@ -22,7 +22,7 @@ import pytest
 import torch
 from peft import LoraConfig, TaskType, get_peft_model
 
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 # ``_hf_shared`` is in the parent of ``validation/``; mirror the import
 # convention used by the sibling tests.
@@ -47,7 +47,7 @@ def _build_lora_model(base_model, seed: int = 42):
     """LoRA-wrap a base GPT-2 with a fixed adapter shape.
 
     PEFT initialises LoRA-A / LoRA-B from the global ``torch`` RNG at
-    the time of the ``get_peft_model`` call.  ``DPTrainer.__init__``
+    the time of the ``get_peft_model`` call.  ``Trainer.__init__``
     only seeds *after* the user has built the model, so for
     bit-identical-run assertions the test must seed PEFT
     construction itself.  ``set_seed`` here mirrors what HF's
@@ -98,7 +98,7 @@ def _args(tmp_path, **overrides) -> TrainingArguments:
 
 def _train_two_steps(model, tokenizer, dataset, args) -> dict[str, torch.Tensor]:
     """Run a tiny training pass and return a snapshot of trainable params."""
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         processing_class=tokenizer,
@@ -273,7 +273,7 @@ class TestDeviceFlagEffect:
         lora = _build_lora_model(model)
         ds = build_lm_dataset(["a b", "c d"], tokenizer, max_length=8)
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=lora,
             args=_args(tmp_path, use_cpu=True),
             processing_class=tokenizer,
@@ -303,7 +303,7 @@ class TestDeviceFlagEffect:
         ds = build_lm_dataset(["x", "y"], tokenizer, max_length=8)
 
         args = _args(tmp_path, use_cpu=True)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=lora,
             args=args,
             processing_class=tokenizer,
@@ -369,7 +369,7 @@ class TestPostInitIdempotency:
 
         args = _args(tmp_path)
 
-        DPTrainer(
+        Trainer(
             model=lora_a,
             args=args,
             processing_class=tokenizer,
@@ -383,7 +383,7 @@ class TestPostInitIdempotency:
         model_b = make_gpt2_model()
         model_b.config.pad_token_id = tokenizer.pad_token_id
         lora_b = _build_lora_model(model_b)
-        DPTrainer(
+        Trainer(
             model=lora_b,
             args=args,
             processing_class=tokenizer,

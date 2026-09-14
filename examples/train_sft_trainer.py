@@ -2,7 +2,7 @@
 
 Hands ``opaque.alignment`` primitives to
 :class:`opaque.transformers.trl.SFTTrainer`, which orchestrates the per-example
-DP path on top of ``DPTrainer``.
+DP path on top of ``Trainer``.
 
 Exposes the loss paths (``nll`` / ``dft`` / the fused logits-free
 ``chunked_nll``), a custom ``compute_loss_func`` (``--compute-loss-func``, valid

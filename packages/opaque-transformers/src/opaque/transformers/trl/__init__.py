@@ -1,10 +1,10 @@
-"""TRL-style DP trainers — public façade.
+"""TRL-style trainers — public façade.
 
 Implementation lives in :mod:`opaque.api.transformers.trl`.
 
 ``SFTTrainer`` / ``DPOTrainer`` mirror ``trl.SFTTrainer`` / ``trl.DPOTrainer``
 in structure and method names (iteration 1), built on Opaque's per-example DP
-:class:`~opaque.transformers.trainer.DPTrainer` and consuming the
+:class:`~opaque.transformers.trainer.Trainer` and consuming the
 ``opaque.alignment`` primitives.
 """
 

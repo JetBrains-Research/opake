@@ -1,17 +1,17 @@
-"""DP trainer state — standalone dataclass for :class:`DPTrainer`.
+"""Trainer state — standalone dataclass for :class:`opaque.transformers.Trainer`.
 
 Mirrors HF :class:`transformers.TrainerState`'s field *names* for the
 fields we use (so HF reporting callbacks duck-typing
 ``state.global_step``, ``state.epoch``, ``state.log_history`` keep
 working unchanged) without inheriting from it. The field surface is
-the subset we actually use, plus DPTrainer-specific privacy bookkeeping
+the subset we actually use, plus Trainer-specific privacy bookkeeping
 and an explicit serialisation ``version``.
 
 Dropped vs HF:
 
 - ``total_flos`` — FLOP counter never written by the DP path.
 
-HPO parity: HPO itself is not supported by DPTrainer (no
+HPO parity: HPO itself is not supported by Trainer (no
 ``hyperparameter_search`` entry point), but ``is_hyper_param_search``,
 ``trial_name``, and ``trial_params`` are kept on the state because HF's
 own reporting callbacks (WandB, TensorBoard, ClearML, Neptune, ...)
@@ -20,7 +20,7 @@ paths regardless of whether HPO is active. Defaults
 (``False`` / ``None`` / ``None``) route every HPO-guarded branch into
 its no-HPO arm — i.e. callbacks behave as in a normal non-HPO HF run.
 
-Schema divergence: ``trainer_state.json`` written by DPTrainer may
+Schema divergence: ``trainer_state.json`` written by Trainer may
 include privacy telemetry keys in ``log_history``. HF's strict
 :meth:`transformers.TrainerState.load_from_json` would reject; ours
 filters unknown top-level keys (forward compat).
@@ -32,16 +32,18 @@ import dataclasses
 import math
 from typing import Any
 
-__all__ = ["DPTrainerState"]
+__all__ = ["TrainerState"]
 
 
 @dataclasses.dataclass
-class DPTrainerState:
-    """Trainer state for DPTrainer (standalone; not a ``TrainerState`` subclass).
+class TrainerState:
+    """State for :class:`opaque.transformers.Trainer`.
+
+    This standalone dataclass does not inherit from ``transformers.TrainerState``.
 
     HF callbacks (TensorBoard, WandB, EarlyStoppingCallback, …) read
     ``state.global_step``, ``state.epoch``, ``state.log_history`` etc.
-    via attribute access — not ``isinstance(state, TrainerState)`` —
+    via attribute access — not ``isinstance(state, transformers.TrainerState)`` —
     so duck-typing parity is preserved by keeping the field names.
     """
 
@@ -67,14 +69,14 @@ class DPTrainerState:
     is_world_process_zero: bool = True
     stateful_callbacks: dict[str, Any] = dataclasses.field(default_factory=dict)
 
-    # HPO duck-typing parity: HPO is not supported on DPTrainer, but HF's
+    # HPO duck-typing parity: HPO is not supported on Trainer, but HF's
     # reporting callbacks read these attributes unconditionally on every
     # run (see module docstring).  Defaults route into the no-HPO arm.
     is_hyper_param_search: bool = False
     trial_name: str | None = None
     trial_params: dict[str, Any] | None = None
 
-    # DPTrainer-specific privacy bookkeeping
+    # Trainer-specific privacy bookkeeping
     privacy_resolved_delta: float | None = None
     privacy_resolved_noise_multiplier: float | None = None
     privacy_calibration_source: str | None = None
@@ -115,7 +117,7 @@ class DPTrainerState:
         return dataclasses.asdict(self)
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> DPTrainerState:
+    def from_json(cls, data: dict[str, Any]) -> TrainerState:
         """Reconstruct from a dict loaded from ``trainer_state.json``.
 
         Unknown keys are filtered (forward-compat with newer writers).

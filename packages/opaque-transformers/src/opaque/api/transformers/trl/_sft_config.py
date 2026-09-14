@@ -27,7 +27,7 @@ from ._sft_convert import _convert_trl_sft_config
 
 @dataclasses.dataclass
 class SFTConfig(TrainingArguments):
-    """Arguments for supervised fine-tuning on :class:`DPTrainer`.
+    """Arguments for supervised fine-tuning on :class:`Trainer`.
 
     Adds TRL-parity data-prep / loss fields on top of
     :class:`TrainingArguments`, keeping the TRL field names and defaults so the
@@ -80,7 +80,7 @@ class SFTConfig(TrainingArguments):
     loss_type: str = "nll"
 
     # ``activation_offloading`` is inherited from the base ``TrainingArguments``
-    # (shared by SFT and DPO); the base ``DPTrainer`` reads it.
+    # (shared by SFT and DPO); the base ``Trainer`` reads it.
 
     # ---- Telemetry -------------------------------------------------------
     #: Log the per-step completion-metric telemetry (``entropy``,

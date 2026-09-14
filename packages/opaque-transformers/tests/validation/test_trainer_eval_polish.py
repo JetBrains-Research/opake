@@ -1,6 +1,6 @@
 """Stage-4 eval polish: HF parity for prediction_step and EvalPrediction.inputs.
 
-DPTrainer's ``prediction_step`` previously returned only
+Trainer's ``prediction_step`` previously returned only
 ``output.logits`` — every auxiliary ``ModelOutput`` field
 (``hidden_states``, ``attentions``, ``encoder_last_hidden_state``,
 ``image_embeds``, …) was silently dropped, breaking
@@ -31,7 +31,7 @@ import torch
 from torch import Tensor
 from transformers.utils import ModelOutput
 
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 from opaque.transformers.trainer.types import TrainOutput
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -132,7 +132,7 @@ def test_per_example_loss_only_eval_uses_scalar_closure(tmp_path):
         {"features": torch.zeros(3), "labels": 0},
         {"features": torch.ones(3), "labels": 1},
     ]
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=_TinyEvalModel(),
         args=_args(tmp_path, include_for_metrics=["loss"]),
         train_dataset=dataset,
@@ -167,7 +167,7 @@ class TestPredictionStepUnlabeledAndTupleOutputs:
             {"features": torch.full((3,), -0.5), "labels": 1},
         ]
         model = _TinyEvalModel()
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(
                 tmp_path,
@@ -231,7 +231,7 @@ class TestPredictionStepUnlabeledAndTupleOutputs:
             {"features": torch.full((3,), -0.5), "labels": 1},
         ]
         model = _TinyEvalModel()
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(
                 tmp_path,
@@ -275,7 +275,7 @@ class TestPredictionStepUnlabeledAndTupleOutputs:
             {"features": torch.full((3,), 0.5), "labels": 0},
             {"features": torch.full((3,), -0.5), "labels": 1},
         ]
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyEvalModel(),
             args=_args(
                 tmp_path,
@@ -299,7 +299,7 @@ class TestPredictionStepUnlabeledAndTupleOutputs:
             {"features": torch.zeros(3), "labels": 0},
             {"features": torch.ones(3), "labels": 1},
         ]
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyEvalModel(),
             args=_args(tmp_path),
             train_dataset=dataset,
@@ -325,7 +325,7 @@ class TestPredictionStepUnlabeledAndTupleOutputs:
 
     def test_unlabeled_prediction_returns_logits_without_loss(self, tmp_path):
         dataset = [{"features": torch.zeros(3)} for _ in range(2)]
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyEvalModel(),
             args=_args(tmp_path),
             train_dataset=dataset,
@@ -348,7 +348,7 @@ class TestPredictionStepUnlabeledAndTupleOutputs:
     def test_tuple_output_rejected_with_typeerror(self, tmp_path):
         """``forward`` returning a tuple is rejected (not silently coerced).
 
-        DPTrainer's eval contract requires a dict-like ``ModelOutput``.
+        Trainer's eval contract requires a dict-like ``ModelOutput``.
         Bare tuples are HF cruft from pre-``ModelOutput`` model APIs;
         wrap your forward to return a dict.
         """
@@ -356,7 +356,7 @@ class TestPredictionStepUnlabeledAndTupleOutputs:
             {"features": torch.zeros(3), "labels": 0},
             {"features": torch.ones(3), "labels": 1},
         ]
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TupleEvalModel(),
             args=_args(tmp_path),
             train_dataset=dataset,
@@ -400,7 +400,7 @@ class TestPredictionStepLogitsCollapse:
         and must collapse to the raw ``logits`` tensor.
         """
         model, tokenizer = gpt2_lora_and_tokenizer
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path),
             processing_class=tokenizer,
@@ -437,7 +437,7 @@ class TestPredictionStepLogitsCollapse:
     ):
         """``prediction_loss_only=True`` skips logits/labels materialization."""
         model, tokenizer = gpt2_lora_and_tokenizer
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path),
             processing_class=tokenizer,
@@ -470,7 +470,7 @@ class _MultiOutputStubModel(torch.nn.Module):
     def __init__(self, output: Any) -> None:
         super().__init__()
         self._output = output
-        # DPTrainer's optimizer setup needs at least one trainable param.
+        # Trainer's optimizer setup needs at least one trainable param.
         self._noop = torch.nn.Linear(1, 1)
 
     def forward(self, **inputs):
@@ -501,7 +501,7 @@ class TestPredictionStepTupleCollapsePure:
     def test_multi_output_returns_tuple(self, tmp_path):
         """A model returning ``loss + logits + hidden_states`` exposes a tuple."""
         fake_out = self._make_fake_output()
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_MultiOutputStubModel(fake_out),
             args=_args(tmp_path),
             train_dataset=[
@@ -530,7 +530,7 @@ class TestPredictionStepTupleCollapsePure:
     def test_ignore_keys_drops_auxiliary_outputs(self, tmp_path):
         """``ignore_keys=["hidden_states"]`` collapses to a bare tensor."""
         fake_out = self._make_fake_output()
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_MultiOutputStubModel(fake_out),
             args=_args(tmp_path),
             train_dataset=[
@@ -592,7 +592,7 @@ class TestEvalPredictionInputsMainInputName:
             return {"dummy": 0.0}
 
         model, tokenizer = gpt2_lora_and_tokenizer
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path, include_for_metrics=["inputs"]),
             processing_class=tokenizer,
@@ -648,7 +648,7 @@ class TestEvalPredictionInputsMainInputName:
             return batch
 
         model, tokenizer = gpt2_lora_and_tokenizer
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path, include_for_metrics=["inputs"]),
             processing_class=tokenizer,
@@ -689,7 +689,7 @@ class TestEvalPredictionInputsMainInputName:
             return {"dummy": 0.0}
 
         model, tokenizer = gpt2_lora_and_tokenizer
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path),  # no include_for_metrics override
             processing_class=tokenizer,

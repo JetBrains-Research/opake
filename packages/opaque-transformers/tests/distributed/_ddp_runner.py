@@ -1,4 +1,4 @@
-"""Subprocess-launchable DDP test runner for DPTrainer.
+"""Subprocess-launchable DDP test runner for Trainer.
 
 Launched by ``test_ddp_trainer.py`` via ``subprocess.Popen`` (one process
 per rank). Receives ``RANK`` / ``LOCAL_RANK`` / ``WORLD_SIZE`` /
@@ -32,7 +32,7 @@ from transformers import PretrainedConfig, PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutput
 from transformers.trainer_callback import TrainerCallback
 
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 
 class TinyConfig(PretrainedConfig):
@@ -169,9 +169,7 @@ def scenario_runtime_foundation(
         use_compat_patches=False,
     )
     ds = TinyDataset(n=32, seq_len=8, vocab=cfg.vocab_size)
-    trainer = DPTrainer(
-        model=model, args=args, train_dataset=ds, data_collator=_collate
-    )
+    trainer = Trainer(model=model, args=args, train_dataset=ds, data_collator=_collate)
 
     # Rank/world plumbing.
     assert trainer._ddp.is_distributed
@@ -268,7 +266,7 @@ def _run_eval_gather_case(
         captured["labels"] = labels
         return {"accuracy": float((predictions.argmax(-1) == labels).float().mean())}
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=train_ds,
@@ -361,7 +359,7 @@ def scenario_batch_eval_metrics(
             return {"seen": float(running["seen"])}
         return {}
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=train_ds,
@@ -391,7 +389,7 @@ def scenario_rank_gating_and_worker_seed(
         use_cpu=use_cpu,
         use_compat_patches=False,
     )
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=TinyDataset(8, 4, cfg.vocab_size),
@@ -489,7 +487,7 @@ def scenario_push_to_hub_no_deadlock(
             return_value=MagicMock(),
         ) as mock_upload,
     ):
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model, args=args, train_dataset=ds, data_collator=_collate
         )
         trainer.train()
@@ -520,7 +518,7 @@ def scenario_env_backend_diagnostic(
         use_compat_patches=False,
     )
     try:
-        DPTrainer(
+        Trainer(
             model=model,
             args=args,
             train_dataset=TinyDataset(8, 4, cfg.vocab_size),
@@ -530,7 +528,7 @@ def scenario_env_backend_diagnostic(
         msg = str(exc)
         assert "ddp_backend='xccl'" in msg or 'ddp_backend="xccl"' in msg
         return
-    raise AssertionError("Expected DPTrainer to fail fast for unavailable xccl runtime")
+    raise AssertionError("Expected Trainer to fail fast for unavailable xccl runtime")
 
 
 def scenario_checkpoint_save_failure(
@@ -564,7 +562,7 @@ def scenario_checkpoint_save_failure(
         use_compat_patches=False,
     )
     ds = TinyDataset(n=8, seq_len=4, vocab=cfg.vocab_size)
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=args,
         train_dataset=ds,
@@ -608,9 +606,7 @@ def scenario_non_divisible_population_trimmed(
     # ``world_size * 4 + 1`` is never a multiple of ``world_size``.
     n = world_size * 4 + 1
     ds = TinyDataset(n=n, seq_len=4, vocab=cfg.vocab_size)
-    trainer = DPTrainer(
-        model=model, args=args, train_dataset=ds, data_collator=_collate
-    )
+    trainer = Trainer(model=model, args=args, train_dataset=ds, data_collator=_collate)
     trainer._ctx = trainer._setup_training()
     local_len = len(trainer.get_train_dataloader().dataset)
     gathered = [None] * world_size

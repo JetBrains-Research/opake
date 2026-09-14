@@ -4,7 +4,7 @@
 Transformers models work under `torch.func.vmap(grad(...))` and
 provides fused Triton kernels for the hot ops on the forward /
 backward path. It predates and operates independently of
-`DPTrainer` — any code that drives DP-SGD over HF models (the
+`Trainer` — any code that drives DP-SGD over HF models (the
 trainer, a hand-rolled training loop, a custom orchestration layer)
 can use the same APIs.
 
@@ -414,7 +414,7 @@ expected shape, it is a no-op.
 For an arbitrary `nn.Module` used downstream of `make_functional`,
 the `forward` should return a dict-like `ModelOutput` (or any
 `Mapping` with `"loss"` and optionally `"logits"`) so consumers like
-`DPTrainer.prediction_step` can read named fields.  Wrap if needed:
+`Trainer.prediction_step` can read named fields.  Wrap if needed:
 
 ```python
 class MyModel(torch.nn.Module):
@@ -430,11 +430,11 @@ class MyModel(torch.nn.Module):
 
 If the model is already vmap-safe and doesn't need opaque's compat
 shims, pass `compat=False` to `apply_model_patches` (or
-`use_compat_patches=False` to DPTrainer).
+`use_compat_patches=False` to Trainer).
 
-## DPTrainer integration
+## Trainer integration
 
-`DPTrainer` calls `apply_runtime_patches(...)` and
+`Trainer` calls `apply_runtime_patches(...)` and
 `apply_model_patches(model, ...)` during `__init__`, driven by three
 `TrainingArguments` fields — using the trainer doesn't require calling
 the patch APIs directly:
@@ -466,6 +466,6 @@ args = TrainingArguments(
   the `partition_trainable=True` flag for PEFT / LoRA training.
 - [Memory Optimizations](../memory-optimizations.md) — kernel
   benchmarks and gradient checkpointing.
-- [DPTrainer](dptrainer.md) — when the trainer drives the patch
+- [Trainer](trainer.md) — when the trainer drives the patch
   surface for you.
 - [Distributed Training](../distributed-trainer.md) — DDP specifics.

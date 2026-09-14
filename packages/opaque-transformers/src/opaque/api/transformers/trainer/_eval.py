@@ -1,11 +1,11 @@
-"""Evaluation helpers for :class:`DPTrainer`.
+"""Evaluation helpers for :class:`Trainer`.
 
 This module hosts the Opaque-owned eval container plus pure helpers used
 by the eval loop:
 
 - :class:`EvaluationResult` — single dataclass returned by
-  :meth:`DPTrainer.evaluate`, :meth:`DPTrainer.predict`, and
-  :meth:`DPTrainer.evaluation_loop`.  Replaces HF's split
+  :meth:`Trainer.evaluate`, :meth:`Trainer.predict`, and
+  :meth:`Trainer.evaluation_loop`.  Replaces HF's split
   ``EvalLoopOutput`` / ``PredictionOutput`` pair.
 - :class:`_PredictionAccumulator` — collects per-batch losses, predictions,
   labels, and (optionally) inputs across an eval loop, with bounded device and

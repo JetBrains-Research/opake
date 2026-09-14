@@ -1,6 +1,6 @@
-"""Callback handler construction for DPTrainer.
+"""Callback handler construction for Trainer.
 
-DPTrainer uses HF's :class:`transformers.trainer_callback.CallbackHandler`
+Trainer uses HF's :class:`transformers.trainer_callback.CallbackHandler`
 and :class:`~transformers.trainer_callback.DefaultFlowCallback` directly.
 This module just bundles the construction pattern HF's ``Trainer``
 applies internally:
@@ -21,7 +21,7 @@ functional optimizer + ``Callable[[int], float]`` schedule have no
 those slots see ``None``.
 
 DP semantic note: ``on_substep_end`` is part of HF's hook surface but is
-**not fired** by DPTrainer.  Each iteration of DP-SGD is one atomic
+**not fired** by Trainer.  Each iteration of DP-SGD is one atomic
 optimizer step (the Poisson round); there is no substep concept.  HF
 callbacks that override ``on_substep_end`` will simply not be invoked.
 """
@@ -67,7 +67,7 @@ def resolve_eval_metric(
 
     Returns ``(resolved_key, value)`` if found, else ``None``.  Matches the
     key-resolution rule used by HF (and historically by
-    :meth:`DPTrainer._update_best_metric`): try the raw key first; if absent
+    :meth:`Trainer._update_best_metric`): try the raw key first; if absent
     and the key doesn't already start with ``"eval_"``, try the prefixed
     form.  Returns ``None`` when ``metric_for_best_model`` is ``None``, the
     metric dict is empty, or the key isn't present under either spelling —
@@ -321,18 +321,18 @@ class BestModelSaveCallback(TrainerCallback):
 
     HF's :class:`DefaultFlowCallback` recognises ``save_strategy="steps"``
     and ``"epoch"`` but not ``"best"``.  This callback fills that gap.
-    Auto-injected by :class:`DPTrainer` when ``save_strategy == "best"`` or
+    Auto-injected by :class:`Trainer` when ``save_strategy == "best"`` or
     ``load_best_model_at_end=True`` (so best always lands on a saved step).
 
     Timing
     ------
-    ``on_evaluate`` fires inside :meth:`DPTrainer._after_evaluate`, *before*
-    :meth:`DPTrainer._update_best_metric` runs in the caller.  So when this
+    ``on_evaluate`` fires inside :meth:`Trainer._after_evaluate`, *before*
+    :meth:`Trainer._update_best_metric` runs in the caller.  So when this
     callback fires, ``state.best_metric`` still holds the *previous* best —
     the same precondition :class:`~transformers.EarlyStoppingCallback` relies
     on.  We therefore compute the improvement comparison ourselves rather
     than reading post-update state.  The trainer's separate
-    :meth:`~DPTrainer._update_best_metric` call records the new best under
+    :meth:`~Trainer._update_best_metric` call records the new best under
     the canonical attribute names; the two stay in sync because both use
     :func:`is_metric_improved` against the same operands.
     """

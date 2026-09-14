@@ -159,7 +159,7 @@ Everything else lives in the relevant package's
 ## Patching model (on-import)
 
 `opaque.patches` exposes explicit entry points. `opaque.transformers`
-does not patch Hugging Face globals at import time; `DPTrainer`
+does not patch Hugging Face globals at import time; `Trainer`
 applies runtime and model patches during construction, and non-trainer
 flows should call `opaque.patches.apply_runtime_patches()` once plus
 `opaque.patches.apply_model_patches(model)` for each model instance.

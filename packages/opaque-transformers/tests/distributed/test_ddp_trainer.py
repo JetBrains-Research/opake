@@ -1,4 +1,4 @@
-"""DDP end-to-end tests for :class:`DPTrainer`.
+"""DDP end-to-end tests for :class:`Trainer`.
 
 Each test launches N rank workers via ``subprocess.Popen`` (one per rank)
 running :mod:`_ddp_runner` with the right ``RANK`` / ``LOCAL_RANK`` /
@@ -237,7 +237,7 @@ def test_gloo_checkpoint_save_failure_propagates_to_all_ranks(tmp_path) -> None:
 @pytest.mark.slow
 @pytest.mark.distributed
 def test_gloo_non_divisible_population_trimmed() -> None:
-    """DPTrainer trims N % world_size != 0 to an equal shard length on every rank."""
+    """Trainer trims N % world_size != 0 to an equal shard length on every rank."""
     _run_ddp("non_divisible_population_trimmed", world_size=2, backend="gloo")
 
 

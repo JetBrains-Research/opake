@@ -39,7 +39,7 @@ def test_process_registry_contains_composition_nodes() -> None:
 def test_cached_composed_repeated_roundtrips_via_json() -> None:
     """``cached(compose(repeat(EpsDelta, 3), EpsDelta))`` must round-trip.
 
-    Mirrors the structural pattern DPTrainer writes into its accountant
+    Mirrors the structural pattern Trainer writes into its accountant
     checkpoint: a cached opaque-boundary at the top, a Composed node
     splicing the prior phase's repeated step, and a Repeated wrapper
     for the homogeneous repetition.  This is the exact tree shape that

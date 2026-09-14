@@ -1,6 +1,6 @@
-# Distributed DPTrainer
+# Distributed Trainer
 
-`DPTrainer` supports multi-process DDP without Accelerate runtime ownership.
+`Trainer` supports multi-process DDP without Accelerate runtime ownership.
 This page documents the backend matrix, DP-specific distributed semantics, and
 the safe Hugging Face parity subset.
 
@@ -11,7 +11,7 @@ the safe Hugging Face parity subset.
 - Not supported: FSDP, DeepSpeed, TPU/XLA runtime ownership, Accelerate
   `DataLoaderConfiguration` knobs that conflict with Poisson DP semantics.
 
-`DPTrainer` expects the process group to be initialized externally and then
+`Trainer` expects the process group to be initialized externally and then
 validates that runtime against `TrainingArguments.ddp_backend`.
 
 ## Backend matrix
@@ -26,10 +26,10 @@ vendor runtime stacks and fail fast when unavailable.
 
 ## Launch pattern
 
-Use one process per rank:
+From the repository root, use one process per rank:
 
 ```bash
-torchrun --nproc-per-node=4 train_dp_trainer.py
+torchrun --nproc-per-node=4 examples/train_dpsgd_trainer.py
 ```
 
 ```python
@@ -52,7 +52,7 @@ args = TrainingArguments(
   `parallel_poisson` accounting.
 
 `per_rank` requires the public, fixed training population length to be evenly
-divisible by `WORLD_SIZE`. When it isn't, `DPTrainer` drops the remaining
+divisible by `WORLD_SIZE`. When it isn't, `Trainer` drops the remaining
 tail examples and logs a warning; the dropped tail changes both the
 sharding and the accounting sample-rate denominator.
 
@@ -78,7 +78,7 @@ Intentionally not exposed from Accelerate-style config:
 - `split_batches`, `dispatch_batches`, `even_batches`, `use_seedable_sampler`.
 
 These knobs conflict with Poisson-sampling semantics or imply batching behavior
-that `DPTrainer` does not implement.
+that `Trainer` does not implement.
 
 ## Rank-gated side effects
 

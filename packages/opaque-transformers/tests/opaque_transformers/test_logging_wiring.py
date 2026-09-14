@@ -15,7 +15,7 @@ import torch
 from transformers.utils import logging as hf_logging
 
 from opaque.api.transformers.trainer._distributed import DDPState, apply_logging
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opaque.transformers.trainer import Trainer, TrainingArguments
 
 
 @pytest.fixture
@@ -107,10 +107,10 @@ def test_hf_baseline_respects_use_cpu_for_runtime_defaults(tmp_path):
 
 
 def test_apply_logging_runs_at_trainer_construction(tmp_path, restore_logging):
-    """The wiring call site (``DPTrainer.__init__`` -> ``apply_logging``) fires.
+    """The wiring call site (``Trainer.__init__`` -> ``apply_logging``) fires.
 
     Guards the fix against silently reverting to "accepted but never consumed":
-    deleting the ``apply_logging`` call in ``DPTrainer.__init__`` makes this fail.
+    deleting the ``apply_logging`` call in ``Trainer.__init__`` makes this fail.
     """
     model = torch.nn.Linear(4, 2)
     dummy_dataset = [{"x": torch.zeros(4)}]
@@ -121,5 +121,5 @@ def test_apply_logging_runs_at_trainer_construction(tmp_path, restore_logging):
         max_steps=1,
         save_strategy="no",
     )
-    DPTrainer(model=model, args=args, train_dataset=dummy_dataset, eval_dataset=None)
+    Trainer(model=model, args=args, train_dataset=dummy_dataset, eval_dataset=None)
     assert hf_logging.get_verbosity() == 40  # log_level="error" applied in __init__

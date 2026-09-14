@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Opaque Authors
 # SPDX-License-Identifier: Apache-2.0
-"""Fast end-to-end smoke tests for DPTrainer + DP-FTRL.
+"""Fast end-to-end smoke tests for Trainer + DP-FTRL.
 
 Uses a tiny embedded LM (no HF model load) so the full
 mechanism-dispatch surface — strategy construction, amplifier wiring,
@@ -23,7 +23,7 @@ import torch
 from torch.utils.data import Dataset
 
 from opaque.api.transformers.trainer import _dpftrl
-from opaque.api.transformers.trainer._dp_trainer import DPTrainer
+from opaque.api.transformers.trainer._trainer import Trainer
 from opaque.exceptions import CheckpointError, ConfigurationError
 from opaque.transformers import TrainingArguments
 
@@ -135,7 +135,7 @@ class TestDpFtrlTrain:
             max_steps=max_steps,
         )
         torch.manual_seed(0)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -155,7 +155,7 @@ class TestDpFtrlTrain:
         )
         args.logging_strategy = "steps"
         args.logging_steps = 1
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -184,7 +184,7 @@ class TestDpFtrlSamplerDispatch:
             noise_multiplier=None,
             target_epsilon=8.0,
         )
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -208,7 +208,7 @@ class TestDpFtrlSamplerDispatch:
         from opaque.api.transformers.trainer import _dpftrl
 
         args = _args(output_dir=str(tmp_path), mechanism="mf_band", max_steps=16)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -254,7 +254,7 @@ class TestDpFtrlSamplerDispatch:
             max_steps=max_steps,
         )
         torch.manual_seed(0)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -286,7 +286,7 @@ class TestDpFtrlSamplerDispatch:
             max_steps=16,
         )
         torch.manual_seed(0)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -318,7 +318,7 @@ class TestDpFtrlSamplerDispatch:
         assert sampler.sample_rate == pytest.approx(accountant_process.sample_rate)
 
 
-class TestDpTrainerAllocationModes:
+class TestTrainerAllocationModes:
     @pytest.mark.parametrize(
         ("mechanism", "sampling_mode", "max_steps", "allocation"),
         [
@@ -341,7 +341,7 @@ class TestDpTrainerAllocationModes:
             max_steps=max_steps,
             **kwargs,
         )
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -378,7 +378,7 @@ class TestDpFtrlCheckpointRoundTrip:
             save_steps=4,
         )
         torch.manual_seed(0)
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=_TinyLM(),
             args=args1,
             train_dataset=ds,
@@ -407,7 +407,7 @@ class TestDpFtrlCheckpointRoundTrip:
             save_steps=4,
         )
         torch.manual_seed(123)
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=_TinyLM(),
             args=args2,
             train_dataset=ds,
@@ -439,7 +439,7 @@ class TestDpFtrlCheckpointRoundTrip:
 
         outdir = tmp_path / "k-out-of-t"
         ds = _TinyDS()
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(outdir),
@@ -463,7 +463,7 @@ class TestDpFtrlCheckpointRoundTrip:
             runtime.sampler_state["k"] = 1
             torch.save(runtime, runtime_path)
 
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(tmp_path / "k-out-of-t-resumed"),
@@ -494,7 +494,7 @@ class TestDpFtrlCheckpointRoundTrip:
     def test_mf_resume_rejects_same_shape_strategy_drift(self, tmp_path):
         outdir = tmp_path / "mf-strategy-drift"
         ds = _TinyDS()
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(outdir),
@@ -516,7 +516,7 @@ class TestDpFtrlCheckpointRoundTrip:
             "bands": 4,
             "momentum": 0.5,
         }
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=_TinyLM(),
             args=resumed_args,
             train_dataset=ds,
@@ -529,7 +529,7 @@ class TestDpFtrlCheckpointRoundTrip:
     def test_calibrated_horizon_resume_restores_noise_multiplier(self, tmp_path):
         outdir = tmp_path / "calibrated"
         ds = _TinyDS()
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(outdir),
@@ -544,7 +544,7 @@ class TestDpFtrlCheckpointRoundTrip:
         )
         original = trainer1.train()
 
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(tmp_path / "calibrated-resumed"),
@@ -568,7 +568,7 @@ class TestDpFtrlCheckpointRoundTrip:
     def test_calibrated_horizon_resume_rejects_target_drift(self, tmp_path):
         outdir = tmp_path / "calibrated-target-drift"
         ds = _TinyDS()
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(outdir),
@@ -583,7 +583,7 @@ class TestDpFtrlCheckpointRoundTrip:
         )
         trainer1.train()
 
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(tmp_path / "calibrated-target-drift-resumed"),
@@ -602,7 +602,7 @@ class TestDpFtrlCheckpointRoundTrip:
     def test_fixed_horizon_resume_rejects_calibrated_mode(self, tmp_path):
         outdir = tmp_path / "fixed-to-calibrated"
         ds = _TinyDS()
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(outdir),
@@ -616,7 +616,7 @@ class TestDpFtrlCheckpointRoundTrip:
         )
         trainer1.train()
 
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(tmp_path / "fixed-to-calibrated-resumed"),
@@ -635,7 +635,7 @@ class TestDpFtrlCheckpointRoundTrip:
     def test_fixed_horizon_resume_rejects_noise_multiplier_drift(self, tmp_path):
         outdir = tmp_path / "fixed-noise"
         ds = _TinyDS()
-        trainer1 = DPTrainer(
+        trainer1 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(outdir),
@@ -649,7 +649,7 @@ class TestDpFtrlCheckpointRoundTrip:
         )
         trainer1.train()
 
-        trainer2 = DPTrainer(
+        trainer2 = Trainer(
             model=_TinyLM(),
             args=_args(
                 output_dir=str(tmp_path / "fixed-noise-resumed"),
@@ -719,7 +719,7 @@ class TestDpFtrlLrScheduleIntegration:
                 seed=0,
             )
             torch.manual_seed(0)
-            trainer = DPTrainer(
+            trainer = Trainer(
                 model=_TinyLM(),
                 args=args,
                 train_dataset=_TinyDS(),
@@ -763,7 +763,7 @@ class TestDpFtrlLrScheduleIntegration:
         # From-scratch run.
         args = TrainingArguments(output_dir=str(outdir), **kwargs)
         torch.manual_seed(0)
-        t1 = DPTrainer(
+        t1 = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -787,7 +787,7 @@ class TestDpFtrlLrScheduleIntegration:
         outdir2 = tmp_path / "bandmf_cosine_resumed"
         args2 = TrainingArguments(output_dir=str(outdir2), **kwargs)
         torch.manual_seed(0)
-        t2 = DPTrainer(
+        t2 = Trainer(
             model=_TinyLM(),
             args=args2,
             train_dataset=_TinyDS(),
@@ -812,7 +812,7 @@ class TestGaussianPathUnchanged:
             max_steps=4,
         )
         torch.manual_seed(0)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -843,7 +843,7 @@ class TestNonPrivateZeroNoise:
             noise_multiplier=0.0,
         )
         torch.manual_seed(0)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),
@@ -871,7 +871,7 @@ class TestNonPrivateZeroNoise:
                 noise_multiplier=0.0,
             )
             torch.manual_seed(0)
-            trainer = DPTrainer(
+            trainer = Trainer(
                 model=_TinyLM(),
                 args=args,
                 train_dataset=_TinyDS(),
@@ -896,7 +896,7 @@ class TestNonPrivateZeroNoise:
         )
         assert math.isinf(args.clipping_norm)
         torch.manual_seed(0)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=_TinyLM(),
             args=args,
             train_dataset=_TinyDS(),

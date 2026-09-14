@@ -1,4 +1,4 @@
-"""DP Trainer public façade.
+"""Trainer public façade.
 
 Implementation lives in :mod:`opaque.api.transformers.trainer`.
 """
@@ -6,14 +6,14 @@ Implementation lives in :mod:`opaque.api.transformers.trainer`.
 from __future__ import annotations
 
 from opaque.api.transformers.trainer import (
-    DPTrainer,
+    Trainer,
     TrainingArguments,
 )
 
 from . import types
 
 __all__ = [
-    "DPTrainer",
+    "Trainer",
     "TrainingArguments",
     "types",
 ]
