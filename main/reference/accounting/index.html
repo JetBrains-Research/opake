@@ -4643,7 +4643,11 @@ safe endpoint reaches the requested relative tolerance, <code>calibrate()</code>
 <p>When the process uses a Monte Carlo PLD, calibration divides the configured
 failure probability across the two endpoint probes and at most
 <code>max_iterations</code> interior probes. <code>result.mc_confidence</code> therefore covers the
-adaptive search as a whole rather than only its selected final parameter.</p>
+adaptive search as a whole rather than only its selected final parameter.
+Balls-in-Bins calibration also reuses its seeded, sigma-independent projected
+draws across probes when they fit the bounded native cache. Set
+<code>OPAQUE_BNB_TRANSCRIPT_CACHE_MAX_BYTES</code> to control its memory cap (4 GiB by
+default), or to <code>0</code> to use the lower-memory one-shot path for every probe.</p>
 <p>Calibrating a second stage against the remaining budget (see
 <a href="#seeding-with-a-prior-process">Seeding with a prior process</a>): pass the
 earlier run's executed process as <code>prefix</code>. Each probe evaluates
