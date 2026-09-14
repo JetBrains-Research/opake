@@ -9,5 +9,9 @@
 
 pub(crate) mod cyclic_cholesky;
 pub mod monte_carlo;
+mod registry;
 
 pub use monte_carlo::bnb_mc_pld;
+pub use registry::{
+    bnb_pld_from_transcript_handle, drop_bnb_transcript_handle, register_bnb_transcripts,
+};

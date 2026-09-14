@@ -116,6 +116,53 @@ pub fn py_bnb_mc_pld(
     Ok(PyPld::new(pld))
 }
 
+#[pyfunction]
+#[pyo3(
+    name = "register_bnb_transcript_corpus",
+    signature = (gram, num_bins, num_samples, seed)
+)]
+pub fn py_register_bnb_transcript_corpus(
+    gram: Vec<f64>,
+    num_bins: usize,
+    num_samples: usize,
+    seed: u64,
+) -> PyResult<u64> {
+    Ok(crate::amplification::register_bnb_transcripts(
+        &gram,
+        num_bins,
+        num_samples,
+        seed,
+    )?)
+}
+
+#[pyfunction]
+#[pyo3(name = "drop_bnb_transcript_corpus", signature = (handle))]
+pub fn py_drop_bnb_transcript_corpus(handle: u64) {
+    crate::amplification::drop_bnb_transcript_handle(handle);
+}
+
+#[pyfunction]
+#[pyo3(
+    name = "bnb_pld_from_transcript_handle",
+    signature = (handle, gram, num_bins, sigma, config)
+)]
+pub fn py_bnb_pld_from_transcript_handle(
+    handle: u64,
+    gram: Vec<f64>,
+    num_bins: usize,
+    sigma: f64,
+    config: &PyDiscretizationConfig,
+) -> PyResult<PyPld> {
+    let pld = crate::amplification::bnb_pld_from_transcript_handle(
+        handle,
+        &gram,
+        num_bins,
+        sigma,
+        &config.inner,
+    )?;
+    Ok(PyPld::new(pld))
+}
+
 /// Monte Carlo PLD for BandMF with warm-start b-min-sep subsampling (Dong & Ganesh, arXiv:2602.09338).
 ///
 /// Args:

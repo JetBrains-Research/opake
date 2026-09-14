@@ -67,6 +67,8 @@ from opaque.api.dpftrl.noise._lambda_cgd import LambdaCgdStrategy
 from opaque.api.dpftrl.noise._schedule_fingerprint import strategy_cache_key
 from opaque.exceptions import ConfigurationError, InputTypeError
 
+from ._balls_in_bins_transcript_cache import with_handle as _with_transcript_handle
+
 if TYPE_CHECKING:
     from opaque.api.accounting.core._base import Pld
 
@@ -225,8 +227,25 @@ class BallsInBins(DpHorizonProcess):
                 max_participations=self.max_participations,
             )
         config.warn_if_large_mc()
+        pinned_gram = tuple(gram)
+        result = _with_transcript_handle(
+            pinned_gram,
+            self.num_bins,
+            config.resolved_num_mc_samples,
+            config.seed,
+            lambda handle: _native.bnb_pld_from_transcript_handle(
+                handle,
+                list(pinned_gram),
+                self.num_bins,
+                self.inner.noise_multiplier,
+                native_cfg,
+            ),
+            native=_native,
+        )
+        if result is not None:
+            return result
         return _native.bnb_mc_pld(
-            list(gram),
+            list(pinned_gram),
             self.num_bins,
             self.inner.noise_multiplier,
             native_cfg,

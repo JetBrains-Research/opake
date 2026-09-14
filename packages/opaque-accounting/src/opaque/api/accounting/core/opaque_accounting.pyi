@@ -482,6 +482,26 @@ def bnb_mc_pld(
         The privacy loss distribution (asymmetric).
     """
 
+def register_bnb_transcript_corpus(
+    gram: list[float],
+    num_bins: int,
+    num_samples: int,
+    seed: int,
+) -> int:
+    """Allocate BnB projected draws in Rust; return a reusable handle."""
+
+def drop_bnb_transcript_corpus(handle: int) -> None:
+    """Free a corpus allocated by ``register_bnb_transcript_corpus``."""
+
+def bnb_pld_from_transcript_handle(
+    handle: int,
+    gram: list[float],
+    num_bins: int,
+    sigma: float,
+    config: DiscretizationConfig,
+) -> Pld:
+    """Build a BnB PLD from a registered corpus at sigma."""
+
 def mf_gaussian_pld(
     noise_multiplier: float,
     sensitivity: float,

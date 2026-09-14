@@ -741,6 +741,10 @@ When the process uses a Monte Carlo PLD, calibration divides the configured
 failure probability across the two endpoint probes and at most
 `max_iterations` interior probes. `result.mc_confidence` therefore covers the
 adaptive search as a whole rather than only its selected final parameter.
+Balls-in-Bins calibration also reuses its seeded, sigma-independent projected
+draws across probes when they fit the bounded native cache. Set
+`OPAQUE_BNB_TRANSCRIPT_CACHE_MAX_BYTES` to control its memory cap (4 GiB by
+default), or to `0` to use the lower-memory one-shot path for every probe.
 
 Calibrating a second stage against the remaining budget (see
 [Seeding with a prior process](#seeding-with-a-prior-process)): pass the

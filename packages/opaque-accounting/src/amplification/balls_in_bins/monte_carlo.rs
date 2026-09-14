@@ -54,6 +54,38 @@ fn shard_seed(seed: u64, shard: usize, add_direction: bool) -> u64 {
     seed.wrapping_add((shard as u64) * 2 + u64::from(add_direction))
 }
 
+fn validate_and_factor(gram: &[f64], b: usize, sigma: Option<f64>) -> Result<CyclicBandedCholesky> {
+    if gram.len() != b * b {
+        return Err(PldError::InvalidParameter(format!(
+            "Gram matrix size {} doesn't match num_bins²={}",
+            gram.len(),
+            b * b
+        )));
+    }
+    if let Some(value) = sigma {
+        if value <= 0.0 {
+            return Err(PldError::InvalidParameter(format!(
+                "sigma must be > 0, got {}",
+                value
+            )));
+        }
+    }
+
+    let chol = CyclicBandedCholesky::compute(gram, b, 1e-6)?;
+    let max_diag = (0..b).map(|i| gram[i * b + i]).fold(0.0f64, f64::max);
+    let residual = chol.max_residual(gram);
+    if residual > 1e-8 * max_diag.max(1.0) {
+        return Err(PldError::NumericalError(format!(
+            "Cholesky does not reproduce the Gram matrix: max|G - LLᵀ| = {} \
+             (tolerance {}, b={}). The sampled covariance would not be G.",
+            residual,
+            1e-8 * max_diag.max(1.0),
+            b
+        )));
+    }
+    Ok(chol)
+}
+
 /// Sample one privacy loss value from the BnB dominating pair.
 ///
 /// For the "remove" direction: X ~ P, Y = log(P(X)/Q(X))
@@ -155,37 +187,9 @@ pub fn bnb_mc_pld(
     let num_samples = config.resolved_num_mc_samples(2)?;
     let seed = config.seed;
 
-    if gram.len() != b * b {
-        return Err(PldError::InvalidParameter(format!(
-            "Gram matrix size {} doesn't match num_bins²={}",
-            gram.len(),
-            b * b
-        )));
-    }
-    if sigma <= 0.0 {
-        return Err(PldError::InvalidParameter(format!(
-            "sigma must be > 0, got {}",
-            sigma
-        )));
-    }
     // Cyclically banded Cholesky: the Gram wraps, so a linear band would
     // discard the corner (up to ~68% of the diagonal for λ-CGD).
-    let chol = CyclicBandedCholesky::compute(gram, b, 1e-6)?;
-
-    // The factorisation must actually reproduce the Gram it was handed —
-    // otherwise the sampler draws u ~ N(m_i, σ²·LLᵀ) from the wrong
-    // covariance, which is not conservative in either direction.
-    let max_diag = (0..b).map(|i| gram[i * b + i]).fold(0.0f64, f64::max);
-    let residual = chol.max_residual(gram);
-    if residual > 1e-8 * max_diag.max(1.0) {
-        return Err(PldError::NumericalError(format!(
-            "Cholesky does not reproduce the Gram matrix: max|G - LLᵀ| = {} \
-             (tolerance {}, b={}). The sampled covariance would not be G.",
-            residual,
-            1e-8 * max_diag.max(1.0),
-            b
-        )));
-    }
+    let chol = validate_and_factor(gram, b, Some(sigma))?;
 
     let sigma2 = sigma * sigma;
     let inv_2sig2 = 1.0 / (2.0 * sigma2);
@@ -249,6 +253,168 @@ pub fn bnb_mc_pld(
     let (pmf_remove, remove_resolution) = samples_to_pmf(&mut remove_samples, config, 2)?;
     let (pmf_add, add_resolution) = samples_to_pmf(&mut add_samples, config, 2)?;
 
+    Ok(
+        PrivacyLossDistribution::new_asymmetric(pmf_remove, pmf_add).with_monte_carlo_guarantee(
+            config.mc_failure_probability,
+            remove_resolution.max(add_resolution),
+        ),
+    )
+}
+
+/// Prepare sigma-independent BnB draws for reuse across calibration probes.
+///
+/// The projected standard-normal draws `Lz` are retained rather than raw `z`,
+/// avoiding both RNG and cyclic Cholesky work on every subsequent sigma.
+pub(crate) fn bnb_prepare_transcripts(
+    gram: &[f64],
+    num_bins: usize,
+    num_samples: usize,
+    seed: u64,
+) -> Result<(Vec<usize>, Vec<f64>, Vec<f64>)> {
+    if num_samples == 0 {
+        return Err(PldError::InvalidParameter("num_samples must be > 0".into()));
+    }
+    let b = num_bins;
+    let cells = num_samples
+        .checked_mul(b)
+        .ok_or_else(|| PldError::InvalidParameter("sample count and bins are too large".into()))?;
+    let chol = validate_and_factor(gram, b, None)?;
+    let shard_cells = SAMPLES_PER_SHARD
+        .checked_mul(b)
+        .ok_or_else(|| PldError::InvalidParameter("sample shard is too large".into()))?;
+
+    let mut remove_components = vec![0usize; num_samples];
+    let mut remove_lz = vec![0.0; cells];
+    let mut add_lz = vec![0.0; cells];
+    let zero_mean = vec![0.0; b];
+
+    rayon::join(
+        || {
+            remove_components
+                .par_chunks_mut(SAMPLES_PER_SHARD)
+                .zip(remove_lz.par_chunks_mut(shard_cells))
+                .enumerate()
+                .for_each(|(shard, (components, projected))| {
+                    let mut rng = StdRng::seed_from_u64(shard_seed(seed, shard, false));
+                    let mut z = vec![0.0; b];
+                    for (component, lz) in components.iter_mut().zip(projected.chunks_mut(b)) {
+                        *component = rng.random_range(0..b);
+                        for value in &mut z {
+                            *value = rng.sample::<f64, _>(StandardNormal);
+                        }
+                        chol.sample_gaussian(&zero_mean, 1.0, &z, lz);
+                    }
+                });
+        },
+        || {
+            add_lz
+                .par_chunks_mut(shard_cells)
+                .enumerate()
+                .for_each(|(shard, projected)| {
+                    let mut rng = StdRng::seed_from_u64(shard_seed(seed, shard, true));
+                    let mut z = vec![0.0; b];
+                    for lz in projected.chunks_mut(b) {
+                        for value in &mut z {
+                            *value = rng.sample::<f64, _>(StandardNormal);
+                        }
+                        chol.sample_gaussian(&zero_mean, 1.0, &z, lz);
+                    }
+                });
+        },
+    );
+    Ok((remove_components, remove_lz, add_lz))
+}
+
+/// Build a BnB PLD from sigma-independent projected draws.
+pub(crate) fn bnb_pld_from_transcripts(
+    gram: &[f64],
+    num_bins: usize,
+    remove_components: &[usize],
+    remove_lz: &[f64],
+    add_lz: &[f64],
+    sigma: f64,
+    config: &DiscretizationConfig,
+) -> Result<PrivacyLossDistribution> {
+    let b = num_bins;
+    if gram.len() != b * b {
+        return Err(PldError::InvalidParameter(format!(
+            "Gram matrix size {} doesn't match num_bins²={}",
+            gram.len(),
+            b * b
+        )));
+    }
+    if sigma <= 0.0 {
+        return Err(PldError::InvalidParameter(format!(
+            "sigma must be > 0, got {}",
+            sigma
+        )));
+    }
+    let num_samples = remove_components.len();
+    let cells = num_samples
+        .checked_mul(b)
+        .ok_or_else(|| PldError::InvalidParameter("sample count and bins are too large".into()))?;
+    if num_samples == 0 || remove_lz.len() != cells || add_lz.len() != cells {
+        return Err(PldError::InvalidParameter(
+            "BnB transcript dimensions do not match num_bins".into(),
+        ));
+    }
+    if remove_components.iter().any(|&component| component >= b) {
+        return Err(PldError::InvalidParameter(
+            "BnB transcript component is outside num_bins".into(),
+        ));
+    }
+
+    let sigma2 = sigma * sigma;
+    let inv_2sig2 = 1.0 / (2.0 * sigma2);
+    let diag_terms: Vec<f64> = (0..b).map(|k| -gram[k * b + k] * inv_2sig2).collect();
+    let log_b = (b as f64).ln();
+    let mut remove_samples = vec![0.0; num_samples];
+    let mut add_samples = vec![0.0; num_samples];
+
+    rayon::join(
+        || {
+            remove_samples
+                .par_iter_mut()
+                .zip(remove_components.par_iter().zip(remove_lz.par_chunks(b)))
+                .for_each(|(sample, (&component, lz))| {
+                    let mean = &gram[component * b..component * b + b];
+                    let mut max_val = f64::NEG_INFINITY;
+                    for k in 0..b {
+                        let u = mean[k] + sigma * lz[k];
+                        max_val = max_val.max(u * inv_2sig2 * 2.0 + diag_terms[k]);
+                    }
+                    let mut sum_exp = 0.0;
+                    for k in 0..b {
+                        let u = mean[k] + sigma * lz[k];
+                        let term = u * inv_2sig2 * 2.0 + diag_terms[k];
+                        sum_exp += (term - max_val).exp();
+                    }
+                    *sample = max_val + sum_exp.ln() - log_b;
+                });
+        },
+        || {
+            add_samples
+                .par_iter_mut()
+                .zip(add_lz.par_chunks(b))
+                .for_each(|(sample, lz)| {
+                    let mut max_val = f64::NEG_INFINITY;
+                    for k in 0..b {
+                        let u = sigma * lz[k];
+                        max_val = max_val.max(u * inv_2sig2 * 2.0 + diag_terms[k]);
+                    }
+                    let mut sum_exp = 0.0;
+                    for k in 0..b {
+                        let u = sigma * lz[k];
+                        let term = u * inv_2sig2 * 2.0 + diag_terms[k];
+                        sum_exp += (term - max_val).exp();
+                    }
+                    *sample = -(max_val + sum_exp.ln() - log_b);
+                });
+        },
+    );
+
+    let (pmf_remove, remove_resolution) = samples_to_pmf(&mut remove_samples, config, 2)?;
+    let (pmf_add, add_resolution) = samples_to_pmf(&mut add_samples, config, 2)?;
     Ok(
         PrivacyLossDistribution::new_asymmetric(pmf_remove, pmf_add).with_monte_carlo_guarantee(
             config.mc_failure_probability,
