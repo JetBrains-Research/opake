@@ -28,12 +28,14 @@ def with_handle(
     num_mc_samples: int,
     mc_seed: int,
     use_handle: Callable[[int], _T],
+    *,
+    native=_native,
 ) -> _T | None:
     """Use one projected-draw corpus, or return ``None`` when it cannot fit."""
     key = (gram, num_bins, num_mc_samples, mc_seed)
 
     def factory() -> int:
-        return _native.register_bnb_transcript_corpus(
+        return native.register_bnb_transcript_corpus(
             list(gram), num_bins, num_mc_samples, mc_seed
         )
 

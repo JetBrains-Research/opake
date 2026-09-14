@@ -240,6 +240,7 @@ class BallsInBins(DpHorizonProcess):
                 self.inner.noise_multiplier,
                 native_cfg,
             ),
+            native=_native,
         )
         if result is not None:
             return result

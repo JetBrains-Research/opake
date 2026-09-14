@@ -860,6 +860,10 @@ class TestBisrPld:
                 captured["gram"] = tuple(gram)
                 return sentinel
 
+            def bnb_pld_from_transcript_handle(self, _handle, gram, *_):
+                captured["gram"] = tuple(gram)
+                return sentinel
+
         monkeypatch.setattr(_balls_in_bins, "_native", CapturingNative())
         assert process.pld() is sentinel
 
