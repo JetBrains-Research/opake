@@ -92,11 +92,8 @@ class NativeCache:
             lock around the use) for any code path that runs inside or
             alongside :func:`opaque.accounting.calibration.calibrate`.
         """
-        self._refresh_max_bytes()
-        if self._max_bytes == 0:
-            return None
-        nbytes = self._nbytes_estimate(key)
-        if nbytes > self._max_bytes:
+        nbytes = self._admitted_nbytes(key)
+        if nbytes is None:
             return None
 
         with self._lock:
@@ -117,16 +114,30 @@ class NativeCache:
         cache is disabled (``max_bytes == 0`` or ``nbytes > max_bytes``);
         callers must fall back to a no-handle code path in that case.
         """
-        self._refresh_max_bytes()
-        if self._max_bytes == 0:
-            return None
-        nbytes = self._nbytes_estimate(key)
-        if nbytes > self._max_bytes:
+        nbytes = self._admitted_nbytes(key)
+        if nbytes is None:
             return None
 
         with self._lock:
             handle = self._get_or_create_locked(key, factory, nbytes)
             return use_handle(handle)
+
+    def _admitted_nbytes(self, key: tuple) -> int | None:
+        self._refresh_max_bytes()
+        if self._max_bytes == 0:
+            return None
+        nbytes = self._nbytes_estimate(key)
+        if nbytes > self._max_bytes:
+            setting = f" ({self._max_bytes_env})" if self._max_bytes_env else ""
+            warnings.warn(
+                f"{self._name} entry needs {nbytes:,} bytes, exceeding the "
+                f"{self._max_bytes:,}-byte cache limit{setting}; "
+                "this entry cannot be reused.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            return None
+        return nbytes
 
     def _get_or_create_locked(
         self, key: tuple, factory: Callable[[], int], nbytes: int

@@ -12,11 +12,13 @@ The Poisson/Gaussian integration regressions live in
 ``packages/opaque-dpsgd/tests/accounting/test_calibration.py``.
 """
 
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, replace
 
 import pytest
 
 import opaque.accounting as acc
+from opaque.api.accounting.core.discretization import _use_discretization
 from opaque.exceptions import CalibrationError
 
 DELTA = 1e-5
@@ -149,3 +151,43 @@ def test_non_monotone_interior_probe_rejected():
             param_max=1.4,
             tolerance=1e-4,
         )
+
+
+@pytest.mark.parametrize("safe_at_max", [False, True])
+@pytest.mark.parametrize("lower", [1.0, math.nextafter(1.0, math.inf)])
+def test_adjacent_bounds_do_not_repeat_evaluations(safe_at_max, lower):
+    upper = math.nextafter(lower, math.inf)
+    calls = []
+
+    def process(param):
+        calls.append(param)
+        safe = param == (upper if safe_at_max else lower)
+        return _MetricProcess(1.1 if safe else 0.9)
+
+    with pytest.raises(CalibrationError, match="final bracket"):
+        acc.calibrate(_GainBudget(1.0), process, lower, upper)
+
+    assert calls == [lower, upper]
+
+
+@pytest.mark.parametrize("decreasing", [False, True])
+def test_runtime_value_must_meet_tolerance(decreasing):
+    @dataclass(frozen=True)
+    class ConfigBudget:
+        value: float = 1.0
+        name: str = "config metric"
+        decreasing: bool = True
+
+        def evaluate(self, process):
+            shift = acc.get_discretization().mc_failure_probability
+            return process.metric - shift if self.decreasing else process.metric + shift
+
+    def process(param):
+        return _MetricProcess(2.0 - param if decreasing else param)
+
+    config = replace(acc.get_discretization(), mc_failure_probability=0.1)
+    with (
+        _use_discretization(config),
+        pytest.raises(CalibrationError, match="runtime discretization"),
+    ):
+        acc.calibrate(ConfigBudget(decreasing=decreasing), process, 0.0, 2.0)
