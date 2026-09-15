@@ -833,9 +833,8 @@ class DPTrainer:
         custom model. Non-HF ``nn.Module`` models log a warning and remain
         supported.
         """
-        # Masking policy the training runs apply (``None``: leave the
-        # process-level policy alone); installed by ``_train_once`` for the
-        # duration of a run and restored afterwards.
+        # Masking policy ``_train_once`` installs for the run and restores
+        # afterwards (``None``: the runtime's data-driven probe).
         self._packed_sequences_policy: bool | None = self.args.packed_sequences
         self._fused_forward_uses_marker = False
         try:
@@ -1168,10 +1167,8 @@ class DPTrainer:
         microbatch_size_override: int | None,
         ignore_keys_for_eval: list[str] | None,
     ) -> TrainOutput:
-        # The vmap-safe mask builder's packed-sequences policy is a
-        # process-wide setting (not thread-local); install this trainer's
-        # policy for the run and put the previous value back afterwards so
-        # a later trainer or model in the same process is not affected.
+        # The packed-sequences policy is process-wide: install this trainer's
+        # for the run and put the previous value back afterwards.
         previous_packed_policy = self._install_packed_sequences_policy()
         try:
             return self._train_once_with_policy(
@@ -1183,19 +1180,14 @@ class DPTrainer:
             self._restore_packed_sequences_policy(previous_packed_policy)
 
     def _install_packed_sequences_policy(self) -> bool | None:
-        """Apply this trainer's packed-sequences policy; return the previous one."""
-        policy = getattr(self, "_packed_sequences_policy", None)
-        if policy is None:
-            return None
+        """Install this trainer's packed-sequences policy; return the previous one."""
         from opaque.patches import packed_sequences, set_packed_sequences
 
         previous = packed_sequences()
-        set_packed_sequences(policy)
+        set_packed_sequences(getattr(self, "_packed_sequences_policy", None))
         return previous
 
     def _restore_packed_sequences_policy(self, previous: bool | None) -> None:
-        if getattr(self, "_packed_sequences_policy", None) is None:
-            return
         from opaque.patches import set_packed_sequences
 
         set_packed_sequences(previous)
