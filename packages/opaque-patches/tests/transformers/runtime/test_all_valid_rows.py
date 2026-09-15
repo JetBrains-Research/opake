@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Opaque Authors
 # SPDX-License-Identifier: Apache-2.0
-"""Packed-sequences policy for the vmap-safe causal-mask builder."""
+"""All-valid-rows policy for the vmap-safe causal-mask builder."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import torch
 
 from opaque.api.patches.transformers.runtime.masking import vmap_create_causal_mask
 from opaque.functional import make_functional
-from opaque.patches import packed_sequences, set_packed_sequences
+from opaque.patches import all_valid_rows, set_all_valid_rows
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "models"))
 from _test_utils import build_moe_model
@@ -22,9 +22,9 @@ from _test_utils import build_moe_model
 
 @pytest.fixture(autouse=True)
 def _reset_policy():
-    set_packed_sequences(None)
+    set_all_valid_rows(None)
     yield
-    set_packed_sequences(None)
+    set_all_valid_rows(None)
 
 
 class _SdpaConfig:
@@ -55,19 +55,19 @@ def _masks_under_vmap(attention_masks):
 
 
 def test_policy_round_trip_and_validation():
-    assert packed_sequences() is None
-    set_packed_sequences(True)
-    assert packed_sequences() is True
-    set_packed_sequences(False)
-    assert packed_sequences() is False
+    assert all_valid_rows() is None
+    set_all_valid_rows(True)
+    assert all_valid_rows() is True
+    set_all_valid_rows(False)
+    assert all_valid_rows() is False
     with pytest.raises(TypeError):
-        set_packed_sequences(1)
+        set_all_valid_rows(1)
 
 
-def test_packed_true_allows_fast_path_without_probing():
+def test_all_valid_true_allows_fast_path_without_probing():
     padded = torch.ones(3, 8, dtype=torch.bool)
     padded[1, -1] = False
-    set_packed_sequences(True)
+    set_all_valid_rows(True)
     assert _masks_under_vmap(padded) == [None]
     # Plain (non-vmap) call with a padded 2-D mask is not probed either.
     mask = vmap_create_causal_mask(
@@ -80,9 +80,9 @@ def test_packed_true_allows_fast_path_without_probing():
     assert mask is None
 
 
-def test_packed_true_keeps_a_higher_rank_mask():
+def test_all_valid_true_keeps_a_higher_rank_mask():
     """The policy only replaces the padding-mask probe; a 4-D mask is kept."""
-    set_packed_sequences(True)
+    set_all_valid_rows(True)
     explicit = torch.zeros(2, 1, 8, 8, dtype=torch.bool).tril()
     mask = vmap_create_causal_mask(
         config=_SdpaConfig(),
@@ -94,9 +94,9 @@ def test_packed_true_keeps_a_higher_rank_mask():
     assert mask is not None
 
 
-def test_packed_false_materialises_regardless_of_content():
+def test_all_valid_false_materialises_regardless_of_content():
     all_valid = torch.ones(3, 8, dtype=torch.bool)
-    set_packed_sequences(False)
+    set_all_valid_rows(False)
     created = _masks_under_vmap(all_valid)
     assert len(created) == 1
     assert created[0] is not None
@@ -137,7 +137,7 @@ def _per_example_grads(model, input_ids, mask, labels):
 
 
 def test_all_valid_example_gradient_invariant_to_padded_mate(device):
-    """Under ``packed_sequences=False`` a row's gradient ignores its microbatch."""
+    """Under ``all_valid_rows=False`` a row's gradient ignores its microbatch."""
     torch.manual_seed(0)
     model, _ = build_moe_model(
         "mellum",
@@ -157,7 +157,7 @@ def test_all_valid_example_gradient_invariant_to_padded_mate(device):
     padded[1, -4:] = 0
     padded_labels = torch.where(padded.bool(), labels, torch.full_like(labels, -100))
 
-    set_packed_sequences(False)
+    set_all_valid_rows(False)
     grads_full = _per_example_grads(model, input_ids, full, labels)
     grads_mixed = _per_example_grads(model, input_ids, padded, padded_labels)
     for name, g in grads_full.items():
@@ -170,9 +170,9 @@ def test_all_valid_example_gradient_invariant_to_padded_mate(device):
         not torch.allclose(grads_mixed[name][1], g[1]) for name, g in grads_full.items()
     )
 
-    # And the fast path (packed=True) computes the same per-example gradients
+    # And the fast path (all_valid_rows=True) computes the same per-example gradients
     # for all-valid rows, only through a different kernel.
-    set_packed_sequences(True)
+    set_all_valid_rows(True)
     grads_fast = _per_example_grads(model, input_ids, full, labels)
     for name, g in grads_full.items():
         torch.testing.assert_close(grads_fast[name], g, atol=1e-5, rtol=1e-4, msg=name)
@@ -193,7 +193,7 @@ def test_forward_matches_between_policies_on_all_valid_rows(device):
     mask = torch.ones_like(input_ids)
     outputs = {}
     for policy in (None, True, False):
-        set_packed_sequences(policy)
+        set_all_valid_rows(policy)
         with torch.no_grad():
             outputs[policy] = model(input_ids=input_ids, attention_mask=mask).logits
     torch.testing.assert_close(outputs[True], outputs[None], atol=1e-5, rtol=1e-4)

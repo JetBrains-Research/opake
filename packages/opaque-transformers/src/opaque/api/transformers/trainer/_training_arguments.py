@@ -600,13 +600,15 @@ class TrainingArguments:
     # snapshot, leaving the run resumable after preemption.
     enable_jit_checkpoint: bool = False
 
-    #: Whether every collated row is fully valid (no padding).  ``True`` lets
-    #: the vmap-safe causal-mask builder take its all-valid fast path without
-    #: probing the batch; ``False`` (default) always materialises the mask so
-    #: an example's attention kernel never depends on its microbatch mates;
+    #: Whether every collated row is fully valid (no padding); each row is
+    #: still exactly one protected example.  ``True`` lets the vmap-safe
+    #: causal-mask builder take its all-valid fast path without probing the
+    #: batch; ``False`` (default) always materialises the mask so an
+    #: example's attention kernel never depends on its microbatch mates;
     #: ``None`` keeps the runtime's data-driven probe, under which one padded
-    #: record changes the kernel of every example in its microbatch.
-    packed_sequences: bool | None = False
+    #: record changes the kernel of every example in its microbatch, and is
+    #: rejected for a private run.
+    all_valid_rows: bool | None = False
 
     # HF-compatible private device counter. Device resolution replaces the
     # sentinel with 0 for CPU/MPS or 1 for CUDA.
@@ -629,13 +631,13 @@ class TrainingArguments:
             return
 
         self._normalize_and_validate_common_fields()
-        if self.packed_sequences is not None and not isinstance(
-            self.packed_sequences, bool
+        if self.all_valid_rows is not None and not isinstance(
+            self.all_valid_rows, bool
         ):
             raise InputTypeError(
                 *(
-                    "packed_sequences must be True, False or None; got "
-                    f"{self.packed_sequences!r}.",
+                    "all_valid_rows must be True, False or None; got "
+                    f"{self.all_valid_rows!r}.",
                 )
             )
 
@@ -1169,6 +1171,16 @@ class TrainingArguments:
                     "privacy_noise_multiplier=0.0 is the non-private path; "
                     "privacy_target_epsilon is meaningless there.  Drop the target "
                     "or set a positive noise multiplier.",
+                )
+            )
+        if self.all_valid_rows is None and self.privacy_noise_multiplier != 0.0:
+            raise ConfigurationError(
+                *(
+                    "all_valid_rows=None keeps the batch probe, under which one "
+                    "padded record changes the attention kernel of every example "
+                    "in its microbatch; it is not a private mode.  Use False "
+                    "(materialise the mask) or True (every row is fully valid), or "
+                    "privacy_noise_multiplier=0.0 for a non-private run.",
                 )
             )
         if (
