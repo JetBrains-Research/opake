@@ -32,6 +32,7 @@ from opaque.exceptions import InputTypeError, OperationError
 from ._auto import AutoClipState
 from ._clipped_fun import ClippedFunAux, FixedClipState
 from ._clipped_grad import ClippedGradAux
+from ._moe import MoeClipState, _release
 
 _MARKER_CLIP_STATES = (FixedClipState, AutoClipState)
 
@@ -40,6 +41,7 @@ __all__ = [
     "sync_clip_state",
     "sync_clipped_fun_aux",
     "sync_clipped_grad_aux",
+    "sync_moe_clip_state",
 ]
 
 
@@ -66,6 +68,42 @@ def sync_clip_state(
         )
 
     return state
+
+
+def _reduce_device() -> torch.device:
+    backend = dist.get_backend() if dist.is_initialized() else None
+    if backend == "nccl":
+        if not torch.cuda.is_available():
+            raise OperationError(
+                *(
+                    "Distributed backend is 'nccl' but CUDA is not available; "
+                    "cannot all-reduce the MoE load release.",
+                )
+            )
+        return torch.device(f"cuda:{torch.cuda.current_device()}")
+    return torch.device("cpu")
+
+
+def sync_moe_clip_state(state: MoeClipState) -> MoeClipState:
+    """Finish the pending load release of :func:`moe_clipped_grad` under DDP.
+
+    Every rank's ``grad_fn`` leaves its rank-local, un-noised load mean in the
+    state; this all-reduces those means (``sum``, so the result is the batch
+    mean over the expected batch size every rank was given), adds the noise
+    once from the shared key and step, filters, and advances the state.  The
+    ranks must have been built with the same ``key``; the noise derivation is
+    deterministic in ``(key, step)``, so every rank lands on the same
+    ``f_tilde``.  Not distributed, or nothing pending: the state is returned
+    unchanged.
+    """
+    if not is_distributed() or not state._pending:
+        return state
+    if not isinstance(state, MoeClipState):
+        raise InputTypeError(*(f"Expected a MoeClipState, got {type(state).__name__}",))
+    device = _reduce_device()
+    total = state._local_load.detach().to(device=device, dtype=torch.float32).clone()
+    dist.all_reduce(total, op=dist.ReduceOp.SUM)
+    return _release(state, total.cpu())
 
 
 # Each supported aux family has a complete field schema.  Do not infer this
@@ -302,5 +340,6 @@ def sync_aux(
 
 register_sync_type(FixedClipState, sync_clip_state)
 register_sync_type(AutoClipState, sync_clip_state)
+register_sync_type(MoeClipState, sync_moe_clip_state)
 register_sync_type(ClippedFunAux, sync_clipped_fun_aux)
 register_sync_type(ClippedGradAux, sync_clipped_grad_aux)

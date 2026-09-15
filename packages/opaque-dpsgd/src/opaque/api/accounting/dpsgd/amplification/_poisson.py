@@ -12,9 +12,10 @@ from dataclasses import dataclass
 from opaque.api.accounting.core import _native
 from opaque.api.accounting.core._base import DpProcess, Pld
 from opaque.api.accounting.core._pld_cache import pld_cache
-from opaque.api.accounting.core.mechanisms._nonprivate import NonPrivate
-from opaque.api.accounting.dpsgd.mechanisms._adaclip import AdaClip
-from opaque.api.accounting.dpsgd.mechanisms._gaussian import Gaussian
+from opaque.api.accounting.dpsgd.mechanisms._effective import (
+    GAUSSIAN_FAMILY,
+    effective_gaussian_noise_multiplier,
+)
 from opaque.exceptions import ConfigurationError, InputTypeError
 
 #: Mechanism types accepted by plain :func:`poisson`.
@@ -27,7 +28,8 @@ class Poisson(DpProcess):
 
     Plain Poisson accepts any Opaque ``DpProcess``. ``sample_rate=1.0``
     returns the base mechanism without amplification. The capped form
-    requires a Gaussian, AdaClip(Gaussian), or NonPrivate inner mechanism,
+    requires a Gaussian, AdaClip(Gaussian), MoeAux(Gaussian), or NonPrivate
+    inner mechanism,
     with both ``truncated_batch_size`` and ``dataset_size`` set. Its guarantee
     uses the dataset-size-indexed add/remove adjacency of Ganesh (2025),
     https://arxiv.org/abs/2508.15089.
@@ -104,11 +106,11 @@ class Poisson(DpProcess):
                 raise ConfigurationError(
                     *(f"Poisson: dataset_size must be >= 1, got {self.dataset_size}",)
                 )
-            if not isinstance(self.inner, (Gaussian, AdaClip, NonPrivate)):
+            if not isinstance(self.inner, GAUSSIAN_FAMILY):
                 raise InputTypeError(
                     *(
                         "truncated Poisson requires a Gaussian, AdaClip(Gaussian), "
-                        "or NonPrivate inner mechanism, got "
+                        "MoeAux(Gaussian) or NonPrivate inner mechanism, got "
                         f"{type(self.inner).__name__}.",
                     )
                 )
@@ -151,29 +153,18 @@ class Poisson(DpProcess):
             )
 
         if truncated:
-            match self.inner:
-                case NonPrivate() | Gaussian(noise_multiplier=0):
-                    return _native.non_private_pld(native_cfg)
-                case Gaussian(noise_multiplier=nm):
-                    return _native.truncated_poisson_gaussian_pld(
-                        nm,
-                        self.sample_rate,
-                        self.truncated_batch_size,
-                        self.dataset_size,
-                        native_cfg,
-                    )
-                case AdaClip(inner=NonPrivate() | Gaussian(noise_multiplier=0)):
-                    return _native.non_private_pld(native_cfg)
-                case AdaClip(inner=Gaussian()) as ac:
-                    return _native.truncated_poisson_gaussian_pld(
-                        ac.effective_noise_multiplier,
-                        self.sample_rate,
-                        self.truncated_batch_size,
-                        self.dataset_size,
-                        native_cfg,
-                    )
-                case _:
-                    raise AssertionError
+            nm = effective_gaussian_noise_multiplier(self.inner)
+            if nm is None:
+                raise AssertionError
+            if nm == 0:
+                return _native.non_private_pld(native_cfg)
+            return _native.truncated_poisson_gaussian_pld(
+                nm,
+                self.sample_rate,
+                self.truncated_batch_size,
+                self.dataset_size,
+                native_cfg,
+            )
 
         return _native.poisson_pld(
             self.inner.pld(
@@ -211,7 +202,7 @@ def poisson(
 
     Args:
         inner: The base Opaque :class:`DpProcess`. The capped form requires
-            :func:`gaussian`, :func:`adaclip`, or
+            :func:`gaussian`, :func:`adaclip`, :func:`moe_aux`, or
             :func:`opaque.accounting.nonprivate`.
         sample_rate: Probability of including each example
             (``E[batch_size] / |D|``), between zero and one inclusive.

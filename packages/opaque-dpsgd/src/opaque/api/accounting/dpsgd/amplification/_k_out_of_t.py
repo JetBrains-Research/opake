@@ -17,15 +17,17 @@ from opaque.api.accounting.core import _native
 from opaque.api.accounting.core._horizon import DpHorizonProcess
 from opaque.api.accounting.core._pld_cache import pld_cache
 from opaque.api.accounting.core._random_allocation_cache import epoch_pld
-from opaque.api.accounting.core.mechanisms._nonprivate import NonPrivate
-from opaque.api.accounting.dpsgd.mechanisms._adaclip import AdaClip
-from opaque.api.accounting.dpsgd.mechanisms._gaussian import Gaussian
+from opaque.api.accounting.dpsgd.mechanisms._effective import (
+    GAUSSIAN_FAMILY,
+    GaussianFamily,
+    effective_gaussian_noise_multiplier,
+)
 from opaque.exceptions import ConfigurationError, InputTypeError
 
 if TYPE_CHECKING:
     from opaque.api.accounting.core._base import Pld
 
-_Inner = Gaussian | AdaClip | NonPrivate
+_Inner = GaussianFamily
 _Allocation = Literal["block", "total"]
 
 
@@ -70,19 +72,15 @@ class KOutOfT(DpHorizonProcess):
         return (floor,) * (self.k - num_ceil) + (floor + 1,) * num_ceil
 
     def _noise_multiplier(self) -> float | None:
-        match self.inner:
-            case NonPrivate() | Gaussian(noise_multiplier=0):
-                return None
-            case Gaussian(noise_multiplier=nm):
-                return nm
-            case AdaClip(inner=NonPrivate() | Gaussian(noise_multiplier=0)):
-                return None
-            case AdaClip(inner=Gaussian()) as ac:
-                return ac.effective_noise_multiplier
-            case _:
-                raise InputTypeError(
-                    *("KOutOfT requires Gaussian, AdaClip(Gaussian), or NonPrivate",)
+        nm = effective_gaussian_noise_multiplier(self.inner)
+        if nm is None:
+            raise InputTypeError(
+                *(
+                    "KOutOfT requires Gaussian, AdaClip(Gaussian), MoeAux(Gaussian), "
+                    "or NonPrivate",
                 )
+            )
+        return None if nm == 0 else nm
 
     @pld_cache(maxsize=16)
     def pld(
@@ -133,11 +131,11 @@ def k_out_of_t(
     ``allocation="total"`` uses the block reduction as a valid conservative
     upper bound. The returned process accounts the complete ``t``-step run.
     """
-    if not isinstance(inner, (Gaussian, AdaClip, NonPrivate)):
+    if not isinstance(inner, GAUSSIAN_FAMILY):
         raise InputTypeError(
             *(
-                "k_out_of_t() requires Gaussian, AdaClip, or NonPrivate inner, got "
-                f"{type(inner).__name__}.",
+                "k_out_of_t() requires Gaussian, AdaClip, MoeAux, or NonPrivate "
+                f"inner, got {type(inner).__name__}.",
             )
         )
     if allocation not in ("block", "total"):
