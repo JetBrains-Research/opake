@@ -4021,7 +4021,7 @@ class DPTrainer:
         # re-instantiation; the outer epoch loop is purely a synthetic
         # boundary layer for HF callbacks.
         if ctx.current_sampler is None:
-            if ctx.sampler_stream_key is None:
+            if getattr(ctx, "sampler_stream_key", None) is None:
                 sampler_key = key(a.data_seed if a.data_seed is not None else a.seed)
                 if ctx.sampler_restart_step is not None:
                     # Restart ignored Poisson state on a cursor-derived stream
