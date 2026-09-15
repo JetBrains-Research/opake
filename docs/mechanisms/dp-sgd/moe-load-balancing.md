@@ -249,6 +249,22 @@ into the clipper. For a model with no patches, the loss function calls
 the backbone and the head itself through `functional_call` and computes
 the cross-entropy inline; HF's auxiliary path never runs.
 
+### DPTrainer
+
+`TrainingArguments(router_load=True, router_load_max_tokens=<row length>)`
+switches the trainer's clipper to `moe_clipped_grad` and wraps its
+accountant in `moe_aux` with `router_load_ratio` (default 0.02). The
+geometry is read off the model, `alpha` defaults to the model config's
+`router_aux_loss_coef`, the loss closure passes the two forward keywords,
+and every logged step carries `router_load_imbalance` and
+`router_load_noise_std`. The release state rides in the DP runtime
+checkpoint with the other clip states, and DDP ranks synchronize it
+through the trainer's existing state sync. It needs the Gaussian
+mechanism, fixed clipping, and the base per-example causal-LM loss; a
+subclass that overrides `compute_per_example_loss` is rejected at
+construction because its forward cannot hand the router logits to the
+clipper.
+
 ### Choosing the public constants
 
 `max_tokens` is the collator's row length, a public constant of the data

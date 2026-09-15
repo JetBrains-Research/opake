@@ -138,6 +138,7 @@ _DICT_FIELDS: tuple[str, ...] = (
     "sampling_kwargs",
     "noise_calibration_kwargs",
     "privacy_noise_mechanism_kwargs",
+    "router_load_kwargs",
     "optim_args",
 )
 
@@ -561,6 +562,21 @@ class TrainingArguments:
     #: Mode-specific clipping factory kwargs. Adaptive clipping accepts
     #: ``target_quantile`` / ``clipping_norm_max``; AUTO-S accepts ``gamma``.
     clipping_kwargs: dict[str, Any] | str = field(default_factory=dict)
+
+    # ---- MoE router-load release -----------------------------------------
+    #: Release the batch router load of a mixture-of-experts model inside the
+    #: clipper and train with the Switch load-balancing surrogate at the
+    #: filtered estimate (``moe_clipped_grad``, accounted by ``moe_aux``).
+    router_load: bool = False
+    #: Share of the whitened sensitivity given to the load release; the same
+    #: value prices the joint release in the accountant.
+    router_load_ratio: float = 0.02
+    #: Public bound on the valid tokens of one collated row (``T_max``).
+    #: Required when ``router_load`` is on.
+    router_load_max_tokens: int | None = None
+    #: Extra ``moe_clipped_grad`` kwargs: ``alpha`` (default: the model
+    #: config's ``router_aux_loss_coef``), ``mean_tokens``, ``filter_beta``.
+    router_load_kwargs: dict[str, Any] | str = field(default_factory=dict)
 
     # ---- Noise mechanism / fixed multiplier -------------------------------
     privacy_noise_mechanism: str = "gaussian"
@@ -1007,6 +1023,73 @@ class TrainingArguments:
         # Idempotency sentinel.
         self._dp_post_init_done = True
 
+    def _validate_router_load_fields(self) -> None:
+        """Validate the MoE router-load release fields."""
+        if not isinstance(self.router_load, bool):
+            raise InputTypeError(
+                *(f"router_load must be a bool, got {self.router_load!r}.",)
+            )
+        ratio = self.router_load_ratio
+        if (
+            isinstance(ratio, bool)
+            or not isinstance(ratio, (int, float))
+            or not math.isfinite(ratio)
+            or ratio <= 0
+        ):
+            raise ConfigurationError(
+                *(
+                    f"router_load_ratio must be a positive finite number, got {ratio!r}.",
+                )
+            )
+        self.router_load_ratio = float(ratio)
+        if self.router_load_max_tokens is not None:
+            max_tokens = self.router_load_max_tokens
+            if (
+                isinstance(max_tokens, bool)
+                or int(max_tokens) != max_tokens
+                or max_tokens < 1
+            ):
+                raise ConfigurationError(
+                    *(
+                        "router_load_max_tokens must be a positive integer, got "
+                        f"{max_tokens!r}.",
+                    )
+                )
+            self.router_load_max_tokens = int(max_tokens)
+        if not self.router_load:
+            return
+        if self.router_load_max_tokens is None:
+            raise ConfigurationError(
+                *(
+                    "router_load=True requires router_load_max_tokens, the public "
+                    "bound on the valid tokens of one collated row (the collator's "
+                    "row length).",
+                )
+            )
+        if self.clipping_mode == "adaptive":
+            raise ConfigurationError(
+                *(
+                    "router_load=True is incompatible with clipping_mode='adaptive': "
+                    "the load release needs a constant per-record bound; use "
+                    "clipping_mode='fixed' or 'auto'.",
+                )
+            )
+        if self.privacy_noise_mechanism != "gaussian":
+            raise ConfigurationError(
+                *(
+                    "router_load=True requires privacy_noise_mechanism='gaussian'; "
+                    f"got {self.privacy_noise_mechanism!r}.",
+                )
+            )
+        unknown = set(self.router_load_kwargs) - {"alpha", "mean_tokens", "filter_beta"}
+        if unknown:
+            raise ConfigurationError(
+                *(
+                    "router_load_kwargs accepts 'alpha', 'mean_tokens' and "
+                    f"'filter_beta'; got {sorted(unknown)}.",
+                )
+            )
+
     def _normalize_and_validate_common_fields(self) -> None:
         """Normalize shared HF-shaped fields and validate their domains."""
         if self.output_dir is None:
@@ -1041,6 +1124,7 @@ class TrainingArguments:
             "sampling_kwargs",
             "noise_calibration_kwargs",
             "privacy_noise_mechanism_kwargs",
+            "router_load_kwargs",
         ):
             if getattr(self, name) is None:
                 setattr(self, name, {})
@@ -1226,6 +1310,7 @@ class TrainingArguments:
                     "does not provide a matching privacy accountant.",
                 )
             )
+        self._validate_router_load_fields()
         if self.privacy_noise_mechanism == "gaussian":
             _normalize_gaussian_compute_dtype(self.privacy_noise_mechanism_kwargs)
 

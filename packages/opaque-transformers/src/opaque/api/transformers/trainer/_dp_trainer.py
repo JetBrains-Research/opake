@@ -47,7 +47,7 @@ import opaque.dpsgd.accounting as dpsgd_acc
 from opaque.accounting import Accountant
 from opaque.accounting import calibration as cal
 from opaque.accounting.types import DpHorizonProcess
-from opaque.api.engine.clipping import clipped_grad
+from opaque.api.engine.clipping import MoeClipState, clipped_grad, moe_clipped_grad
 from opaque.api.engine.device import (
     device_capabilities,
     sdpa_autocast_under_vmap_broken,
@@ -586,6 +586,7 @@ class DPTrainer:
 
         apply_runtime_patches(compat=True)
         self._apply_opaque_model_patches()
+        self._setup_router_load()
 
         # Compute precision: bf16 autocast for training, full-cast only for
         # the bf16_full_eval scope.  See _setup_precision.
@@ -872,6 +873,65 @@ class DPTrainer:
                 accepts_marker(module, allow_var_kwargs=False)
                 for module in self._model.modules()
             )
+        )
+
+    def _setup_router_load(self) -> None:
+        """Resolve the MoE routing geometry and the surrogate coefficient.
+
+        ``router_load=True`` needs a mixture-of-experts model whose backbone
+        records router logits, the loss-only forward the patches install
+        (``loss_only`` / ``output_router_logits``), and the base per-example
+        causal-LM loss: a subclass that overrides the loss hook computes its
+        own forward and cannot hand the router logits to the clipper.
+        """
+        self._moe_geometry: dict[str, int] | None = None
+        self._router_load_alpha: float = 0.0
+        a = self.args
+        if not a.router_load:
+            return
+        if (
+            type(self).compute_per_example_loss
+            is not DPTrainer.compute_per_example_loss
+        ):
+            raise ConfigurationError(
+                *(
+                    f"router_load=True is not supported by {type(self).__name__}: it "
+                    "overrides compute_per_example_loss, so the router logits cannot "
+                    "reach the clipper. Use DPTrainer's per-example causal-LM loss.",
+                )
+            )
+        if self._overrides_metrics_seam():
+            raise ConfigurationError(
+                *(
+                    "router_load=True cannot be combined with an overridden "
+                    "compute_per_example_loss_and_metrics.",
+                )
+            )
+        if not self._fused_forward_uses_marker:
+            raise ConfigurationError(
+                *(
+                    "router_load=True needs the loss-only causal-LM forward the "
+                    "opaque patches install (a supported MoE family with "
+                    "use_compat_patches=True).",
+                )
+            )
+        from opaque.patches.transformers import moe_geometry
+
+        self._moe_geometry = dict(moe_geometry(self._model))
+        kwargs = a.router_load_kwargs if isinstance(a.router_load_kwargs, dict) else {}
+        alpha = kwargs.get("alpha")
+        if alpha is None:
+            config = getattr(self._model, "config", None)
+            alpha = getattr(config, "router_aux_loss_coef", 0.0) or 0.0
+        self._router_load_alpha = float(alpha)
+        log.info(
+            "router_load: E=%d k=%d L=%d, ratio=%g, max_tokens=%d, alpha=%g",
+            self._moe_geometry["num_experts"],
+            self._moe_geometry["top_k"],
+            self._moe_geometry["num_layers"],
+            a.router_load_ratio,
+            a.router_load_max_tokens,
+            self._router_load_alpha,
         )
 
     def _setup_precision(self) -> None:
@@ -1553,20 +1613,24 @@ class DPTrainer:
         # mechanism; reusing the root key makes both step-t streams identical.
         # Keep non-adaptive seeding unchanged for reproducibility.
         quantile_noise_key = gradient_noise_key = key(a.seed)
-        if a.clipping_mode == "adaptive":
+        if a.clipping_mode == "adaptive" or a.router_load:
             quantile_noise_key, gradient_noise_key = split(gradient_noise_key)
 
         # --- Clipping ---
-        grad_fn, clip_state = self._create_grad_fn(
-            per_example_loss_fn,
-            batch_argnums,
-            a,
-            clip_norm,
-            expected_batch_size,
-            microbatch_size,
-            quantile_noise_key=quantile_noise_key,
-            has_aux=wants_metrics,
-        )
+        # Built after the privacy calibration below: the MoE router-load
+        # clipper scales its load release with the resolved noise multiplier.
+        def _build_clipper(noise_multiplier: float | None):
+            return self._create_grad_fn(
+                per_example_loss_fn,
+                batch_argnums,
+                a,
+                clip_norm,
+                expected_batch_size,
+                microbatch_size,
+                quantile_noise_key=quantile_noise_key,
+                has_aux=wants_metrics,
+                noise_multiplier=noise_multiplier,
+            )
 
         # --- LR schedule ---
         # Built early so MF strategies (BandMF / BLT) can consume it for
@@ -1657,6 +1721,8 @@ class DPTrainer:
             # None ⇒ unbounded Poisson PLD; int ⇒ truncated_poisson_gaussian_pld.
             int(_trunc_cap) if _trunc_cap is not None else None,
         )
+
+        grad_fn, clip_state = _build_clipper(noise_multiplier)
 
         # --- Optimizer ---
         opt, opt_state = self.create_optimizer(
@@ -2290,7 +2356,13 @@ class DPTrainer:
         # the cluster-wide loss when other ranks contributed examples.
         batch_size = int(getattr(aux, "batch_size", 0) or 0)
         if batch_size == 0:
-            return {"loss": 0.0, "batch_size": 0}
+            empty: dict[str, Any] = {"loss": 0.0, "batch_size": 0}
+            if isinstance(ctx.clip_state, MoeClipState):
+                # An empty draw still releases (pure noise) and advances the
+                # estimate, so the monitor stays reported on every step.
+                empty["router_load_imbalance"] = ctx.clip_state.imbalance
+                empty["router_load_noise_std"] = ctx.clip_state.filtered_noise_std
+            return empty
 
         # Noise σ travels on the ``NoisedPytree`` wrapper; ``_effective``
         # handles both scalar and ``PerGroup`` shapes.  ``grads.max_norm``
@@ -2313,6 +2385,11 @@ class DPTrainer:
         }
         if aux.clipped_grad_norms is not None and aux.clipped_grad_norms.numel() > 0:
             metrics["clipped_grad_norm"] = aux.clipped_grad_norms.mean().item()
+        if isinstance(ctx.clip_state, MoeClipState):
+            # Public post-processing of the load release: the imbalance the
+            # next step's surrogate sees and the known noise of the estimate.
+            metrics["router_load_imbalance"] = ctx.clip_state.imbalance
+            metrics["router_load_noise_std"] = ctx.clip_state.filtered_noise_std
 
         if aux.group_norms is not None and hasattr(clipping_norm, "values"):
             group_noise_std = noise_std if hasattr(noise_std, "values") else None
@@ -2425,6 +2502,26 @@ class DPTrainer:
             Scalar ``loss`` (or ``(loss, logits)`` when
             ``return_logits=True``).
         """
+        loss, output_logits, _ = self._forward_per_example(
+            fmodel, params, inputs, return_logits=return_logits
+        )
+        if return_logits:
+            return loss, output_logits
+        return loss
+
+    def _forward_per_example(
+        self,
+        fmodel: Callable[..., Any],
+        params: dict[str, Tensor],
+        inputs: dict[str, Tensor],
+        *,
+        return_logits: bool,
+    ) -> tuple[Tensor, Any, Any]:
+        """One example's forward: ``(loss, logits, output)``.
+
+        The body of :meth:`compute_per_example_loss`; the router-load path
+        reads the model output's ``router_logits`` off the third element.
+        """
         smoothing = float(self.args.label_smoothing_factor)
         # Push smoothing through to the loss function as a kwarg so the
         # Opaque CE kernels (both non-fused and fused-linear) apply it
@@ -2498,9 +2595,36 @@ class DPTrainer:
                     label_smoothing=smoothing,
                 )
 
-        if return_logits:
-            return loss, output_logits
-        return loss
+        return loss, output_logits, output
+
+    def _compute_per_example_loss_and_router_logits(
+        self,
+        fmodel: Callable[..., Any],
+        params: dict[str, Tensor],
+        inputs: dict[str, Tensor],
+    ) -> tuple[Tensor, Any, Tensor | None]:
+        """The ``moe_clipped_grad`` loss contract: ``(loss, router_logits, mask)``.
+
+        Runs the base per-example loss with HF's ``output_router_logits=True``
+        on the loss-only forward, which hands back the per-layer router
+        logits without computing the batch-coupled auxiliary loss.
+        """
+        loss, _, output = self._forward_per_example(
+            fmodel,
+            params,
+            {**inputs, "output_router_logits": True},
+            return_logits=False,
+        )
+        router_logits = output.get("router_logits")
+        if router_logits is None:
+            raise OperationError(
+                *(
+                    "router_load=True but the model forward returned no "
+                    "router_logits; the backbone must record its router logits "
+                    "under output_router_logits=True.",
+                )
+            )
+        return loss, router_logits, inputs.get("attention_mask")
 
     def compute_per_example_loss_and_metrics(
         self,
@@ -3687,9 +3811,17 @@ class DPTrainer:
         """
         keys = batch_keys
 
+        router_load = (
+            bool(self.args.router_load) and not with_metrics and not return_logits
+        )
+
         def _call(merged: dict[str, Tensor], inputs: dict[str, Tensor]) -> Any:
             if with_metrics:
                 return self.compute_per_example_loss_and_metrics(fmodel, merged, inputs)
+            if router_load:
+                return self._compute_per_example_loss_and_router_logits(
+                    fmodel, merged, inputs
+                )
             return self.compute_per_example_loss(
                 fmodel, merged, inputs, return_logits=return_logits
             )
@@ -4280,6 +4412,9 @@ class DPTrainer:
                 logs["privacy_clipped_grad_norm_mean"] = step_result[
                     "clipped_grad_norm"
                 ]
+            for name in ("router_load_imbalance", "router_load_noise_std"):
+                if name in step_result:
+                    logs[name] = step_result[name]
             for group_name, group_values in step_result.get(
                 "group_metrics", {}
             ).items():
@@ -4380,8 +4515,13 @@ class DPTrainer:
         *,
         quantile_noise_key: RngKey,
         has_aux: bool = False,
+        noise_multiplier: float | None = None,
     ) -> tuple[Callable[..., Any], Any]:
         """Create the clipped gradient function based on clipping mode.
+
+        With ``router_load`` the MoE clipper is built instead; it needs the
+        resolved ``noise_multiplier`` (its load noise scales with it) and
+        draws the load release from ``quantile_noise_key``.
 
         ``loss_fn`` stays eager as a Python callable.  When compilation is
         enabled, the clipping factory compiles its tensor-only per-microbatch
@@ -4396,7 +4536,48 @@ class DPTrainer:
         auto_gamma = float(ca.get("gamma", 0.01))
         compiler = self._grad_compiler()
 
-        if a.clipping_mode == "adaptive":
+        if a.router_load:
+            if has_aux:
+                raise ConfigurationError(
+                    *("router_load=True cannot be combined with a loss aux channel.",)
+                )
+            if noise_multiplier is None or self._moe_geometry is None:
+                raise OperationError(
+                    *(
+                        "_create_grad_fn reached the router-load branch before the "
+                        "noise multiplier and the MoE geometry were resolved.",
+                    )
+                )
+            kwargs = (
+                dict(a.router_load_kwargs)
+                if isinstance(a.router_load_kwargs, dict)
+                else {}
+            )
+            kwargs.pop("alpha", None)
+            if a.clipping_mode == "auto":
+                raise ConfigurationError(
+                    *(
+                        "router_load=True with clipping_mode='auto' is not supported; "
+                        "use clipping_mode='fixed'.",
+                    )
+                )
+            grad_fn, state = moe_clipped_grad(
+                loss_fn,
+                clipping_norm=clip_norm,
+                normalize_by=expected_batch_size,
+                batch_argnums=batch_argnums,
+                noise_multiplier=float(noise_multiplier),
+                ratio=float(a.router_load_ratio),
+                key=quantile_noise_key,
+                max_tokens=float(a.router_load_max_tokens),
+                alpha=self._router_load_alpha,
+                microbatch_size=microbatch_size,
+                return_aux=True,
+                _chunk_compiler=compiler,
+                **self._moe_geometry,
+                **kwargs,
+            )
+        elif a.clipping_mode == "adaptive":
             grad_fn, state = adaptive_clipped_grad(
                 loss_fn,
                 argnums=0,
@@ -4478,6 +4659,12 @@ class DPTrainer:
                     expected_batch_size=expected_batch_size,
                     num_groups=num_groups,
                 )
+
+        if a.router_load:
+            _inner = base
+
+            def base(nm, _b=_inner, _ratio=float(a.router_load_ratio)):
+                return dpsgd_acc.moe_aux(_b(nm), ratio=_ratio)
 
         # Non-private substitution: at noise_multiplier == 0 the inner element
         # becomes ``acc.nonprivate()``, which composes through the poisson /
