@@ -5,8 +5,9 @@ import torch
 from torch.func import grad
 
 from opaque.api.engine.clipping._clipped_fun import clipped_fun
-from opaque.api.engine.clipping._pytree import clip_pytree
-from opaque.types import ClippedPytree
+from opaque.api.engine.clipping._pytree import auto_scale_pytree, clip_pytree
+from opaque.exceptions import ConfigurationError
+from opaque.types import ClippedPytree, clipped
 
 
 def _unwrap_clipped(value):
@@ -91,6 +92,20 @@ def test_clip_handles_empty_tree(device):
     assert clip_aux.norm.item() == 0.0
 
 
+@pytest.mark.parametrize(
+    ("operation", "kwargs"),
+    [
+        (clip_pytree, {"clipping_norm": 1.0}),
+        (auto_scale_pytree, {"R": 1.0}),
+    ],
+    ids=["fixed", "auto"],
+)
+def test_pytree_scaling_rejects_dp_wrapper(operation, kwargs):
+    wrapper = clipped({"w": torch.tensor([3.0, 4.0])}, max_norm=1.0)
+    with pytest.raises(TypeError, match="raw tensor pytrees"):
+        operation(wrapper, **kwargs)
+
+
 # ============================================================================
 # clipped_fun tests (with gradients)
 # ============================================================================
@@ -113,6 +128,19 @@ def test_clipped_fun_scalar_basic():
     clipped_grad = _unwrap_clipped(clipped_grad)
     assert isinstance(clipped_grad, torch.Tensor)
     assert clipped_grad.shape == param.shape
+
+
+@pytest.mark.parametrize(
+    "microbatch_size",
+    [None, 2],
+    ids=["full-batch", "microbatch"],
+)
+def test_clipped_fun_rejects_empty_batch(microbatch_size):
+    clipped_fn, clip_state = clipped_fun(
+        lambda value: value, clipping_norm=1.0, microbatch_size=microbatch_size
+    )
+    with pytest.raises(ConfigurationError, match="requires a non-empty batch"):
+        clipped_fn(torch.empty(0, 3), state=clip_state)
 
 
 def test_clipped_fun_return_norms():
