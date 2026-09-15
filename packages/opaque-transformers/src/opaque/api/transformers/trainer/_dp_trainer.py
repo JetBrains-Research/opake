@@ -3466,7 +3466,11 @@ class DPTrainer:
         the training loop after train-triggered evaluation, matching HF.
         """
         ctx = self._ctx
-        if ctx is not None:
+        # ``accounting`` is None when privacy accounting is disabled; skip the
+        # caching wrap entirely — ``acc.cached(None)`` would produce a
+        # CachedProcess(None) that satisfies the ``is not None`` guards in the
+        # log / checkpoint / finalize paths and then crashes on ε queries.
+        if ctx is not None and ctx.accounting is not None:
             ctx.accounting = acc.cached(ctx.accounting)
         self.log(dict(metrics))
         self._control = self._callback_handler.on_evaluate(

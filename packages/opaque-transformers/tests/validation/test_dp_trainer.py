@@ -475,6 +475,38 @@ class TestDPTrainerTrain:
         assert "privacy_epsilon" not in output.metrics
         assert not (tmp_path / "checkpoint-2" / "accountant.json").exists()
 
+    def test_accounting_off_survives_mid_training_eval(
+        self, gpt2_with_lora, tiny_lm_dataset, tmp_path
+    ):
+        """Regression: eval used to wrap the disabled (None) accountant in
+        ``CachedProcess(None)", which then crashed the ε queries behind the
+        log / checkpoint / final-metrics ``is not None`` guards."""
+        model, tokenizer = gpt2_with_lora
+        trainer = DPTrainer(
+            model=model,
+            args=_default_args(
+                output_dir=str(tmp_path),
+                privacy_noise_multiplier=1.0,
+                privacy_target_epsilon=None,
+                max_steps=2,
+                eval_strategy="steps",
+                eval_steps=1,
+                logging_steps=1,
+                save_strategy="steps",
+                save_steps=1,
+            ),
+            processing_class=tokenizer,
+            train_dataset=tiny_lm_dataset,
+            eval_dataset=tiny_lm_dataset,
+        )
+
+        output = trainer.train()
+
+        assert trainer._accountant is None
+        assert "privacy_epsilon" not in output.metrics
+        for step in (1, 2):
+            assert not (tmp_path / f"checkpoint-{step}" / "accountant.json").exists()
+
     def test_privacy_accounting_can_be_explicitly_disabled(self):
         args = _default_args(
             privacy_noise_multiplier=1.0,
