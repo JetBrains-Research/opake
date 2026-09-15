@@ -125,6 +125,17 @@ def test_gloo_runtime_foundation_trains_and_checkpoints(tmp_path) -> None:
     )
 
 
+@pytest.mark.slow
+@pytest.mark.distributed
+def test_gloo_chained_ignore_data_skip_resume_keeps_sampler_lineage(tmp_path) -> None:
+    _run_ddp(
+        "sampler_lineage_chained_resume",
+        world_size=2,
+        output_dir=str(tmp_path),
+        backend="gloo",
+    )
+
+
 @pytest.mark.cuda
 @pytest.mark.slow
 def test_runtime_foundation_rank_world_world4(tmp_path) -> None:

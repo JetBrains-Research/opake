@@ -304,6 +304,11 @@ class RuntimeCheckpoint:
         metadata={"compare_on_resume": True, "drift": "shape"},
     )
 
+    # --- Sampler stream lineage ------------------------------------------
+    # Pre-rank sampler stream key (``{"seed", "impl"}``) the run drew from,
+    # so a DDP resume folds each rank from the checkpoint's lineage.
+    sampler_stream_key: dict[str, Any] | None = None
+
 
 def save_dp_runtime_state(  # noqa: PLR0913
     path: str,
@@ -329,6 +334,7 @@ def save_dp_runtime_state(  # noqa: PLR0913
     learning_rate: float | None = None,
     warmup_steps: int | float | None = None,
     lr_scheduler_kwargs: dict[str, Any] | None = None,
+    sampler_stream_key: dict[str, Any] | None = None,
 ) -> None:
     """Save the DP runtime bundle as a :class:`RuntimeCheckpoint`."""
     if not isinstance(clip_state, ClipState):
@@ -368,6 +374,9 @@ def save_dp_runtime_state(  # noqa: PLR0913
         learning_rate=(float(learning_rate) if learning_rate is not None else None),
         warmup_steps=(float(warmup_steps) if warmup_steps is not None else None),
         lr_scheduler_kwargs=lr_scheduler_kwargs,
+        sampler_stream_key=(
+            dict(sampler_stream_key) if sampler_stream_key is not None else None
+        ),
     )
     # ``torch.save`` of a dataclass round-trips via pickle.  Kept as
     # pickle to handle the heterogeneous types (tensors inside
