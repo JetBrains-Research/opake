@@ -86,7 +86,9 @@ def test_fused_for_causal_lm_forwards_label_smoothing(monkeypatch):
         captured["logit_scale"] = logit_scale
         captured["weight"] = weight
         captured["label_shape"] = tuple(labels_.shape)
-        return hidden_states.new_tensor(12.0, dtype=torch.float32)
+        # The kernel's four outputs: (nll_sum, lse, valids, token_weight).
+        empty = hidden_states.new_empty(0)
+        return hidden_states.new_tensor(12.0, dtype=torch.float32), empty, empty, empty
 
     monkeypatch.setattr(
         Opaque_LinearCrossEntropyLoss, "apply", staticmethod(fake_apply)
