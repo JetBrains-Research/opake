@@ -63,11 +63,18 @@ must be set.** Neither has a silent default — construction raises if
 both are `None`. The usual configurations are:
 
 - `privacy_target_epsilon=ε` (NM left as `None`) — calibrate the noise
-  multiplier from the budget at `train()` start.
+  multiplier from the budget at `train()` start and enable privacy accounting.
 - `privacy_noise_multiplier=σ` (target_eps left as `None`) — fix the
-  noise multiplier; accounted ε is reported but not constrained.
+  noise multiplier without privacy accounting. Set `privacy_accounting=True`
+  to report resulting ε without constraining it.
 - For independent DP-SGD only, set both to use a fixed multiplier and
   stop after the accumulated epsilon reaches the target.
+
+Privacy accounting defaults to enabled when `privacy_target_epsilon` is set
+and disabled for fixed-noise-only training. Set `privacy_accounting=True` to
+opt in for fixed-noise training, or `privacy_accounting=False` to explicitly
+disable it for configurations without `privacy_target_epsilon`. Disabled runs
+do not report ε / δ or write `accountant.json` checkpoints.
 
 Setting `privacy_noise_multiplier=0.0` together with a
 `privacy_target_epsilon` raises: the non-private path can't honour a

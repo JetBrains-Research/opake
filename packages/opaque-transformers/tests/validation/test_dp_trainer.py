@@ -447,6 +447,51 @@ class TestDPTrainerTrain:
                 break
         assert changed, "Model parameters did not change after training"
 
+    def test_fixed_noise_without_budget_skips_accounting(
+        self, gpt2_with_lora, tiny_lm_dataset, tmp_path
+    ):
+        model, tokenizer = gpt2_with_lora
+        trainer = DPTrainer(
+            model=model,
+            args=_default_args(
+                output_dir=str(tmp_path),
+                privacy_noise_multiplier=1.0,
+                privacy_target_epsilon=None,
+                max_steps=2,
+                eval_strategy="no",
+                logging_steps=1,
+                save_strategy="steps",
+                save_steps=2,
+            ),
+            processing_class=tokenizer,
+            train_dataset=tiny_lm_dataset,
+            eval_dataset=tiny_lm_dataset,
+        )
+
+        output = trainer.train()
+
+        assert trainer.args.privacy_accounting is False
+        assert trainer._accountant is None
+        assert "privacy_epsilon" not in output.metrics
+        assert not (tmp_path / "checkpoint-2" / "accountant.json").exists()
+
+    def test_privacy_accounting_can_be_explicitly_disabled(self):
+        args = _default_args(
+            privacy_noise_multiplier=1.0,
+            privacy_target_epsilon=None,
+            privacy_accounting=False,
+        )
+
+        assert args.privacy_accounting is False
+
+    def test_privacy_target_enables_accounting_by_default(self):
+        args = _default_args(
+            privacy_noise_multiplier=None,
+            privacy_target_epsilon=1.0,
+        )
+
+        assert args.privacy_accounting is True
+
     def test_model_generates_after_training(self, gpt2_with_lora, tiny_lm_dataset):
         """Verify model.generate() works after param restoration."""
         model, tokenizer = gpt2_with_lora

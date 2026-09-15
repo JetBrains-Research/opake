@@ -555,6 +555,9 @@ class TrainingArguments:
     privacy_target_epsilon: float | None = None
     #: Defaults at training setup to ``1 / dataset_size**1.1`` when unset.
     privacy_target_delta: float | None = None
+    #: Whether to maintain and report a privacy accountant. Defaults to ``True``
+    #: when an epsilon target is set, otherwise ``False``.
+    privacy_accounting: bool | None = None
 
     # ---- Clipping (mode + JSON-style args, HF ``optim_args`` pattern) ---
     clipping_mode: str = "fixed"
@@ -583,7 +586,8 @@ class TrainingArguments:
 
     # ---- Resume policy --------------------------------------------------
     # There is no "resume without DP state" opt-in.  ``resume_from_checkpoint``
-    # requires a *complete* DP checkpoint (dp_state + optimizer + accountant);
+    # requires a *complete* DP checkpoint (dp_state + optimizer, plus an
+    # accountant when privacy accounting is enabled);
     # a weights-only export is not resumable.  To start a fresh DP run from
     # arbitrary weights (public-data warmup, an HF checkpoint, a pretrained
     # model), load them at construction via ``model=...`` — the run begins
@@ -1140,6 +1144,22 @@ class TrainingArguments:
                     "Set either privacy_noise_multiplier (use 0.0 for non-private "
                     "training) or privacy_target_epsilon (to calibrate noise to a "
                     "budget); neither was provided.",
+                )
+            )
+        if self.privacy_accounting is None:
+            self.privacy_accounting = self.privacy_target_epsilon is not None
+        elif not isinstance(self.privacy_accounting, bool):
+            raise ConfigurationError(
+                *(
+                    "privacy_accounting must be a bool or None; got "
+                    f"{self.privacy_accounting!r}.",
+                )
+            )
+        if not self.privacy_accounting and self.privacy_target_epsilon is not None:
+            raise ConfigurationError(
+                *(
+                    "privacy_target_epsilon requires privacy_accounting=True. "
+                    "Drop the target for fixed-noise training without accounting.",
                 )
             )
         if (

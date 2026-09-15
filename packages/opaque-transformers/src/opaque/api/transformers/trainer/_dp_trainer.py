@@ -234,7 +234,7 @@ class _TrainingContext:
     opt: Any
     opt_state: Any
     lr_schedule: Callable[[int], float]
-    accounting: Accountant
+    accounting: Accountant | None
     mechanism: Callable
     # Cached process reused across independent step compositions. Whole-horizon
     # mechanisms are installed in ``accounting`` once and leave this as None.
@@ -283,7 +283,7 @@ def _initialize_accounting(
 
 def _account_independent_step(ctx: _TrainingContext) -> None:
     """Compose one step unless the context already holds a complete horizon."""
-    if ctx.step_process is not None:
+    if ctx.accounting is not None and ctx.step_process is not None:
         ctx.accounting |= ctx.step_process
 
 
@@ -1714,9 +1714,12 @@ class DPTrainer:
         # share key validation + device move (no asymmetric crash modes).
         collate_fn = self._resolve_collate_fn()
 
-        accounting, step_process, horizon_process = _initialize_accounting(
-            mechanism(noise_multiplier)
-        )
+        accounting: Accountant | None = None
+        step_process = horizon_process = None
+        if a.privacy_accounting:
+            accounting, step_process, horizon_process = _initialize_accounting(
+                mechanism(noise_multiplier)
+            )
 
         return _TrainingContext(
             fmodel=fmodel,
@@ -2077,45 +2080,7 @@ class DPTrainer:
         if a.load_best_model_at_end:
             self._load_best_model(ctx)
 
-        # Final metrics
-        final_epsilon = ctx.accounting.epsilon_at(ctx.target_delta)
-        # HF parity: add any remaining tr_loss to the total before computing avg.
-        # This ensures that even if logging_steps didn't align perfectly with the
-        # final step, the total training loss includes all steps.
-        self._total_loss_scalar += self._tr_loss.item()
-        effective_global_step = max(global_step, 0.001)  # Avoid ZeroDivisionError
-        train_loss = self._total_loss_scalar / effective_global_step
-        train_start = self._train_start_time or time.time()
-        metrics: dict[str, Any] = speed_metrics(
-            "train",
-            train_start,
-            num_samples=len(self._train_dataset) * ctx.num_epochs,
-            num_steps=global_step,
-            num_tokens=(
-                self.state.num_input_tokens_seen
-                if a.include_tokens_per_second
-                else None
-            ),
-        )
-        metrics.update(
-            {
-                "train_loss": train_loss,
-                "train_steps": global_step,
-                "privacy_epsilon": final_epsilon,
-                "privacy_delta": ctx.target_delta,
-                "privacy_noise_multiplier": ctx.noise_multiplier,
-            }
-        )
-        if a.include_num_input_tokens_seen != "no":
-            metrics["num_input_tokens_seen"] = self.state.num_input_tokens_seen
-        self._memory_tracker.stop_and_update_metrics(metrics)
-
-        log.info(
-            "Training complete: %d steps, final loss=%.4f, epsilon=%.3f",
-            global_step,
-            train_loss,
-            final_epsilon,
-        )
+        train_loss, metrics = self._finalize_training_metrics(ctx, global_step)
         self.log(metrics, start_time=self._train_start_time)
         self._refresh_final_checkpoint_state(global_step)
 
@@ -2129,6 +2094,57 @@ class DPTrainer:
             _hub.push_to_hub(self, commit_message="End of training")
 
         return TrainOutput(global_step, train_loss, metrics)
+
+    def _finalize_training_metrics(
+        self, ctx: _TrainingContext, global_step: int
+    ) -> tuple[float, dict[str, Any]]:
+        """Collect final metrics and close the memory tracker."""
+        final_epsilon = (
+            ctx.accounting.epsilon_at(ctx.target_delta)
+            if ctx.accounting is not None
+            else None
+        )
+        self._total_loss_scalar += self._tr_loss.item()
+        train_loss = self._total_loss_scalar / max(global_step, 0.001)
+        metrics: dict[str, Any] = speed_metrics(
+            "train",
+            self._train_start_time or time.time(),
+            num_samples=len(self._train_dataset) * ctx.num_epochs,
+            num_steps=global_step,
+            num_tokens=(
+                self.state.num_input_tokens_seen
+                if self.args.include_tokens_per_second
+                else None
+            ),
+        )
+        metrics.update(
+            {
+                "train_loss": train_loss,
+                "train_steps": global_step,
+                "privacy_noise_multiplier": ctx.noise_multiplier,
+            }
+        )
+        if final_epsilon is not None:
+            metrics["privacy_epsilon"] = final_epsilon
+            metrics["privacy_delta"] = ctx.target_delta
+        if self.args.include_num_input_tokens_seen != "no":
+            metrics["num_input_tokens_seen"] = self.state.num_input_tokens_seen
+        self._memory_tracker.stop_and_update_metrics(metrics)
+
+        if final_epsilon is None:
+            log.info(
+                "Training complete: %d steps, final loss=%.4f (accounting disabled)",
+                global_step,
+                train_loss,
+            )
+        else:
+            log.info(
+                "Training complete: %d steps, final loss=%.4f, epsilon=%.3f",
+                global_step,
+                train_loss,
+                final_epsilon,
+            )
+        return train_loss, metrics
 
     # ------------------------------------------------------------------
     # training_step() — single DP-SGD step
@@ -4201,37 +4217,39 @@ class DPTrainer:
         ctrl = self._control
 
         if ctrl.should_log:
-            # Re-wrap the accountant in ``acc.cached`` at each log boundary
-            # so subsequent ``epsilon_at`` queries within this window are
-            # amortized.  Mirrors ``_after_evaluate`` and the manual loop.
-            ctx.accounting = acc.cached(ctx.accounting)
-            epsilon = ctx.accounting.epsilon_at(ctx.target_delta)
-            # Stop-at-ε (fallback): owns the stop only when no crossing step
-            # was predicted (``ctx.stop_at_step is None`` — Monte-Carlo
-            # accountants, unreachable target); otherwise the in-loop integer
-            # check is the single stop owner and this block only computed ε
-            # for the log line.  Fixed-NM path only; the calibrated NM was
-            # sized to hit target_epsilon at max_steps, so stopping earlier
-            # would mean we over-noised the run.
             a = self.args
-            if (
-                ctx.stop_at_step is None
-                and not ctx.is_horizon_process
-                and a.privacy_noise_multiplier is not None
-                and a.privacy_noise_multiplier > 0
-                and a.privacy_target_epsilon is not None
-                and epsilon >= a.privacy_target_epsilon
-            ):
-                # Horizon configurations cannot reach this fallback: combining
-                # fixed noise with a target is rejected during validation.
-                self.state.privacy_target_epsilon_reached = True
-                self._control.should_training_stop = True
-                log.info(
-                    "stop-at-ε hit: ε=%g >= target=%g at step %d",
-                    epsilon,
-                    a.privacy_target_epsilon,
-                    global_step,
-                )
+            epsilon: float | None = None
+            if ctx.accounting is not None:
+                # Re-wrap the accountant in ``acc.cached`` at each log boundary
+                # so subsequent ``epsilon_at`` queries within this window are
+                # amortized.  Mirrors ``_after_evaluate`` and the manual loop.
+                ctx.accounting = acc.cached(ctx.accounting)
+                epsilon = ctx.accounting.epsilon_at(ctx.target_delta)
+                # Stop-at-ε (fallback): owns the stop only when no crossing step
+                # was predicted (``ctx.stop_at_step is None`` — Monte-Carlo
+                # accountants, unreachable target); otherwise the in-loop integer
+                # check is the single stop owner and this block only computed ε
+                # for the log line.  Fixed-NM path only; the calibrated NM was
+                # sized to hit target_epsilon at max_steps, so stopping earlier
+                # would mean we over-noised the run.
+                if (
+                    ctx.stop_at_step is None
+                    and not ctx.is_horizon_process
+                    and a.privacy_noise_multiplier is not None
+                    and a.privacy_noise_multiplier > 0
+                    and a.privacy_target_epsilon is not None
+                    and epsilon >= a.privacy_target_epsilon
+                ):
+                    # Horizon configurations cannot reach this fallback: combining
+                    # fixed noise with a target is rejected during validation.
+                    self.state.privacy_target_epsilon_reached = True
+                    self._control.should_training_stop = True
+                    log.info(
+                        "stop-at-ε hit: ε=%g >= target=%g at step %d",
+                        epsilon,
+                        a.privacy_target_epsilon,
+                        global_step,
+                    )
             # HF parity: ``loss`` is the *average* per-step loss across the
             # window since the last log boundary, not the per-step
             # instantaneous value.  Smooths out per-step variance that
@@ -4267,13 +4285,14 @@ class DPTrainer:
                 "batch_size": step_result.get("batch_size", 0),
                 "grad_norm": step_result.get("grad_norm", 0.0),
                 "learning_rate": ctx.lr_schedule(global_step - 1),
-                "privacy_epsilon": epsilon,
-                "privacy_delta": ctx.target_delta,
                 "privacy_clip_rate": step_result.get("clip_rate", 0.0),
                 "privacy_clipping_norm": step_result.get("clipping_norm", 0.0),
                 "privacy_noise_std": step_result.get("noise_std", 0.0),
                 "privacy_noise_multiplier": ctx.noise_multiplier,
             }
+            if epsilon is not None:
+                logs["privacy_epsilon"] = epsilon
+                logs["privacy_delta"] = ctx.target_delta
             if "clip_rate_max" in step_result:
                 logs["privacy_clip_rate_max"] = step_result["clip_rate_max"]
             if "clipped_grad_norm" in step_result:
@@ -5191,7 +5210,8 @@ class DPTrainer:
 
                 self._save_trainer_state(staging_dir)
                 self._save_training_args(staging_dir)
-                self._save_accountant(staging_dir, ctx.accounting)
+                if ctx.accounting is not None:
+                    self._save_accountant(staging_dir, ctx.accounting)
                 if not a.save_only_model:
                     self._save_optimizer(staging_dir, ctx)
                     self._save_dp_runtime(staging_dir, ctx)
@@ -5482,14 +5502,13 @@ class DPTrainer:
 
     def _read_runtime_for_resume(
         self, ckpt_dir: str
-    ) -> tuple[ckpt.RuntimeCheckpoint, Accountant]:
+    ) -> tuple[ckpt.RuntimeCheckpoint, Accountant | None]:
         """Load a *complete* DP checkpoint for resume.
 
-        A resumable DP checkpoint must carry the full runtime needed to
-        continue a privacy-accounted process: ``dp_state.pt`` (clip /
-        noise / sampler state), ``dp_optimizer.pt`` (optimizer state), and
-        ``accountant.json`` (privacy provenance).  A checkpoint missing
-        any of these is a **weights-only export** — e.g. one written with
+        A resumable DP checkpoint must carry ``dp_state.pt`` (clip / noise /
+        sampler state) and ``dp_optimizer.pt``. Accounted runs additionally
+        require ``accountant.json``. A checkpoint missing a required file is
+        a **weights-only export** — e.g. one written with
         ``save_only_model=True``, an HF checkpoint, or a plain pretrained
         model — and is *not resumable*: continuing a DP run from it would
         rebuild the noise stream from scratch and/or discard the spent
@@ -5509,8 +5528,9 @@ class DPTrainer:
         required = (
             ckpt.DP_STATE_NAME,
             ckpt.DP_OPTIMIZER_NAME,
-            ckpt.DP_ACCOUNTANT_NAME,
         )
+        if self.args.privacy_accounting:
+            required += (ckpt.DP_ACCOUNTANT_NAME,)
         missing = [name for name in required if not (Path(ckpt_dir) / name).exists()]
         if missing:
             raise CheckpointError(
@@ -5530,11 +5550,13 @@ class DPTrainer:
         runtime_payload = ckpt.load_dp_runtime_state(
             str(Path(ckpt_dir) / ckpt.DP_STATE_NAME)
         )
-        with (
-            (Path(ckpt_dir) / ckpt.DP_ACCOUNTANT_NAME).open() as f,
-            _deep_json_recursion(),
-        ):
-            accountant = opaque_from_state_dict(Accountant(), json.load(f))
+        accountant: Accountant | None = None
+        if self.args.privacy_accounting:
+            with (
+                (Path(ckpt_dir) / ckpt.DP_ACCOUNTANT_NAME).open() as f,
+                _deep_json_recursion(),
+            ):
+                accountant = opaque_from_state_dict(Accountant(), json.load(f))
         return runtime_payload, accountant
 
     def _read_trainer_state(self, ckpt_dir: str) -> dict[str, Any] | None:
