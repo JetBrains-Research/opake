@@ -9,10 +9,8 @@ Headline factories:
 - :func:`adaptive_clipped_grad` — adaptive clipping (Andrew et al.,
   `Differentially Private Learning with Adaptive Clipping
   <https://arxiv.org/abs/1905.03871>`_, 2021).
-- :func:`moe_clipped_grad` — per-example clipping for mixture-of-experts
-  models with the Switch load-balancing loss, releasing the batch router
-  load inside the clipper (accounted by
-  :func:`opaque.dpsgd.accounting.moe_aux`).
+- :func:`moe_clipped_grad` — MoE clipping with the batch router load
+  released inside the clipper (accounted by :func:`opaque.dpsgd.accounting.moe_aux`).
 
 Adaptive clipping is DP-SGD-only: its threshold drifts across steps,
 which violates the constant-sensitivity assumption matrix-factorization

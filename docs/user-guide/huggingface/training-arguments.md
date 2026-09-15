@@ -134,10 +134,10 @@ noise would yield infinite noise and `NaN` gradients.
 | `sampling_kwargs` | Mode-specific sampler kwargs. `truncated_batch_size=N` caps Poisson draws at `N`; k-out-of-t accepts `k` and `allocation`; other modes accept no keys. |
 | `clipping_mode` | `"fixed"` (default), `"adaptive"`, or `"auto"`. `adaptive` is rejected under any `mf_*` mechanism (MF noise requires constant per-step sensitivity). |
 | `clipping_kwargs` | Mode-specific clipping kwargs. Adaptive accepts the public factory names `target_quantile` and `clipping_norm_max`. AUTO-S accepts `gamma`; fixed accepts no keys. |
-| `router_load` | `False`. `True` trains a mixture-of-experts model with the Switch load-balancing surrogate at a differentially private estimate of the batch router load, released inside the clipper (`moe_clipped_grad`) and priced by `moe_aux`; see [MoE load balancing](../../mechanisms/dp-sgd/moe-load-balancing.md). Requires `privacy_noise_mechanism="gaussian"` and `clipping_mode="fixed"`. |
-| `router_load_ratio` | `0.02`. Share of the whitened sensitivity given to the load release; the gradient noise is inflated by `sqrt(1 + ratio)` at a fixed budget. |
-| `router_load_max_tokens` | Required with `router_load`: the public bound on the valid tokens of one collated row (the collator's row length). |
-| `router_load_kwargs` | Extra clipper kwargs: `alpha` (default: the model config's `router_aux_loss_coef`), `mean_tokens` (default: `router_load_max_tokens`), `filter_beta` (default `0.99`). |
+| `router_load` | `False`. `True` trains a MoE model with the [MoE load-balancing](../../mechanisms/dp-sgd/moe-load-balancing.md) release (`moe_clipped_grad` + `moe_aux`). Requires `privacy_noise_mechanism="gaussian"` and `clipping_mode="fixed"`. |
+| `router_load_ratio` | `0.02`. Share of the whitened sensitivity given to the load release. |
+| `router_load_max_tokens` | Required with `router_load`: the collator's row length. |
+| `router_load_kwargs` | `alpha` (default: the model config's `router_aux_loss_coef`), `mean_tokens`, `filter_beta`. |
 | `privacy_noise_mechanism` | `"gaussian"` (default, DP-SGD), or one of the DP-FTRL matrix-factorization mechanisms: `"mf_band"`, `"mf_blt"`, `"mf_bisr"`, `"mf_bsr"`, `"mf_lambda_cgd"`, `"mf_identity"`. |
 | `privacy_noise_mechanism_kwargs` | Mechanism extras. For `"gaussian"`: `compute_dtype` as a native `torch.dtype` or the string names `float16`, `bfloat16`, `float32`, `float64`. For `mf_*`: per-strategy kwargs (auto-filled from Mellum-shaped defaults — see below). |
 | `noise_calibration_kwargs` | Calibration search bounds; defaults `{"min": 0.11, "max": 10.0, "tolerance": 1e-3}`. |

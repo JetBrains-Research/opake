@@ -876,14 +876,7 @@ class DPTrainer:
         )
 
     def _setup_router_load(self) -> None:
-        """Resolve the MoE routing geometry and the surrogate coefficient.
-
-        ``router_load=True`` needs a mixture-of-experts model whose backbone
-        records router logits, the loss-only forward the patches install
-        (``loss_only`` / ``output_router_logits``), and the base per-example
-        causal-LM loss: a subclass that overrides the loss hook computes its
-        own forward and cannot hand the router logits to the clipper.
-        """
+        """Resolve the MoE routing geometry and the surrogate coefficient."""
         self._moe_geometry: dict[str, int] | None = None
         self._router_load_alpha: float = 0.0
         a = self.args
@@ -2358,8 +2351,7 @@ class DPTrainer:
         if batch_size == 0:
             empty: dict[str, Any] = {"loss": 0.0, "batch_size": 0}
             if isinstance(ctx.clip_state, MoeClipState):
-                # An empty draw still releases (pure noise) and advances the
-                # estimate, so the monitor stays reported on every step.
+                # An empty draw still releases pure noise and advances the estimate.
                 empty["router_load_imbalance"] = ctx.clip_state.imbalance
                 empty["router_load_noise_std"] = ctx.clip_state.filtered_noise_std
             return empty
@@ -2386,8 +2378,6 @@ class DPTrainer:
         if aux.clipped_grad_norms is not None and aux.clipped_grad_norms.numel() > 0:
             metrics["clipped_grad_norm"] = aux.clipped_grad_norms.mean().item()
         if isinstance(ctx.clip_state, MoeClipState):
-            # Public post-processing of the load release: the imbalance the
-            # next step's surrogate sees and the known noise of the estimate.
             metrics["router_load_imbalance"] = ctx.clip_state.imbalance
             metrics["router_load_noise_std"] = ctx.clip_state.filtered_noise_std
 
@@ -2517,11 +2507,7 @@ class DPTrainer:
         *,
         return_logits: bool,
     ) -> tuple[Tensor, Any, Any]:
-        """One example's forward: ``(loss, logits, output)``.
-
-        The body of :meth:`compute_per_example_loss`; the router-load path
-        reads the model output's ``router_logits`` off the third element.
-        """
+        """One example's forward: ``(loss, logits, output)``."""
         smoothing = float(self.args.label_smoothing_factor)
         # Push smoothing through to the loss function as a kwarg so the
         # Opaque CE kernels (both non-fused and fused-linear) apply it
@@ -2603,12 +2589,7 @@ class DPTrainer:
         params: dict[str, Tensor],
         inputs: dict[str, Tensor],
     ) -> tuple[Tensor, Any, Tensor | None]:
-        """The ``moe_clipped_grad`` loss contract: ``(loss, router_logits, mask)``.
-
-        Runs the base per-example loss with HF's ``output_router_logits=True``
-        on the loss-only forward, which hands back the per-layer router
-        logits without computing the batch-coupled auxiliary loss.
-        """
+        """The ``moe_clipped_grad`` loss contract: ``(loss, router_logits, mask)``."""
         loss, _, output = self._forward_per_example(
             fmodel,
             params,
@@ -4519,9 +4500,8 @@ class DPTrainer:
     ) -> tuple[Callable[..., Any], Any]:
         """Create the clipped gradient function based on clipping mode.
 
-        With ``router_load`` the MoE clipper is built instead; it needs the
-        resolved ``noise_multiplier`` (its load noise scales with it) and
-        draws the load release from ``quantile_noise_key``.
+        With ``router_load`` the MoE clipper is built instead; its load noise
+        scales with the resolved ``noise_multiplier``.
 
         ``loss_fn`` stays eager as a Python callable.  When compilation is
         enabled, the clipping factory compiles its tensor-only per-microbatch
@@ -4554,13 +4534,6 @@ class DPTrainer:
                 else {}
             )
             kwargs.pop("alpha", None)
-            if a.clipping_mode == "auto":
-                raise ConfigurationError(
-                    *(
-                        "router_load=True with clipping_mode='auto' is not supported; "
-                        "use clipping_mode='fixed'.",
-                    )
-                )
             grad_fn, state = moe_clipped_grad(
                 loss_fn,
                 clipping_norm=clip_norm,

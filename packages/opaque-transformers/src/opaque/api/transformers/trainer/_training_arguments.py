@@ -564,15 +564,13 @@ class TrainingArguments:
     clipping_kwargs: dict[str, Any] | str = field(default_factory=dict)
 
     # ---- MoE router-load release -----------------------------------------
-    #: Release the batch router load of a mixture-of-experts model inside the
-    #: clipper and train with the Switch load-balancing surrogate at the
-    #: filtered estimate (``moe_clipped_grad``, accounted by ``moe_aux``).
+    #: Train a MoE model with the Switch load-balancing surrogate at a DP
+    #: estimate of the batch router load (``moe_clipped_grad`` / ``moe_aux``).
     router_load: bool = False
-    #: Share of the whitened sensitivity given to the load release; the same
-    #: value prices the joint release in the accountant.
+    #: Share of the whitened sensitivity given to the load release.
     router_load_ratio: float = 0.02
-    #: Public bound on the valid tokens of one collated row (``T_max``).
-    #: Required when ``router_load`` is on.
+    #: Public bound on the valid tokens of one collated row; required with
+    #: ``router_load``.
     router_load_max_tokens: int | None = None
     #: Extra ``moe_clipped_grad`` kwargs: ``alpha`` (default: the model
     #: config's ``router_aux_loss_coef``), ``mean_tokens``, ``filter_beta``.
@@ -1066,12 +1064,11 @@ class TrainingArguments:
                     "row length).",
                 )
             )
-        if self.clipping_mode == "adaptive":
+        if self.clipping_mode != "fixed":
             raise ConfigurationError(
                 *(
-                    "router_load=True is incompatible with clipping_mode='adaptive': "
-                    "the load release needs a constant per-record bound; use "
-                    "clipping_mode='fixed' or 'auto'.",
+                    "router_load=True requires clipping_mode='fixed', got "
+                    f"{self.clipping_mode!r}.",
                 )
             )
         if self.privacy_noise_mechanism != "gaussian":

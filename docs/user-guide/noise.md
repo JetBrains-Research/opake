@@ -145,18 +145,6 @@ sensitivity-proportional Mahalanobis allocation (scalar case:
 :class:`~opaque.types.PerGroup` bounds, ``S`` sums ``Δ¹_g+Δ²_g`` over
 groups).
 
-### Side releases drawn inside the clipper
-
-Two clippers release a side statistic of their own with Gaussian noise
-drawn from their own key stream, so the noise function sees only the
-gradient: `adaptive_clipped_grad` noises its clipped fraction, and
-`moe_clipped_grad` noises the batch router load of a mixture-of-experts
-model. In both cases the step is still one Gaussian; the accountant
-wrapper (`adaclip`, `moe_aux`) prices the joint release at an effective
-multiplier, and the `noise_multiplier` handed to `gaussian_noise` stays
-the value the wrapper's inner `gaussian()` carries. See
-[MoE load balancing](../mechanisms/dp-sgd/moe-load-balancing.md).
-
 ## Matrix-factorization noise (DP-FTRL)
 
 Standard Gaussian noise is independent across training steps. Matrix-

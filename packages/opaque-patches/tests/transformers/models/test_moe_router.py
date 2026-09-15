@@ -55,12 +55,7 @@ def _tiny_mellum(device, **overrides):
 
 @contextlib.contextmanager
 def _restored_class_forwards(model):
-    """Undo class-level ``forward`` replacements made while the block runs.
-
-    ``apply_model_patches`` installs class-level forwards guarded by a marker,
-    so the first install in a process is captured by every later instance.
-    Tests that change the install leave the classes as they found them.
-    """
+    """Undo class-level ``forward`` replacements made while the block runs."""
     saved = {}
     for module in model.modules():
         cls = type(module)

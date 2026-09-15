@@ -87,14 +87,9 @@ def _reduce_device() -> torch.device:
 def sync_moe_clip_state(state: MoeClipState) -> MoeClipState:
     """Finish the pending load release of :func:`moe_clipped_grad` under DDP.
 
-    Every rank's ``grad_fn`` leaves its rank-local, un-noised load mean in the
-    state; this all-reduces those means (``sum``, so the result is the batch
-    mean over the expected batch size every rank was given), adds the noise
-    once from the shared key and step, filters, and advances the state.  The
-    ranks must have been built with the same ``key``; the noise derivation is
-    deterministic in ``(key, step)``, so every rank lands on the same
-    ``f_tilde``.  Not distributed, or nothing pending: the state is returned
-    unchanged.
+    All-reduces the rank-local load means, adds the noise once from the
+    shared ``(key, step)`` and filters, so every rank lands on the same
+    ``f_tilde``.  Not distributed, or nothing pending: returned unchanged.
     """
     if not is_distributed() or not state._pending:
         return state

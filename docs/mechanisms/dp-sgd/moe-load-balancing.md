@@ -300,9 +300,9 @@ post-processing of previous releases. Everything computed from private
 examples inside the gradient transform, router logits, probabilities,
 executed routes, the per-example load, stays inside it: the per-example
 load is stripped from the returned diagnostics, and the gradient norms
-they carry are norms of the gradient alone. The clipping rule must have
-a constant per-record bound, so adaptive clipping cannot host this
-release; fixed clipping and AUTO-S can.
+they carry are norms of the gradient alone. The gradient half uses fixed
+clipping; adaptive clipping has no constant per-record bound and cannot
+host this release.
 
 ## References
 

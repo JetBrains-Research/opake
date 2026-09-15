@@ -272,16 +272,13 @@ required with uneven local batches; the current bound remains
 ## MoE load balancing
 
 `moe_clipped_grad` is the clipper for mixture-of-experts models trained
-with the Switch load-balancing loss. That loss couples the batch through
-the load vector, the fraction of tokens routed to each expert, so a
-per-example pipeline cannot express it directly; the clipper releases the
-batch load privately inside its state, the way adaptive clipping releases
-its clipped fraction, and feeds the filtered estimate into the next step's
-per-example surrogate. The loss function returns
-`(loss, router_logits, attention_mask)` for one example, the gradient
-stream is the plain `ClippedPytree`, and the accountant is
+with the Switch load-balancing loss. It releases the batch router load
+privately inside its state, the way adaptive clipping releases its clipped
+fraction, and feeds the filtered estimate into the next step's per-example
+surrogate. The loss function returns `(loss, router_logits, attention_mask)`
+for one example and the accountant is
 `dpsgd_acc.moe_aux(dpsgd_acc.gaussian(nm), ratio=ratio)` with the same
-`ratio` the clipper takes:
+`ratio`:
 
 ```python
 from opaque.dpsgd.clipping import moe_clipped_grad
@@ -302,9 +299,8 @@ grad_fn, clip_state = moe_clipped_grad(
 ```
 
 Under DDP synchronize the state after every step with
-`opaque.distributed.sync`, as for adaptive clipping. The mechanism, its
-bound, the joint accountant and the router-logits contract are described
-in [MoE load balancing](../mechanisms/dp-sgd/moe-load-balancing.md).
+`opaque.distributed.sync`, as for adaptive clipping. See
+[MoE load balancing](../mechanisms/dp-sgd/moe-load-balancing.md).
 
 ## Loss function requirements
 

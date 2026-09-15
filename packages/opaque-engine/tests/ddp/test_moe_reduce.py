@@ -28,12 +28,7 @@ def _require_gloo() -> None:
 @pytest.mark.slow
 @pytest.mark.distributed
 def test_synced_release_matches_single_process_full_batch() -> None:
-    """Two ranks with half a batch each land on the single-process result.
-
-    The rank-local means are summed by the sync, the noise is drawn once from
-    the shared ``(key, step)``, so ``f_tilde`` matches a single process that
-    saw the whole batch; the reduced gradients match as well.
-    """
+    """Two ranks with half a batch each land on the single-process result."""
     _require_gloo()
     params, x, mask, y = _moe_fixture()
     grad_fn, state = _moe_factory()

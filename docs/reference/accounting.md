@@ -338,19 +338,14 @@ step = dpsgd_acc.poisson(dpsgd_acc.adaclip(dpsgd_acc.gaussian(0.5), fraction_noi
 ### `moe_aux(inner, *, ratio=0.02) -> DpProcess`
 
 Accounts for the MoE router-load release of
-[`moe_clipped_grad`](clipping.md): the clipped gradient and the batch
-router load of one step are one Gaussian on their concatenation, and the
-load half is allocated `ratio` of the gradient half's whitened
-sensitivity, so the step is a Gaussian at the joint multiplier
-`inner.noise_multiplier / sqrt(1 + ratio)`. Returns a `MoeAux` process
-composable with `poisson()` (plain or truncated), `parallel_poisson()` and
+[`moe_clipped_grad`](clipping.md): the step is a Gaussian at the joint
+multiplier `inner.noise_multiplier / sqrt(1 + ratio)`. Returns a `MoeAux`
+process composable with `poisson()`, `parallel_poisson()` and
 `k_out_of_t()`. The same `ratio` is given to the clipper.
 
-- `inner` (Gaussian): Base mechanism (from `gaussian()`), with the same
-  multiplier handed to `gaussian_noise`.
+- `inner` (Gaussian): Base mechanism (from `gaussian()`).
 - `ratio` (float): Share of the whitened sensitivity given to the load
-  release. Default: 0.02, a one-percent inflation of the gradient noise at
-  a fixed budget.
+  release. Default: 0.02.
 
 ```python
 step = dpsgd_acc.poisson(dpsgd_acc.moe_aux(dpsgd_acc.gaussian(0.5), ratio=0.02), 0.01)

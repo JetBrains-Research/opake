@@ -1,14 +1,9 @@
 """MoE router-load release transformation for privacy accounting.
 
-Prices the joint release of :func:`opaque.dpsgd.clipping.moe_clipped_grad`:
-the clipped gradient and the batch router load of one step are one Gaussian
-mechanism on their concatenation, and whitening each half by its own noise
-scale shows the joint per-record sensitivity to be ``1/nm² + ratio/nm²``
-(the load half is allocated ``ratio`` of the gradient half's whitened
-sensitivity).  The step is therefore a Gaussian mechanism at the joint
-multiplier ``nm / sqrt(1 + ratio)``, which is what the amplifiers and the
-PLD below evaluate.  The same ``ratio`` given to the clipper sets its load
-noise; see :mod:`opaque.api.engine.clipping._moe`.
+The clipped gradient and the batch router load of one step (see
+:func:`opaque.dpsgd.clipping.moe_clipped_grad`) are one Gaussian on their
+concatenation with whitened sensitivity ``1/nm² + ratio/nm²``, i.e. a
+Gaussian at the joint multiplier ``nm / sqrt(1 + ratio)``.
 """
 
 from __future__ import annotations
@@ -43,10 +38,8 @@ class MoeAux(DpProcess):
     ratio: float = DEFAULT_RATIO
 
     def __post_init__(self) -> None:
-        # Validate here (not only in ``moe_aux()``) so direct construction and
-        # deserialization -- the generic DpProcess codec rebuilds with
-        # ``cls(**kwargs)`` -- cannot produce an instance that prices the load
-        # release as free.
+        # Validated here too so direct construction and deserialization
+        # cannot price the load release as free.
         if not isinstance(self.ratio, (int, float)) or isinstance(self.ratio, bool):
             raise InputTypeError(*(f"ratio must be a number, got {self.ratio!r}",))
         if not math.isfinite(self.ratio) or self.ratio <= 0:
@@ -100,22 +93,16 @@ class MoeAux(DpProcess):
 def moe_aux(inner: _Inner, *, ratio: float = DEFAULT_RATIO) -> MoeAux:
     """Account for the privacy cost of the MoE router-load release.
 
-    Wraps an ``inner`` Gaussian mechanism and prices the batch router load
-    released by :func:`opaque.dpsgd.clipping.moe_clipped_grad` with the same
-    ``ratio``: the joint release is one Gaussian at multiplier
-    ``inner.noise_multiplier / sqrt(1 + ratio)``, so at a fixed privacy budget
-    the gradient noise is inflated by exactly ``sqrt(1 + ratio)`` (about one
-    percent at the default).
+    Wraps an ``inner`` Gaussian and prices the load released by
+    :func:`opaque.dpsgd.clipping.moe_clipped_grad` with the same ``ratio``:
+    one Gaussian at ``inner.noise_multiplier / sqrt(1 + ratio)``, so at a
+    fixed budget the gradient noise grows by ``sqrt(1 + ratio)``.
 
     Args:
-        inner: Base mechanism, ``gaussian(noise_multiplier)`` with the same
-            multiplier handed to ``gaussian_noise``.
+        inner: ``gaussian(noise_multiplier)`` with the multiplier handed to
+            ``gaussian_noise``.
         ratio: Share of the whitened sensitivity given to the load release,
             the same value given to ``moe_clipped_grad`` (default 0.02).
-
-    Returns:
-        A :class:`MoeAux` process with an
-        :attr:`~MoeAux.effective_noise_multiplier` property.
 
     Example::
 

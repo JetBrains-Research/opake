@@ -21,11 +21,6 @@ gradient sum. Simple and broadly applicable.
 |-----------|--------------------|----------|
 | [Gaussian](dp-sgd/gaussian.md) | $\mathcal{N}(0, \sigma^2)$ | $(-\infty, +\infty)$ |
 
-The [MoE load-balancing release](dp-sgd/moe-load-balancing.md) rides the
-Gaussian mechanism: a mixture-of-experts model's batch router load is
-released inside the clipper as a second half of the same Gaussian, priced
-by `moe_aux` at a joint multiplier.
-
 ## Correlated noise (DP-FTRL)
 
 Instead of independent noise at each step, matrix-factorization (MF)

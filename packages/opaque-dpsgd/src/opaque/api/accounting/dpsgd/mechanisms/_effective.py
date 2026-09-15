@@ -1,10 +1,8 @@
 """Effective Gaussian multiplier of the DP-SGD mechanism family.
 
-The subsampling amplifiers evaluate a Gaussian PLD at one multiplier.  A
-plain :class:`Gaussian` carries it directly; the transformations that ride a
-side release on the same step (:class:`AdaClip`, :class:`MoeAux`) carry it as
-their ``effective_noise_multiplier``.  This helper is the one place that
-knows the family, so every amplifier prices every member the same way.
+The subsampling amplifiers evaluate a Gaussian PLD at one multiplier; the
+transformations riding a side release (:class:`AdaClip`, :class:`MoeAux`)
+carry it as ``effective_noise_multiplier``.
 """
 
 from __future__ import annotations

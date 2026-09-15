@@ -2,38 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 r"""Per-example clipping for MoE models with the load-balancing loss.
 
-The Switch-style load-balancing loss
-:math:`E \sum_e f_e(B)\, P_e(B)` couples the examples of a batch through the
-load vector :math:`f(B)`, the fraction of the batch's tokens routed to each
-expert.  That vector is argmax-derived and has zero gradient almost
-everywhere, so the batch gradient of the loss is exactly the sum of
-per-example gradients of the surrogate
-:math:`E\, w_x \langle \tilde f - k/E,\, P(x) \rangle` evaluated at the
-constant :math:`\tilde f = f(B)`, with :math:`P(x)` the example's mean router
-probabilities and :math:`w_x = T_x / \bar T` its public token weight.  The
-only object a per-example pipeline lacks is that constant.
-
-:func:`moe_clipped_grad` supplies it the way adaptive clipping supplies its
-clipping threshold: as a side release computed inside the clipper and
-consumed one step later.  Each example's centred, token-weighted load
-:math:`s(x) = w_x (h(x) - k/E)` has the structural bound
-:math:`\|s(x)\|_2 \le \Delta_L = (T_{\max}/\bar T)\sqrt{k L (1 - k/E)}`
-for any input, so its batch mean is released with Gaussian noise of standard
-deviation ``noise_multiplier / sqrt(ratio) * Delta_L / normalize_by`` drawn
-from the clipper's own key stream, filtered by a bias-corrected exponential
-moving average, and carried in :class:`MoeClipState` as the ``f_tilde`` the
-next step's surrogate uses.  The gradient stream is the ordinary clipped
-pytree at bound ``clipping_norm``; the noise function and the optimizer see
-nothing new.
-
-Privacy: the two releases of a step are one Gaussian on the concatenation of
-the clipped gradient and the load, with whitened per-record sensitivity
-``1/nm² + ratio/nm²``.  The accountant therefore prices the step as a
-Gaussian mechanism at the joint multiplier ``nm / sqrt(1 + ratio)``, which
-:func:`opaque.dpsgd.accounting.moe_aux` computes from the same ``ratio``.
-Everything computed from private examples stays inside the gradient
-transform: the per-example router statistics never leave it, and the
-per-example load is stripped from the returned diagnostics.
+The Switch load-balancing loss :math:`E \sum_e f_e(B)\, P_e(B)` couples the
+examples of a batch only through the load vector :math:`f(B)`, which has
+zero gradient almost everywhere.  Its batch gradient is therefore the sum of
+per-example gradients of :math:`E\, w_x \langle \tilde f - k/E,\, P(x) \rangle`
+at the constant :math:`\tilde f = f(B)`.  :func:`moe_clipped_grad` releases
+that constant the way adaptive clipping releases its threshold: noised
+inside the clipper, carried in :class:`MoeClipState`, consumed one step
+later.  The joint release is one Gaussian at multiplier
+``nm / sqrt(1 + ratio)``, priced by :func:`opaque.dpsgd.accounting.moe_aux`.
 """
 
 from __future__ import annotations
@@ -64,9 +41,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-#: Fold-in tag of the load-release noise stream, beneath the clipper's key
-#: and before the step index, so the stream is disjoint from every other
-#: derivation of the same key.
+#: Fold-in tag of the load-release noise stream.
 MOE_LOAD_STREAM_FOLD = "opaque.clipping.moe_load"
 
 _MIN_EXPERTS = 2
@@ -106,31 +81,23 @@ def router_load_and_probs(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Per-example load fractions, mean router probabilities and token count.
 
-    Written to run inside ``vmap(grad(...))`` on one example: reductions are
-    out-of-place, the executed route set is recovered with ``torch.topk`` on
-    the same fp32 softmax the router used, and the per-expert indicator is a
-    broadcast compare.  The statistics follow the Switch Transformer
-    load-balancing loss (Fedus, Zoph, Shazeer, 2022,
-    https://arxiv.org/abs/2101.03961, eqs. 4-6) as pooled by Hugging Face:
-    load and router probability are averaged over all layers and all valid
-    tokens with one common denominator.
+    Runs inside ``vmap(grad(...))`` on one example.  Load and router
+    probability follow the Switch load-balancing loss (Fedus, Zoph, Shazeer,
+    2022, eqs. 4-6) as pooled by Hugging Face: averaged over all layers and
+    valid tokens with one common denominator.
 
     Args:
-        router_logits: One ``(T, E)`` (or ``(..., E)``, flattened) logits
-            tensor per routed layer, in layer order.
-        attention_mask: Token validity for the same example (``None`` counts
-            every position).  Non-binary masks are read as
-            ``attention_mask != 0``.
+        router_logits: One ``(T, E)`` logits tensor per routed layer.
+        attention_mask: Token validity (``None`` counts every position; read
+            as ``attention_mask != 0``).
         top_k: Experts executed per token.
-        num_layers: Expected number of captured layers; a mismatch raises so
-            a duplicated capture cannot silently double the released load.
+        num_layers: Expected number of captured layers; a mismatch raises.
 
     Returns:
-        ``(h_layers, P, T_x)``: the ``(L, E)`` fp32 executed load fraction
-        per layer (``sum_e h[l] = top_k`` on a non-empty row), the ``(E,)``
-        fp32 mean router probability pooled over layers and valid tokens
-        (``sum_e P = 1``), and the fp32 valid-token count.  A fully masked
-        row returns zeros rather than ``0 / 0``.
+        ``(h_layers, P, T_x)``: the ``(L, E)`` executed load fraction per
+        layer, the ``(E,)`` mean router probability pooled over layers and
+        valid tokens, and the valid-token count.  A fully masked row returns
+        zeros.
     """
     if len(router_logits) != num_layers:
         raise ConfigurationError(
@@ -256,13 +223,7 @@ class MoeClipState(ClipState):
     """State of :func:`moe_clipped_grad`.
 
     ``f_tilde`` is the public load estimate the next step's surrogate uses;
-    everything else is the filter, the release stream and the public
-    constants the release needs, threaded explicitly like every other Opaque
-    state.  The dataclass round-trips through
-    :func:`opaque.serialization.state_dict`.
-
-    Attributes:
-        f_tilde: Public load estimate ``(E,)`` in force for the next step.
+    the private fields are the filter, the release stream and its constants.
     """
 
     f_tilde: torch.Tensor
@@ -404,89 +365,60 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
     r"""Create a per-example clipper for a MoE loss with the load-balancing term.
 
     ``loss_fn(params, *batch)`` is evaluated on one example and returns
-    ``(loss, router_logits, attention_mask)``: the example's scalar loss, one
-    ``(T, E)`` router-logits tensor per routed layer in layer order (the
-    logits the router executed), and the example's token mask (``None``
+    ``(loss, router_logits, attention_mask)``: the scalar loss, one ``(T, E)``
+    router-logits tensor per routed layer, and the token mask (``None``
     counts every position).  The returned function differentiates
-    ``loss + alpha * E * w_x * <f_tilde - k/E, P(x)>`` with respect to
-    ``params`` (the surrogate enters value-neutrally, so the reported loss
-    values are the plain ``loss``), clips and sums the per-example gradients
-    exactly like :func:`opaque.dpsgd.clipping.clipped_grad`, and releases the
-    batch mean of the per-example token-weighted centred load with Gaussian
-    noise inside the state, from which the next step's ``f_tilde`` is
-    filtered.
+    ``loss + alpha * E * w_x * <f_tilde - k/E, P(x)>`` (value-neutrally, so
+    reported losses stay the plain ``loss``), clips and sums per-example
+    gradients like :func:`clipped_grad`, and releases the batch mean of the
+    token-weighted centred load with Gaussian noise inside the state, from
+    which the next step's ``f_tilde`` is filtered.
 
-    Privacy accounting is ``moe_aux(gaussian(noise_multiplier), ratio=ratio)``
-    with the same ``noise_multiplier`` handed to ``gaussian_noise`` and the
-    same ``ratio`` given here: the joint release is one Gaussian mechanism at
-    multiplier ``noise_multiplier / sqrt(1 + ratio)``.  The load noise is drawn
-    from ``key`` folded with :data:`MOE_LOAD_STREAM_FOLD` and the step index,
-    so it is disjoint from any other stream derived from the same key; under
-    DDP pass the same ``key`` on every rank and synchronize the state after
-    every step (:func:`opaque.distributed.sync`), which all-reduces the
-    rank-local load means and adds the noise once.
+    Accounting is ``moe_aux(gaussian(noise_multiplier), ratio=ratio)`` with
+    the same two values given here.  Under DDP pass the same ``key`` on every
+    rank and call :func:`opaque.distributed.sync` on the state after every
+    step.
 
     Args:
         loss_fn: Per-example function returning
-            ``(loss, router_logits, attention_mask)``.  ``params`` is its
-            first positional argument.
-        clipping_norm: Per-example gradient bound ``C_g`` (float or
+            ``(loss, router_logits, attention_mask)``.
+        clipping_norm: Per-example gradient bound (float or
             :class:`~opaque.types.PerGroup`).
         normalize_by: Divisor of the summed gradients and of the released
             load mean; set to the expected batch size.
         batch_argnums: Which arguments after ``params`` carry the batch
-            dimension, counted as in :func:`clipped_grad` (``1`` is the first
-            argument after ``params``).
-        noise_multiplier: The gradient noise multiplier, the same value
-            handed to ``gaussian_noise``.
-        ratio: Share of the whitened sensitivity given to the load release,
-            ``ρ = nm_g² / nm_h²``; the load noise std is
-            ``noise_multiplier / sqrt(ratio) * Delta_L / normalize_by`` and the
-            accountant prices the step at ``noise_multiplier / sqrt(1 + ratio)``.
+            dimension, as in :func:`clipped_grad`.
+        noise_multiplier: The gradient noise multiplier handed to
+            ``gaussian_noise``.
+        ratio: Share of the whitened sensitivity given to the load release;
+            the load noise std is
+            ``noise_multiplier / sqrt(ratio) * Delta_L / normalize_by``.
         key: RNG key of the load-release noise stream.
-        top_k: Experts executed per token ``k``.
-        num_experts: Number of experts ``E``.
-        num_layers: Number of routed layers ``L`` (router logits per example).
-        max_tokens: Public bound on the valid tokens of one example
-            ``T_max``; the load of a longer row is clipped to the bound.
-        mean_tokens: Public token constant ``T̄`` of the token weight
-            ``w_x = T_x / T̄`` (``None``: ``max_tokens``).
+        top_k: Experts executed per token.
+        num_experts: Number of experts.
+        num_layers: Number of routed layers.
+        max_tokens: Public bound on the valid tokens of one example.
+        mean_tokens: Public token constant of the weight ``w_x = T_x / mean``
+            (``None``: ``max_tokens``).
         alpha: Coefficient of the surrogate (the model's router aux-loss
             coefficient).
-        filter_beta: Coefficient of the bias-corrected exponential moving
-            average that turns the released loads into ``f_tilde``.
-        return_aux: If True, also return per-example diagnostics as
-            :class:`~opaque.api.engine.clipping.ClippedGradAux` with
-            ``loss_aux`` removed (the per-example load is private-internal).
-        return_stats: If True, return aggregate clipping statistics instead.
-        pre_clipping_transform: Applied to each per-example gradient pytree
-            before clipping, as in :func:`clipped_grad`.
-        microbatch_size: Process the batch in chunks of this size.
-        dtype: Output dtype of the summed gradient.
-        compute_dtype: Accumulation dtype of the reductions.
+        filter_beta: Bias-corrected EMA coefficient of the load estimate.
+        return_aux: Also return per-example diagnostics with ``loss_aux``
+            removed (the per-example load is private).
+        return_stats: Return aggregate clipping statistics instead.
+        pre_clipping_transform: As in :func:`clipped_grad`.
+        microbatch_size: As in :func:`clipped_grad`.
+        dtype: As in :func:`clipped_grad`.
+        compute_dtype: As in :func:`clipped_grad`.
 
     Returns:
-        ``(grad_fn, state)``.  ``grad_fn(params, *batch, state=state, **kwargs)``
-        returns ``(grads, new_state)`` with ``grads`` a plain
-        :class:`~opaque.types.ClippedPytree` at bound
-        ``clipping_norm / normalize_by``; ``((grads, aux), new_state)`` with
-        ``return_aux``; ``((grads, stats), new_state)`` with ``return_stats``.
-
-    Formal guarantee:
-        Under add/remove adjacency one record moves the clipped gradient sum
-        by at most ``clipping_norm`` and the released load sum by at most
-        ``Delta_L`` (:func:`load_bound`), the latter by a rescale that only
-        ever removes floating-point round-off.  With the noise scales above,
-        the pair is a sensitivity-one Gaussian mechanism at multiplier
-        ``noise_multiplier / sqrt(1 + ratio)`` (whitened sensitivities add in
-        quadrature: ``1/nm² + ratio/nm²``).  ``f_tilde`` is post-processing of
-        earlier releases and costs nothing further.
+        ``(grad_fn, state)``; ``grad_fn(params, *batch, state=state)`` returns
+        ``(grads, new_state)`` with ``grads`` a plain
+        :class:`~opaque.types.ClippedPytree`.
 
     References:
-        Fedus, Zoph, Shazeer. "Switch Transformers." JMLR 2022.
-        https://arxiv.org/abs/2101.03961.  Andrew et al. "Differentially
-        Private Learning with Adaptive Clipping." NeurIPS 2021.
-        https://arxiv.org/abs/1905.03871 (the joint-release allocation).
+        Fedus, Zoph, Shazeer (2022), https://arxiv.org/abs/2101.03961;
+        Andrew et al. (2021), https://arxiv.org/abs/1905.03871.
     """
     if noise_multiplier < 0:
         raise ConfigurationError(

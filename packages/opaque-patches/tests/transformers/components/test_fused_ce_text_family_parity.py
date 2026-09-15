@@ -138,11 +138,7 @@ def test_fused_ce_explicitly_preserves_logits_for_metrics():
 
 
 def test_router_auxiliary_loss_contract_kept_without_loss_only():
-    """Without ``loss_only`` a router-logits request keeps HF's own contract.
-
-    The batch-coupled auxiliary loss is HF's to compute on that path; the
-    wrapper defers verbatim (``output_router_logits`` forwarded, no marker).
-    """
+    """Without ``loss_only`` a router-logits request defers to HF's forward."""
     sentinel = object()
     calls = []
 

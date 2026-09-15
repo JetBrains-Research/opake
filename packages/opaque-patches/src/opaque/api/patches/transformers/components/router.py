@@ -2,23 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Top-k router helpers for stacked-expert MoE families.
 
-Two things live here.  :func:`moe_geometry` reads the routing geometry a
-per-example MoE objective needs (``top_k``, ``num_experts`` and the number of
-routed layers) off a model, as a plain mapping that unpacks into
+:func:`moe_geometry` reads ``top_k``, ``num_experts`` and the number of
+routed layers off a model as a mapping that unpacks into
 :func:`opaque.dpsgd.clipping.moe_clipped_grad`.  :func:`install_fp32_router`
-is the opt-in fp32-logit router swap: the stock Hugging Face router computes
-its logits with ``F.linear`` in the hidden-state dtype and only the softmax
-in fp32, so under bf16 the logits carry exact ties and the top-k set a load
-statistic recovers from the logits can differ from the executed one.  The swap
-computes the logits in fp32 (the precision Mellum 2.0 was pretrained with), so
-ties disappear and the logits handed to the load statistics are the executed
-ones.
-
-The swap is an instance-level ``types.MethodType`` binding on each router
-module, recorded so it can be removed again in-process; the class-level
-forward is never touched.  It changes the executed routing function on the
-small fraction of tokens that sit on a bf16 rounding tie; adapters served
-through stock HF run bf16 routes, so the swap is opt-in and off by default.
+is the opt-in fp32-logit router swap: the stock router computes its logits
+in the hidden-state dtype, so under bf16 they carry exact ties and the top-k
+set recovered from the logits can differ from the executed one.  The swap is
+an instance-level binding that :func:`remove_fp32_router` undoes.
 """
 
 from __future__ import annotations
@@ -41,12 +31,7 @@ _ROUTER_ATTRS = ("top_k", "num_experts", "norm_topk_prob", "weight")
 
 
 class MoeGeometry(TypedDict):
-    """Routing geometry of a mixture-of-experts model.
-
-    A plain mapping so it unpacks into the keyword parameters of the
-    per-example MoE clipper (``moe_clipped_grad(loss_fn, **geometry, ...)``)
-    and round-trips through a configuration file unchanged.
-    """
+    """Routing geometry of a MoE model; unpacks into ``moe_clipped_grad``."""
 
     top_k: int
     num_experts: int
@@ -56,11 +41,8 @@ class MoeGeometry(TypedDict):
 def is_router_module(module: nn.Module) -> bool:
     """Whether ``module`` is a stacked-expert top-k router.
 
-    The single router predicate of the package: a class name containing
-    ``"TopKRouter"`` or the stock router attributes (``top_k``,
-    ``num_experts``, ``norm_topk_prob``, ``weight``).  :func:`moe_geometry`
-    and the fp32 installer count routers with it, so every consumer sees the
-    same modules.
+    Matches a class name containing ``"TopKRouter"`` or the stock router
+    attributes (``top_k``, ``num_experts``, ``norm_topk_prob``, ``weight``).
     """
     if "TopKRouter" in type(module).__name__:
         return True
@@ -70,23 +52,12 @@ def is_router_module(module: nn.Module) -> bool:
 def moe_geometry(model: nn.Module) -> MoeGeometry:
     """Read ``(top_k, num_experts, num_layers)`` off a MoE model.
 
-    ``num_layers`` counts the router modules the backbone records logits
-    for, so dense layers of a mixed model do not count.  ``top_k`` and
-    ``num_experts`` are taken from the routers themselves (the values that
-    execute) and fall back to ``model.config`` (``num_experts_per_tok`` and
-    ``num_experts`` / ``num_local_experts``) for a router that does not
-    expose them.
-
-    Args:
-        model: A Hugging Face MoE model whose backbone records router logits.
-
-    Returns:
-        A :class:`MoeGeometry` mapping.
+    ``num_layers`` counts the router modules; ``top_k`` and ``num_experts``
+    come from the routers and fall back to ``model.config``.
 
     Raises:
-        ConfigurationError: for a model without a top-k router, when the
-            routers disagree on ``(num_experts, top_k)``, or when neither the
-            routers nor the config expose them.
+        ConfigurationError: no top-k router, routers that disagree, or
+            neither routers nor config exposing the values.
     """
     routers = [module for module in model.modules() if is_router_module(module)]
     if not routers:

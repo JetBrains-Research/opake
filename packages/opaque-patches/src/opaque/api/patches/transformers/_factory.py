@@ -256,16 +256,12 @@ def make_apply_model_patches(
         ``grouped_moe`` only chooses its grouped-GEMM fast path (kernel-fused
         Triton on CUDA / ``torch._grouped_mm`` on MPS-CPU) vs the dense compat
         path, so a dense run keeps a correct, vmap-safe MoE.
-        ``loss_only_forward`` → ``compat`` (or the fused routes being on): the
-        loss-only causal-LM forward
-        (``loss_only=True``, and router logits without HF's batch-coupled
-        auxiliary loss under ``output_router_logits=True``) that per-example
-        objectives call; ``fused_linear_cross_entropy`` inherits from
-        ``performance`` and only decides whether that wrapper takes its fused /
-        chunked cross-entropy routes or the eager ``lm_head`` branch.
-        ``router_fp32`` (default ``False``) binds an fp32-logit forward on the
-        family's router instances (``classes["router"]``); ``router_fp32=False``
-        removes a previously installed swap.
+        ``loss_only_forward`` → ``compat`` (or the fused routes being on)
+        installs the loss-only causal-LM forward; ``fused_linear_cross_entropy``
+        inherits from ``performance`` and decides whether it takes the fused /
+        chunked routes or the eager ``lm_head`` branch. ``router_fp32``
+        (default ``False``) binds an fp32-logit forward on the family's
+        router instances; ``False`` removes an earlier install.
     """
     activation_factory = _resolve(activation_kind, _ACTIVATION_FACTORIES)
     rms_norm_factory = _resolve(rms_norm_kind, _RMSNORM_FACTORIES)
@@ -337,10 +333,7 @@ def make_apply_model_patches(
                     model,
                 )
 
-        # fp32-logit router (opt-in): an instance-level, removable swap on the
-        # family's router modules. It changes the executed routing function on
-        # bf16 rounding ties (pretraining-faithful for Mellum 2.0), so it is off
-        # unless asked for; an explicit ``False`` undoes an earlier install.
+        # fp32-logit router (opt-in, instance-level, removable).
         router_fp32 = kwargs.get("router_fp32")
         if router_fp32 is not None and model is not None:
             router_class = classes.get("router")
@@ -399,13 +392,8 @@ def make_apply_model_patches(
             chunked_linear_ce = _normalize_chunked_linear_cross_entropy(
                 chunked_linear_ce
             )
-        # Loss-only causal-LM forward (compat): the per-example contract DP
-        # training calls (``loss_only=True``; router logits handed back without
-        # HF's batch-coupled auxiliary loss under ``output_router_logits``).
-        # Which cross-entropy route it takes -- Triton fused, portable chunked,
-        # or the eager ``lm_head`` branch -- is the performance decision, gated
-        # by ``fused_linear_cross_entropy`` and recorded on the instance so a
-        # later model in the same process is not bound to the first install.
+        # Loss-only causal-LM forward (compat); which CE route it takes is the
+        # performance decision, recorded per instance.
         enable_fused_linear_ce = kwargs.get("fused_linear_cross_entropy")
         if enable_fused_linear_ce is None:
             enable_fused_linear_ce = performance
