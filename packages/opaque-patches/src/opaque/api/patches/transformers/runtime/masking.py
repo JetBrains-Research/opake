@@ -233,15 +233,14 @@ def vmap_create_causal_mask(
     attn_impl = getattr(config, "_attn_implementation", None)
     all_valid_attention = attention_mask is None
     packed = _PACKED_SEQUENCES
-    if not all_valid_attention and packed is not None:
+    is_padding_mask = (
+        not all_valid_attention and attention_mask.ndim <= 2  # noqa: PLR2004 - padding masks are 1D/2D
+    )
+    if is_padding_mask and packed is not None:
         # Public policy: never inspect the batch content (see
         # ``set_packed_sequences``).
         all_valid_attention = packed
-    elif (
-        not all_valid_attention
-        and attention_mask.ndim <= 2  # noqa: PLR2004 - padding masks are 1D/2D
-        and not torch.compiler.is_compiling()
-    ):
+    elif is_padding_mask and not torch.compiler.is_compiling():
         try:
             functorch = torch._C._functorch
             physical_mask = attention_mask

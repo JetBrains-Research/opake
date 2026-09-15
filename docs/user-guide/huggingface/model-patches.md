@@ -233,7 +233,7 @@ an example's attention kernel never depends on whether a microbatch mate is
 padded; `None` (default) probes the batch as before. `packed_sequences()` reads
 the current setting. Under DP training the kernel choice should be a public
 property of the data, which is why `DPTrainer` installs the policy from its
-`packed_sequences` argument for the duration of `train()`.
+`packed_sequences` argument (default `False`) for the duration of `train()`.
 
 The original dense **Mellum** (`Mellum-4b`, `model_type="llama"`) needs no MoE
 support — it is a Llama checkpoint served by the `llama` family.

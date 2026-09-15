@@ -51,3 +51,27 @@ def test_run_policy_is_the_argument_and_the_previous_value_comes_back(tmp_path, 
 
     trainer._restore_packed_sequences_policy(previous)
     assert packed_sequences() is foreign
+
+
+def test_default_never_probes_the_batch(tmp_path):
+    assert _trainer(tmp_path).args.packed_sequences is False
+
+
+def test_train_once_restores_the_previous_policy_on_failure(tmp_path, monkeypatch):
+    set_packed_sequences(True)
+    trainer = _trainer(tmp_path)
+    seen = {}
+
+    def boom(self, **kwargs):
+        seen["during"] = packed_sequences()
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(DPTrainer, "_train_once_with_policy", boom)
+    with pytest.raises(RuntimeError, match="boom"):
+        trainer._train_once(
+            resume_from_checkpoint=None,
+            microbatch_size_override=None,
+            ignore_keys_for_eval=None,
+        )
+    assert seen["during"] is False
+    assert packed_sequences() is True

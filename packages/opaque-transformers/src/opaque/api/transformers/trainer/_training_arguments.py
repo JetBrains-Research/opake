@@ -600,13 +600,13 @@ class TrainingArguments:
     # snapshot, leaving the run resumable after preemption.
     enable_jit_checkpoint: bool = False
 
-    #: Public statement that every collated row is fully valid (packed
-    #: sequences, no padding).  ``True`` lets the vmap-safe causal-mask
-    #: builder take its all-valid fast path without probing the batch;
-    #: ``False`` always materialises the mask so an example's attention kernel
-    #: never depends on its microbatch mates; ``None`` keeps the runtime's
-    #: data-driven probe.
-    packed_sequences: bool | None = None
+    #: Whether every collated row is fully valid (no padding).  ``True`` lets
+    #: the vmap-safe causal-mask builder take its all-valid fast path without
+    #: probing the batch; ``False`` (default) always materialises the mask so
+    #: an example's attention kernel never depends on its microbatch mates;
+    #: ``None`` keeps the runtime's data-driven probe, under which one padded
+    #: record changes the kernel of every example in its microbatch.
+    packed_sequences: bool | None = False
 
     # HF-compatible private device counter. Device resolution replaces the
     # sentinel with 0 for CPU/MPS or 1 for CUDA.

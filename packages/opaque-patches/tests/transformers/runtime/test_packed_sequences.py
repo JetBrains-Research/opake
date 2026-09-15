@@ -80,6 +80,20 @@ def test_packed_true_allows_fast_path_without_probing():
     assert mask is None
 
 
+def test_packed_true_keeps_a_higher_rank_mask():
+    """The policy only replaces the padding-mask probe; a 4-D mask is kept."""
+    set_packed_sequences(True)
+    explicit = torch.zeros(2, 1, 8, 8, dtype=torch.bool).tril()
+    mask = vmap_create_causal_mask(
+        config=_SdpaConfig(),
+        input_embeds=torch.randn(2, 8, 16),
+        attention_mask=explicit,
+        cache_position=torch.arange(8),
+        past_key_values=None,
+    )
+    assert mask is not None
+
+
 def test_packed_false_materialises_regardless_of_content():
     all_valid = torch.ones(3, 8, dtype=torch.bool)
     set_packed_sequences(False)

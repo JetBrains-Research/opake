@@ -134,7 +134,7 @@ noise would yield infinite noise and `NaN` gradients.
 | `sampling_kwargs` | Mode-specific sampler kwargs. `truncated_batch_size=N` caps Poisson draws at `N`; k-out-of-t accepts `k` and `allocation`; other modes accept no keys. |
 | `clipping_mode` | `"fixed"` (default), `"adaptive"`, or `"auto"`. `adaptive` is rejected under any `mf_*` mechanism (MF noise requires constant per-step sensitivity). |
 | `clipping_kwargs` | Mode-specific clipping kwargs. Adaptive accepts the public factory names `target_quantile` and `clipping_norm_max`. AUTO-S accepts `gamma`; fixed accepts no keys. |
-| `packed_sequences` | `None` (default) keeps the mask builder's data-driven probe; `True` declares every collated row fully valid so the attention fast path needs no probe; `False` always materialises the mask so the kernel choice never depends on the private batch content. |
+| `packed_sequences` | `False` (default) always materialises the mask so the kernel choice never depends on the private batch content; `True` declares every collated row fully valid so the attention fast path needs no probe; `None` keeps the mask builder's data-driven probe. |
 | `privacy_noise_mechanism` | `"gaussian"` (default, DP-SGD), or one of the DP-FTRL matrix-factorization mechanisms: `"mf_band"`, `"mf_blt"`, `"mf_bisr"`, `"mf_bsr"`, `"mf_lambda_cgd"`, `"mf_identity"`. |
 | `privacy_noise_mechanism_kwargs` | Mechanism extras. For `"gaussian"`: `compute_dtype` as a native `torch.dtype` or the string names `float16`, `bfloat16`, `float32`, `float64`. For `mf_*`: per-strategy kwargs (auto-filled from Mellum-shaped defaults — see below). |
 | `noise_calibration_kwargs` | Calibration search bounds; defaults `{"min": 0.11, "max": 10.0, "tolerance": 1e-3}`. |
