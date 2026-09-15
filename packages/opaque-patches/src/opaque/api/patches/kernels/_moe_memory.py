@@ -117,23 +117,6 @@ def estimate_moe_workspace(
     )
 
 
-def use_grouped_route(
-    estimate: MoEWorkspaceEstimate,
-    *,
-    experts: int,
-    min_experts: int,
-    budget_bytes: int,
-) -> bool:
-    """Select grouped execution using both its speed gate and memory estimate."""
-    dense_fits = estimate.dense_bytes <= budget_bytes
-    grouped_fits = estimate.grouped_bytes <= budget_bytes
-    if dense_fits and not grouped_fits:
-        return False
-    if not dense_fits:
-        return estimate.grouped_bytes < estimate.dense_bytes
-    return experts >= min_experts and grouped_fits
-
-
 def grouped_forward_bytes_per_route(
     hidden: int, intermediate: int, itemsize: int
 ) -> int:

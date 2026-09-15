@@ -160,9 +160,8 @@ def test_grouped_moe_frozen_experts_mps():
 
 
 def _check_dispatch(device: str) -> None:
-    # opaque_moe routes large-E to the sparse path and small-E to dense; both must
-    # match the dense oracle. (Only correctness is asserted; the E threshold is a
-    # perf heuristic.)
+    # Exercise production dispatch at two geometries. The cost model owns the path
+    # choice; either choice must preserve the dense oracle's numerical contract.
     for E in (4, 16):
         gu, dn, x3, idx3, w3, B, T, H = _inputs(device, E=E)
         x2, idx2, w2 = (
