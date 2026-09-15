@@ -309,6 +309,9 @@ class RuntimeCheckpoint:
         default=None,
         metadata={"compare_on_resume": True, "drift": "dp_relevant"},
     )
+    # Whether the release was on; a resume may not switch it (the release
+    # stream would restart at step 0 on the same key).
+    router_load: bool | None = None
 
 
 def save_dp_runtime_state(  # noqa: PLR0913
@@ -336,6 +339,7 @@ def save_dp_runtime_state(  # noqa: PLR0913
     warmup_steps: int | float | None = None,
     lr_scheduler_kwargs: dict[str, Any] | None = None,
     router_load_ratio: float | None = None,
+    router_load: bool | None = None,
 ) -> None:
     """Save the DP runtime bundle as a :class:`RuntimeCheckpoint`."""
     if not isinstance(clip_state, ClipState):
@@ -378,6 +382,7 @@ def save_dp_runtime_state(  # noqa: PLR0913
         router_load_ratio=(
             float(router_load_ratio) if router_load_ratio is not None else None
         ),
+        router_load=(bool(router_load) if router_load is not None else None),
     )
     # ``torch.save`` of a dataclass round-trips via pickle.  Kept as
     # pickle to handle the heterogeneous types (tensors inside

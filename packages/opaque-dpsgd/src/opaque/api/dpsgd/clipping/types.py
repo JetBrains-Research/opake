@@ -9,6 +9,7 @@ from opaque.api.dpsgd.clipping._adaptive import (
     AdaptiveClippedGradAux,
     AdaptiveClipState,
 )
+from opaque.api.dpsgd.clipping._moe import MoeClipState
 from opaque.api.engine.clipping.types import (
     AutoClippedFunAux,
     AutoClippedGradAux,
@@ -27,4 +28,5 @@ __all__ = [
     "ClippedGradFn",
     "ClippedGradResult",
     "FixedClipState",
+    "MoeClipState",
 ]

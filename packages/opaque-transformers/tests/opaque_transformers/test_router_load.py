@@ -19,10 +19,10 @@ from torch.utils.data import Dataset
 
 pytest.importorskip("transformers")
 
-from opaque.api.engine.clipping import MoeClipState
 from opaque.api.transformers.trainer._dp_trainer import DPTrainer
 from opaque.dpsgd.accounting.mechanisms.types import MoeAux
-from opaque.exceptions import ConfigurationError
+from opaque.dpsgd.clipping.types import MoeClipState
+from opaque.exceptions import CheckpointError, ConfigurationError
 from opaque.transformers import TrainingArguments
 
 E, K, L, VOCAB, SEQ = 8, 2, 2, 128, 12
@@ -80,15 +80,15 @@ def _collate(batch):
     return {k: torch.stack([b[k] for b in batch]) for k in batch[0]}
 
 
-def _filter_ratio(t: int, s: int, beta: float = 0.99) -> float:
-    """``filtered_noise_std(t) / filtered_noise_std(s)`` at a common load noise."""
-
-    def phi(n: int) -> float:
-        return math.sqrt((1 - beta) ** 2 * (1 - beta ** (2 * n)) / (1 - beta**2)) / (
-            1 - beta**n
-        )
-
-    return phi(t) / phi(s)
+def _filtered_std_after_drift(
+    first: float, scales: list[float], beta: float = 0.99
+) -> float:
+    """Recursive noise std of the filter after releases at ``first * scale`` each."""
+    var, decay = 0.0, 1.0
+    for scale in scales:
+        var = beta**2 * var + (1 - beta) ** 2 * (first * scale) ** 2
+        decay *= beta
+    return math.sqrt(var) / (1 - decay)
 
 
 def _args(output_dir, **overrides):
@@ -228,7 +228,7 @@ class TestTrain:
                 data_collator=_collate,
             )
 
-    def test_resume_continues_the_release_state(self, tmp_path, monkeypatch):
+    def test_resume_continues_the_release_state(self, tmp_path):
         """Resuming from step 2 reproduces an uninterrupted run's steps 3 and 4."""
         common = {
             "save_strategy": "steps",
@@ -243,9 +243,8 @@ class TestTrain:
         )
         reference.train()
 
-        model = _tiny_mellum()
         first = DPTrainer(
-            model=model,
+            model=_tiny_mellum(),
             args=_args(tmp_path / "run", max_steps=2, **common),
             train_dataset=_RaggedDS(),
             data_collator=_collate,
@@ -253,13 +252,9 @@ class TestTrain:
         first.train()
         ckpt = tmp_path / "run" / "checkpoint-2"
         assert ckpt.is_dir()
-        # Reloading the weights of a stacked-experts MoE checkpoint is a
-        # separate trainer concern (the saved per-expert layout does not load
-        # back onto the stacked module); the model object already holds the
-        # step-2 weights, so this test covers the release state alone.
-        monkeypatch.setattr(DPTrainer, "_load_model_weights", lambda self, d: None)
+        # A fresh model instance: the weights come back from the checkpoint.
         resumed = DPTrainer(
-            model=model,
+            model=_tiny_mellum(),
             args=_args(tmp_path / "run", max_steps=4, **common),
             train_dataset=_RaggedDS(),
             data_collator=_collate,
@@ -293,19 +288,17 @@ class TestTrain:
         )
 
     def test_resume_with_a_changed_ratio_warns_and_uses_the_current_one(
-        self, tmp_path, monkeypatch, caplog
+        self, tmp_path, caplog
     ):
         common = {"save_strategy": "steps", "save_steps": 2, "lr_scheduler": "constant"}
-        model = _tiny_mellum()
         DPTrainer(
-            model=model,
+            model=_tiny_mellum(),
             args=_args(tmp_path / "run", max_steps=2, **common),
             train_dataset=_RaggedDS(),
             data_collator=_collate,
         ).train()
-        monkeypatch.setattr(DPTrainer, "_load_model_weights", lambda self, d: None)
         resumed = DPTrainer(
-            model=model,
+            model=_tiny_mellum(),
             args=_args(
                 tmp_path / "run", max_steps=3, router_load_ratio=0.125, **common
             ),
@@ -318,11 +311,52 @@ class TestTrain:
         rows = [
             row for row in resumed.state.log_history if "router_load_noise_std" in row
         ]
-        # The release ran at the current ratio (0.125 vs 0.5: twice the load
-        # noise), which is what the accountant priced.
+        # The third release ran at the current ratio (0.125 vs 0.5: twice the
+        # load noise), which is what the accountant priced, and the telemetry
+        # tracks the mixed history exactly.  The first row is one release's
+        # own std, so it seeds the recursion.
+        first = rows[0]["router_load_noise_std"]
         assert rows[2]["router_load_noise_std"] == pytest.approx(
-            2.0 * rows[1]["router_load_noise_std"] * _filter_ratio(3, 2)
+            _filtered_std_after_drift(first, [1.0, 1.0, 2.0]), rel=1e-6
         )
+
+
+class TestResumeToggle:
+    def _run(self, output_dir, **overrides):
+        args = _args(
+            output_dir,
+            max_steps=2,
+            save_strategy="steps",
+            save_steps=2,
+            lr_scheduler="constant",
+            **overrides,
+        )
+        DPTrainer(
+            model=_tiny_mellum(),
+            args=args,
+            train_dataset=_RaggedDS(),
+            data_collator=_collate,
+        ).train()
+        return str(output_dir / "checkpoint-2")
+
+    def _resume(self, output_dir, ckpt, **overrides):
+        args = _args(output_dir, max_steps=4, lr_scheduler="constant", **overrides)
+        DPTrainer(
+            model=_tiny_mellum(),
+            args=args,
+            train_dataset=_RaggedDS(),
+            data_collator=_collate,
+        ).train(resume_from_checkpoint=ckpt)
+
+    def test_release_cannot_be_switched_off_by_a_resume(self, tmp_path):
+        ckpt = self._run(tmp_path)
+        with pytest.raises(CheckpointError, match="cannot be switched on or off"):
+            self._resume(tmp_path, ckpt, router_load=False)
+
+    def test_release_cannot_be_switched_on_by_a_resume(self, tmp_path):
+        ckpt = self._run(tmp_path, router_load=False)
+        with pytest.raises(CheckpointError, match="cannot be switched on or off"):
+            self._resume(tmp_path, ckpt)
 
 
 def test_state_type_is_registered_for_sync():

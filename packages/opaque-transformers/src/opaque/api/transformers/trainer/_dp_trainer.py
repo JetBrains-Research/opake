@@ -47,14 +47,19 @@ import opaque.dpsgd.accounting as dpsgd_acc
 from opaque.accounting import Accountant
 from opaque.accounting import calibration as cal
 from opaque.accounting.types import DpHorizonProcess
-from opaque.api.engine.clipping import MoeClipState, clipped_grad, moe_clipped_grad
+from opaque.api.engine.clipping import clipped_grad
 from opaque.api.engine.device import (
     device_capabilities,
     sdpa_autocast_under_vmap_broken,
 )
 from opaque.api.transformers._rng import IGNORE_DATA_SKIP_STREAM_FOLD
 from opaque.dpftrl.noise import mf_gaussian_noise
-from opaque.dpsgd.clipping import adaptive_clipped_grad, auto_clipped_grad
+from opaque.dpsgd.clipping import (
+    adaptive_clipped_grad,
+    auto_clipped_grad,
+    moe_clipped_grad,
+)
+from opaque.dpsgd.clipping.types import MoeClipState
 from opaque.dpsgd.noise import gaussian_noise
 from opaque.exceptions import (
     CheckpointError,
@@ -1237,6 +1242,7 @@ class DPTrainer:
                 resume_path
             )
             self._validate_horizon_resume_calibration(runtime_payload)
+            self._reject_router_load_toggle(runtime_payload)
             trainer_state_json = self._read_trainer_state(resume_path)
             if trainer_state_json is not None:
                 self.state = DPTrainerState.from_json(trainer_state_json)
@@ -5499,6 +5505,7 @@ class DPTrainer:
                 else None
             ),
             router_load_ratio=(float(a.router_load_ratio) if a.router_load else None),
+            router_load=bool(a.router_load),
         )
 
     def _save_accountant(self, ckpt_dir: str, accountant: Accountant) -> None:
@@ -5645,7 +5652,24 @@ class DPTrainer:
         # surface mismatched keys as errors (``strict=True``).
         if not mutated:
             strict = not self._is_peft
-            self._model.load_state_dict(new_state, strict=strict)
+            try:
+                self._model.load_state_dict(new_state, strict=strict)
+            except RuntimeError as exc:
+                if self._is_peft or not hasattr(type(self._model), "from_pretrained"):
+                    raise
+                # ``save_pretrained`` may write a different layout than the live
+                # module holds (HF v5 stacked experts are saved per expert);
+                # ``from_pretrained`` applies that conversion on the way back.
+                log.info(
+                    "Direct state_dict load failed (%s); reloading through "
+                    "from_pretrained to apply the checkpoint's weight conversion.",
+                    type(exc).__name__,
+                )
+                converted = type(self._model).from_pretrained(
+                    ckpt_dir, config=self._model.config
+                )
+                self._model.load_state_dict(converted.state_dict(), strict=True)
+                del converted
 
     def _read_runtime_for_resume(
         self, ckpt_dir: str
@@ -5712,6 +5736,26 @@ class DPTrainer:
         with path.open() as f:
             return json.load(f)
 
+    def _reject_router_load_toggle(self, runtime: ckpt.RuntimeCheckpoint) -> None:
+        """A resume may not switch the MoE router-load release on or off.
+
+        Switching it off drops the release's step counter and key from the
+        next checkpoint; switching it on again later would restart the
+        load-noise stream at step 0 on the same key and replay samples the
+        accountant has already composed as independent releases.
+        """
+        saved = runtime.router_load
+        if saved is None or bool(saved) == bool(self.args.router_load):
+            return
+        raise CheckpointError(
+            *(
+                f"router_load={bool(self.args.router_load)} does not match the "
+                f"checkpoint (router_load={bool(saved)}); the MoE router-load "
+                "release cannot be switched on or off by a resume. Start a new "
+                "run (with a new seed) instead.",
+            )
+        )
+
     def _apply_runtime_state(
         self,
         ctx: _TrainingContext,
@@ -5733,6 +5777,8 @@ class DPTrainer:
                 _rng_key=restored_clip._rng_key,
                 _local_load=restored_clip._local_load,
                 _pending=restored_clip._pending,
+                _noise_var=restored_clip._noise_var,
+                _decay=restored_clip._decay,
             )
         ctx.clip_state = restored_clip
         ctx.noise_state = opaque_from_state_dict(ctx.noise_state, runtime.noise_state)

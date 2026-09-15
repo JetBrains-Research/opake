@@ -22,25 +22,37 @@ where $f_e(B)$ is the fraction of the batch's tokens whose top-$k$ set
 contains expert $e$ and $P_e(B)$ is the mean router probability of expert
 $e$ over the batch's tokens
 ([Fedus, Zoph, Shazeer, 2022](https://arxiv.org/abs/2101.03961), eqs. 4
-to 6). The load $f$ is a normalised count of argmax outcomes, so it is
-piecewise constant in the parameters and its gradient is zero almost
-everywhere. The router mass $P$ is differentiable and it is a
-token-weighted mean of per-example router masses $P_e(x)$. Therefore
+to 6; stated there per layer for top-1 routing, pooled over layers and
+generalised to top-$k$ here). The load $f$ is a normalised count of
+argmax outcomes, so it is piecewise constant in the parameters and its
+gradient is zero almost everywhere. The router mass
+$P_e(B) = \frac{1}{T_B} \sum_{x \in B} T_x\, P_e(x)$ is differentiable, a
+token-weighted mean of per-example router masses over the batch's token
+total $T_B$. Freezing $f$ at its batch value therefore gives
 
 $$\nabla_\theta L_{\text{aux}}(B) = E \sum_e f_e(B)\, \nabla_\theta P_e(B)
-  = \sum_{x \in B} \nabla_\theta \Big[ E\, w_x \sum_e f_e(B)\, P_e(x) \Big],$$
+  = \sum_{x \in B} \nabla_\theta \Big[ E\, \frac{T_x}{T_B} \sum_e f_e(B)\, P_e(x) \Big].$$
 
-with $w_x = T_x / \bar T$ the example's token count over a public
-constant. Hand every example the constant vector $\tilde f = f(B)$ and
-the load-balancing gradient is a sum of per-example gradients of the
-surrogate
+Two batch-level quantities remain, $T_B$ and $f(B)$, and a per-example
+pipeline can use neither. The mechanism replaces the first by a public
+constant, $T_x / T_B \to w_x / \bar B$ with $w_x = T_x / \bar T$ for a
+public token constant $\bar T$ and $\bar B$ the expected batch size the
+summed gradients are divided by, and the second by the lagged private
+estimate $\tilde f$ of the next sections. Every example then contributes
+the gradient of the surrogate
 
-$$S(x; \tilde f) = E\, w_x \sum_e \big(\tilde f_e - k/E\big)\, P_e(x).$$
+$$S(x; \tilde f) = E\, w_x \sum_e \big(\tilde f_e - k/E\big)\, P_e(x),$$
 
-Centring by $k/E$ changes nothing, since $\sum_e P_e(x) = 1$, and makes
-the signal read as imbalance: a balanced estimate produces a zero
-gradient. The only object the per-example pipeline lacks is the constant
-$\tilde f$, and the mechanism below is how it obtains one.
+whose normalised batch sum is the frozen-load Switch gradient scaled by
+$T_B / (\bar B \bar T)$: the Switch gradient itself when the realised
+token total equals the public normalisation, a public rescaling of it
+otherwise. What is trained is therefore a one-step-lagged,
+public-normalised, top-$k$, layer-pooled generalisation of the Switch
+objective, not an identity with it. Centring by $k/E$ changes nothing,
+since $\sum_e P_e(x) = 1$, and makes the signal read as imbalance: a
+balanced estimate produces a zero gradient. The only private object the
+pipeline lacks is $\tilde f$, and the mechanism below is how it obtains
+one.
 
 ## The released statistic
 
@@ -135,8 +147,16 @@ The estimate is consumed one step late, so there is no dependency inside
 a step: gradient and load come out of the same per-example transform,
 and at $\beta = 0.99$ the current batch has one percent weight in the
 estimate that multiplies its own gradient. The noise standard deviation
-of the estimate is known exactly at every step,
-`MoeClipState.filtered_noise_std`, with the closed form
+of the latent estimate $k/E + \tilde d_t$, before the clamp, is known
+exactly at every step: `MoeClipState.filtered_noise_std` tracks the
+filter's noise variance recursively,
+$v_{t+1} = \beta^2 v_t + (1-\beta)^2 s_h^2$ with
+$s_h = \frac{\sigma_h}{\sqrt{L}} \sqrt{\frac{E-1}{E}}$ the per-entry
+noise of one pooled, projected release, and divides by the bias
+correction, so it stays exact when the noise scale or $\beta$ changes
+between steps (a resume with different arguments). $\tilde f$ itself is
+the clamp of that latent value, so its error is Gaussian only away from
+the boundaries. At constant parameters the closed form is
 
 $$s_{t} = \frac{\sigma_h}{\sqrt{L}} \sqrt{\frac{E-1}{E}}
   \cdot \frac{\sqrt{(1-\beta)^2 (1 - \beta^{2t}) / (1 - \beta^2)}}{1 - \beta^{t}},$$

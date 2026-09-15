@@ -16,7 +16,8 @@ from dataclasses import replace
 import pytest
 import torch
 
-from opaque.api.engine.clipping import MoeClipState, moe_clipped_grad
+from opaque.api.dpsgd.clipping import moe_clipped_grad
+from opaque.api.dpsgd.clipping.types import MoeClipState
 from opaque.api.engine.clipping._moe import (
     centred_load,
     load_balancing_surrogate,

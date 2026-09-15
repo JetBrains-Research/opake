@@ -10,11 +10,13 @@ from pathlib import Path
 import pytest
 import torch
 import torch.distributed as dist
-from engine_ddp_helpers import (
+from dpsgd_ddp_helpers import (
     _moe_factory,
     _moe_fixture,
     _spawn,
     _worker_moe_sync_gloo,
+    _worker_moe_sync_pending_disagreement_gloo,
+    _worker_moe_sync_ratio_mismatch_gloo,
 )
 
 
@@ -47,3 +49,15 @@ def test_synced_release_matches_single_process_full_batch() -> None:
         torch.testing.assert_close(
             distributed["grads"][name], value, atol=1e-6, rtol=1e-5
         )
+
+
+@pytest.mark.distributed
+def test_ratio_mismatch_is_rejected_on_every_rank() -> None:
+    _require_gloo()
+    _spawn(2, _worker_moe_sync_ratio_mismatch_gloo)
+
+
+@pytest.mark.distributed
+def test_pending_disagreement_is_rejected_instead_of_blocking() -> None:
+    _require_gloo()
+    _spawn(2, _worker_moe_sync_pending_disagreement_gloo)
