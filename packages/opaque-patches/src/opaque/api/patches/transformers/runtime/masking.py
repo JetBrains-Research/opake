@@ -5,6 +5,45 @@
 import torch
 
 from opaque.api.patches.transformers.components.attention import vmap_repeat_kv
+from opaque.exceptions import InputTypeError
+
+# Process-level packed-sequences policy consulted by ``vmap_create_causal_mask``.
+# ``None`` keeps the data-driven probe of the physical batch; see
+# :func:`set_packed_sequences`.
+_PACKED_SEQUENCES: bool | None = None
+
+
+def set_packed_sequences(flag: bool | None) -> None:
+    """Declare whether every collated row is fully valid (no padding).
+
+    The causal-mask builder may skip materialising the mask and let SDPA run
+    its ``is_causal`` fast path when no row is padded. By default it decides
+    that by probing the physical (micro)batch, which makes the attention
+    kernel a function of the batch composition rather than of the example
+    alone. Under DP training the choice should come from a public property of
+    the data instead:
+
+    - ``True``: the collator guarantees packed, all-valid rows; the fast path
+      is allowed without inspecting the batch.
+    - ``False``: never probe the batch; materialise the mask whenever an
+      attention mask is given, so every example's attention runs the same
+      kernel regardless of its microbatch mates.
+    - ``None`` (default): probe the batch as before.
+
+    The policy is a process-wide module setting, not thread-local: a caller
+    that sets it for one run (``DPTrainer`` does so for the duration of
+    ``train()``) should read :func:`packed_sequences` first and put the
+    previous value back afterwards.
+    """
+    global _PACKED_SEQUENCES
+    if flag is not None and not isinstance(flag, bool):
+        InputTypeError.raise_("packed_sequences must be True, False or None")
+    _PACKED_SEQUENCES = flag
+
+
+def packed_sequences() -> bool | None:
+    """Current packed-sequences policy (see :func:`set_packed_sequences`)."""
+    return _PACKED_SEQUENCES
 
 
 def _active_mask_dtype(input_embeds: torch.Tensor) -> torch.dtype:
@@ -193,7 +232,12 @@ def vmap_create_causal_mask(
     # so we check for actual cached data rather than just None.
     attn_impl = getattr(config, "_attn_implementation", None)
     all_valid_attention = attention_mask is None
-    if (
+    packed = _PACKED_SEQUENCES
+    if not all_valid_attention and packed is not None:
+        # Public policy: never inspect the batch content (see
+        # ``set_packed_sequences``).
+        all_valid_attention = packed
+    elif (
         not all_valid_attention
         and attention_mask.ndim <= 2  # noqa: PLR2004 - padding masks are 1D/2D
         and not torch.compiler.is_compiling()

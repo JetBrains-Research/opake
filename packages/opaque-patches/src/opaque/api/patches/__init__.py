@@ -11,6 +11,10 @@ import torch.nn as nn
 
 from opaque.api.patches.peft import apply_peft_model_patches
 from opaque.api.patches.transformers._router import apply_transformers_model_patches
+from opaque.api.patches.transformers.runtime.masking import (
+    packed_sequences,
+    set_packed_sequences,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -165,4 +169,6 @@ __all__ = [
     "apply_runtime_patches",
     "apply_transformers_model_patches",
     "is_runtime_patched",
+    "packed_sequences",
+    "set_packed_sequences",
 ]

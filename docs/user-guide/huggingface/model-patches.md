@@ -225,6 +225,16 @@ large-expert MoE (`E >= 16`) with `torch._grouped_mm` available uses the MPS/CPU
 `Opaque_GroupedMoE` variant. Smaller MoEs (e.g. Mixtral-8) and fp32 / no-Triton
 hosts stay on the dense path.
 
+**Packed-sequence policy.** `opaque.patches.set_packed_sequences(flag)` tells the
+vmap-safe causal-mask builder whether every collated row is fully valid. With
+`True` the SDPA `is_causal` fast path is allowed without inspecting the batch;
+with `False` the mask is always materialised when an attention mask is given, so
+an example's attention kernel never depends on whether a microbatch mate is
+padded; `None` (default) probes the batch as before. `packed_sequences()` reads
+the current setting. Under DP training the kernel choice should be a public
+property of the data, which is why `DPTrainer` installs the policy from its
+`packed_sequences` argument for the duration of `train()`.
+
 The original dense **Mellum** (`Mellum-4b`, `model_type="llama"`) needs no MoE
 support — it is a Llama checkpoint served by the `llama` family.
 

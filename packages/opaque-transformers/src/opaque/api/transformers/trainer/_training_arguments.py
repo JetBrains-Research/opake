@@ -600,6 +600,14 @@ class TrainingArguments:
     # snapshot, leaving the run resumable after preemption.
     enable_jit_checkpoint: bool = False
 
+    #: Public statement that every collated row is fully valid (packed
+    #: sequences, no padding).  ``True`` lets the vmap-safe causal-mask
+    #: builder take its all-valid fast path without probing the batch;
+    #: ``False`` always materialises the mask so an example's attention kernel
+    #: never depends on its microbatch mates; ``None`` keeps the runtime's
+    #: data-driven probe.
+    packed_sequences: bool | None = None
+
     # HF-compatible private device counter. Device resolution replaces the
     # sentinel with 0 for CPU/MPS or 1 for CUDA.
     _n_gpu: int = field(init=False, repr=False, default=-1)
@@ -621,6 +629,15 @@ class TrainingArguments:
             return
 
         self._normalize_and_validate_common_fields()
+        if self.packed_sequences is not None and not isinstance(
+            self.packed_sequences, bool
+        ):
+            raise InputTypeError(
+                *(
+                    "packed_sequences must be True, False or None; got "
+                    f"{self.packed_sequences!r}.",
+                )
+            )
 
         # --- 3. ``disable_tqdm`` default from log level (HF parity) ---------
         if self.disable_tqdm is None:
