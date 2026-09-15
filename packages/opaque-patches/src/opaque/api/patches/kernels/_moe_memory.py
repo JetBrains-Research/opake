@@ -13,6 +13,7 @@ _MIB = 1024**2
 _GIB = 1024**3
 _FALLBACK_WORKSPACE_BYTES = 256 * _MIB
 _MAX_WORKSPACE_BYTES = 8 * _GIB
+_MAX_FP32_ACCUMULATOR_BYTES = 32 * _MIB
 _FREE_MEMORY_FRACTION = 0.25
 _ROUTING_INDEX_BYTES = 8
 
@@ -85,7 +86,7 @@ def estimate_moe_workspace(
         down_proj.requires_grad if compute_down_wgrad is None else compute_down_wgrad
     )
 
-    dense_fixed = rows * hidden * 4
+    dense_fixed = rows * hidden * x.element_size()
     dense_per_row = (
         itemsize * (4 * intermediate + 3 * hidden)
         + 4 * (3 * intermediate + 2 * hidden)
@@ -93,7 +94,7 @@ def estimate_moe_workspace(
     )
 
     routed_rows = rows * top_k
-    grouped_fixed = rows * hidden * 4
+    grouped_fixed = rows * hidden * x.element_size()
     grouped_per_route = (
         3 * _ROUTING_INDEX_BYTES
         + itemsize * (5 * intermediate + 5 * hidden)
@@ -202,3 +203,10 @@ def chunk_size(
     if row_multiple > 1:
         rows = max(row_multiple, rows - rows % row_multiple)
     return min(total, rows)
+
+
+def fp32_accumulator_rows(total: int, width: int) -> int:
+    """Bound a token-local FP32 accumulator independently of free memory."""
+    if total <= 0:
+        return 1
+    return min(total, max(1, _MAX_FP32_ACCUMULATOR_BYTES // max(width * 4, 1)))

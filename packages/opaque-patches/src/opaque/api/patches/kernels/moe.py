@@ -25,12 +25,14 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
+from ._moe_expert_cast import cast_expert_banks
 from ._moe_memory import (
     _workspace_budget_bytes,
     chunk_size,
     dense_backward_bytes_per_row,
     dense_routing_bytes_per_row,
     estimate_moe_workspace,
+    fp32_accumulator_rows,
     use_grouped_route,
 )
 
@@ -80,7 +82,7 @@ def _moe_forward(x, gate_up_proj, down_proj, top_k_index, top_k_weights):
     xf = x.reshape(-1, hidden)
     index = top_k_index.reshape(-1, top_k_index.shape[-1])
     weights = top_k_weights.reshape(-1, top_k_weights.shape[-1])
-    out = torch.zeros_like(x, dtype=torch.float32)
+    out = torch.empty_like(x)
     out_flat = out.reshape(-1, hidden)
     per_row = dense_backward_bytes_per_row(
         hidden, intermediate, x.element_size()
@@ -91,17 +93,20 @@ def _moe_forward(x, gate_up_proj, down_proj, top_k_index, top_k_weights):
         x.device,
         fixed_bytes=out.numel() * out.element_size(),
     )
-    for e in range(experts):
-        for lo in range(0, xf.shape[0], rows):
-            hi = min(lo + rows, xf.shape[0])
+    rows = min(rows, fp32_accumulator_rows(xf.shape[0], hidden))
+    for lo in range(0, xf.shape[0], rows):
+        hi = min(lo + rows, xf.shape[0])
+        local_out = torch.zeros_like(xf[lo:hi], dtype=torch.float32)
+        for e in range(experts):
             gate_up = F.linear(xf[lo:hi], gate_up_proj[e])
             h = (
                 F.silu(gate_up[:, :intermediate].float()).to(x.dtype)
                 * gate_up[:, intermediate:]
             )
             route = _expert_route(index[lo:hi], weights[lo:hi], e, experts)
-            out_flat[lo:hi].add_((F.linear(h, down_proj[e]) * route).float())
-    return out.to(x.dtype)
+            local_out.add_((F.linear(h, down_proj[e]) * route).float())
+        out_flat[lo:hi] = local_out.to(x.dtype)
+    return out
 
 
 def _dense_weight_grad_terms(
@@ -521,8 +526,10 @@ class Opaque_MoE(torch.autograd.Function):
 
     @staticmethod
     def forward(x, gate_up_proj, down_proj, top_k_index, top_k_weights):
-        x, gate_up_proj, down_proj, top_k_weights = _cast_to_dtype(
-            _active_cuda_dtype(x), x, gate_up_proj, down_proj, top_k_weights
+        compute_dtype = _active_cuda_dtype(x)
+        x, top_k_weights = _cast_to_dtype(compute_dtype, x, top_k_weights)
+        gate_up_proj, down_proj = cast_expert_banks(
+            compute_dtype, gate_up_proj, down_proj
         )
         return _moe_forward(x, gate_up_proj, down_proj, top_k_index, top_k_weights)
 
@@ -538,8 +545,9 @@ class Opaque_MoE(torch.autograd.Function):
         compute_down_wgrad = ctx.needs_input_grad[2]
         compute_route_grad = ctx.needs_input_grad[4]
         x, gate_up_proj, down_proj, top_k_index, top_k_weights = ctx.saved_tensors
-        x, gate_up_proj, down_proj, top_k_weights = _cast_to_dtype(
-            ctx.compute_dtype, x, gate_up_proj, down_proj, top_k_weights
+        x, top_k_weights = _cast_to_dtype(ctx.compute_dtype, x, top_k_weights)
+        gate_up_proj, down_proj = cast_expert_banks(
+            ctx.compute_dtype, gate_up_proj, down_proj
         )
         dx, dgate_up, ddown, dtw = _MoEBackward.apply(
             grad_out,
@@ -559,8 +567,10 @@ class Opaque_MoE(torch.autograd.Function):
     @staticmethod
     def vmap(info, in_dims, x, gate_up_proj, down_proj, top_k_index, top_k_weights):
         # Forward is token-independent: merge the vmap batch into the token dim.
-        x, gate_up_proj, down_proj, top_k_weights = _cast_to_dtype(
-            _active_cuda_dtype(x), x, gate_up_proj, down_proj, top_k_weights
+        compute_dtype = _active_cuda_dtype(x)
+        x, top_k_weights = _cast_to_dtype(compute_dtype, x, top_k_weights)
+        gate_up_proj, down_proj = cast_expert_banks(
+            compute_dtype, gate_up_proj, down_proj
         )
         return (
             _moe_forward(x, gate_up_proj, down_proj, top_k_index, top_k_weights),

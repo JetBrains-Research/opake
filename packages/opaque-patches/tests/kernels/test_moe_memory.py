@@ -10,7 +10,7 @@ from __future__ import annotations
 import torch
 from torch.func import grad, vmap
 
-from opaque.api.patches.kernels import _grouped_moe, _moe_memory
+from opaque.api.patches.kernels import _grouped_moe, _moe_expert_cast, _moe_memory
 from opaque.api.patches.kernels import moe as moe_kernel
 from opaque.api.patches.kernels._grouped_moe import Opaque_GroupedMoE
 from opaque.api.patches.kernels.moe import (
@@ -28,6 +28,110 @@ def _inputs(E=16, I=32, H=16, K=2, B=3, T=6):
     index = torch.randint(E, (B, T, K))
     weights = torch.rand(B, T, K)
     return x, gate_up, down, index, weights
+
+
+def setup_function():
+    _moe_expert_cast.clear_expert_shadow_cache()
+
+
+def test_frozen_expert_shadows_reuse_and_version_invalidate():
+    bank = torch.randn(4, 8, 8)
+    first = _moe_expert_cast.cast_expert_banks(torch.bfloat16, bank)[0]
+    second = _moe_expert_cast.cast_expert_banks(torch.bfloat16, bank)[0]
+    assert second is first
+
+    bank.add_(1)
+    updated = _moe_expert_cast.cast_expert_banks(torch.bfloat16, bank)[0]
+    assert updated is not first
+    torch.testing.assert_close(updated.float(), bank.to(torch.bfloat16).float())
+    assert _moe_expert_cast.expert_shadow_cache_info() == (
+        1,
+        updated.numel() * updated.element_size(),
+    )
+
+
+def test_state_loading_and_dtype_moves_cannot_reuse_stale_shadow():
+    module = torch.nn.Linear(8, 8, bias=False)
+    module.weight.requires_grad_(False)
+    first = _moe_expert_cast.cast_expert_banks(torch.bfloat16, module.weight)[0]
+    module.load_state_dict({"weight": torch.full_like(module.weight, 3)})
+    loaded = _moe_expert_cast.cast_expert_banks(torch.bfloat16, module.weight)[0]
+    assert loaded is not first
+    torch.testing.assert_close(loaded, torch.full_like(loaded, 3))
+
+    moved = module.weight.to(torch.float64)
+    moved_shadow = _moe_expert_cast.cast_expert_banks(torch.bfloat16, moved)[0]
+    assert moved_shadow is not loaded
+    torch.testing.assert_close(moved_shadow, loaded)
+
+
+def test_trainable_and_shared_storage_experts_are_never_retained():
+    trainable = torch.randn(4, 8, 8, requires_grad=True)
+    first = _moe_expert_cast.cast_expert_banks(torch.bfloat16, trainable)[0]
+    second = _moe_expert_cast.cast_expert_banks(torch.bfloat16, trainable)[0]
+    assert first is not second
+    assert _moe_expert_cast.expert_shadow_cache_info() == (0, 0)
+
+    base = torch.randn(4, 8, 8)
+    shared_view = base.view_as(base)
+    first = _moe_expert_cast.cast_expert_banks(torch.bfloat16, shared_view)[0]
+    base.add_(1)
+    second = _moe_expert_cast.cast_expert_banks(torch.bfloat16, shared_view)[0]
+    assert first is not second
+    torch.testing.assert_close(second.float(), base.to(torch.bfloat16).float())
+    assert _moe_expert_cast.expert_shadow_cache_info() == (0, 0)
+
+    independent_alias = torch.empty(0)
+    independent_alias.set_(
+        base.untyped_storage(), base.storage_offset(), base.shape, base.stride()
+    )
+    assert not independent_alias._is_view()
+    _moe_expert_cast.cast_expert_banks(torch.bfloat16, independent_alias)
+    assert _moe_expert_cast.expert_shadow_cache_info() == (0, 0)
+
+
+def test_optimizer_updated_experts_recast_without_retention():
+    bank = torch.nn.Parameter(torch.randn(4, 8, 8))
+    optimizer = torch.optim.SGD([bank], lr=0.1)
+    before = _moe_expert_cast.cast_expert_banks(torch.bfloat16, bank)[0]
+    bank.grad = torch.ones_like(bank)
+    optimizer.step()
+    after = _moe_expert_cast.cast_expert_banks(torch.bfloat16, bank)[0]
+    assert after is not before
+    assert _moe_expert_cast.expert_shadow_cache_info() == (0, 0)
+    torch.testing.assert_close(after.float(), bank.to(torch.bfloat16).float())
+
+
+def test_expert_shadow_cache_is_budget_bounded(monkeypatch):
+    bank = torch.randn(4, 8, 8)
+    shadow_bytes = bank.numel() * 2
+    monkeypatch.setattr(_moe_expert_cast, "_cache_budget", lambda device: shadow_bytes)
+    first = _moe_expert_cast.cast_expert_banks(torch.bfloat16, bank)[0]
+    other = torch.randn_like(bank)
+    _moe_expert_cast.cast_expert_banks(torch.bfloat16, other)
+    assert _moe_expert_cast.expert_shadow_cache_info() == (1, shadow_bytes)
+    assert _moe_expert_cast.cast_expert_banks(torch.bfloat16, bank)[0] is not first
+
+
+def test_expert_bank_pair_recasts_when_combined_shadow_exceeds_budget(monkeypatch):
+    gate_up = torch.randn(4, 8, 8)
+    down = torch.randn_like(gate_up)
+    one_shadow_bytes = gate_up.numel() * 2
+    monkeypatch.setattr(
+        _moe_expert_cast, "_cache_budget", lambda device: one_shadow_bytes
+    )
+    first = _moe_expert_cast.cast_expert_banks(torch.bfloat16, gate_up, down)
+    second = _moe_expert_cast.cast_expert_banks(torch.bfloat16, gate_up, down)
+    assert all(a is not b for a, b in zip(first, second, strict=True))
+    assert _moe_expert_cast.expert_shadow_cache_info() == (0, 0)
+
+
+def test_expert_shadow_cache_releases_deleted_source():
+    bank = torch.randn(4, 8, 8)
+    _moe_expert_cast.cast_expert_banks(torch.bfloat16, bank)
+    assert _moe_expert_cast.expert_shadow_cache_info()[0] == 1
+    del bank
+    assert _moe_expert_cast.expert_shadow_cache_info() == (0, 0)
 
 
 def test_workspace_estimate_separates_required_weight_grad_output():
@@ -352,6 +456,30 @@ def test_forced_forward_chunks_bound_grouped_mm_rows(monkeypatch):
     assert len(rows) > 2
     assert max(rows) < index2.numel()
     assert max(sort_rows) < index2.numel()
+    assert all(route_rows % index2.shape[-1] == 0 for route_rows in sort_rows)
+
+
+def test_grouped_fp32_accumulators_are_token_chunk_local(monkeypatch):
+    x, gate_up, down, index, weights = _inputs(B=1, T=12)
+    x, index, weights = x[0], index[0], weights[0]
+    monkeypatch.setattr(_moe_memory, "_MAX_FP32_ACCUMULATOR_BYTES", x.shape[-1] * 8)
+    allocations = []
+    zeros = _grouped_moe.torch.zeros
+
+    def recording_zeros(*shape, **kwargs):
+        tensor = zeros(*shape, **kwargs)
+        if tensor.dtype == torch.float32 and tensor.ndim == 2:
+            allocations.append(tuple(tensor.shape))
+        return tensor
+
+    monkeypatch.setattr(_grouped_moe.torch, "zeros", recording_zeros)
+    out = Opaque_GroupedMoE.apply(
+        x.requires_grad_(), gate_up, down, index, weights.requires_grad_()
+    )
+    out.square().mean().backward()
+    token_accumulators = [shape for shape in allocations if shape[1] == x.shape[-1]]
+    assert token_accumulators
+    assert max(shape[0] for shape in token_accumulators) < x.shape[0]
 
 
 def test_forced_weight_grad_tiles_when_routed_activations_fit(monkeypatch):
