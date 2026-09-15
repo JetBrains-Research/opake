@@ -206,6 +206,53 @@ def _resolve_drift_disposition(
     return drift
 
 
+def _rank_local_sampler_state(
+    saved_state: Mapping[str, Any], template_sampler: Any, world_size: int
+) -> Mapping[str, Any]:
+    """Re-key a rank-0 sampler snapshot onto this rank's own sampler stream.
+
+    The sampler snapshot is written once, by world rank 0, and carries rank
+    0's rank-folded stream key (``key_seed`` / ``key_impl``).  Under DDP every
+    rank draws its shard with its own key (``fold_in(sampler_key, rank)`` on
+    fresh construction), so installing the snapshot verbatim would put rank
+    0's coins on every rank: records sharing a local shard index would be
+    co-included for the rest of the run, and the Poisson / b-min-sep
+    amplification the accountant applies (which needs the inclusion coin of
+    the added record independent of every other coin) would no longer hold
+    for the resumed steps.
+
+    This returns the snapshot with the stream key replaced by
+    ``template_sampler``'s own key, so ``from_state_dict`` restores the saved
+    cursor on the rank-local stream and rank ``r`` continues exactly the
+    stream it drew before the checkpoint.  Rank 0's template key equals the
+    saved key by construction, so rank 0 restores bit-identically.  At
+    ``world_size == 1`` the snapshot is returned unchanged, so single-process
+    resume is unaffected.  Snapshots without a stream key (deterministic
+    samplers) are returned unchanged.
+
+    Raises:
+        CheckpointError: If the snapshot carries a stream key but the template
+            sampler has none to substitute; installing the shared key would
+            silently correlate the ranks' coins.
+    """
+    if world_size <= 1 or "key_seed" not in saved_state:
+        return saved_state
+    template_key = getattr(template_sampler, "_stream_key", None)
+    if template_key is None:
+        raise CheckpointError(
+            *(
+                "Sampler snapshot carries a stream key but the template "
+                f"{type(template_sampler).__name__} exposes none; cannot restore "
+                "a rank-local sampling stream under DDP.",
+            )
+        )
+    local_state = dict(saved_state)
+    local_state["key_seed"] = int(template_key.seed)
+    if "key_impl" in local_state:
+        local_state["key_impl"] = str(template_key.impl)
+    return local_state
+
+
 def _compile_strict_chunk(
     fn: Callable, *, backend: str | Callable, mode: str
 ) -> Callable:
@@ -1868,12 +1915,22 @@ class DPTrainer:
             # saved length so ``from_state_dict`` can validate.  Build
             # one (without caching the loader yet), then replace it
             # with the restored cursor before the actual loader binds.
+            # Under DDP the template also carries this rank's own
+            # rank-folded stream key; the snapshot (written by rank 0)
+            # is re-keyed onto it so each rank resumes *its own*
+            # pre-checkpoint stream rather than rank 0's (see
+            # :func:`_rank_local_sampler_state`).
             if ctx.current_sampler is None:
                 self._train_dataloader = None
                 self.get_train_dataloader()  # populates ctx.current_sampler
                 self._train_dataloader = None  # drop the cached loader
             ctx.current_sampler = from_state_dict(
-                ctx.current_sampler, saved_sampler_state
+                ctx.current_sampler,
+                _rank_local_sampler_state(
+                    saved_sampler_state,
+                    ctx.current_sampler,
+                    self._ddp.world_size,
+                ),
             )
 
         train_loader = self.get_train_dataloader()
@@ -3877,12 +3934,13 @@ class DPTrainer:
         # denominator used here (see :meth:`_effective_train_dataset_size`),
         # so runtime and accountant cannot drift apart.
         #
-        # Resume caveat (multi-GPU only): the sampler snapshot is
-        # self-contained (carries its own key) and is written once on rank
-        # 0, so resuming a DDP run currently restores rank 0's per-rank key
-        # on every rank, re-introducing the cross-rank correlation after the
-        # resume point.  Fully fixing that needs per-rank sampler snapshots;
-        # tracked for the multi-GPU work and validated there.
+        # Resume (multi-GPU): the sampler snapshot is self-contained (carries
+        # its own key) and is written once on rank 0.  The resume path in
+        # :meth:`train` therefore re-keys the snapshot onto the rank-folded
+        # key of this rank's freshly built template sampler
+        # (:func:`_rank_local_sampler_state`) before ``from_state_dict``, so
+        # only the cursor is taken from the snapshot and every rank resumes
+        # its own pre-checkpoint stream with cross-rank coins independent.
         if self._ddp.world_size > 1:
             from opaque.distributed import local_shard
 
