@@ -324,6 +324,7 @@ def _grouped_eager_attention(
     scaling: float,
     dropout: float,
     softcap: float | None = None,
+    s_aux: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     num_key_value_groups = query.shape[-3] // key.shape[-3]
     output_groups = []
@@ -350,12 +351,30 @@ def _grouped_eager_attention(
                 key_group.shape[-2],
             )
 
-        attn_weights = torch.nn.functional.softmax(
-            attn_weights, dim=-1, dtype=torch.float32
-        ).to(query.dtype)
+        if s_aux is None:
+            attn_weights = torch.nn.functional.softmax(
+                attn_weights, dim=-1, dtype=torch.float32
+            ).to(query.dtype)
+        else:
+            sink_logits = s_aux[query_head_start:query_head_end].reshape(
+                *((1,) * (attn_weights.ndim - 3)),
+                num_key_value_groups,
+                1,
+                1,
+            )
+            sink_logits = sink_logits.expand(*attn_weights.shape[:-1], 1)
+            combined_logits = torch.cat((attn_weights, sink_logits), dim=-1)
+            combined_logits = (
+                combined_logits - combined_logits.max(dim=-1, keepdim=True).values
+            )
+            attn_weights = torch.nn.functional.softmax(
+                combined_logits, dim=-1, dtype=combined_logits.dtype
+            )[..., :-1]
         attn_weights = torch.nn.functional.dropout(
             attn_weights, p=dropout, training=module.training
         )
+        if s_aux is not None:
+            attn_weights = attn_weights.to(value_group.dtype)
         output_groups.append(torch.matmul(attn_weights, value_group))
         weight_groups.append(attn_weights)
 
@@ -383,6 +402,33 @@ def vmap_eager_attention_forward(
     """
     attn_output, attn_weights = _grouped_eager_attention(
         module, query, key, value, attention_mask, scaling, dropout
+    )
+    return attn_output.transpose(-3, -2).contiguous(), attn_weights
+
+
+def vmap_eager_attention_forward_with_sinks(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    dropout: float = 0.0,
+    s_aux: torch.Tensor | None = None,
+    **kwargs,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """vmap-compatible eager attention with per-head auxiliary sink logits."""
+    if s_aux is None:
+        s_aux = module.sinks
+    attn_output, attn_weights = _grouped_eager_attention(
+        module,
+        query,
+        key,
+        value,
+        attention_mask,
+        scaling,
+        dropout,
+        s_aux=s_aux,
     )
     return attn_output.transpose(-3, -2).contiguous(), attn_weights
 

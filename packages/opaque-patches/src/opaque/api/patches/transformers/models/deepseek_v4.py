@@ -9,6 +9,9 @@ from __future__ import annotations
 from opaque.api.patches.transformers._factory import make_apply_model_patches
 from opaque.api.patches.transformers._family import make_apply_family_patches
 from opaque.api.patches.transformers._registry import register_family
+from opaque.api.patches.transformers.components.attention import (
+    vmap_eager_attention_forward_with_sinks,
+)
 
 _MODULE_PATH = "transformers.models.deepseek_v4.modeling_deepseek_v4"
 
@@ -16,6 +19,7 @@ _MODULE_PATH = "transformers.models.deepseek_v4.modeling_deepseek_v4"
 apply_deepseek_v4_family_patches = make_apply_family_patches(
     family="deepseek_v4",
     module_path=_MODULE_PATH,
+    eager_attention_replacement=vmap_eager_attention_forward_with_sinks,
     rope_replacement=None,
 )
 

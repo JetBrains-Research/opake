@@ -98,6 +98,7 @@ def assert_vmap_grad(model, device, dtype=None):
     )
     assert len(grads.pytree) > 0
     assert all(torch.isfinite(g).all() for g in grads.pytree.values())
+    return grads
 
 
 # ----------------------------------------------------------------------------
@@ -512,17 +513,27 @@ def assert_parity_vmap_grad(
     label: str = "",
     apply_model_patches_kwargs: dict | None = None,
     dtype: torch.dtype | None = None,
+    sequential_upstream: bool = False,
 ):
-    """Compare vmap gradients against an upstream runtime-compatible reference."""
+    """Compare vmap gradients against a runtime-compatible or sequential reference."""
     torch.manual_seed(0)
-    unpatched, patched = build_runtime_patched_model_pair(
-        config_cls,
-        model_cls,
-        device,
-        attn_impl=attn_impl,
-        config_kwargs=config_kwargs,
-        apply_model_patches_kwargs=apply_model_patches_kwargs,
-    )
+    if sequential_upstream:
+        unpatched, patched = build_patched_model_pair(
+            config_cls,
+            model_cls,
+            device,
+            attn_impl=attn_impl,
+            config_kwargs=config_kwargs,
+        )
+    else:
+        unpatched, patched = build_runtime_patched_model_pair(
+            config_cls,
+            model_cls,
+            device,
+            attn_impl=attn_impl,
+            config_kwargs=config_kwargs,
+            apply_model_patches_kwargs=apply_model_patches_kwargs,
+        )
     if dtype is not None:
         unpatched = unpatched.to(dtype)
         patched = patched.to(dtype)
@@ -533,6 +544,28 @@ def assert_parity_vmap_grad(
     input_ids = torch.randint(0, vocab, (batch, seq), device=device)
     attention_mask = torch.ones(batch, seq, dtype=torch.long, device=device)
     labels = input_ids.clone()
+
+    def _sequential_clipped_grads(model):
+        from opaque.api.engine.clipping._pytree import clip_pytree
+
+        summed = None
+        for index in range(batch):
+            model.zero_grad(set_to_none=True)
+            loss = model(
+                input_ids=input_ids[index : index + 1],
+                attention_mask=attention_mask[index : index + 1],
+                labels=labels[index : index + 1],
+            ).loss
+            loss.backward()
+            per_example = _collect_grads(model)
+            clipped, _ = clip_pytree(per_example, clipping_norm=1.0)
+            if summed is None:
+                summed = {name: gradient.clone() for name, gradient in clipped.items()}
+            else:
+                summed = {
+                    name: summed[name] + gradient for name, gradient in clipped.items()
+                }
+        return summed
 
     def _vmap_grads(model):
         fmodel, trainable, frozen = make_functional(
@@ -552,20 +585,29 @@ def assert_parity_vmap_grad(
         )
         return grads
 
-    grads_ref = _vmap_grads(unpatched)
-    grads_test = _vmap_grads(patched)
+    if sequential_upstream:
+        grads_ref = _sequential_clipped_grads(unpatched)
+        with parity_model_patches(patched, apply_model_patches_kwargs):
+            grads_test = _vmap_grads(patched).pytree
+    else:
+        grads_ref = _vmap_grads(unpatched).pytree
+        grads_test = _vmap_grads(patched).pytree
 
     actual_dtype = dtype or next(patched.parameters()).dtype
     tolerances = _get_tolerances(actual_dtype, softcapping)
 
-    assert set(grads_ref.pytree.keys()) == set(grads_test.pytree.keys()), (
-        f"{label} vmap_grad key mismatch"
+    ref_keys = set(grads_ref)
+    test_keys = set(grads_test)
+    assert ref_keys <= test_keys, (
+        f"{label} vmap_grad key mismatch: missing={ref_keys - test_keys}"
     )
-    for name in sorted(grads_ref.pytree):
+    for name in test_keys - ref_keys:
+        grads_ref[name] = torch.zeros_like(grads_test[name])
+    for name in sorted(grads_ref):
         _assert_tensors_close(
             f"vmap_grad {name}",
-            grads_test.pytree[name],
-            grads_ref.pytree[name],
+            grads_test[name],
+            grads_ref[name],
             rtol=tolerances["rtol"],
             atol=tolerances["atol"],
             label=label,

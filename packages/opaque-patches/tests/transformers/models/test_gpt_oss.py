@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 
 pytest.importorskip("transformers")
 
@@ -45,8 +46,22 @@ def test_gpt_oss_forward_no_grad(tiny, device):
 
 def test_gpt_oss_forward_backward(tiny, device):
     assert_forward_backward(tiny[0], device)
+    sink_params = {
+        name: parameter
+        for name, parameter in tiny[0].named_parameters()
+        if name.endswith(".sinks")
+    }
+    assert sink_params
+    assert all(parameter.grad is not None for parameter in sink_params.values())
 
 
 def test_gpt_oss_vmap_grad(tiny, device):
     """DP-SGD per-sample gradients run through HF's (vmap-safe) experts forward."""
-    assert_vmap_grad(tiny[0], device)
+    grads = assert_vmap_grad(tiny[0], device)
+    sink_grads = {
+        name: gradient
+        for name, gradient in grads.pytree.items()
+        if name.endswith(".sinks")
+    }
+    assert sink_grads
+    assert all(torch.isfinite(gradient).all() for gradient in sink_grads.values())

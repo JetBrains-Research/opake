@@ -66,6 +66,7 @@ _NON_BINDING_SLIDING_WINDOW = 64
 
 # Families that are eager-only (SDPA not supported by HF).
 _EAGER_ONLY_FAMILIES = {"gpt_oss", "deepseek_v4"}
+_SINK_FAMILIES = {"gpt_oss", "deepseek_v4"}
 
 # MoE families — need extra config kwargs.
 _MOE_FAMILIES = {
@@ -86,8 +87,6 @@ _PARITY_SKIP_FAMILIES = {
 # These families require runtime compatibility shims even for an ordinary
 # forward, so no strict-upstream parity reference is available.
 _STRICT_FORWARD_PARITY_SKIP_FAMILIES = {
-    "deepseek_v4",
-    "gpt_oss",
     "qwen3_next",
 }
 
@@ -97,8 +96,6 @@ _STRICT_FORWARD_PARITY_SKIP_FAMILIES = {
 _GRAD_PARITY_SKIP_FAMILIES = {
     "gpt2",  # kv_cache/batchify patches alter backward graph
     "qwen3_next",  # masking_utils uses .item()-like ops under vmap
-    "deepseek_v4",  # runtime compatibility shims change sink gradients
-    "gpt_oss",  # runtime compatibility shims change sink gradients
 }
 
 # Families whose Config / ForCausalLM class name does not follow the standard
@@ -479,7 +476,7 @@ def test_lora_forward_parity(family, device):
 
 @pytest.mark.parametrize("family", _family_params_with_slow("cohere"))
 def test_vmap_grad_parity(family, device):
-    """Patched and runtime-compatible reference vmap(grad) values match."""
+    """Patched vmap gradients match a compatible or pristine sequential reference."""
     if family in _GRAD_PARITY_SKIP_FAMILIES:
         pytest.skip(f"{family} has unreliable gradient parity")
     config_cls, model_cls = _resolve_family_imports(family)
@@ -496,6 +493,7 @@ def test_vmap_grad_parity(family, device):
             softcapping=softcapping,
             label=f"{family}",
             dtype=_parity_dtype(device),
+            sequential_upstream=family in _SINK_FAMILIES,
         )
     except Exception as e:
         raise AssertionError(f"{family} vmap grad parity failed") from e
