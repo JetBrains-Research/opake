@@ -39,6 +39,7 @@ Opaque is organized into several modules, each focused on a specific aspect of D
   - `clip_pytree()` — Low-level PyTree clipping
   - `adaptive_clipped_grad()` — Clipped gradients with an auto-tuned clip norm
   - `auto_clipped_grad()` — AUTO-S automatic per-example gradient scaling (Bu et al. 2023)
+  - `moe_clipped_grad()` — MoE clipping with the router load released inside the clipper
 
 - **[Noise](noise.md)** — Noise injection for DP
   - `gaussian_noise()` — Gaussian noise
@@ -46,7 +47,7 @@ Opaque is organized into several modules, each focused on a specific aspect of D
   - Strategy factories: `band_mf_strategy()`, `blt_strategy()`, `lambda_cgd_strategy()`, `bisr_strategy()`, `identity_strategy()`
 
 - **[Accounting](accounting.md)** — Privacy budget tracking
-  - `gaussian()`, `adaclip()` — DP-SGD mechanisms (also via `opaque.dpsgd.accounting`)
+  - `gaussian()`, `adaclip()`, `moe_aux()` — DP-SGD mechanisms (also via `opaque.dpsgd.accounting`)
   - `poisson()` (plain or truncated via `truncated_batch_size` / `dataset_size`), `parallel_poisson()` — Poisson-family amplification
   - `mf_gaussian()`, `poisson()`, `b_min_sep()`, `balls_in_bins()` — DP-FTRL whole-process accounting
   - `DpProcess` operators: `*` (repeat), `|` (compose)
