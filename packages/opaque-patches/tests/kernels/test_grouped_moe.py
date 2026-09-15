@@ -21,6 +21,7 @@ from torch.func import grad, vmap
 from opaque.api.patches.kernels import _moe_memory
 from opaque.api.patches.kernels._grouped_moe import (
     Opaque_GroupedMoE,
+    _grouped_AtB,
     grouped_mm_available,
 )
 from opaque.api.patches.kernels.moe import Opaque_MoE, opaque_moe
@@ -157,6 +158,79 @@ def test_grouped_moe_frozen_experts_cpu():
 @pytest.mark.mps
 def test_grouped_moe_frozen_experts_mps():
     _check_frozen_experts("mps")
+
+
+def test_grouped_atb_handles_empty_groups_on_device(monkeypatch):
+    torch.manual_seed(964)
+    A = torch.randn(5, 16)
+    B = torch.randn(5, 8)
+    ends = torch.tensor([2, 2, 5, 5], dtype=torch.int32)
+    monkeypatch.setattr(
+        torch.Tensor,
+        "tolist",
+        lambda self: pytest.fail("grouped offsets must stay on device"),
+    )
+    actual = _grouped_AtB(A, B, ends, 4)
+    expected = torch.stack(
+        [
+            A[:2].mT @ B[:2],
+            torch.zeros(16, 8),
+            A[2:].mT @ B[2:],
+            torch.zeros(16, 8),
+        ]
+    )
+    torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "routes",
+    [
+        pytest.param(
+            [[[0, 1], [2, 3], [0, 2], [1, 3]]],
+            id="balanced",
+        ),
+        pytest.param(
+            [[[0, 0], [0, 0], [0, 0], [0, 0]]],
+            id="skewed-duplicate-empty",
+        ),
+    ],
+)
+@pytest.mark.parametrize("expert_argnums", [(), (1,), (2,), (1, 2)])
+def test_route_plans_preserve_ordinary_and_dp_gradients(
+    monkeypatch, routes, expert_argnums
+):
+    torch.manual_seed(964)
+    B, T, K, E, H, I = 2, 4, 2, 4, 16, 16
+    x = torch.randn(B, T, H)
+    gate_up = torch.randn(E, 2 * I, H)
+    down = torch.randn(E, H, I)
+    index = torch.tensor(routes).expand(B, -1, -1).clone()
+    weights = torch.rand(B, T, K)
+    monkeypatch.setattr(_moe_memory, "_MAX_WORKSPACE_BYTES", 4_096)
+
+    def grouped_loss(xx, g, d, ii, ww):
+        return Opaque_GroupedMoE.apply(xx, g, d, ii, ww).square().mean()
+
+    def dense_loss(xx, g, d, ii, ww):
+        return Opaque_MoE.apply(xx, g, d, ii, ww).square().mean()
+
+    argnums = (0, *expert_argnums, 4)
+    ordinary = grad(grouped_loss, argnums=argnums)(
+        x[0], gate_up, down, index[0], weights[0]
+    )
+    ordinary_ref = grad(dense_loss, argnums=argnums)(
+        x[0], gate_up, down, index[0], weights[0]
+    )
+    per_example = vmap(
+        grad(grouped_loss, argnums=argnums), in_dims=(0, None, None, 0, 0)
+    )(x, gate_up, down, index, weights)
+    per_example_ref = vmap(
+        grad(dense_loss, argnums=argnums), in_dims=(0, None, None, 0, 0)
+    )(x, gate_up, down, index, weights)
+    for actual, expected in zip(ordinary, ordinary_ref, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=2e-3, atol=2e-3)
+    for actual, expected in zip(per_example, per_example_ref, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=2e-3, atol=2e-3)
 
 
 def _check_dispatch(device: str) -> None:

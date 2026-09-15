@@ -351,20 +351,20 @@ def test_forced_forward_chunks_bound_grouped_mm_rows(monkeypatch):
     torch.testing.assert_close(actual, expected, rtol=1e-3, atol=1e-3)
     assert len(rows) > 2
     assert max(rows) < index2.numel()
-    assert max(sort_rows) < index2.numel()
+    assert sort_rows == [index2.numel()]
 
 
-def test_forced_weight_grad_tiles_when_routed_activations_fit(monkeypatch):
+def test_forced_weight_grad_tiles_share_route_plan(monkeypatch):
     x, gate_up, down, index, weights = _inputs(B=1, T=1, K=1)
     monkeypatch.setattr(_moe_memory, "_MAX_WORKSPACE_BYTES", 3_000)
-    streamed = []
-    stream_weight_grads = _grouped_moe._stream_grouped_weight_grads
+    plan_ids = []
+    accumulate = _grouped_moe._accumulate_grouped_AtB
 
-    def recording_stream(*args, **kwargs):
-        streamed.append(True)
-        return stream_weight_grads(*args, **kwargs)
+    def recording_accumulate(A, B, plan, *args, **kwargs):
+        plan_ids.append(id(plan))
+        return accumulate(A, B, plan, *args, **kwargs)
 
-    monkeypatch.setattr(_grouped_moe, "_stream_grouped_weight_grads", recording_stream)
+    monkeypatch.setattr(_grouped_moe, "_accumulate_grouped_AtB", recording_accumulate)
 
     def loss(xx, g, d, ii, ww):
         return Opaque_GroupedMoE.apply(xx, g, d, ii, ww).square().mean()
@@ -372,7 +372,8 @@ def test_forced_weight_grad_tiles_when_routed_activations_fit(monkeypatch):
     actual = vmap(grad(loss, argnums=(1, 2)), in_dims=(0, None, None, 0, 0))(
         x, gate_up, down, index, weights
     )
-    assert streamed == [True]
+    assert len(plan_ids) >= 2
+    assert plan_ids[::2] == plan_ids[1::2]
     assert actual[0].shape[:2] == (1, gate_up.shape[0])
     assert actual[1].shape[:2] == (1, down.shape[0])
 
@@ -388,15 +389,15 @@ def test_forced_trainable_backward_chunks_single_long_example(monkeypatch):
         rows.append(A.shape[0])
         return grouped_mm(A, Bw, ends)
 
-    streamed = []
-    stream_weight_grads = _grouped_moe._stream_grouped_weight_grads
+    sort_rows = []
+    route_sort = _grouped_moe._route_sort
 
-    def recording_stream(*args, **kwargs):
-        streamed.append(True)
-        return stream_weight_grads(*args, **kwargs)
+    def recording_route_sort(expert_of_row, n_groups):
+        sort_rows.append(expert_of_row.numel())
+        return route_sort(expert_of_row, n_groups)
 
     monkeypatch.setattr(_grouped_moe, "_grouped_mm", recording_grouped_mm)
-    monkeypatch.setattr(_grouped_moe, "_stream_grouped_weight_grads", recording_stream)
+    monkeypatch.setattr(_grouped_moe, "_route_sort", recording_route_sort)
 
     def grouped_loss(xx, g, d, ii, ww):
         return Opaque_GroupedMoE.apply(xx, g, d, ii, ww).square().mean()
@@ -413,8 +414,37 @@ def test_forced_trainable_backward_chunks_single_long_example(monkeypatch):
     )
     for result, reference in zip(actual, expected, strict=True):
         torch.testing.assert_close(result, reference, rtol=2e-3, atol=2e-3)
-    assert streamed == [True]
+    # One bounded scan in forward and one in backward; output-gradient tiles
+    # consume each plan directly rather than rescanning all routes per group.
+    assert sum(sort_rows) == 2 * index.numel()
     assert max(rows) <= 2
+
+
+def test_forced_bf16_chunks_accumulate_weight_gradients_in_fp32(monkeypatch):
+    x, gate_up, down, index, weights = _inputs(E=4, I=16, H=16, B=1, T=8)
+    x, gate_up, down, weights = (
+        tensor.to(torch.bfloat16) for tensor in (x, gate_up, down, weights)
+    )
+    monkeypatch.setattr(_moe_memory, "_MAX_WORKSPACE_BYTES", 8_192)
+
+    def grouped_loss(xx, g, d, ii, ww):
+        return Opaque_GroupedMoE.apply(xx, g, d, ii, ww).float().square().mean()
+
+    def dense_loss(xx, g, d, ii, ww):
+        return Opaque_MoE.apply(xx, g, d, ii, ww).float().square().mean()
+
+    in_dims = (0, None, None, 0, 0)
+    actual = vmap(grad(grouped_loss, argnums=(1, 2)), in_dims=in_dims)(
+        x, gate_up, down, index, weights
+    )
+    expected = vmap(grad(dense_loss, argnums=(1, 2)), in_dims=in_dims)(
+        x, gate_up, down, index, weights
+    )
+    for result, reference in zip(actual, expected, strict=True):
+        relative_error = (
+            result.float() - reference.float()
+        ).norm() / reference.float().norm().clamp_min(1e-6)
+        assert relative_error < 1e-2
 
 
 def test_forced_trainable_vmap_chunks_examples_and_preserves_gradients(monkeypatch):
