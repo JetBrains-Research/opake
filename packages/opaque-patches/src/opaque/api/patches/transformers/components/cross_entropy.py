@@ -172,14 +172,39 @@ def _fused_linear_ce_loss_is_supported(
     return not torch.is_tensor(ii)
 
 
-def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = False):
-    """ForCausalLM forward with fused linear + cross-entropy loss.
+#: Instance attribute the family ``apply`` sets on a causal-LM module to say
+#: whether the fused / chunked cross-entropy routes are enabled for it.  The
+#: class-level wrapper is installed once per process, so the route policy of
+#: a later model must not be frozen into that first closure.
+FUSED_LINEAR_CE_ATTR = "_opaque_fused_linear_ce"
 
-    When a loss-only caller sets ``loss_only=True`` and labels are
-    provided, skips ``lm_head`` and computes loss from
-    ``hidden_states @ lm_head.weight.T`` (CCE), unless ``loss_function`` would
-    need unsupported options — then defers to the original forward (e.g.
-    non-zero ``logits_to_keep``, ``shift_labels``, class ``weight``).
+
+def _make_fused_ce_causal_lm_forward(
+    original, *, force_chunked: bool | int = False, fused: bool = True
+):
+    """Loss-only ``ForCausalLM`` forward for per-example objectives.
+
+    The wrapper is inert unless a call passes ``loss_only=True`` together
+    with ``labels``; inference and logits-consuming labelled calls defer to
+    ``original`` and keep the model-native contract.  A loss-only call
+    computes the cross-entropy on one of three routes: the Triton fused
+    linear + cross-entropy kernel (CUDA, bf16 / fp16), the portable chunked
+    kernel (any other host, or ``force_chunked``), or the eager ``lm_head``
+    plus ``loss_function`` branch when the fused routes are disabled
+    (``fused=False``, or the instance attribute :data:`FUSED_LINEAR_CE_ATTR`
+    set to ``False``) or when ``loss_function`` would need options the
+    kernels do not support (non-zero ``logits_to_keep``, ``shift_labels``,
+    class ``weight``, CUDA fp32 hidden states).  The fused routes return
+    ``logits=None``; the eager route returns the full logits.
+
+    ``output_router_logits=True`` (from the call or the config default) on a
+    loss-only call asks a MoE backbone for its per-layer router logits and
+    hands them back untouched in a ``MoeCausalLMOutputWithPast`` with
+    ``aux_loss=None``: HF's batch-coupled load-balancing loss is neither
+    computed nor added to ``loss``, because it has no per-example gradient
+    and under ``vmap`` it would degenerate into the per-sequence objective.
+    That HF contract is still reached without ``loss_only``, which defers to
+    the original forward.
     """
 
     def forward(
@@ -219,29 +244,20 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
                 **kwargs,
             )
 
-        output_router_logits = kwargs.get("output_router_logits")
+        # A MoE backbone records its per-layer router logits when asked.  On
+        # this per-example path they are handed back untouched and HF's
+        # batch-coupled load-balancing loss is never computed: it has no
+        # per-example gradient, and under ``vmap`` it would be the
+        # per-sequence objective.  The key is popped so it never reaches
+        # ``loss_function``.
+        output_router_logits = kwargs.pop("output_router_logits", None)
         if output_router_logits is None:
-            output_router_logits = getattr(self.config, "output_router_logits", False)
-        if output_router_logits:
-            # MoE router auxiliary loss is batch-coupled, not a separable
-            # per-example objective. Preserve the upstream model's loss/output
-            # contract instead of silently dropping it in the fused CE path.
-            return original(
-                self,
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                past_key_values=past_key_values,
-                inputs_embeds=inputs_embeds,
-                labels=labels,
-                use_cache=use_cache,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-                cache_position=cache_position,
-                logits_to_keep=logits_to_keep,
-                **kwargs,
+            output_router_logits = bool(
+                getattr(self.config, "output_router_logits", False)
             )
+        backbone_kwargs = kwargs
+        if output_router_logits:
+            backbone_kwargs = {**kwargs, "output_router_logits": True}
 
         # Resolve config defaults
         output_attentions = (
@@ -270,17 +286,20 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cache_position=cache_position,
-            **kwargs,
+            **backbone_kwargs,
         )
         hidden_states = outputs[0]
 
         # CUDA + half precision routes to the Triton kernel; any other host
         # (MPS/CPU) routes to the pure-PyTorch chunked kernel, which streams the
-        # log-sum-exp over bounded token/vocabulary tiles. The wrapper is
-        # installed with the performance patch bucket, but only
-        # an explicit loss-only call may return ``logits=None``.
+        # log-sum-exp over bounded token/vocabulary tiles.  The wrapper is
+        # installed with the compat bucket; whether these routes are enabled
+        # is the performance decision the family ``apply`` records on the
+        # instance (falling back to the install-time default).
+        fused_enabled = bool(getattr(self, FUSED_LINEAR_CE_ATTR, fused))
         use_fused_ce = (
             loss_only
+            and fused_enabled
             and _fused_linear_ce_loss_is_supported(logits_to_keep, kwargs)
             and (
                 (
@@ -370,9 +389,11 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
         if hasattr(outputs, "router_logits"):
             from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
+            # The batch-coupled auxiliary loss is never computed on this
+            # per-example path (see the router-logits note above).
             return MoeCausalLMOutputWithPast(
                 loss=loss,
-                aux_loss=getattr(outputs, "aux_loss", None),
+                aux_loss=None,
                 logits=logits,
                 past_key_values=outputs.past_key_values,
                 hidden_states=outputs.hidden_states,

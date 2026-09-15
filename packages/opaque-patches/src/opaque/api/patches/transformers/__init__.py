@@ -65,6 +65,10 @@ from opaque.api.patches.transformers._registry import (
     supported_families,
 )
 from opaque.api.patches.transformers._router import apply_transformers_model_patches
+from opaque.api.patches.transformers.components.router import (
+    MoeGeometry,
+    moe_geometry,
+)
 from opaque.api.patches.transformers.types import (
     FamilyPatchFn,
     ForwardFactory,
@@ -83,6 +87,8 @@ __all__ = [
     "make_apply_model_patches",
     "ModelPatchFn",
     "ModulePatcher",
+    "MoeGeometry",
+    "moe_geometry",
     "register_activation_kind",
     "register_family",
     "register_fused_add_rms_kind",

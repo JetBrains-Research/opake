@@ -19,6 +19,9 @@ import pytest
 pytest.importorskip("transformers")
 
 from opaque.api.patches.transformers._registry import _FAMILY_REGISTRY
+from opaque.api.patches.transformers.components.cross_entropy import (
+    FUSED_LINEAR_CE_ATTR,
+)
 from opaque.patches.transformers import (
     family_name,
     make_apply_family_patches,
@@ -315,6 +318,15 @@ def test_fused_linear_cross_entropy_follows_performance(monkeypatch):
     assert instance_b.loss_function is original_loss_b
     assert not hasattr(FakeB.forward, "__opaque_patched__")
 
+    # The loss-only forward is a compat patch: with performance off it is
+    # still installed, with the fused routes recorded off on the instance.
+    _, FakeCompat, original_loss_compat, apply_compat = _fresh_module("compat")
+    instance_compat = FakeCompat()
+    apply_compat(instance_compat, performance=False, compat=True)
+    assert instance_compat.loss_function is original_loss_compat
+    assert getattr(FakeCompat.forward, "__opaque_patched__", False)
+    assert getattr(instance_compat, FUSED_LINEAR_CE_ATTR) is False
+
     # Per-concern overrides remain available in both directions.
     _, FakeC, original_loss_c, apply_c = _fresh_module("c")
     instance_c = FakeC()
@@ -354,7 +366,7 @@ def test_fused_linear_cross_entropy_follows_performance(monkeypatch):
     # loss-only forward.
     chunk_widths = []
 
-    def record_chunk_width(original, *, force_chunked=False):
+    def record_chunk_width(original, *, force_chunked=False, fused=True):
         chunk_widths.append(force_chunked)
         return original
 

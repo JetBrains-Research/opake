@@ -55,11 +55,12 @@ graph.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `compat` | `True` | vmap-safety wrappers — `eager_attention`, `batchify`, `vmap_masking`, `empty_batches`, `vmap_checkpointing`. |
-| `performance` | `True` | Memory-efficiency patches that run on any host (`kv_cache` and the conditional fused-linear-CE wrapper). |
+| `compat` | `True` | vmap-safety wrappers — `eager_attention`, `batchify`, `vmap_masking`, `empty_batches`, `vmap_checkpointing`, and the loss-only causal-LM forward (`loss_only_forward`). |
+| `performance` | `True` | Memory-efficiency patches that run on any host (`kv_cache`, and the fused / chunked cross-entropy routes of the loss-only forward). |
 | `kernels` | `performance` | CUDA + Triton kernel group — `rope`, `rms_norm`, `activation`, `cross_entropy`.  Forced `False` when CUDA + Triton aren't importable, so `performance=True` keeps `kv_cache` on CPU / MPS hosts. |
 | `peft` | `True` | LoRA / PEFT module fusion (`opaque_lora_*`). |
-| `fused_linear_cross_entropy` | `performance` | Conditional fused LM-head loss wrapper. Set `False` to disable; only calls with `loss_only=True` return `logits=None`. |
+| `fused_linear_cross_entropy` | `performance` | Whether the loss-only forward takes its fused / chunked LM-head loss routes (`logits=None`) or the eager `lm_head` branch. The wrapper itself is a compat patch and stays installed either way. |
+| `router_fp32` | `False` | fp32-logit router swap for MoE families (see [Mixture-of-Experts](#mixture-of-experts-moe-models)). |
 
 Each umbrella forwards to per-concern boolean kwargs in `**kwargs`,
 so you can override individual patches without flipping the whole
@@ -201,8 +202,39 @@ MoE families are supported via the `moe` patch — a **vmap-safety enabler**
 (under the `compat` bucket, not a CUDA kernel): it swaps HF v5's stacked-weight
 `*Experts.forward` onto `Opaque_MoE`, which is `vmap(grad)`-safe. HF's own
 experts forward is *not* vmap-able, so this patch is what makes **DP-SGD MoE
-training possible** at all. The router, load-balancing aux loss, and parameters
-are left untouched. Disable with `apply_model_patches(model, moe=False)`.
+training possible** at all. The router and the parameters are left untouched;
+the batch-level load-balancing aux loss has no per-example gradient and is not
+part of a DP objective (the
+[MoE load balancing](../../mechanisms/dp-sgd/moe-load-balancing.md) mechanism
+replaces it with a DP release of the batch router load). Disable with
+`apply_model_patches(model, moe=False)`.
+
+**Router logits for a per-example objective.** The loss-only causal-LM forward
+(installed with `compat`) accepts HF's own `output_router_logits=True` next to
+`loss_only=True`: the backbone records its per-layer router logits, the loss
+path is kept, and the result is a `MoeCausalLMOutputWithPast` with one `(T, E)`
+logits tensor per routed layer and `aux_loss=None`. HF's batch-coupled aux loss
+is neither computed nor added, because it has no per-example gradient and under
+`vmap` it would degenerate into the per-sequence objective. This is how a
+per-example loss under `vmap(grad)` reaches the routing statistics without
+that term; without `loss_only` the same keyword still defers to the stock
+forward and keeps HF's contract. `opaque.patches.transformers.moe_geometry(model)`
+reads the routing geometry (`top_k`, `num_experts`, `num_layers`) off the
+model as a mapping that unpacks into the MoE clipper.
+
+**fp32 router (opt-in).** `apply_model_patches(model, router_fp32=True)` binds an
+fp32-logit forward on the family's top-k router instances (Mellum 2.0's
+`MellumTopKRouter`): logits are computed as `F.linear(h.float(), W.float())`,
+followed by the fp32 softmax and top-k, with the scores cast back to the hidden
+dtype. This is the router precision Mellum 2.0 was pretrained with and it removes
+bf16 rounding ties, so the executed top-k set is well defined and matches the
+routes any load statistics derive from the logits. It is an instance-level swap
+rather than a class patch and can be undone with `router_fp32=False`; a model
+with no matching router raises `ConfigurationError` rather than installing
+nothing. It is off by default because adapters served through stock HF run bf16
+routes, and it is not a fix for routing drift: the ties originate in the bf16
+hidden states, and the swap changes the executed routing function on those
+tokens, not the weights.
 
 | Model | `model_type` | Experts | RMSNorm | RoPE | CE | Notes |
 |---|---|---|---|---|---|---|
@@ -296,12 +328,17 @@ with 128K vocab, this avoids the ~2 GB `logits = hidden_states @
 lm_head.T` allocation that the non-fused path produces per forward
 pass.
 
-The fused forward wrapper is installed with the normal `performance` patch
-bucket. It delegates to the original model forward unless the caller sets
-`loss_only=True`; that loss-only branch may return `logits=None`. Unsupported
-loss options also fall back to the model-native logits path. Set
-`fused_linear_cross_entropy=False` on `apply_model_patches` to disable the
-wrapper.
+The loss-only forward wrapper is a `compat` patch (`loss_only_forward`), so
+it is installed whether or not the performance patches are, and it is also
+installed when only the fused routes are requested. It delegates to the
+original model forward unless the caller sets `loss_only=True`; that loss-only
+branch computes the loss on one of three routes: the Triton fused kernel (CUDA
+bf16 / fp16), the portable chunked kernel (any other host), or the eager
+`lm_head` branch when `fused_linear_cross_entropy=False` or when the loss
+options are ones the kernels do not support. The fused routes return
+`logits=None`; the eager route returns the full logits. The route policy is
+recorded per model instance, so two models patched with different settings in
+one process each keep their own.
 
 Cohere's multiplicative and Granite's divisive logit scaling are passed as one
 scalar into the tiled computation. Scaling occurs before optional softcapping,
