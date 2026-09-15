@@ -40,8 +40,10 @@ formatting jobs.
 
 This composite action downloads the selected coverage artifacts, runs Qodana,
 and uploads its SARIF report. The PR workflow calls it through `qodana.yml` as
-a required check; the main workflow uses the same action in an allowed-to-fail
-job so policy violations remain visible without gating wheel publication.
+a required check, except on Dependabot pull requests because they cannot access
+the `QODANA_TOKEN` Actions secret. The main workflow uses the same action in an
+allowed-to-fail job so policy violations remain visible without gating wheel
+publication.
 
 ### `.github/workflows/build-distributions.yml`
 
