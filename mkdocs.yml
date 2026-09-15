@@ -145,6 +145,7 @@ nav:
       - Distributed Training: tutorials/distributed_training.ipynb
   - Development:
     - Overview: development/index.md
+    - Patched-model performance evidence: development/performance-evidence.md
   - API Reference:
     - Overview: reference/index.md
     - Exceptions: reference/exceptions.md

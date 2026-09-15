@@ -160,6 +160,9 @@ docs = [
 # avoiding collisions when multiple packages share directory names (e.g.
 # tests/noise/ in both opaque-dpsgd and opaque-dpftrl).
 addopts = "--import-mode=importlib"
+# Repository-owned development tools are importable for their contract tests but
+# remain excluded from the umbrella wheel.
+pythonpath = ["."]
 
 # Local test discovery walks the whole `packages/` tree — any package with a
 # `tests/` directory is picked up automatically. CI uses grouped explicit
