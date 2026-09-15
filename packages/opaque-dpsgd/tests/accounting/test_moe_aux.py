@@ -24,6 +24,8 @@ class TestConstructor:
     def test_rejects_non_gaussian(self):
         with pytest.raises(TypeError, match="Gaussian"):
             dpsgd_acc.moe_aux(acc.eps_delta(1.0))  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="Gaussian"):
+            MoeAux(inner=acc.eps_delta(1.0))  # type: ignore[arg-type]
 
     @pytest.mark.parametrize("ratio", [0.0, -0.1, math.inf, math.nan])
     def test_rejects_bad_ratio(self, ratio):

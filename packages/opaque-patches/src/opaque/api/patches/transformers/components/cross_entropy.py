@@ -234,14 +234,16 @@ def _make_fused_ce_causal_lm_forward(
 
         # Popped so it never reaches ``loss_function``; the batch-coupled aux
         # loss is not computed on this per-example path.
-        output_router_logits = kwargs.pop("output_router_logits", None)
-        if output_router_logits is None:
+        explicit_router_logits = kwargs.pop("output_router_logits", None)
+        if explicit_router_logits is None:
             output_router_logits = bool(
                 getattr(self.config, "output_router_logits", False)
             )
+        else:
+            output_router_logits = bool(explicit_router_logits)
         backbone_kwargs = kwargs
-        if output_router_logits:
-            backbone_kwargs = {**kwargs, "output_router_logits": True}
+        if explicit_router_logits is not None or output_router_logits:
+            backbone_kwargs = {**kwargs, "output_router_logits": output_router_logits}
 
         # Resolve config defaults
         output_attentions = (

@@ -38,8 +38,15 @@ class MoeAux(DpProcess):
     ratio: float = DEFAULT_RATIO
 
     def __post_init__(self) -> None:
-        # Validated here too so direct construction and deserialization
-        # cannot price the load release as free.
+        # Validated here so direct construction and deserialization cannot
+        # price the load release as free.
+        if not isinstance(self.inner, (Gaussian, NonPrivate)):
+            raise InputTypeError(
+                *(
+                    "MoeAux requires a Gaussian or NonPrivate inner mechanism, "
+                    f"got {type(self.inner).__name__}.",
+                )
+            )
         if not isinstance(self.ratio, (int, float)) or isinstance(self.ratio, bool):
             raise InputTypeError(*(f"ratio must be a number, got {self.ratio!r}",))
         if not math.isfinite(self.ratio) or self.ratio <= 0:
@@ -111,14 +118,4 @@ def moe_aux(inner: _Inner, *, ratio: float = DEFAULT_RATIO) -> MoeAux:
             sample_rate=0.01,
         )
     """
-    match inner:
-        case Gaussian() | NonPrivate():
-            pass
-        case _:
-            raise InputTypeError(
-                *(
-                    "moe_aux() requires a Gaussian or NonPrivate inner mechanism, "
-                    f"got {type(inner).__name__}.",
-                )
-            )
     return MoeAux(inner=inner, ratio=ratio)

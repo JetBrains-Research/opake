@@ -201,10 +201,10 @@ def load_bound(
         )
     if num_layers < 1:
         raise ConfigurationError(*(f"num_layers must be >= 1, got {num_layers}.",))
-    if mean_tokens <= 0 or max_tokens <= 0:
+    if not all(math.isfinite(t) and t > 0 for t in (mean_tokens, max_tokens)):
         raise ConfigurationError(
             *(
-                "mean_tokens and max_tokens must be positive, got "
+                "mean_tokens and max_tokens must be finite and positive, got "
                 f"mean_tokens={mean_tokens}, max_tokens={max_tokens}.",
             )
         )
@@ -420,12 +420,14 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
         Fedus, Zoph, Shazeer (2022), https://arxiv.org/abs/2101.03961;
         Andrew et al. (2021), https://arxiv.org/abs/1905.03871.
     """
-    if noise_multiplier < 0:
+    if not math.isfinite(noise_multiplier) or noise_multiplier < 0:
         raise ConfigurationError(
-            *(f"noise_multiplier must be non-negative, got {noise_multiplier}.",)
+            *(
+                f"noise_multiplier must be finite and non-negative, got {noise_multiplier}.",
+            )
         )
-    if not ratio > 0:
-        raise ConfigurationError(*(f"ratio must be positive, got {ratio}.",))
+    if not math.isfinite(ratio) or not ratio > 0:
+        raise ConfigurationError(*(f"ratio must be finite and positive, got {ratio}.",))
     if not 0.0 < filter_beta < 1.0:
         raise ConfigurationError(
             *(f"filter_beta must be in (0, 1), got {filter_beta}.",)

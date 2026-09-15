@@ -867,8 +867,7 @@ class DPTrainer:
         # module carries the actual fused forward. Require both facts so an
         # unsupported custom model never receives an unknown marker.
         self._fused_forward_uses_marker = bool(
-            kwargs.get("fused_linear_cross_entropy") is not False
-            and accepts_marker(self._model, allow_var_kwargs=True)
+            accepts_marker(self._model, allow_var_kwargs=True)
             and any(
                 accepts_marker(module, allow_var_kwargs=False)
                 for module in self._model.modules()
@@ -898,6 +897,13 @@ class DPTrainer:
                 *(
                     "router_load=True cannot be combined with an overridden "
                     "compute_per_example_loss_and_metrics.",
+                )
+            )
+        if self._compute_loss_func is not None:
+            raise ConfigurationError(
+                *(
+                    "router_load=True cannot be combined with compute_loss_func: "
+                    "the router logits come from the loss-only causal-LM forward.",
                 )
             )
         if not self._fused_forward_uses_marker:
@@ -5492,6 +5498,7 @@ class DPTrainer:
                 if isinstance(a.lr_scheduler_kwargs, dict)
                 else None
             ),
+            router_load_ratio=(float(a.router_load_ratio) if a.router_load else None),
         )
 
     def _save_accountant(self, ckpt_dir: str, accountant: Accountant) -> None:
@@ -5713,7 +5720,21 @@ class DPTrainer:
         ckpt_dir: str,
     ) -> None:
         """Overwrite ctx fields with values restored from a checkpoint."""
-        ctx.clip_state = opaque_from_state_dict(ctx.clip_state, runtime.clip_state)
+        restored_clip = opaque_from_state_dict(ctx.clip_state, runtime.clip_state)
+        if isinstance(ctx.clip_state, MoeClipState):
+            # The release constants (noise multiplier, ratio, bound) stay the
+            # current run's, which the accountant prices; drift is reported by
+            # ``_warn_on_arg_drift``.
+            restored_clip = dataclasses.replace(
+                ctx.clip_state,
+                f_tilde=restored_clip.f_tilde,
+                _m=restored_clip._m,
+                _step=restored_clip._step,
+                _rng_key=restored_clip._rng_key,
+                _local_load=restored_clip._local_load,
+                _pending=restored_clip._pending,
+            )
+        ctx.clip_state = restored_clip
         ctx.noise_state = opaque_from_state_dict(ctx.noise_state, runtime.noise_state)
 
         opt_path = Path(ckpt_dir) / ckpt.DP_OPTIMIZER_NAME
@@ -5950,6 +5971,9 @@ class DPTrainer:
             "sample_rate": fallback_rate,
             "target_delta": (
                 ctx.target_delta if ctx is not None else a.privacy_target_delta
+            ),
+            "router_load_ratio": (
+                float(a.router_load_ratio) if a.router_load else None
             ),
             # In *calibrated* mode the noise multiplier is recomputed over the
             # remaining steps and so legitimately differs from the saved one;

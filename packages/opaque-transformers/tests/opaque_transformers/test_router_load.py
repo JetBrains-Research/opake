@@ -10,6 +10,8 @@ monitor is logged, and a checkpoint resume continues the release state.
 from __future__ import annotations
 
 import importlib
+import logging
+import math
 
 import pytest
 import torch
@@ -76,6 +78,17 @@ class _RaggedDS(Dataset):
 
 def _collate(batch):
     return {k: torch.stack([b[k] for b in batch]) for k in batch[0]}
+
+
+def _filter_ratio(t: int, s: int, beta: float = 0.99) -> float:
+    """``filtered_noise_std(t) / filtered_noise_std(s)`` at a common load noise."""
+
+    def phi(n: int) -> float:
+        return math.sqrt((1 - beta) ** 2 * (1 - beta ** (2 * n)) / (1 - beta**2)) / (
+            1 - beta**n
+        )
+
+    return phi(t) / phi(s)
 
 
 def _args(output_dir, **overrides):
@@ -158,6 +171,29 @@ class TestTrain:
         process = trainer._accountant.process
         assert "MoeAux" in repr(process)
         assert MoeAux.__name__ in repr(process)
+
+    def test_custom_loss_func_is_rejected(self, tmp_path):
+        with pytest.raises(ConfigurationError, match="compute_loss_func"):
+            DPTrainer(
+                model=_tiny_mellum(),
+                args=_args(tmp_path),
+                train_dataset=_RaggedDS(),
+                data_collator=_collate,
+                compute_loss_func=lambda output, labels: output["loss"],
+            )
+
+    def test_trains_with_the_fused_routes_off(self, tmp_path):
+        trainer = DPTrainer(
+            model=_tiny_mellum(),
+            args=_args(
+                tmp_path,
+                max_steps=1,
+                performance_kernels_config={"fused_linear_cross_entropy": False},
+            ),
+            train_dataset=_RaggedDS(),
+            data_collator=_collate,
+        )
+        assert trainer.train().global_step == 1
 
     def test_alpha_override_and_geometry_from_model(self, tmp_path):
         model = _tiny_mellum()
@@ -254,6 +290,38 @@ class TestTrain:
         # rather than starting a fresh one.
         assert (
             res_rows[2]["router_load_noise_std"] < ref_rows[0]["router_load_noise_std"]
+        )
+
+    def test_resume_with_a_changed_ratio_warns_and_uses_the_current_one(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        common = {"save_strategy": "steps", "save_steps": 2, "lr_scheduler": "constant"}
+        model = _tiny_mellum()
+        DPTrainer(
+            model=model,
+            args=_args(tmp_path / "run", max_steps=2, **common),
+            train_dataset=_RaggedDS(),
+            data_collator=_collate,
+        ).train()
+        monkeypatch.setattr(DPTrainer, "_load_model_weights", lambda self, d: None)
+        resumed = DPTrainer(
+            model=model,
+            args=_args(
+                tmp_path / "run", max_steps=3, router_load_ratio=0.125, **common
+            ),
+            train_dataset=_RaggedDS(),
+            data_collator=_collate,
+        )
+        with caplog.at_level(logging.WARNING):
+            resumed.train(resume_from_checkpoint=str(tmp_path / "run" / "checkpoint-2"))
+        assert any("router_load_ratio" in r.getMessage() for r in caplog.records)
+        rows = [
+            row for row in resumed.state.log_history if "router_load_noise_std" in row
+        ]
+        # The release ran at the current ratio (0.125 vs 0.5: twice the load
+        # noise), which is what the accountant priced.
+        assert rows[2]["router_load_noise_std"] == pytest.approx(
+            2.0 * rows[1]["router_load_noise_std"] * _filter_ratio(3, 2)
         )
 
 

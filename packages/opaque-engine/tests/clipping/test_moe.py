@@ -222,6 +222,10 @@ class TestRouterStatistics:
             load_bound(
                 top_k=K, num_experts=E, num_layers=L, mean_tokens=0, max_tokens=1
             )
+        with pytest.raises(ConfigurationError, match="finite"):
+            load_bound(
+                top_k=K, num_experts=E, num_layers=L, mean_tokens=1, max_tokens=math.nan
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +455,10 @@ class TestRelease:
             _factory(filter_beta=1.0)
         with pytest.raises(ConfigurationError, match="noise_multiplier"):
             _factory(noise_multiplier=-1.0)
+        with pytest.raises(ConfigurationError, match="noise_multiplier"):
+            _factory(noise_multiplier=math.nan)
+        with pytest.raises(ConfigurationError, match="ratio"):
+            _factory(ratio=math.inf)
         with pytest.raises(ConfigurationError, match="batch_argnums"):
             _factory(batch_argnums=0)
         with pytest.raises(ConfigurationError, match="return_aux"):

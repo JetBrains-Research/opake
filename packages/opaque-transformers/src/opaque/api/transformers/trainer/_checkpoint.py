@@ -304,6 +304,12 @@ class RuntimeCheckpoint:
         metadata={"compare_on_resume": True, "drift": "shape"},
     )
 
+    # --- MoE router-load release ---------------------------------------
+    router_load_ratio: float | None = field(
+        default=None,
+        metadata={"compare_on_resume": True, "drift": "dp_relevant"},
+    )
+
 
 def save_dp_runtime_state(  # noqa: PLR0913
     path: str,
@@ -329,6 +335,7 @@ def save_dp_runtime_state(  # noqa: PLR0913
     learning_rate: float | None = None,
     warmup_steps: int | float | None = None,
     lr_scheduler_kwargs: dict[str, Any] | None = None,
+    router_load_ratio: float | None = None,
 ) -> None:
     """Save the DP runtime bundle as a :class:`RuntimeCheckpoint`."""
     if not isinstance(clip_state, ClipState):
@@ -368,6 +375,9 @@ def save_dp_runtime_state(  # noqa: PLR0913
         learning_rate=(float(learning_rate) if learning_rate is not None else None),
         warmup_steps=(float(warmup_steps) if warmup_steps is not None else None),
         lr_scheduler_kwargs=lr_scheduler_kwargs,
+        router_load_ratio=(
+            float(router_load_ratio) if router_load_ratio is not None else None
+        ),
     )
     # ``torch.save`` of a dataclass round-trips via pickle.  Kept as
     # pickle to handle the heterogeneous types (tensors inside

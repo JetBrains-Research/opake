@@ -334,6 +334,23 @@ class TestLossOnlyForward:
             assert out.logits is None
             assert len(out.router_logits) == L
 
+    def test_explicit_false_overrides_the_config_default(self, device):
+        model, _ = _tiny_mellum(device)
+        input_ids, mask, labels = _ragged_batch(device, [12, 8], 12)
+        with _restored_class_forwards(model):
+            apply_model_patches(model)
+            model.config.output_router_logits = True
+            with torch.no_grad():
+                out = model(
+                    input_ids=input_ids,
+                    attention_mask=mask,
+                    labels=labels,
+                    loss_only=True,
+                    output_router_logits=False,
+                )
+            assert out.logits is None
+            assert out.router_logits is None
+
     def test_eager_route_with_performance_off(self, device):
         """The wrapper is a compat patch: installed with the fused routes off."""
         model, _ = _tiny_mellum(device)
