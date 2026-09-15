@@ -416,17 +416,7 @@ def test_chunked_linear_ce_bf16_streams_fp32_mps():
 
 
 def test_chunked_linear_ce_matches_eager_under_bare_grad():
-    """``torch.func.grad`` alone, not only ``vmap(grad(...))``.
-
-    A bare ``grad`` re-enters the kernel through
-    ``torch._functorch.autograd_function.custom_function_call_grad``, which
-    generates a single-level Function whose ``forward`` calls back into
-    ``custom_function_call`` and hands the result to ``setup_context`` as
-    ``output``.  Projecting the forward's three outputs down to the loss inside
-    ``apply`` therefore made that outer ``setup_context`` try to unpack the loss
-    tensor itself; the projection belongs at the call site.  This pins the whole
-    path against eager, which the ``vmap(grad(...))`` tests do not reach.
-    """
+    """A bare ``torch.func.grad`` takes a path ``vmap(grad(...))`` never hits."""
     torch.manual_seed(0)
     n_tokens, hidden, vocab = 5, 8, 16
     h = torch.randn(1, n_tokens + 1, hidden, dtype=torch.float64)

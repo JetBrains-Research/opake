@@ -1002,10 +1002,9 @@ class Opaque_LinearCrossEntropyLoss(torch.autograd.Function):
     Returns unreduced ``nll_sum`` — caller handles reduction.
     """
 
-    @classmethod
-    def apply(cls, *args):
-        """Return the scalar loss while retaining internal statistics outputs."""
-        return super().apply(*args)[0]
+    # ``apply`` must not project the outputs down to the loss: a bare
+    # ``torch.func.grad`` hands whatever ``apply`` returns to ``setup_context``
+    # as ``output``.  Callers unpack ``(nll_sum, lse, valids, token_weight)``.
 
     @staticmethod
     def forward(
@@ -1231,7 +1230,7 @@ def opaque_linear_cross_entropy_loss(
         fn_name="opaque_linear_cross_entropy_loss",
     )
     hidden_states, weight = follow_autocast(hidden_states, weight)
-    nll_sum = Opaque_LinearCrossEntropyLoss.apply(
+    nll_sum, _lse, _valids, _token_weight = Opaque_LinearCrossEntropyLoss.apply(
         hidden_states,
         weight,
         labels,

@@ -275,15 +275,9 @@ class _ChunkedLinearCE(torch.autograd.Function):
 
     generate_vmap_rule = True
 
-    # NOTE: do not override ``apply`` to project the output down to the loss.
-    # ``torch.func.grad`` re-enters through
-    # ``torch._functorch.autograd_function.custom_function_call_grad``, which
-    # generates a single-level Function whose ``forward`` calls back into
-    # ``custom_function_call`` and then hands whatever that returns to
-    # ``setup_context`` as ``output``.  An ``apply`` that returns only
-    # ``output[0]`` therefore makes the outer ``setup_context`` unpack the loss
-    # tensor itself, which fails as soon as its length is not 3.  The
-    # projection belongs at the call site, where no transform can see it.
+    # ``apply`` must not project the outputs down to the loss: a bare
+    # ``torch.func.grad`` hands whatever ``apply`` returns to ``setup_context``
+    # as ``output``.  Callers unpack ``(nll, lse, token_weight)``.
 
     @staticmethod
     def forward(
@@ -433,9 +427,10 @@ def linear_nll_sum_chunked(
 ):
     """Unreduced NLL sum over non-ignored tokens.
 
-    Drop-in for ``Opaque_LinearCrossEntropyLoss.apply`` (same positional args,
-    same return): HF-style label shift (position ``i`` predicts ``labels[i+1]``);
-    the caller handles the mean reduction. Ignored positions contribute zero.
+    Takes the same positional args as ``Opaque_LinearCrossEntropyLoss.apply``
+    and returns the sum alone: HF-style label shift (position ``i`` predicts
+    ``labels[i+1]``); the caller handles the mean reduction. Ignored positions
+    contribute zero.
     """
     e = hidden_states[..., :-1, :].contiguous().flatten(0, -2)  # (N, D)
     targets = labels[..., 1:].contiguous().flatten()  # (N,)
