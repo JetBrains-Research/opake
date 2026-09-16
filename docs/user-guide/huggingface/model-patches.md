@@ -179,8 +179,10 @@ which fused Triton kernels are applied per model:
 | Exaone4 | 1.2B, 32B (tiny config) | SwiGLU | Yes | Yes | Yes | Yes | MLP only |
 | GPT-2 | 124M, 355M | — | — | — | — | — | — |
 
-Gemma3 text support is causal. The vmap masking replacement rejects
-`use_bidirectional_attention=True`, which relies on custom mask hooks.
+Gemma3 text supports both causal and bidirectional attention. The vmap masking
+replacement preserves Transformers `or_mask_function` and `and_mask_function`
+composition, including the hooks used by `use_bidirectional_attention=True`.
+Custom hooks must use tensor operations compatible with `torch.vmap`.
 
 DeepSeek-Coder ships with `config.model_type == "llama"` and therefore
 inherits the LLaMA family registration end-to-end — vmap compat,

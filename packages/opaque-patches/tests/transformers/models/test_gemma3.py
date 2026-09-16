@@ -9,13 +9,11 @@ pytest.importorskip("transformers")
 import sys
 from pathlib import Path
 
-import torch
 from transformers.models.gemma3.modeling_gemma3 import (
     Gemma3ForCausalLM,
     Gemma3TextConfig,
 )
 
-from opaque.exceptions import ConfigurationError
 from opaque.patches import apply_model_patches
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -67,12 +65,10 @@ def test_gemma3_vmap_grad(tiny_model, device):
     assert_vmap_grad(tiny_model, device)
 
 
-def test_gemma3_bidirectional_attention_fails_closed(device):
+def test_gemma3_bidirectional_attention_supports_vmap(device):
     model = Gemma3ForCausalLM(_tiny_config(use_bidirectional_attention=True)).to(device)
     apply_model_patches(model, eager_attention=True)
 
-    with pytest.raises(
-        ConfigurationError,
-        match=r"`or_mask_function` cannot be combined with vmap masking",
-    ):
-        model(input_ids=torch.tensor([[1, 2, 3, 4]], device=device))
+    assert_forward_no_grad(model, device)
+    assert_vmap_forward(model, device)
+    assert_vmap_grad(model, device)

@@ -12,7 +12,6 @@ from opaque.api.patches.transformers.runtime.masking import (
     vmap_create_sliding_window_causal_mask,
     vmap_update_linear_attention_mask,
 )
-from opaque.exceptions import ConfigurationError
 from opaque.patches import apply_runtime_patches
 
 
@@ -200,6 +199,9 @@ def test_legacy_linear_attention_mask_is_vmap_safe():
         )
     )(masks)
     assert torch.equal(result, masks)
+
+
+@pytest.mark.parametrize(
     "builder",
     [
         vmap_create_causal_mask,
@@ -208,8 +210,8 @@ def test_legacy_linear_attention_mask_is_vmap_safe():
     ],
     ids=["causal", "sliding", "compact-sliding"],
 )
-@pytest.mark.parametrize("hook_name", ["or_mask_function", "and_mask_function"])
-def test_mask_hooks_fail_closed_before_fast_paths(builder, hook_name):
+def test_mask_hooks_compose_before_fast_paths(builder):
+    """Custom composition materializes the mask instead of taking the None path."""
     config = type(
         "Cfg",
         (),
@@ -220,38 +222,86 @@ def test_mask_hooks_fail_closed_before_fast_paths(builder, hook_name):
         },
     )()
 
-    def hook(*_):
-        raise AssertionError("mask hooks must not run")
+    def allow_future(_batch_idx, _head_idx, query_idx, key_idx):
+        return key_idx > query_idx
 
-    with pytest.raises(
-        ConfigurationError,
-        match=rf"`{hook_name}` cannot be combined with vmap masking",
-    ):
-        builder(
-            config,
-            inputs_embeds=torch.randn(1, 8, 8),
-            attention_mask=None,
-            past_key_values=None,
-            **{hook_name: hook},
-        )
+    def keep_diagonal(_batch_idx, _head_idx, query_idx, key_idx):
+        return key_idx == query_idx
+
+    mask = builder(
+        config,
+        inputs_embeds=torch.randn(1, 8, 8),
+        attention_mask=None,
+        past_key_values=None,
+        or_mask_function=allow_future,
+        and_mask_function=keep_diagonal,
+    )
+
+    assert mask is not None
+    allowed = mask if mask.dtype == torch.bool else mask == 0
+    assert torch.equal(allowed, torch.eye(8, dtype=torch.bool).view(1, 1, 8, 8))
 
 
-def test_mask_hook_error_names_all_present_hooks():
-    config = type("Cfg", (), {"_attn_implementation": "sdpa"})()
+@pytest.mark.parametrize(
+    "builder",
+    [
+        vmap_create_causal_mask,
+        vmap_create_sliding_window_causal_mask,
+        vmap_create_compact_sdpa_sliding_window_causal_mask,
+    ],
+    ids=["causal", "sliding", "compact-sliding"],
+)
+def test_mask_hooks_do_not_unmask_padding(builder):
+    config = type("Cfg", (), {"_attn_implementation": "sdpa", "sliding_window": 16})()
 
-    def hook(*_):
+    def allow_everything(*_):
         return True
 
-    with pytest.raises(ConfigurationError) as error:
-        vmap_create_causal_mask(
-            config,
-            inputs_embeds=torch.randn(1, 8, 8),
-            or_mask_function=hook,
-            and_mask_function=hook,
-        )
+    mask = builder(
+        config,
+        inputs_embeds=torch.randn(1, 4, 8),
+        attention_mask=torch.tensor([[1, 1, 1, 0]], dtype=torch.bool),
+        or_mask_function=allow_everything,
+    )
+    allowed = mask if mask.dtype == torch.bool else mask == 0
 
-    assert "`or_mask_function`" in str(error.value)
-    assert "`and_mask_function`" in str(error.value)
+    assert not torch.any(allowed[..., -1])
+
+
+def test_mask_hooks_receive_batch_indices():
+    config = type("Cfg", (), {"_attn_implementation": "eager"})()
+
+    def allow_everything_for_second_batch(batch_idx, _head_idx, _query_idx, _key_idx):
+        return batch_idx == 1
+
+    mask = vmap_create_causal_mask(
+        config,
+        inputs_embeds=torch.randn(2, 4, 8),
+        or_mask_function=allow_everything_for_second_batch,
+    )
+    allowed = mask == 0
+
+    assert torch.equal(allowed[0, 0], torch.ones(4, 4, dtype=torch.bool).tril())
+    assert torch.all(allowed[1, 0])
+
+
+def test_mask_hooks_work_under_vmap():
+    config = type("Cfg", (), {"_attn_implementation": "eager"})()
+    input_embeds = torch.randn(1, 4, 8)
+
+    def allow_future(_batch_idx, _head_idx, query_idx, key_idx):
+        return key_idx > query_idx
+
+    masks = torch.vmap(
+        lambda attention_mask: vmap_create_causal_mask(
+            config,
+            inputs_embeds=input_embeds,
+            attention_mask=attention_mask,
+            or_mask_function=allow_future,
+        )
+    )(torch.ones(3, 4, dtype=torch.bool))
+
+    assert torch.all(masks == 0)
 
 
 class TestSlidingWindowCausalMask:
