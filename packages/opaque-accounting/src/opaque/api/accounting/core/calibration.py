@@ -169,13 +169,11 @@ def calibrate(
 
         tolerance: Positive, finite relative convergence tolerance
             - Uses ``math.isclose(achieved, target, rel_tol=tolerance, abs_tol=0)``
-            - Default: 1e-6 (very tight, suitable for most applications)
-            - Use 1e-2 for faster convergence, 1e-8 for maximum precision
+            - Default: 1e-6; discretization can limit attainable precision
 
         max_iterations: Positive maximum number of binary search iterations
             - Each iteration halves the search space
-            - 100 iterations gives ~1e-30 precision (rarely needed)
-            - Exhaustion raises CalibrationError
+            - Exhaustion or stalled bounds raises CalibrationError
 
         prefix: Optional already-executed process; each probe evaluates
             ``prefix | process(param)``, so the budget is the total across
@@ -339,6 +337,13 @@ def calibrate(
                 )
                 final_process = process(result.param)
                 achieved = result.achieved
+            if not math.isclose(achieved, budget.value, rel_tol=tolerance, abs_tol=0.0):
+                message = (
+                    f"Calibration for {budget.name} did not converge under runtime "
+                    f"discretization: target={budget.value}, achieved={achieved}, "
+                    f"relative tolerance={tolerance}, param={result.param}."
+                )
+                raise CalibrationError(message)
             result.achieved = achieved
 
             pld_method = getattr(final_process, "pld", None)
@@ -487,8 +492,10 @@ def _calibrate_impl(
         )
 
     for iteration in range(max_iterations):
-        iterations = iteration + 1
         mid = (unsafe_param + safe_param) / 2
+        if mid in (unsafe_param, safe_param):
+            break
+        iterations = iteration + 1
         proc = process(mid)
         current = budget.evaluate(proc)
 

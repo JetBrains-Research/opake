@@ -42,20 +42,10 @@ fn checked_sample_cells(num_samples: usize, n_steps: usize) -> Result<usize> {
         .ok_or_else(|| PldError::InvalidParameter("sample count and horizon are too large".into()))
 }
 
-#[inline]
-fn log_gaussian_ratio_block(mu: &[f64], y: &[f64], sigma2: f64) -> f64 {
-    let mut dot = 0.0;
-    let mut norm_sq = 0.0;
-    for (&mean, &value) in mu.iter().zip(y) {
-        dot += mean * value;
-        norm_sq += mean * mean;
-    }
-    (dot - 0.5 * norm_sq) / sigma2
-}
-
 /// Evaluates warm-start b-min-sep `ln(P(y)/Q(y))` with reusable storage.
 struct WarmLogLikelihoodRatio<'a> {
     coef: &'a [f64],
+    prefix_norm_sq: Vec<f64>,
     sigma2: f64,
     log_p: f64,
     log_one_minus_p: f64,
@@ -67,6 +57,13 @@ impl<'a> WarmLogLikelihoodRatio<'a> {
     fn new(coef: &'a [f64], p: f64, sigma2: f64) -> Self {
         Self {
             coef,
+            prefix_norm_sq: coef
+                .iter()
+                .scan(0.0, |sum, &mean| {
+                    *sum += mean * mean;
+                    Some(*sum)
+                })
+                .collect(),
             sigma2,
             log_p: p.ln(),
             log_one_minus_p: (-p).ln_1p(),
@@ -88,11 +85,11 @@ impl<'a> WarmLogLikelihoodRatio<'a> {
 
         for i in (0..n).rev() {
             let block_len = bands.min(n - i);
-            let log_block = log_gaussian_ratio_block(
-                &self.coef[..block_len],
-                &y[i..i + block_len],
-                self.sigma2,
-            );
+            let dot = self.coef[..block_len]
+                .iter()
+                .zip(&y[i..i + block_len])
+                .fold(0.0, |sum, (&mean, &value)| sum + mean * value);
+            let log_block = (dot - 0.5 * self.prefix_norm_sq[block_len - 1]) / self.sigma2;
             self.log_f[i] = log_add(
                 self.log_one_minus_p + self.log_f[i + 1],
                 self.log_p + log_block + self.log_f[i + bands],
@@ -139,8 +136,7 @@ fn sample_x_under_p(n: usize, bands: usize, p: f64, rng: &mut impl Rng, x_buf: &
     }
 }
 
-/// `y = Cx + σ ζ` with standard normal `ζ` (column `i` of `C` applied to `x`).
-#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
+/// `y = Cx + σ ζ`, visiting only participating columns of `C`.
 fn y_from_x_and_zeta(
     coef: &[f64],
     n: usize,
@@ -149,16 +145,16 @@ fn y_from_x_and_zeta(
     sigma: f64,
     y_out: &mut [f64],
 ) {
-    for i in 0..n {
-        let mut acc = sigma * zeta[i];
-        let j0 = i.saturating_sub(coef.len().saturating_sub(1));
-        for j in j0..=i {
-            let k = i - j;
-            if k < coef.len() {
-                acc += coef[k] * x[j];
-            }
+    for (value, &noise) in y_out[..n].iter_mut().zip(&zeta[..n]) {
+        *value = sigma * noise;
+    }
+    for (j, &participation) in x[..n].iter().enumerate() {
+        if participation == 0.0 {
+            continue;
         }
-        y_out[i] = acc;
+        for (&mean, value) in coef.iter().zip(&mut y_out[j..n]) {
+            *value += mean * participation;
+        }
     }
 }
 
@@ -605,6 +601,19 @@ mod tests {
             let actual = WarmLogLikelihoodRatio::new(&coef, p, sigma2).evaluate(&y);
             assert_abs_diff_eq!(actual, expected, epsilon = 1e-12);
         }
+    }
+
+    #[test]
+    fn noisy_trajectory_applies_truncated_toeplitz_columns() {
+        let coef = [1.0, 0.5, 0.25];
+        let noise = [1.0, -2.0, 0.0, 2.0, -1.0, 0.5, -1.0, 0.0];
+        let mut y = [0.0; 8];
+        let x = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0];
+        y_from_x_and_zeta(&coef, y.len(), &x, &noise, 0.5, &mut y);
+        assert_eq!(y, [1.5, -0.5, 0.25, 2.0, 0.0, 0.5, 0.5, 0.5]);
+
+        y_from_x_and_zeta(&coef, y.len(), &[0.0; 8], &noise, 1.0, &mut y);
+        assert_eq!(y, noise);
     }
 
     #[test]

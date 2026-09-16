@@ -566,6 +566,9 @@ fn kl_lower_cdf_bound(rank: usize, n: usize, log_inverse_failure: f64) -> f64 {
 
     for _ in 0..64 {
         let midpoint = 0.5 * (lower + upper);
+        if midpoint == lower || midpoint == upper {
+            break;
+        }
         if binary_kl(q, midpoint) >= target {
             lower = midpoint;
         } else {
@@ -672,6 +675,16 @@ mod tests {
             );
             assert!(kl >= previous, "lower CDF band must be monotone");
             previous = kl;
+        }
+    }
+
+    #[test]
+    fn final_rank_confidence_matches_tail_residual() {
+        for n in [10, 10_000, 6_023_968, 500_000_000] {
+            let log_inverse_failure = (2.0 * n as f64 / 1e-6).ln();
+            let bound = kl_lower_cdf_bound(n, n, log_inverse_failure);
+            let expected = (-log_inverse_failure / n as f64).exp();
+            assert!((bound - expected).abs() <= 2.0 * f64::EPSILON);
         }
     }
 
