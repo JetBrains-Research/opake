@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 import torch
 import torch.nn as nn
+from peft import LoraConfig, get_peft_model
 from torch._dynamo.testing import CompileCounterWithBackend
 from transformers import PretrainedConfig, PreTrainedModel
 
@@ -84,6 +85,21 @@ def test_default_trainer_rejects_unregistered_hf_family(tmp_path):
     with pytest.raises(ConfigurationError, match="require a registered"):
         DPTrainer(
             model=_UnregisteredHFModel(),
+            args=_args(tmp_path),
+            train_dataset=[{"x": torch.zeros(4)}],
+            eval_dataset=None,
+        )
+
+
+def test_default_trainer_rejects_unregistered_hf_family_with_lora(tmp_path):
+    model = get_peft_model(
+        _UnregisteredHFModel(),
+        LoraConfig(target_modules=["linear"]),
+    )
+
+    with pytest.raises(ConfigurationError, match="require a registered"):
+        DPTrainer(
+            model=model,
             args=_args(tmp_path),
             train_dataset=[{"x": torch.zeros(4)}],
             eval_dataset=None,

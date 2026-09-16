@@ -26,8 +26,7 @@ from _test_utils import (
 )
 
 
-@pytest.fixture
-def tiny_model(device):
+def _tiny_config(**overrides):
     kwargs = get_tiny_config_kwargs()
     kwargs.update(
         {
@@ -37,9 +36,15 @@ def tiny_model(device):
             "num_hidden_layers": 2,
         }
     )
+    kwargs.update(overrides)
     config = Gemma3TextConfig(**kwargs)
     config._attn_implementation = "sdpa"
-    model = Gemma3ForCausalLM(config).to(device)
+    return config
+
+
+@pytest.fixture
+def tiny_model(device):
+    model = Gemma3ForCausalLM(_tiny_config()).to(device)
     apply_model_patches(model, eager_attention=True)
     return model
 
@@ -58,3 +63,12 @@ def test_gemma3_vmap_forward(tiny_model, device):
 
 def test_gemma3_vmap_grad(tiny_model, device):
     assert_vmap_grad(tiny_model, device)
+
+
+def test_gemma3_bidirectional_attention_supports_vmap(device):
+    model = Gemma3ForCausalLM(_tiny_config(use_bidirectional_attention=True)).to(device)
+    apply_model_patches(model, eager_attention=True)
+
+    assert_forward_no_grad(model, device)
+    assert_vmap_forward(model, device)
+    assert_vmap_grad(model, device)

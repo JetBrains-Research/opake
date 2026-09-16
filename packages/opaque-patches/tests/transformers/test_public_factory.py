@@ -681,3 +681,52 @@ def test_unregistered_hf_family_raises_when_compat_is_enabled():
 
     with pytest.raises(ConfigurationError, match="require a registered"):
         apply_transformers_model_patches(_Model(_Config()))
+
+
+@pytest.mark.parametrize("mixed", [False, True], ids=["peft", "mixed-peft"])
+def test_peft_wrapped_unregistered_hf_family_raises(mixed):
+    import torch
+    from peft import LoraConfig, get_peft_model
+    from transformers import PretrainedConfig, PreTrainedModel
+
+    from opaque.api.patches.transformers._router import apply_transformers_model_patches
+    from opaque.exceptions import ConfigurationError
+
+    class _Config(PretrainedConfig):
+        model_type = "definitely-not-registered-peft-xyz"
+
+    class _Model(PreTrainedModel):
+        config_class = _Config
+
+        def __init__(self):
+            super().__init__(_Config())
+            self.linear = torch.nn.Linear(2, 2)
+
+    model = get_peft_model(
+        _Model(),
+        LoraConfig(target_modules=["linear"]),
+        mixed=mixed,
+    )
+
+    with pytest.raises(ConfigurationError, match="require a registered"):
+        apply_transformers_model_patches(model)
+
+
+def test_peft_wrapped_custom_model_warns_and_skips(caplog):
+    import torch
+    from peft import LoraConfig, get_peft_model
+
+    from opaque.api.patches.transformers._router import apply_transformers_model_patches
+
+    class _Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(2, 2)
+
+        def forward(self, inputs):
+            return self.linear(inputs)
+
+    model = get_peft_model(_Model(), LoraConfig(target_modules=["linear"]))
+    apply_transformers_model_patches(model)
+
+    assert "no registered apply function" in caplog.text
