@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the qwen3_next family (hybrid linear-attention MoE).
 
-Experts are patched (vmap-safe), but the GatedDeltaNet path isn't vmap-traceable,
-so only forward/backward run (no DP vmap(grad) suite).
+Experts are patched (vmap-safe), and the recurrent padding-mask patch makes the
+GatedDeltaNet path traceable by DP-SGD's per-example gradient transform.
 """
 
 import sys
@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _test_utils import (
     assert_forward_backward,
     assert_forward_no_grad,
+    assert_vmap_grad,
     build_moe_model,
     experts_forward_patched,
 )
@@ -44,3 +45,7 @@ def test_qwen3_next_forward_no_grad(tiny, device):
 
 def test_qwen3_next_forward_backward(tiny, device):
     assert_forward_backward(tiny[0], device)
+
+
+def test_qwen3_next_vmap_grad(tiny, device):
+    assert_vmap_grad(tiny[0], device)

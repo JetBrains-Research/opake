@@ -28,6 +28,7 @@ from ._test_utils import (
 _MODULE_PATCH_NAMES = (
     "create_causal_mask",
     "create_sliding_window_causal_mask",
+    "create_recurrent_attention_mask",
     "repeat_kv",
     "eager_attention_forward",
     "apply_rotary_pos_emb",
@@ -36,7 +37,7 @@ _MODULE_PATCH_NAMES = (
 # gemma2 additionally rewrites the process-wide ``ALL_ATTENTION_FUNCTIONS``
 # "sdpa" entry, and mistral rebinds the sliding-window mask builder, so between
 # them they cover both leak routes.
-_FAMILIES = ("mistral", "gemma2")
+_FAMILIES = ("mistral", "gemma2", "qwen3_next")
 
 
 def _imports(family: str):
@@ -46,16 +47,32 @@ def _imports(family: str):
     if family == "gemma2":
         config_cls = module.Gemma2Config
         model_cls = module.Gemma2ForCausalLM
+    if family == "qwen3_next":
+        config_cls = module.Qwen3NextConfig
+        model_cls = module.Qwen3NextForCausalLM
     if config_cls is None or model_cls is None:  # pragma: no cover - guard
         pytest.skip(f"{family} config/model classes unavailable")
     return config_cls, model_cls
+
+
+def _config_kwargs(model_cls) -> dict:
+    kwargs = get_tiny_config_kwargs()
+    if model_cls.__name__ == "Qwen3NextForCausalLM":
+        kwargs.update(
+            num_hidden_layers=4,
+            num_experts=4,
+            num_experts_per_tok=2,
+            moe_intermediate_size=64,
+            use_cache=False,
+        )
+    return kwargs
 
 
 def _reference_logits(config_cls, model_cls, device) -> torch.Tensor:
     """Build a fresh *unpatched* model and run it."""
     torch.manual_seed(0)
     upstream, _ = build_patched_model_pair(
-        config_cls, model_cls, device, config_kwargs=get_tiny_config_kwargs()
+        config_cls, model_cls, device, config_kwargs=_config_kwargs(model_cls)
     )
     upstream.eval()
     input_ids = (
@@ -74,7 +91,7 @@ def test_reference_output_survives_a_patch_cycle(family, device):
 
     torch.manual_seed(0)
     _, patchable = build_patched_model_pair(
-        config_cls, model_cls, device, config_kwargs=get_tiny_config_kwargs()
+        config_cls, model_cls, device, config_kwargs=_config_kwargs(model_cls)
     )
     with parity_model_patches(patchable):
         pass
@@ -94,7 +111,7 @@ def test_module_level_names_are_restored(family, device):
     config_cls, model_cls = _imports(family)
     torch.manual_seed(0)
     _, patchable = build_patched_model_pair(
-        config_cls, model_cls, device, config_kwargs=get_tiny_config_kwargs()
+        config_cls, model_cls, device, config_kwargs=_config_kwargs(model_cls)
     )
     modeling_module = sys.modules[type(patchable).__module__]
 
