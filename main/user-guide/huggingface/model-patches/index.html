@@ -3984,6 +3984,10 @@ which fused Triton kernels are applied per model:</p>
 </tr>
 </tbody>
 </table>
+<p>Gemma3 text supports both causal and bidirectional attention. The vmap masking
+replacement preserves Transformers <code>or_mask_function</code> and <code>and_mask_function</code>
+composition, including the hooks used by <code>use_bidirectional_attention=True</code>.
+Custom hooks must use tensor operations compatible with <code>torch.vmap</code>.</p>
 <p>DeepSeek-Coder ships with <code>config.model_type == "llama"</code> and therefore
 inherits the LLaMA family registration end-to-end — vmap compat,
 SwiGLU / RMSNorm / RoPE kernels, fused linear CE, and QKV + MLP LoRA
