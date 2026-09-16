@@ -23,6 +23,7 @@ Tolerances are dtype-specific:
 
 from __future__ import annotations
 
+import gc
 import importlib
 import importlib.util
 import sys
@@ -73,6 +74,7 @@ _MOE_FAMILIES = {
     "mixtral",
     "qwen3_moe",
     "qwen3_5_moe",
+    "qwen3_next",
     "hunyuan_v1_moe",
 }
 
@@ -91,15 +93,24 @@ _STRICT_FORWARD_PARITY_SKIP_FAMILIES = {
     "qwen3_next",
 }
 
-# Families whose gradient parity is unreliable due to custom autograd
-# functions in the patches that change the backward Jacobian path even
-# when the forward is bit-identical.
-_GRAD_PARITY_SKIP_FAMILIES = {
-    "gpt2",  # kv_cache/batchify patches alter backward graph
-    "qwen3_next",  # masking_utils uses .item()-like ops under vmap
-    "deepseek_v4",  # runtime compatibility shims change sink gradients
-    "gpt_oss",  # runtime compatibility shims change sink gradients
+# Known, test-specific upstream compatibility gaps. Strict xfails prevent these
+# exemptions from remaining after Transformers or the patches resolve them.
+_BACKWARD_GRAD_XFAIL_REASONS = {
+    "qwen3_next": (
+        "Transformers Qwen3-Next calls Cache.get_seq_length on a cache containing "
+        "only linear-attention layers"
+    ),
+    "deepseek_v4": (
+        "the required eager-attention compatibility shim omits the upstream "
+        "self-attention sink gradient"
+    ),
+    "gpt_oss": (
+        "the required eager-attention compatibility shim omits the upstream "
+        "self-attention sink gradient"
+    ),
 }
+
+_VMAP_GRAD_XFAIL_REASONS: dict[str, str] = {}
 
 # Families whose Config / ForCausalLM class name does not follow the standard
 # pattern (FamilyConfig, FamilyForCausalLM). Map family → explicit module
@@ -124,6 +135,11 @@ def _resolve_family_imports(family: str):
     model_mod = importlib.import_module(
         f"transformers.models.{family}.modeling_{family}"
     )
+    module_attrs, class_forwards = _PRISTINE_FAMILY_STATE[family]
+    for name, value in module_attrs.items():
+        setattr(model_mod, name, value)
+    for cls, forward in class_forwards.items():
+        cls.forward = forward
 
     if family in _EXCEPTIONS:
         config_cls = getattr(cfg_mod, _EXCEPTIONS[family][0])
@@ -164,6 +180,10 @@ def _base_config_kwargs(family: str) -> dict:
     if family == "gpt2":
         kwargs.pop("num_key_value_heads", None)
         kwargs.pop("rope_theta", None)
+        # Model preparation disables stochastic dropout for DP transforms. Match
+        # that deterministic contract in the upstream parity reference instead of
+        # comparing against GPT-2's nonzero training defaults.
+        kwargs.update(attn_pdrop=0.0, embd_pdrop=0.0, resid_pdrop=0.0)
     return kwargs
 
 
@@ -220,6 +240,75 @@ def _get_families():
 
 FAMILIES = _get_families()
 
+
+_FAMILY_MODULE_PATCH_NAMES = (
+    "create_causal_mask",
+    "create_sliding_window_causal_mask",
+    "create_recurrent_attention_mask",
+    "repeat_kv",
+    "eager_attention_forward",
+    "apply_rotary_pos_emb",
+    "ALL_ATTENTION_FUNCTIONS",
+)
+
+
+def _snapshot_pristine_family_state(families=FAMILIES):
+    """Capture upstream globals before any package test applies process-wide patches."""
+    state = {}
+    for family in families:
+        model_mod = importlib.import_module(
+            f"transformers.models.{family}.modeling_{family}"
+        )
+        module_attrs = {
+            name: getattr(model_mod, name)
+            for name in _FAMILY_MODULE_PATCH_NAMES
+            if hasattr(model_mod, name)
+        }
+        class_forwards = {
+            value: value.forward
+            for value in vars(model_mod).values()
+            if isinstance(value, type)
+            and value.__module__ == model_mod.__name__
+            and hasattr(value, "forward")
+        }
+        state[family] = module_attrs, class_forwards
+    return state
+
+
+_PRISTINE_FAMILY_STATE = _snapshot_pristine_family_state()
+
+
+def _restore_family_state(state):
+    for family, (module_attrs, class_forwards) in state.items():
+        model_mod = importlib.import_module(
+            f"transformers.models.{family}.modeling_{family}"
+        )
+        for name, value in module_attrs.items():
+            setattr(model_mod, name, value)
+        for cls, forward in class_forwards.items():
+            cls.forward = forward
+
+
+@pytest.fixture(autouse=True)
+def _isolate_parity_family_state(request):
+    """Keep pristine parity references from altering later package tests."""
+    from opaque.api.patches.transformers._family import _reset_patched_families
+
+    callspec = getattr(request.node, "callspec", None)
+    family = callspec.params.get("family") if callspec is not None else None
+    previous_state = _snapshot_pristine_family_state((family,)) if family else {}
+    try:
+        yield
+    finally:
+        _restore_family_state(previous_state)
+        # The restored globals may differ from what the idempotency cache recorded
+        # during the parity case. Force later tests to inspect and patch them anew.
+        _reset_patched_families()
+        if torch.backends.mps.is_available():
+            gc.collect()
+            torch.mps.empty_cache()
+
+
 _FORWARD_PARITY_CASES = [
     pytest.param(
         family,
@@ -236,13 +325,16 @@ _FORWARD_PARITY_CASES = [
 ]
 
 
-def _family_params_with_slow(*slow_families: str):
-    return [
-        pytest.param(family, marks=pytest.mark.slow)
-        if family in slow_families
-        else family
-        for family in FAMILIES
-    ]
+def _family_params(*slow_families: str, xfail_reasons: dict[str, str] | None = None):
+    params = []
+    for family in FAMILIES:
+        marks = []
+        if family in slow_families:
+            marks.append(pytest.mark.slow)
+        if xfail_reasons is not None and family in xfail_reasons:
+            marks.append(pytest.mark.xfail(strict=True, reason=xfail_reasons[family]))
+        params.append(pytest.param(family, marks=marks))
+    return params
 
 
 @pytest.mark.parametrize(("family", "impl"), _FORWARD_PARITY_CASES)
@@ -272,11 +364,12 @@ def test_forward_logits_parity(family, impl, device):
         raise AssertionError(f"{family} [{impl}] forward parity failed") from e
 
 
-@pytest.mark.parametrize("family", _family_params_with_slow("cohere"))
+@pytest.mark.parametrize(
+    "family",
+    _family_params("cohere", xfail_reasons=_BACKWARD_GRAD_XFAIL_REASONS),
+)
 def test_backward_grads_parity(family, device):
     """Patched and unpatched models produce identical per-parameter gradients."""
-    if family in _GRAD_PARITY_SKIP_FAMILIES:
-        pytest.skip(f"{family} has unreliable gradient parity")
     config_cls, model_cls = _resolve_family_imports(family)
     extra = _extra_config_kwargs(family)
     softcapping = family in _SOFTCAP_FAMILIES
@@ -477,11 +570,12 @@ def test_lora_forward_parity(family, device):
     )
 
 
-@pytest.mark.parametrize("family", _family_params_with_slow("cohere"))
+@pytest.mark.parametrize(
+    "family",
+    _family_params("cohere", xfail_reasons=_VMAP_GRAD_XFAIL_REASONS),
+)
 def test_vmap_grad_parity(family, device):
     """Patched and runtime-compatible reference vmap(grad) values match."""
-    if family in _GRAD_PARITY_SKIP_FAMILIES:
-        pytest.skip(f"{family} has unreliable gradient parity")
     config_cls, model_cls = _resolve_family_imports(family)
     extra = _extra_config_kwargs(family)
     softcapping = family in _SOFTCAP_FAMILIES
@@ -496,6 +590,8 @@ def test_vmap_grad_parity(family, device):
             softcapping=softcapping,
             label=f"{family}",
             dtype=_parity_dtype(device),
+            batch=2 if family in _MOE_FAMILIES else 4,
+            seq=4 if family in _MOE_FAMILIES else 12,
         )
     except Exception as e:
         raise AssertionError(f"{family} vmap grad parity failed") from e

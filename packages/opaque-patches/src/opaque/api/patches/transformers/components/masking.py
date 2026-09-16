@@ -12,7 +12,9 @@ def apply_module_masking_patch(mod) -> bool:
     """
     from opaque.api.patches.transformers.runtime.masking import (
         vmap_create_causal_mask,
+        vmap_create_recurrent_attention_mask,
         vmap_create_sliding_window_causal_mask,
+        vmap_update_linear_attention_mask,
     )
 
     patched = False
@@ -21,6 +23,13 @@ def apply_module_masking_patch(mod) -> bool:
         patched = True
     if hasattr(mod, "create_sliding_window_causal_mask"):
         mod.create_sliding_window_causal_mask = vmap_create_sliding_window_causal_mask
+        patched = True
+    if hasattr(mod, "create_recurrent_attention_mask"):
+        mod.create_recurrent_attention_mask = vmap_create_recurrent_attention_mask
+        patched = True
+    model_cls = getattr(mod, "Qwen3NextModel", None)
+    if model_cls is not None and hasattr(model_cls, "_update_linear_attn_mask"):
+        model_cls._update_linear_attn_mask = vmap_update_linear_attention_mask
         patched = True
     return patched
 
