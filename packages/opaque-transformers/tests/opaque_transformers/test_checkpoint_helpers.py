@@ -29,8 +29,6 @@ from opaque.random.types import RngKey
 from opaque.serialization import from_state_dict as opaque_from_state_dict
 from opaque.types import (
     PerGroup,
-    SecondMomentClippingOutput,
-    SecondMomentNoiseOutput,
     clipped,
 )
 
@@ -298,20 +296,6 @@ def _mf_noise_factory(strategy_factory: Callable[[], Any]) -> Callable[[RngKey],
     return make_noise
 
 
-def _paired_noise_factory(rng_key: RngKey):
-    return mf_gaussian_noise(
-        _noise_tree(),
-        band_mf_strategy(bands=3, momentum=0.9),
-        n_steps=_NOISE_STEPS,
-        min_sep=_NOISE_STEPS,
-        max_participations=1,
-        noise_multiplier=1.0,
-        key=rng_key,
-        compute_dtype=torch.float64,
-        second_moment_strategy=lambda_cgd_strategy(lambda_=0.5),
-    )
-
-
 @dataclasses.dataclass(frozen=True)
 class _NoiseContinuityCase:
     make_noise: Callable[[RngKey], Any]
@@ -329,13 +313,6 @@ def _per_group_input(*, fallback: float, head: float):
     return clipped(
         _noise_tree(),
         max_norm=_per_group_norm(fallback=fallback, head=head),
-    )
-
-
-def _paired_input(*, max_norm: float, squared_max_norm: float):
-    return SecondMomentClippingOutput(
-        grads=_scalar_input(max_norm),
-        squared_grads=_scalar_input(squared_max_norm),
     )
 
 
@@ -422,19 +399,6 @@ _NOISE_CASES = [
         ),
         id="mf-lambda-cgd",
     ),
-    pytest.param(
-        _NoiseContinuityCase(
-            make_noise=_paired_noise_factory,
-            make_input=lambda: _paired_input(max_norm=1.0, squared_max_norm=1.0),
-            make_poison_input=lambda: _paired_input(
-                max_norm=7.0,
-                squared_max_norm=49.0,
-            ),
-            mechanism_kind="mf_band",
-            buffered=True,
-        ),
-        id="mf-paired-band-lambda-cgd",
-    ),
 ]
 
 
@@ -483,8 +447,6 @@ def _nested_tensors(value: Any):
 
 
 def _noise_streams(output: Any):
-    if isinstance(output, SecondMomentNoiseOutput):
-        return output.noisy_grads, output.noisy_squared_grads
     return (output,)
 
 

@@ -171,9 +171,9 @@ def _scale_by_adadelta(
 
         # ---- E[g²] update -------------------------------------------
         if noisy_squared_grads is not None:
-            # External second-moment branch: g² stream replaces (g·g).
-            # phi_g is left at its current value (post-processing already
-            # debiased v_g for this step).  phi_dx similarly stays put —
+            # The separately noised clean aggregate square replaces (g·g).
+            # phi_g is left at its current value because this branch does not
+            # square the first-stream noise. phi_dx similarly stays put —
             # we don't have σ in this branch, so we can't advance the
             # update-noise EMA without divergence; document the
             # trade-off below.
@@ -363,8 +363,8 @@ def adadelta(
 
         - ``NoisedPytree`` updates with ``noise_bias_correction=True``
           activate both BC EMAs.  σ travels on the wrapper.
-        - ``SecondMomentNoiseOutput`` updates substitute the privatised
-          ``g²`` stream into ``E[g²]`` directly.  In this branch we
+        - ``SecondMomentNoiseOutput`` updates substitute the JME clean
+          aggregate-square stream into ``E[g²]`` directly. In this branch we
           freeze ``φ_dx`` because σ isn't carried alongside the second-
           moment stream — the update-noise variance EMA cannot advance
           without it.  Use the ``NoisedPytree`` path for full BC.

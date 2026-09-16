@@ -248,197 +248,33 @@ class TestAdaptiveClippedGradEmptyBatch:
         assert clip_state._step == 10
 
 
-# ---------------------------------------------------------------------------
-# adaptive_clipped_grad(second_moment=True) empty-batch parity
-# ---------------------------------------------------------------------------
-
-
-class TestAdaptiveClippedGradEmptyBatchSecondMoment:
-    """Empty batches must emit the same paired ``SecondMomentClippingOutput``
-    shape that ``clipped_grad`` / ``auto_clipped_grad`` emit on non-empty
-    batches, so paired-stream noise + optimizer dispatch stay stable across
-    empty and non-empty Poisson steps.
-    """
-
-    def test_empty_batch_returns_paired_output(self, params, empty_batch):
-        from opaque.types import SecondMomentClippingOutput
-
-        grad_fn, clip_state = adaptive_clipped_grad(
+def test_adaptive_invalid_normalize_by_fails_at_construction():
+    with pytest.raises(ValueError, match="normalize_by must be > 0"):
+        adaptive_clipped_grad(
             _simple_loss_fn,
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
-            second_moment=True,
+            normalize_by=0.0,
         )
-        grads, _ = grad_fn(params, *empty_batch, state=clip_state)
-        assert isinstance(grads, SecondMomentClippingOutput)
-
-        first = _unwrap_clipped(grads.grads)
-        squared = _unwrap_clipped(grads.squared_grads)
-        assert first.shape == params.shape
-        assert squared.shape == params.shape
-        assert torch.all(first == 0)
-        assert torch.all(squared == 0)
-
-    def test_empty_batch_max_norms_match_clipped_grad(self, params, empty_batch):
-        """Both streams' max_norm values must equal what ``clipped_grad`` would
-        attach: ``C/normalize_by`` for the first stream and ``C²/normalize_by``
-        for the squared stream."""
-        clip_norm = 0.7
-        normalize_by = 4.0
-
-        grad_fn, clip_state = adaptive_clipped_grad(
-            _simple_loss_fn,
-            initial_clipping_norm=clip_norm,
-            key=key(0),
-            batch_argnums=(1, 2),
-            second_moment=True,
-            normalize_by=normalize_by,
-        )
-        grads, _ = grad_fn(params, *empty_batch, state=clip_state)
-
-        assert grads.grads.max_norm == pytest.approx(clip_norm / normalize_by)
-        assert grads.squared_grads.max_norm == pytest.approx(
-            (clip_norm * clip_norm) / normalize_by
-        )
-
-    def test_empty_batch_uses_next_clipping_norm(
-        self, params, empty_batch, normal_batch
-    ):
-        """After a normal batch updates ``_next_clipping_norm``, the next
-        empty batch must report the *updated* threshold (and its square) as
-        the streams' bounds."""
-        grad_fn, clip_state = adaptive_clipped_grad(
+    with pytest.raises(ValueError, match="normalize_by must be > 0"):
+        adaptive_clipped_grad(
             _simple_loss_fn,
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
-            second_moment=True,
+            normalize_by=-1.0,
         )
-        _, clip_state = grad_fn(params, *normal_batch, state=clip_state)
-        next_cn = clip_state._next_clipping_norm
-        assert next_cn != 1.0  # adapted
 
-        grads, _ = grad_fn(params, *empty_batch, state=clip_state)
-        assert grads.grads.max_norm == pytest.approx(next_cn)
-        assert grads.squared_grads.max_norm == pytest.approx(next_cn * next_cn)
 
-    def test_paired_output_consistent_across_empty_and_normal(
-        self, params, empty_batch, normal_batch
-    ):
-        """Type stays ``SecondMomentClippingOutput`` on both empty and normal
-        steps so downstream noise mechanism dispatch is stable."""
-        from opaque.types import SecondMomentClippingOutput
-
-        grad_fn, clip_state = adaptive_clipped_grad(
+def test_adaptive_legacy_second_moment_argument_is_rejected():
+    with pytest.raises(TypeError, match="second_moment"):
+        adaptive_clipped_grad(
             _simple_loss_fn,
             initial_clipping_norm=1.0,
             key=key(0),
-            batch_argnums=(1, 2),
             second_moment=True,
         )
-        for batch in (empty_batch, normal_batch, empty_batch):
-            grads, clip_state = grad_fn(params, *batch, state=clip_state)
-            assert isinstance(grads, SecondMomentClippingOutput)
-
-    def test_paired_output_drives_paired_noise_dispatch(
-        self, params, empty_batch, normal_batch
-    ):
-        """End-to-end: gaussian_noise must emit ``SecondMomentNoiseOutput``
-        on both empty and non-empty steps when adaptive clipping is in
-        ``second_moment=True`` mode."""
-        from opaque.dpsgd.noise import gaussian_noise
-        from opaque.types import SecondMomentNoiseOutput
-
-        grad_fn, clip_state = adaptive_clipped_grad(
-            _simple_loss_fn,
-            initial_clipping_norm=1.0,
-            key=key(0),
-            batch_argnums=(1, 2),
-            second_moment=True,
-        )
-        noise_fn, noise_state = gaussian_noise(noise_multiplier=1.1, key=key(99))
-
-        for batch in (empty_batch, normal_batch, empty_batch):
-            grads, clip_state = grad_fn(params, *batch, state=clip_state)
-            noisy, noise_state = noise_fn(grads, noise_state)
-            assert isinstance(noisy, SecondMomentNoiseOutput)
-
-    def test_per_group_empty_batch_paired(self, empty_batch):
-        """PerGroup adaptive + ``second_moment=True`` empty batch produces
-        paired output with PerGroup max_norms on both streams."""
-        from opaque.types import PerGroup, SecondMomentClippingOutput
-
-        def loss_fn(params, x, y):
-            pred = x @ params["w"] + params["b"]
-            return ((pred - y) ** 2).mean()
-
-        params = {"w": torch.randn(10), "b": torch.randn(1)}
-        groups = {"w": "weights", "b": "biases"}
-        init = PerGroup(groups, {"weights": 1.0, "biases": 0.5})
-
-        grad_fn, clip_state = adaptive_clipped_grad(
-            loss_fn,
-            initial_clipping_norm=init,
-            key=key(0),
-            batch_argnums=(1, 2),
-            second_moment=True,
-            normalize_by=2.0,
-        )
-        grads, _ = grad_fn(params, *empty_batch, state=clip_state)
-
-        assert isinstance(grads, SecondMomentClippingOutput)
-        first_mn = grads.grads.max_norm
-        squared_mn = grads.squared_grads.max_norm
-        assert isinstance(first_mn, PerGroup)
-        assert isinstance(squared_mn, PerGroup)
-        assert first_mn.values["weights"] == pytest.approx(1.0 / 2.0)
-        assert first_mn.values["biases"] == pytest.approx(0.5 / 2.0)
-        assert squared_mn.values["weights"] == pytest.approx(1.0 * 1.0 / 2.0)
-        assert squared_mn.values["biases"] == pytest.approx(0.5 * 0.5 / 2.0)
-
-    def test_invalid_normalize_by_fails_at_construction(self):
-        """``normalize_by <= 0`` must fail at ``adaptive_clipped_grad`` factory
-        time so empty-batch and non-empty-batch failure modes stay consistent
-        (the empty-batch short-circuit uses ``normalize_by`` to compute the
-        squared-stream ``max_norm`` without going through ``clipped_grad``,
-        which is where the inner validation otherwise fires)."""
-        with pytest.raises(ValueError, match="normalize_by must be > 0"):
-            adaptive_clipped_grad(
-                _simple_loss_fn,
-                initial_clipping_norm=1.0,
-                key=key(0),
-                batch_argnums=(1, 2),
-                second_moment=True,
-                normalize_by=0.0,
-            )
-        with pytest.raises(ValueError, match="normalize_by must be > 0"):
-            adaptive_clipped_grad(
-                _simple_loss_fn,
-                initial_clipping_norm=1.0,
-                key=key(0),
-                batch_argnums=(1, 2),
-                normalize_by=-1.0,
-            )
-
-    def test_return_aux_with_second_moment_empty_batch(self, params, empty_batch):
-        """Combining ``return_aux=True`` and ``second_moment=True`` on an
-        empty batch must still return the paired stream alongside the aux."""
-        from opaque.types import SecondMomentClippingOutput
-
-        grad_fn, clip_state = adaptive_clipped_grad(
-            _simple_loss_fn,
-            initial_clipping_norm=1.0,
-            key=key(0),
-            batch_argnums=(1, 2),
-            return_aux=True,
-            second_moment=True,
-        )
-        (grads, aux), _ = grad_fn(params, *empty_batch, state=clip_state)
-        assert isinstance(grads, SecondMomentClippingOutput)
-        assert isinstance(aux, AdaptiveClippedGradAux)
-        assert aux.clipping_rate == 0.0
-        assert aux.grad_norms.shape == (0,)
 
 
 # ---------------------------------------------------------------------------
@@ -627,33 +463,3 @@ class TestAdaptiveEmptyBatchStructureAndDtypeParity:
         empty, _ = grad_fn(params, empty_x, empty_y, state=clip_state)
         assert sorted(full.pytree) == sorted(empty.pytree) == ["q"]
         assert torch.all(empty.pytree["q"] == 0)
-
-    def test_second_moment_streams_parity(self):
-        from opaque.types import SecondMomentClippingOutput
-
-        params, (x, y), (empty_x, empty_y) = self._params_and_batches()
-
-        def transform(g):
-            return {"q": g["w"]}
-
-        grad_fn, clip_state = adaptive_clipped_grad(
-            _dict_linear_loss,
-            batch_argnums=(1, 2),
-            key=key(0),
-            pre_clipping_transform=transform,
-            dtype=torch.float32,
-            second_moment=True,
-        )
-        full, _ = grad_fn(params, x, y, state=clip_state)
-        empty, _ = grad_fn(params, empty_x, empty_y, state=clip_state)
-        assert isinstance(full, SecondMomentClippingOutput)
-        assert isinstance(empty, SecondMomentClippingOutput)
-        for stream in (full, empty):
-            assert sorted(stream.grads.pytree) == ["q"]
-            assert sorted(stream.squared_grads.pytree) == ["q"]
-        assert empty.grads.pytree["q"].dtype == torch.float32
-        assert empty.squared_grads.pytree["q"].dtype == torch.float32
-        assert torch.all(empty.grads.pytree["q"] == 0)
-        assert torch.all(empty.squared_grads.pytree["q"] == 0)
-        assert full.grads.max_norm == empty.grads.max_norm
-        assert full.squared_grads.max_norm == empty.squared_grads.max_norm

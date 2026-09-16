@@ -505,17 +505,17 @@ class TestAutoClippedGradEmptyBatchParity:
             R=1.0,
             pre_clipping_transform=transform,
             dtype=torch.float32,
-            second_moment=True,
         )
         full, _ = gf(params, x, y, state=state)
         empty, _ = gf(params, x[:0], y[:0], state=state)
-        assert sorted(full.grads.pytree) == sorted(empty.grads.pytree) == ["q"]
-        assert (
-            sorted(full.squared_grads.pytree)
-            == sorted(empty.squared_grads.pytree)
-            == ["q"]
+        assert sorted(full.pytree) == sorted(empty.pytree) == ["q"]
+        assert empty.pytree["q"].dtype == torch.float32
+        assert torch.all(empty.pytree["q"] == 0)
+
+
+def test_auto_legacy_second_moment_argument_is_rejected():
+    with pytest.raises(TypeError, match="second_moment"):
+        auto_clipped_grad(
+            lambda params, x: (params * x).sum(),
+            second_moment=True,  # type: ignore[call-arg]
         )
-        assert empty.grads.pytree["q"].dtype == torch.float32
-        assert empty.squared_grads.pytree["q"].dtype == torch.float32
-        assert torch.all(empty.grads.pytree["q"] == 0)
-        assert torch.all(empty.squared_grads.pytree["q"] == 0)

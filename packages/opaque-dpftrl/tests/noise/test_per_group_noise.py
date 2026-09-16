@@ -13,7 +13,6 @@ from opaque.api.dpftrl.noise._distributed import (
 )
 from opaque.api.dpftrl.noise._engine import MFNoiseState, _matrix_factorization_noise
 from opaque.api.engine.noise_allocation import per_group_noise_stddev
-from opaque.dpftrl.clipping import clipped_grad
 from opaque.dpftrl.noise import (
     band_mf_strategy,
     bisr_strategy,
@@ -25,7 +24,7 @@ from opaque.dpftrl.noise import (
 )
 from opaque.pytree import tree_leaves
 from opaque.random import key
-from opaque.types import NoisedPytree, PerGroup, SecondMomentClippingOutput, clipped
+from opaque.types import NoisedPytree, PerGroup, clipped
 
 
 def _make_pg_two_groups() -> PerGroup:
@@ -362,60 +361,6 @@ class TestMfNoisePerGroupSingleStream:
         assert v_opt < v_iso * 0.99
 
 
-class TestMfNoisePerGroupPairedStream:
-    @pytest.fixture
-    def grad_template(self):
-        return {"w": torch.zeros(4, 3), "b": torch.zeros(4)}
-
-    def test_paired_returns_per_group_stddevs(self, grad_template):
-        n_steps = 20
-        strategy = band_mf_strategy(bands=4, momentum=0.9)
-        second = band_mf_strategy(bands=4, momentum=0.99)
-        nm = 1.2
-        c1 = _max_column_norm(strategy, n_steps=n_steps)
-        noise_fn, state = mf_gaussian_noise(
-            grad_template,
-            strategy,
-            n_steps=n_steps,
-            noise_multiplier=nm,
-            key=key(11),
-            second_moment_strategy=second,
-        )
-        zeta = 0.05
-        pg = PerGroup(
-            groups={"w": "a", "b": "b"},
-            values={"a": zeta, "b": zeta * 2},
-        )
-        sq = {k: v * v for k, v in {"w": torch.ones(4, 3), "b": torch.ones(4)}.items()}
-        sq_pg = pg * pg
-        paired = SecondMomentClippingOutput(
-            grads=clipped({"w": torch.ones(4, 3), "b": torch.ones(4)}, max_norm=pg),
-            squared_grads=clipped(sq, max_norm=sq_pg),
-        )
-        out, _ = noise_fn(paired, state)
-        assert isinstance(out.noisy_grads.noise_stddev, PerGroup)
-        assert isinstance(out.noisy_squared_grads.noise_stddev, PerGroup)
-        # Joint Mahalanobis on encoded sensitivities equals (c1 / nm)².
-        # The published ``noise_stddev`` is the per-step *realized* σ
-        # (= base σ · ‖row_t(C^-1)‖); divide each stream's row_l2 out to
-        # recover base σ for the joint-PLD calibration identity.
-        c2 = _max_column_norm(second, n_steps=n_steps)
-        first_row_l2 = _row_l2_at_zero(strategy, n_steps=n_steps)
-        second_row_l2 = _row_l2_at_zero(second, n_steps=n_steps)
-        s1 = out.noisy_grads.noise_stddev
-        s2 = out.noisy_squared_grads.noise_stddev
-        mahal = 0.0
-        for param_key in ("w", "b"):
-            b1 = pg.for_path(param_key)
-            b2 = sq_pg.for_path(param_key)
-            d1 = b1 * c1
-            d2 = b2 * c2
-            base_s1 = s1.for_path(param_key) / first_row_l2
-            base_s2 = s2.for_path(param_key) / second_row_l2
-            mahal += (d1 / base_s1) ** 2 + (d2 / base_s2) ** 2
-        assert mahal == pytest.approx((c1 / nm) ** 2, rel=1e-9)
-
-
 class TestMfNoisePerGroupMahalanobisSingleStream:
     """Encoded Mahalanobis budget with per-group IID base stddev."""
 
@@ -456,71 +401,4 @@ class TestMfNoisePerGroupMahalanobisSingleStream:
         assert acc == pytest.approx((c1 / nm) ** 2, rel=1e-9)
 
     def test_pld_match_per_group_single_stream(self, grad_template):
-        """Plan checklist name — same Mahalanobis check as
-        ``test_mahalanobis_equals_c1_over_nm_squared``."""
         self.test_mahalanobis_equals_c1_over_nm_squared(grad_template)
-
-
-class TestPerGroupPairedWithClippedGradAndMf:
-    """End-to-end: ``clipped_grad(..., second_moment=True, PerGroup)`` → ``mf_gaussian_noise``."""
-
-    def test_per_group_paired_with_mf(self):
-        torch.manual_seed(0)
-        params = {"w": torch.randn(3), "b": torch.randn(())}
-        batch_size = 6
-        x = torch.randn(batch_size, 3)
-        y = torch.randn(batch_size)
-
-        def loss_fn(p, x_, y_):
-            return ((x_ @ p["w"] + p["b"] - y_) ** 2).mean()
-
-        pg = PerGroup(
-            groups={"w": "ga", "b": "gb"},
-            values={"ga": 2.0, "gb": 2.0},
-        )
-        grad_fn, clip_state = clipped_grad(
-            loss_fn,
-            argnums=0,
-            batch_argnums=(1, 2),
-            clipping_norm=pg,
-            normalize_by=batch_size,
-            second_moment=True,
-        )
-        paired, clip_state = grad_fn(params, x, y, state=clip_state)
-        assert isinstance(paired, SecondMomentClippingOutput)
-
-        n_steps = 40
-        grad_template = {"w": torch.zeros(3), "b": torch.zeros(())}
-        strategy = band_mf_strategy(bands=4, momentum=0.9)
-        second = band_mf_strategy(bands=4, momentum=0.99)
-        nm = 1.0
-        c1 = _max_column_norm(strategy, n_steps=n_steps)
-        c2 = _max_column_norm(second, n_steps=n_steps)
-        noise_fn, noise_state = mf_gaussian_noise(
-            grad_template,
-            strategy,
-            n_steps=n_steps,
-            noise_multiplier=nm,
-            key=key(2026),
-            second_moment_strategy=second,
-        )
-        out, _ = noise_fn(paired, noise_state)
-        assert isinstance(out.noisy_grads.noise_stddev, PerGroup)
-        assert isinstance(out.noisy_squared_grads.noise_stddev, PerGroup)
-        s1 = out.noisy_grads.noise_stddev
-        s2 = out.noisy_squared_grads.noise_stddev
-        pg1 = paired.grads.max_norm
-        assert isinstance(pg1, PerGroup)
-        sq1 = paired.squared_grads.max_norm
-        assert isinstance(sq1, PerGroup)
-        # Recover base σ from realized σ (= base · row_l2) per stream.
-        first_row_l2 = _row_l2_at_zero(strategy, n_steps=n_steps)
-        second_row_l2 = _row_l2_at_zero(second, n_steps=n_steps)
-        mahal = 0.0
-        for param_key in ("w", "b"):
-            d1 = pg1.for_path(param_key) * c1
-            d2 = sq1.for_path(param_key) * c2
-            base_s1 = s1.for_path(param_key) / first_row_l2
-            base_s2 = s2.for_path(param_key) / second_row_l2
-            mahal += (d1 / base_s1) ** 2 + (d2 / base_s2) ** 2
-        assert mahal == pytest.approx((c1 / nm) ** 2, rel=1e-8)

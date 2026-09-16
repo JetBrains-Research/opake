@@ -433,10 +433,8 @@ The optimal allocation sets $\sigma_i \propto \sqrt{C_i}$ instead of a
 uniform σ.  Privacy accounting remains `gaussian(nm)` — the allocation
 satisfies the same Mahalanobis constraint, just with better MSE.
 
-The same joint allocation supports paired first/second-moment releases.
-With a shared noise multiplier, the first-moment standard deviation is
-increased by $\sqrt{1+C}$, where `C` is the per-record clipping
-bound. Use the smallest bound the optimizer tolerates.
+Projected JME currently requires scalar global clipping. Per-group JME needs a
+group-coupled nonlinear sensitivity derivation and is rejected.
 
 ### Diagnostics
 

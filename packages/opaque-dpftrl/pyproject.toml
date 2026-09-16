@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "opaque-dpftrl"
 dynamic = ["version"]
-description = "Opaque DP-FTRL mechanisms: matrix-factorization noise (BLT, BSR, BISR, lambda-CGD) and private second moments"
+description = "Opaque DP-FTRL mechanisms: matrix-factorization noise (BLT, BSR, BISR, lambda-CGD)"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Opaque Contributors" }]

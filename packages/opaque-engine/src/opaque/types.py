@@ -4,8 +4,8 @@ Single canonical home for the data types that connect clipping →
 noise → optimizer:
 
 - **Pytree wrappers**: ``ClippedPytree`` (post-clipping),
-  ``NoisedPytree`` (post-noise), and the paired-stream outputs
-  ``SecondMomentClippingOutput`` / ``SecondMomentNoiseOutput``.
+  ``NoisedPytree`` (post-noise), and ``SecondMomentNoiseOutput`` for
+  private projected aggregate squares.
 - **Per-group container**: ``PerGroup`` — a dict-like that flows
   through the entire pipeline carrying per-parameter-group scalar
   values.
@@ -26,7 +26,6 @@ from opaque.api.engine.types import (
     NoiseStddev,
     ParamPath,
     PerGroup,
-    SecondMomentClippingOutput,
     SecondMomentNoiseOutput,
     TensorPytree,
     clipped,
@@ -42,7 +41,6 @@ __all__ = [
     "NoisedPytree",
     "ParamPath",
     "PerGroup",
-    "SecondMomentClippingOutput",
     "SecondMomentNoiseOutput",
     "TensorPytree",
     "clipped",

@@ -377,7 +377,6 @@ def global_norm(
     from opaque.api.engine.types import (
         ClippedPytree,
         NoisedPytree,
-        SecondMomentClippingOutput,
         SecondMomentNoiseOutput,
     )
 
@@ -386,7 +385,6 @@ def global_norm(
         (
             ClippedPytree,
             NoisedPytree,
-            SecondMomentClippingOutput,
             SecondMomentNoiseOutput,
         ),
     ):

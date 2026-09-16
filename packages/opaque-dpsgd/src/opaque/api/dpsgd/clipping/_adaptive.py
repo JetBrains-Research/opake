@@ -18,11 +18,10 @@ from opaque.api.engine.clipping._helpers import (
     empty_clipped_grads_like,
     normalize_to_tuple,
 )
-from opaque.api.engine.pytree import tree_map
 from opaque.exceptions import ConfigurationError
 from opaque.random import fold_in, generator_from_key
 from opaque.random.types import RngKey
-from opaque.types import ClipState, PerGroup, SecondMomentClippingOutput, clipped
+from opaque.types import ClipState, PerGroup, clipped
 
 _DEFAULT_FRACTION_NOISE_STD = 0.05
 
@@ -139,28 +138,6 @@ def _adaptive_clipping_norm_update(
     return float(max(clipping_norm_min, min(clipping_norm_max, new_clipping_norm)))
 
 
-def _empty_batch_grads(
-    zeros: Any,
-    bound: float,
-    squared_bound: float,
-    second_moment: bool,
-):
-    """Wrap zero gradients in the same output structure as a non-empty step."""
-    grads = clipped(zeros, max_norm=bound)
-    if not second_moment:
-        return grads
-    return SecondMomentClippingOutput(
-        grads=grads,
-        squared_grads=clipped(
-            tree_map(
-                lambda x: torch.zeros_like(x) if isinstance(x, torch.Tensor) else x,
-                zeros,
-            ),
-            max_norm=squared_bound,
-        ),
-    )
-
-
 def adaptive_clipped_grad(
     loss_fn: Callable,
     argnums: int | tuple[int, ...] = 0,
@@ -211,15 +188,6 @@ def adaptive_clipped_grad(
             Default is identity function.
         **clipped_grad_kwargs: Passed to ``clipped_grad()``
             (``batch_argnums``, ``normalize_by``, etc).
-
-    Note:
-        **Empty-batch parity (``second_moment``):** the empty-batch
-        short-circuit mirrors :func:`~opaque.dpsgd.clipping.clipped_grad` and
-        :func:`~opaque.dpsgd.clipping.auto_clipped_grad` — when ``second_moment=True``
-        it returns a :class:`~opaque.types.SecondMomentClippingOutput` of zeros
-        (squared-stream sensitivity ``C²/normalize_by``), so paired-stream
-        noise and optimizer dispatch are stable across empty and non-empty
-        steps under Poisson sampling.
 
     Returns:
         A tuple of (clipped_grad_fn, initial_state) where:
@@ -325,6 +293,11 @@ def adaptive_clipped_grad(
         )
 
     # Validate parameters
+    if "second_moment" in clipped_grad_kwargs:
+        raise TypeError(  # noqa: TRY003 - mirror an unexpected keyword argument
+            "adaptive_clipped_grad() got an unexpected keyword argument 'second_moment'"
+        )
+
     if isinstance(initial_clipping_norm, PerGroup):
         for gname, val in initial_clipping_norm.values.items():
             if val <= 0:
@@ -369,7 +342,6 @@ def adaptive_clipped_grad(
     # Read static config that the empty-batch path needs to compute max_norms
     # without going through ``clipped_grad`` itself.
     normalize_by = clipped_grad_kwargs.get("normalize_by", 1.0)
-    second_moment = bool(clipped_grad_kwargs.get("second_moment", False))
 
     # Validate the same static args ``clipped_grad`` validates at factory time,
     # so misconfigurations (e.g. ``normalize_by <= 0`` or argnums/batch_argnums
@@ -378,9 +350,6 @@ def adaptive_clipped_grad(
     # consistent.
     _validate_static_args(argnums, batch_argnums_raw, normalize_by)
     output_bound = lambda clipping_norm: clipping_norm / normalize_by  # noqa: E731
-
-    def _output_squared_bound(clipping_norm):
-        return (clipping_norm * clipping_norm) / normalize_by
 
     config = {
         "target_quantile": target_quantile,
@@ -432,11 +401,6 @@ def adaptive_clipped_grad(
 
     def _grad_fn_impl(*args, state: AdaptiveClipState, **kwargs):
         # Empty batch: zero grads, no adaptation, step still incremented.
-        # When ``second_moment=True`` was forwarded to the inner ``clipped_grad``,
-        # mirror its empty-batch shape (paired ``SecondMomentClippingOutput``) so
-        # downstream noise + optimizer dispatch stays paired across empty and
-        # non-empty steps. The squared-stream sensitivity is C^2/normalize_by, the
-        # same bound ``clipped_grad`` would attach on a non-empty step.
         if batch_size_from_args(args, batch_argnums_tuple) == 0:
             new_state = _empty_batch_state(state)
             # Mirror the inner ``clipped_grad`` output contract: transform the
@@ -448,11 +412,9 @@ def adaptive_clipped_grad(
                 pre_clipping_transform,
                 clipped_grad_kwargs.get("dtype"),
             )
-            grads = _empty_batch_grads(
+            grads = clipped(
                 zeros,
-                output_bound(state._next_clipping_norm),
-                _output_squared_bound(state._next_clipping_norm),
-                second_moment,
+                max_norm=output_bound(state._next_clipping_norm),
             )
             if return_aux:
                 empty = torch.empty(0)

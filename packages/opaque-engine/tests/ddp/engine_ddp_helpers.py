@@ -189,29 +189,6 @@ def _worker_sync_profiler(rank: int, world_size: int, port: int) -> None:
         _cleanup_ddp()
 
 
-def _worker_second_moment_clip_gloo(rank: int, world_size: int, port: int) -> None:
-    from opaque.distributed.gradients import reduce_pytree
-    from opaque.types import ClippedPytree, SecondMomentClippingOutput
-
-    _setup_gloo(rank, world_size, port)
-    try:
-        scale = 1.0 if rank == 0 else 10.0
-        out = SecondMomentClippingOutput(
-            grads=ClippedPytree({"w": torch.tensor([1.0, 2.0]) * scale}, max_norm=1.0),
-            squared_grads=ClippedPytree(
-                {"w": torch.tensor([3.0]) * scale}, max_norm=2.0
-            ),
-        )
-        reduced = reduce_pytree(out, op="sum")
-        assert isinstance(reduced, SecondMomentClippingOutput)
-        assert torch.allclose(reduced.grads.pytree["w"], torch.tensor([11.0, 22.0]))
-        assert torch.allclose(reduced.squared_grads.pytree["w"], torch.tensor([33.0]))
-        assert abs(reduced.grads.max_norm - 1.0) < 1e-6
-        assert abs(reduced.squared_grads.max_norm - 2.0) < 1e-6
-    finally:
-        _cleanup_ddp()
-
-
 def _worker_second_moment_noise_gloo(rank: int, world_size: int, port: int) -> None:
     from opaque.distributed.gradients import reduce_pytree
     from opaque.types import NoisedPytree, SecondMomentNoiseOutput
@@ -239,73 +216,6 @@ def _worker_second_moment_noise_gloo(rank: int, world_size: int, port: int) -> N
         )
         assert abs(reduced.noisy_grads.noise_stddev - 0.5 * (2.0**0.5)) < 1e-6
         assert abs(reduced.noisy_squared_grads.noise_stddev - 0.25 * (2.0**0.5)) < 1e-6
-    finally:
-        _cleanup_ddp()
-
-
-def _paired_clipping_fixture(
-    device: torch.device | str,
-) -> tuple[dict, torch.Tensor, torch.Tensor]:
-    params = {
-        "linear": {
-            "weight": torch.tensor([0.25, -0.5, 0.75], device=device),
-        },
-        "bias": torch.tensor(0.1, device=device),
-    }
-    x = torch.arange(24, dtype=torch.float32, device=device).reshape(8, 3) / 10.0
-    y = torch.linspace(-0.4, 0.6, 8, device=device)
-    return params, x, y
-
-
-def _paired_clipping_loss(
-    params: dict, x: torch.Tensor, y: torch.Tensor
-) -> torch.Tensor:
-    prediction = x @ params["linear"]["weight"] + params["bias"]
-    return (prediction - y).square()
-
-
-def _worker_second_moment_clipping_parity_gloo(
-    rank: int,
-    world_size: int,
-    port: int,
-    out_path: str,
-) -> None:
-    from opaque.api.engine.clipping import clipped_grad
-    from opaque.distributed import sum_gradients
-    from opaque.pytree import tree_map
-    from opaque.types import SecondMomentClippingOutput
-
-    _setup_gloo(rank, world_size, port)
-    try:
-        params, x, y = _paired_clipping_fixture("cpu")
-        grad_fn, clip_state = clipped_grad(
-            _paired_clipping_loss,
-            clipping_norm=0.7,
-            batch_argnums=(1, 2),
-            normalize_by=len(x),
-            second_moment=True,
-        )
-        assert len(x) % world_size == 0
-        shard_size = len(x) // world_size
-        shard = slice(rank * shard_size, (rank + 1) * shard_size)
-        local, _ = grad_fn(params, x[shard], y[shard], state=clip_state)
-        reduced = sum_gradients(local)
-
-        assert isinstance(reduced, SecondMomentClippingOutput)
-        if rank == 0:
-            torch.save(
-                {
-                    "grads": tree_map(
-                        lambda tensor: tensor.cpu(), reduced.grads.pytree
-                    ),
-                    "squared_grads": tree_map(
-                        lambda tensor: tensor.cpu(), reduced.squared_grads.pytree
-                    ),
-                    "max_norm": reduced.grads.max_norm,
-                    "squared_max_norm": reduced.squared_grads.max_norm,
-                },
-                out_path,
-            )
     finally:
         _cleanup_ddp()
 

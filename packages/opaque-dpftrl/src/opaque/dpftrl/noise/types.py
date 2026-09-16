@@ -9,7 +9,6 @@ from opaque.api.dpftrl.noise.types import (
     LambdaCgdStrategy,
     MFNoiseState,
     MfStrategy,
-    SecondMomentMFNoiseState,
 )
 
 __all__ = [
@@ -21,5 +20,4 @@ __all__ = [
     "LambdaCgdStrategy",
     "MFNoiseState",
     "MfStrategy",
-    "SecondMomentMFNoiseState",
 ]

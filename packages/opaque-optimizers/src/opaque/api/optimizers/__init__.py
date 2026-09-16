@@ -22,8 +22,8 @@ Opaque-built:
   the same DP metadata wrappers as AdamW.
 - :func:`adafactor` — Adafactor with factored second moment.  Optional
   DP noise-variance bias correction subtracts a φ-EMA from each factor
-  (``noise_bias_correction``).  No private second-moment substitution
-  path — the privatised ``g²`` stream doesn't preserve the factorisation
+  (``noise_bias_correction``). No JME substitution path — the projected
+  aggregate-square stream does not preserve the factorisation
   cleanly (see module docstring).
 - :func:`rmsprop` — RMSprop with optional DP-aware φ-EMA correction
   on the second moment.
@@ -46,9 +46,9 @@ kwargs):
   optimizer has (φ-EMA on ``v̂`` for Adam-family / RMSprop / RAdam,
   cumulative Φ subtraction for Adagrad, planned sign gating for Lion,
   …).
-- ``SecondMomentNoiseOutput`` — carries private first- and second-moment
-  streams together and substitutes the private squared-gradient stream
-  in place of ``g²`` (post-processing inside the optimizer).
+- ``SecondMomentNoiseOutput`` — carries projected JME first- and
+  aggregate-square streams and substitutes the latter for ``g²``
+  (post-processing inside the optimizer).
 
 ``adamax`` is intentionally *not* exposed: its L∞
 ``u_t = max(β₂ u_{t-1}, |g_t|)`` rule rectifies the gradient before

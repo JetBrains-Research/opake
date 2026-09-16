@@ -11,13 +11,8 @@ from torch.func import vmap as _vmap
 from opaque.api.engine.clipping._helpers import normalize_to_tuple
 from opaque.api.engine.clipping._pytree import clip_pytree
 from opaque.api.engine.pytree import global_norm, tree_map
-from opaque.api.engine.types import (
-    ClippedPytree,
-    PerGroup,
-    SecondMomentClippingOutput,
-    clipped,
-)
 from opaque.api.engine.types import ClipState as _ClipState
+from opaque.api.engine.types import PerGroup, clipped
 from opaque.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
@@ -199,7 +194,6 @@ def _microbatch_accumulate(
     return_aux,
     dtype,
     compute_dtype,
-    second_moment: bool = False,
 ):
     """Process batch in microbatches, accumulating results without materializing full batch.
 
@@ -224,9 +218,6 @@ def _microbatch_accumulate(
             Independent of ``dtype``: ``compute_dtype=fp32`` with
             ``dtype=None`` accumulates in fp32 internally and casts back
             to input dtype at the boundary.
-        second_moment: Whether to accumulate per-example gradient second
-            moments alongside the clipped sum.
-
     Returns:
         Tuple of (accumulated_values, concatenated_aux)
     """
@@ -264,9 +255,6 @@ def _microbatch_accumulate(
 
     # Initialize accumulators
     grad_acc = _MicrobatchAccumulator(output_dtype=dtype, compute_dtype=compute_dtype)
-    squared_acc = _MicrobatchAccumulator(
-        output_dtype=dtype, compute_dtype=compute_dtype
-    )
     aux_list = []
 
     # Process each microbatch
@@ -283,14 +271,7 @@ def _microbatch_accumulate(
                 args[i],
             )
 
-        # vmap over microbatch.  Output shape depends on the orthogonal
-        # ``second_moment`` and ``return_aux`` flags:
-        #   (False, False) → clipped_values (which may itself be a pytree)
-        #   (True,  False) → (clipped_values, squared_values)
-        #   (False, True ) → (clipped_values, aux)
-        #   (True,  True ) → (clipped_values, squared_values, aux)
-        n_outputs = 1 + int(bool(second_moment)) + int(return_aux)
-        out_dims = 0 if n_outputs == 1 else (0,) * n_outputs
+        out_dims = (0, 0) if return_aux else 0
         vmapped = _vmap(
             per_example_fn,
             in_dims=in_dims,
@@ -298,22 +279,13 @@ def _microbatch_accumulate(
             randomness="same",
         )
         outputs = vmapped(*microbatch_args)
-        if n_outputs == 1:
-            clipped_values = outputs
-            squared_values = None
-            aux = ()
+        if return_aux:
+            clipped_values, aux = outputs
         else:
-            idx = 0
-            clipped_values = outputs[idx]
-            idx += 1
-            squared_values = outputs[idx] if second_moment else None
-            if second_moment:
-                idx += 1
-            aux = outputs[idx] if return_aux else ()
+            clipped_values = outputs
+            aux = ()
 
         grad_acc.add(clipped_values)
-        if second_moment:
-            squared_acc.add(squared_values)
 
         # Collect aux outputs (CONCAT) - keep per-example
         if return_aux:
@@ -335,7 +307,7 @@ def _microbatch_accumulate(
     else:
         aux = ()
 
-    return grad_acc.result(), squared_acc.result(), aux
+    return grad_acc.result(), aux
 
 
 def _microbatch_accumulate_stats_only(
@@ -347,7 +319,6 @@ def _microbatch_accumulate_stats_only(
     dtype,
     compute_dtype,
     clipping_norm: float | PerGroup,
-    second_moment: bool = False,
 ):
     """Process microbatches while accumulating only summed outputs and aggregate stats."""
     first_batch_idx = batch_argnums[0]
@@ -382,9 +353,6 @@ def _microbatch_accumulate_stats_only(
         batch_size = first_tensor.shape[0]
 
     grad_acc = _MicrobatchAccumulator(output_dtype=dtype, compute_dtype=compute_dtype)
-    squared_acc = _MicrobatchAccumulator(
-        output_dtype=dtype, compute_dtype=compute_dtype
-    )
     total_batch_size = 0
     if isinstance(clipping_norm, PerGroup):
         total_num_clipped: float | dict[str, float] = dict.fromkeys(
@@ -403,22 +371,15 @@ def _microbatch_accumulate_stats_only(
                 args[i],
             )
 
-        n_outputs = 2 + int(bool(second_moment))
-        out_dims = (0,) * n_outputs
         vmapped = _vmap(
             per_example_fn,
             in_dims=in_dims,
-            out_dims=out_dims,
+            out_dims=(0, 0),
             randomness="same",
         )
-        outputs = vmapped(*microbatch_args)
-        clipped_values = outputs[0]
-        squared_values = outputs[1] if second_moment else None
-        stats_aux = outputs[-1]
+        clipped_values, stats_aux = vmapped(*microbatch_args)
 
         grad_acc.add(clipped_values)
-        if second_moment:
-            squared_acc.add(squared_values)
 
         stats = _compute_clipping_stats(
             stats_aux["norms"],
@@ -445,7 +406,6 @@ def _microbatch_accumulate_stats_only(
 
     return (
         grad_acc.result(),
-        squared_acc.result(),
         ClippingStats(
             num_clipped=total_num_clipped,
             clipping_rate=clipping_rate,
@@ -514,7 +474,6 @@ def clipped_fun(
     normalize_by: float = 1.0,
     return_aux: bool = False,
     return_stats: bool = False,
-    second_moment: bool = False,
     microbatch_size: int | None = None,
     dtype: torch.dtype | None = None,
     compute_dtype: torch.dtype | None = None,
@@ -525,14 +484,11 @@ def clipped_fun(
     This is the primary API for per-example clipping in DP-SGD. It wraps a function
     to clip each per-example output to a maximum L2 norm, then sums the clipped outputs.
 
-    The returned pytree is wrapped as :class:`ClippedPytree` (single-stream)
-    or :class:`SecondMomentClippingOutput` (paired-stream when
-    ``second_moment=True``), carrying the post-normalization
-    ``max_norm`` for downstream noise calibration.  The bound is part of
-    the contract: consumers (``gaussian_noise``, ``mf_gaussian_noise``) read it
-    directly without the caller threading a separate ``sensitivity``
-    argument.  Unwrap to a raw pytree via ``.pytree`` if you need the
-    summed values without metadata.
+    The returned pytree is wrapped as :class:`ClippedPytree`, carrying the
+    post-normalization ``max_norm`` for downstream noise calibration. The bound
+    is part of the contract: consumers read it directly without the caller
+    threading a separate ``sensitivity`` argument. Unwrap to a raw pytree via
+    ``.pytree`` if you need the summed values without metadata.
 
     Example Usage:
         >>> from opaque.api.engine.clipping._clipped_fun import clipped_fun
@@ -573,15 +529,6 @@ def clipped_fun(
         return_stats: If True, return :class:`ClippingStats` with aggregate
             clipping counts, rates, and batch size. Cannot be combined with
             ``return_aux``.
-        second_moment: If True, also accumulate the element-wise sum of
-            per-example squared clipped values, i.e. ``Σᵢ gᵢ²``.  The
-            squaring happens inside the per-example loop so the
-            second-stream sensitivity is the per-record squared bound
-            ``C²`` (averaged: ``C² / normalize_by``).  The wrapped
-            output becomes :class:`SecondMomentClippingOutput` with both
-            streams.  Per-group ``clipping_norm`` is supported and yields
-            ``SecondMomentClippingOutput`` with per-group ``max_norm``
-            on both streams.
         microbatch_size: If set, the batch is split up into microbatches of this
             size for memory-efficient processing. Processes each microbatch separately
             and accumulates results without materializing the full batch of gradients.
@@ -599,18 +546,10 @@ def clipped_fun(
             microbatched and non-microbatched runs agree to float32 precision.
     Returns:
         A tuple ``(clip_fn, FixedClipState)`` where ``clip_fn(*args, state=...)``
-        clips the output of ``fun`` and sums across the batch.  The exact
-        return shape depends on ``second_moment`` and ``return_aux``:
-
-        | ``second_moment`` | ``return_aux`` | ``clip_fn`` returns                                |
-        | :---------------- | :------------- | :------------------------------------------------- |
-        | False             | False          | ``(ClippedPytree, state)``                         |
-        | False             | True           | ``((ClippedPytree, ClippedFunAux), state)``        |
-        | True              | False          | ``(SecondMomentClippingOutput, state)``            |
-        | True              | True           | ``((SecondMomentClippingOutput, ClippedFunAux), state)`` |
-
-        With ``return_stats=True`` and ``return_aux=False``, the clipped value
-        is paired with :class:`ClippingStats`.
+        clips the output of ``fun`` and sums across the batch. With
+        ``return_aux=True``, the clipped value is paired with
+        :class:`ClippedFunAux`; with ``return_stats=True``, it is paired with
+        :class:`ClippingStats`.
     """
     if return_aux and return_stats:
         raise ConfigurationError(
@@ -631,9 +570,6 @@ def clipped_fun(
 
     _validate_clipping_norm(clipping_norm)
     output_max_norm = clipping_norm / normalize_by
-    output_squared_max_norm = (
-        (clipping_norm * clipping_norm) / normalize_by if second_moment else None
-    )
     clip_state = FixedClipState()
 
     def clipped_fn(*args, **kwargs):
@@ -657,24 +593,15 @@ def clipped_fun(
         def per_example_fn(*args_single):
             value, aux = fun_with_aux(*args_single, **kwargs)
             clipped_value, norm = scale_fn(value)
-            squared_value = (
-                tree_map(
-                    lambda x: x.square() if isinstance(x, torch.Tensor) else x,
-                    clipped_value,
-                )
-                if second_moment
-                else None
-            )
             if return_aux or return_stats:
                 # Build aux dict with clipping metadata
                 # IMPORTANT: Detach all tensors to prevent memory leaks from retaining
                 # computational graphs. These are monitoring values, not used for gradients.
-                aux_dict = {
-                    "norms": norm.norm.detach(),
-                    "clipped_norms": global_norm(
+                aux_dict = {"norms": norm.norm.detach()}
+                if return_aux:
+                    aux_dict["clipped_norms"] = global_norm(
                         clipped_value, compute_dtype=compute_dtype
-                    ).detach(),
-                }
+                    ).detach()
                 # Per-group norms (dict of scalar tensors → dict of 1D tensors after vmap)
                 if norm.group_norms is not None:
                     aux_dict["group_norms"] = {
@@ -711,28 +638,15 @@ def clipped_fun(
                     if has_aux:
                         aux_dict["value_aux"] = aux
 
-                if return_stats:
-                    if second_moment:
-                        return clipped_value, squared_value, aux_dict
-                    return clipped_value, aux_dict
-
-                if second_moment:
-                    return clipped_value, squared_value, aux_dict
                 return clipped_value, aux_dict
-            if second_moment:
-                return clipped_value, squared_value
             return clipped_value
 
         # Choose execution path based on microbatch_size
         stats = None
         if microbatch_size is None:
-            # Fast path: vmap entire batch at once.  Output shape depends
-            # on the (second_moment, return_aux) flags — see the per_example_fn
-            # branches above.  When n_outputs == 1, vmap returns the single
-            # pytree (which may itself be a tuple of tensors for tuple
-            # params); when n_outputs > 1 the per_example_fn returns a
-            # tuple of n_outputs pytrees.
-            n_outputs = 1 + int(bool(second_moment)) + int(return_aux or return_stats)
+            # When diagnostics are disabled, vmap returns the output pytree
+            # directly; otherwise it returns ``(clipped_values, aux)``.
+            n_outputs = 1 + int(return_aux or return_stats)
             out_dims = 0 if n_outputs == 1 else (0,) * n_outputs
             vmapped = _vmap(
                 per_example_fn,
@@ -743,16 +657,9 @@ def clipped_fun(
             outputs = vmapped(*args)
             if n_outputs == 1:
                 clipped_values = outputs
-                squared_values = None
                 aux = ()
             else:
-                idx = 0
-                clipped_values = outputs[idx]
-                idx += 1
-                squared_values = outputs[idx] if second_moment else None
-                if second_moment:
-                    idx += 1
-                aux = outputs[idx] if (return_aux or return_stats) else ()
+                clipped_values, aux = outputs
 
             # Sum clipped values across batch dimension
             result = tree_map(
@@ -761,18 +668,8 @@ def clipped_fun(
                 ),
                 clipped_values,
             )
-            squared_result = (
-                tree_map(
-                    lambda x: _sum_clipped_tensor(
-                        x, dim=0, output_dtype=dtype, compute_dtype=compute_dtype
-                    ),
-                    squared_values,
-                )
-                if second_moment
-                else None
-            )
         elif return_stats:
-            result, squared_result, stats = _microbatch_accumulate_stats_only(
+            result, stats = _microbatch_accumulate_stats_only(
                 per_example_fn=per_example_fn,
                 args=args,
                 batch_argnums=batch_argnums,
@@ -781,12 +678,11 @@ def clipped_fun(
                 dtype=dtype,
                 compute_dtype=compute_dtype,
                 clipping_norm=clipping_norm,
-                second_moment=second_moment,
             )
             aux = ()
         else:
             # Manual microbatch accumulation: process in chunks, accumulate as we go
-            result, squared_result, aux = _microbatch_accumulate(
+            result, aux = _microbatch_accumulate(
                 per_example_fn=per_example_fn,
                 args=args,
                 batch_argnums=batch_argnums,
@@ -795,24 +691,12 @@ def clipped_fun(
                 return_aux=return_aux,
                 dtype=dtype,
                 compute_dtype=compute_dtype,
-                second_moment=second_moment,
             )
 
         # Normalize
         if normalize_by != 1.0:
             result = tree_map(lambda x: x / normalize_by, result)
-            if second_moment:
-                squared_result = tree_map(lambda x: x / normalize_by, squared_result)
-
-        if second_moment:
-            output = SecondMomentClippingOutput(
-                grads=ClippedPytree(pytree=result, max_norm=output_max_norm),
-                squared_grads=ClippedPytree(
-                    pytree=squared_result, max_norm=output_squared_max_norm
-                ),
-            )
-        else:
-            output = clipped(result, max_norm=output_max_norm)
+        output = clipped(result, max_norm=output_max_norm)
 
         if not return_aux and not return_stats:
             return output

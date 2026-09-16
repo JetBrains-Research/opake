@@ -40,12 +40,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch.autograd.profiler import record_function
 
-from opaque.api.engine.noise_allocation import (
-    PAIRED_FIRST_STREAM_FOLD,
-    PAIRED_SECOND_STREAM_FOLD,
-    per_group_noise_stddev,
-    resolve_paired_clipped,
-)
+from opaque.api.engine.noise_allocation import per_group_noise_stddev
 from opaque.exceptions import ConfigurationError, InputTypeError
 from opaque.pytree import tree_map
 from opaque.random import fold_in as rng_fold_in
@@ -56,8 +51,6 @@ from opaque.types import (
     NoisedPytree,
     NoiseState,
     PerGroup,
-    SecondMomentClippingOutput,
-    SecondMomentNoiseOutput,
 )
 
 if TYPE_CHECKING:
@@ -331,69 +324,12 @@ def gaussian_noise(
         _validate_noise_stddev(effective)
         return effective
 
-    def _add_paired(
-        clipped_input: SecondMomentClippingOutput, st: GaussianNoiseState
-    ) -> tuple[SecondMomentNoiseOutput, GaussianNoiseState]:
-        first_clipped, second_clipped, first_stddev, second_stddev = (
-            resolve_paired_clipped(
-                clipped_input,
-                noise_multiplier=resolved_noise_multiplier,
-            )
-        )
-        # Two independent noise streams, both beneath this mechanism's root
-        # so they cannot collide with each other or with the single-stream
-        # derivation (``fold_in(_rng_key, GAUSSIAN_STREAM_FOLD, step)``).
-        first_step_key = rng_fold_in(
-            st._rng_key,
-            GAUSSIAN_STREAM_FOLD,
-            PAIRED_FIRST_STREAM_FOLD,
-            st._step_counter,
-        )
-        second_step_key = rng_fold_in(
-            st._rng_key,
-            GAUSSIAN_STREAM_FOLD,
-            PAIRED_SECOND_STREAM_FOLD,
-            st._step_counter,
-        )
-        noisy_grads = _add_noise_tree(
-            first_clipped.pytree,
-            first_stddev,
-            generator_from_key(first_step_key),
-        )
-        noisy_squared = _add_noise_tree(
-            second_clipped.pytree,
-            second_stddev,
-            generator_from_key(second_step_key),
-        )
-        next_state = GaussianNoiseState(
-            _step_counter=st._step_counter + 1,
-            _rng_key=st._rng_key,
-        )
-        return (
-            SecondMomentNoiseOutput(
-                NoisedPytree(
-                    pytree=noisy_grads,
-                    max_norm=first_clipped.max_norm,
-                    noise_stddev=first_stddev,
-                ),
-                NoisedPytree(
-                    pytree=noisy_squared,
-                    max_norm=second_clipped.max_norm,
-                    noise_stddev=second_stddev,
-                ),
-            ),
-            next_state,
-        )
-
     def noise_fn(grads, st):
-        """Add Gaussian noise to a clipped pytree (or paired stream)."""
+        """Add Gaussian noise to a clipped pytree."""
         with record_function("opaque::gaussian_noise"):
             return _noise_fn_impl(grads, st)
 
     def _noise_fn_impl(grads, st):
-        if isinstance(grads, SecondMomentClippingOutput):
-            return _add_paired(grads, st)
-
         next_state = GaussianNoiseState(
             _step_counter=st._step_counter + 1,
             _rng_key=st._rng_key,

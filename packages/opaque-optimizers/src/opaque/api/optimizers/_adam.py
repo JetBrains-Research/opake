@@ -23,9 +23,10 @@ behaviors selected at factory time and by the update value type:
     corrected by a β₂-EMA of the noise variance.  Chooi et al.,
     "DP-AdamW", arXiv:2511.07843.
 
-4. **Private second-moment stream** — pass ``SecondMomentNoiseOutput``
-    to ``update()`` to bypass squaring the noised gradient and use a
-    privately-estimated ``g²`` instead.  Kalinin, Upadhyay, Lampert,
+4. **Projected JME second moment** — pass ``SecondMomentNoiseOutput``
+    from :func:`opaque.dpsgd.noise.jme_noise` to bypass squaring the noised
+    gradient and use the separately noised clean aggregate square. Kalinin,
+    Upadhyay, Lampert,
     "Continual Release Moment Estimation with Differential Privacy",
     arXiv:2502.06597.
 
@@ -46,7 +47,7 @@ The optimizer follows torchopt's ``GradientTransformation`` protocol::
     # DP-AdamW-BC (σ travels with the noised gradients):
     updates, state = opt.update(noisy_grads, state, params=p)
 
-    # DP-AdamW with a private second-moment stream:
+    # DP-AdamW with projected JME moments:
     updates, state = opt.update(second_moment_output, state, params=p)
 """
 
@@ -126,7 +127,7 @@ def _scale_by_adam(
     noise_bias_correction: bool,
     bc_floor: float,
 ) -> GradientTransformation:
-    """Adam moment scaling with optional DP bias correction or private second moments.
+    """Adam moment scaling with optional DP bias correction or JME moments.
 
     This is an **internal** moment primitive: :func:`make_optimizer_chain` calls
     ``update()`` and injects DP routing only from ``NoisedPytree`` /
@@ -135,7 +136,7 @@ def _scale_by_adam(
 
     Branches (selected by injected ``noise_stddev`` / ``noisy_squared_grads``):
 
-    - Injected privatised second moment: v-update consumes that stream;
+    - Injected JME aggregate square: v-update consumes that stream;
       no φ-EMA (post-processed stream).  Injected ``noise_stddev`` ignored.
     - Injected non-zero ``noise_stddev``: square the (possibly noised) gradient
       and apply BC::
@@ -176,8 +177,8 @@ def _scale_by_adam(
 
         # ---- v-update ----------------------------------------------------
         if noisy_squared_grads is not None:
-            # External second-moment branch: g² stream replaces (g·g).  No φ-EMA
-            # correction (post-processing already gave us an unbiased v).
+            # The separately noised clean aggregate square replaces (g·g).
+            # No φ-EMA correction is applied to this JME branch.
             new_nu = tree_map(
                 lambda v, g2: b2 * v + (1 - b2) * g2,
                 state.nu,
@@ -327,8 +328,8 @@ def adamw(
             ``NoisedPytree`` updates are passed (DP-AdamW-BC, Chooi et al.).
             Defaults to ``False``; see ``docs/user-guide/optimizers.md``
             for when to flip it on.  Has no effect on steps where the
-            update is a ``SecondMomentNoiseOutput``, since the privatised
-            ``g²`` stream is an alternative answer to the same v-update
+            update is a ``SecondMomentNoiseOutput``, since the JME
+            aggregate-square stream is an alternative answer to the same v-update
             bias.
 
     Returns:
@@ -337,12 +338,13 @@ def adamw(
     DP usage notes:
 
         - Call ``update(updates, state, ...)`` with ``updates`` as ``NoisedPytree``
-          (first-moment noise metadata) or ``SecondMomentNoiseOutput`` (paired
-          streams). Do not pass ``noise_stddev=`` / ``noisy_squared_grads=`` —
+          (first-moment noise metadata) or ``SecondMomentNoiseOutput`` (projected
+          JME streams). Do not pass ``noise_stddev=`` / ``noisy_squared_grads=`` —
           those are internal to the composer chain only.
         - ``NoisedPytree``: realized σ feeds bias correction when enabled.
-        - ``SecondMomentNoiseOutput``: privatised ``g²`` stream substitutes the
-          usual v-update; mutually exclusive per step with the BC-from-σ path.
+        - ``SecondMomentNoiseOutput``: the separately noised clean aggregate
+          square substitutes the usual v-update; mutually exclusive per step
+          with the BC-from-σ path.
     """
     _validate(eps, betas, weight_decay, update_rms_clip)
     bc_floor = eps * eps  # see module docstring on the rationale.

@@ -6,10 +6,20 @@ Correlated-noise mechanisms are analyzed for a **specific linear map** (the stra
 matrix) and optional subsampling model. **DP correctness** requires that accounting,
 noise, and sampling match that map. **Utility** can depend on how closely the
 encoded workload matches your optimizer (for example, BandMF/BLT apply
-`lr_schedule` on the training-step axis). Private second moments add a second MF
-stream; pass its strategy explicitly.
+`lr_schedule` on the training-step axis). Projected JME is not supported for MF
+noise because one protected record can affect multiple strategy rows.
 
 See [Matrix factorization (MF)](user-guide/dp-ftrl.md).
+
+## Projected JME
+
+Projected JME changes the optimizer statistic whenever the normalized aggregate
+exceeds its public projection radius. Its exact accounting currently covers
+scalar clipping, standard Gaussian noise, and plain independent Poisson
+sampling. Per-group clipping, bounded Gaussian output, truncated or parallel
+Poisson, horizon allocation, and DP-FTRL/MF require separate derivations.
+
+See [Projected JME](mechanisms/dp-sgd/jme.md).
 
 ## Randomness and the threat model
 

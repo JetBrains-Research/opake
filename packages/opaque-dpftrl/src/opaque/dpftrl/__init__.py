@@ -17,9 +17,8 @@ private ``noisy_squared_grads`` streams) live in :mod:`opaque.optimizers`.
 
 Strategy and noise-state dataclasses (``BandMfStrategy``, ``BltStrategy``,
 ``BisrStrategy``, ``BsrStrategy``, ``IdentityStrategy``,
-``LambdaCgdStrategy``, ``MfStrategy``, ``MFNoiseState``,
-``SecondMomentMFNoiseState``) live in :mod:`opaque.dpftrl.noise.types`.
-The cross-cutting ``SecondMomentNoiseOutput`` lives in :mod:`opaque.types`.
+``LambdaCgdStrategy``, ``MfStrategy``, ``MFNoiseState``) live in
+:mod:`opaque.dpftrl.noise.types`.
 
 The :mod:`opaque.dpftrl.accounting` subpackage (DP-FTRL-specific privacy
 accounting factories, requires ``opaque-accounting``) is **lazy-imported**:

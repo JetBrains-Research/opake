@@ -9,6 +9,8 @@ the accountant.
 
 - **[Gaussian](gaussian.md)** — independent Gaussian noise on the
   clipped gradient; the canonical DP-SGD release.
+- **[Projected JME](jme.md)** — jointly noise a bounded normalized aggregate
+  and its clean element-wise square for Adam-family optimizers.
 
 ## Pairing with sampling
 

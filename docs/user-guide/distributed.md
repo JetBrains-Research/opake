@@ -298,7 +298,7 @@ following types are registered:
 | `ClippedFunAux`, `ClippedGradAux`, `AdaptiveClippedGradAux` | Gather aux tensors across ranks |
 | `GaussianNoiseState` | Assert seed and step counter match across ranks |
 | `MFNoiseState` | Assert seed and step counter match for MF noise |
-| `SecondMomentMFNoiseState` | Validate both paired MF streams, in a fixed order |
+| `JmeNoiseState` | Validate both DP-SGD JME streams, radius, allocation, and step |
 | `PerfState` | Aggregate step times (max), sample counts (sum), and peak memory (max) across ranks |
 
 The bounded Gaussian path (`gaussian_noise(..., bound=...)`) also returns

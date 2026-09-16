@@ -26,8 +26,8 @@ Adam's, so:
 
 - ``NoisedPytree`` carries realized per-step σ and drives the φ-EMA bias
     correction on ``v̂`` exactly as in :func:`opaque.optimizers._adamw`.
-- ``SecondMomentNoiseOutput`` substitutes a private squared-gradient
-    moment by post-processing.
+- ``SecondMomentNoiseOutput`` substitutes the separately noised JME
+  aggregate square by post-processing.
 - The two first-moment EMAs are unaffected — they remain unbiased
   estimates of E[g] regardless of the noise injected into g.
 """

@@ -179,7 +179,6 @@ cover this variant.
 ```python
 from opaque.dpsgd.noise import gaussian_noise
 from opaque.random import key
-import opaque.accounting as acc
 
 # Noise injection: bounded support, symmetric absolute bound
 noise_fn, noise_state = gaussian_noise(
@@ -191,11 +190,6 @@ noisy_grads, noise_state = noise_fn(grads, noise_state)
 noise_fn, noise_state = gaussian_noise(
     noise_multiplier=noise_multiplier, bound=(-1.0, 4.0), key=key(42),
 )
-
-# Accounting (unchanged from the unbounded mechanism)
-step = dpsgd_acc.poisson(dpsgd_acc.gaussian(noise_multiplier), sample_rate=0.01)
-training = step * 1000
-eps = training.epsilon_at(delta=1e-5)
 ```
 
 ## References
@@ -206,3 +200,6 @@ eps = training.epsilon_at(delta=1e-5)
   Poisson subsampling amplification analysis.
 - **Chen and Hale (2024)** — [The Bounded Gaussian Mechanism for Differential Privacy](https://arxiv.org/abs/2211.17230).
   Introduces the bounded Gaussian mechanism.
+
+For a jointly noised clean aggregate square, see
+[Projected JME](jme.md).

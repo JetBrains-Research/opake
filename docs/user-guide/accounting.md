@@ -19,7 +19,11 @@ factories live next to its runtime:
 | `opaque.dpsgd.accounting` | DP-SGD factories — `gaussian`, `adaclip`, `poisson` (plain or truncated via `truncated_batch_size` / `dataset_size`), `parallel_poisson`, `k_out_of_t`. | `opaque-dpsgd` |
 | `opaque.dpftrl.accounting` | DP-FTRL factories — `band_mf`, `blt`, `bisr`, `bsr`, `lambda_cgd`, `identity_mf`, `poisson` (cyclic when `bands > 1`, plain when `bands == 1`, parameterized by `n_steps`), `b_min_sep`, `balls_in_bins`. | `opaque-dpftrl` |
 
-Private second moments do **not** use a separate accounting wrapper: the joint gradient + squared-gradient release is handled in the runtime σ split (sensitivity-proportional Mahalanobis allocation), so calibration stays on the same underlying mechanism PLD as first-moment-only training. See [Noise API](../reference/noise.md#paired-second-moment-release).
+Projected JME uses no separate accounting wrapper: its two runtime scales
+whiten the complete nonlinear query to sensitivity one. Plain independent
+Poisson sampling is conservatively dominated by
+`poisson(gaussian(noise_multiplier), sample_rate)`. See
+[Projected JME](../mechanisms/dp-sgd/jme.md).
 
 Both algorithm-specific namespaces re-export from the shared `opaque-accounting`
 implementation; the split is purely organisational. The `Accountant` interactive

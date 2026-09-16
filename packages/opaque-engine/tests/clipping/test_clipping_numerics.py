@@ -366,31 +366,3 @@ def test_microbatch_output_dtype_is_preserved(dtype, output_dtype):
 
     result = _run(4, batch, params, dtype=output_dtype)
     assert result.dtype == (dtype if output_dtype is None else output_dtype)
-
-
-@pytest.mark.parametrize("dtype", LOW_PRECISION_DTYPES)
-def test_second_moment_microbatching_matches_full_batch(dtype):
-    """The squared-gradient stream uses a second accumulator; cover it too."""
-    generator = torch.Generator().manual_seed(7)
-    params = torch.randn(8, generator=generator).to(dtype)
-    batch = torch.randn(24, 8, generator=generator).to(dtype)
-    grad_fn = grad(_loss_fn, argnums=0)
-
-    def build(microbatch_size):
-        clipped_fn, state = clipped_fun(
-            lambda p, x: grad_fn(p, x),
-            batch_argnums=1,
-            clipping_norm=1.0,
-            second_moment=True,
-            microbatch_size=microbatch_size,
-        )
-        out, _ = clipped_fn(params, batch, state=state)
-        return out.grads.pytree.double(), out.squared_grads.pytree.double()
-
-    full_grads, full_squared = build(None)
-    micro_grads, micro_squared = build(6)
-
-    tol = 1e-2 * torch.finfo(dtype).eps
-    for micro, full in ((micro_grads, full_grads), (micro_squared, full_squared)):
-        denom = torch.linalg.vector_norm(full).clamp(min=1e-12)
-        assert (torch.linalg.vector_norm(micro - full) / denom).item() < tol

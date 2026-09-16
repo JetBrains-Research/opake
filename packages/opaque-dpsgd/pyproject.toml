@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "opaque-dpsgd"
 dynamic = ["version"]
-description = "Opaque DP-SGD: Gaussian noise (optionally bounded), per-group calibration, AdamW-BC"
+description = "Opaque DP-SGD: Gaussian noise, projected JME, per-group calibration, AdamW-BC"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Opaque Contributors" }]

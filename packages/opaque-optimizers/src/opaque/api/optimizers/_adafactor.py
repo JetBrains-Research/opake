@@ -31,9 +31,9 @@ falls back to the uncorrected factor elsewhere (see
 ``_bias_correction.py``).  ``noise_bias_correction=True`` activates
 this path; it defaults to ``False``.
 
-The private second-moment substitution path (``noisy_squared_grads``)
-is **not** offered for Adafactor.  Substituting a privately-estimated
-``g²`` stream for ``(g+ξ)²`` does not preserve the rank-1 ``r ⊗ c``
+The JME substitution path (``noisy_squared_grads``) is **not** offered for
+Adafactor. Substituting a separately noised aggregate-square stream for
+``(g+ξ)²`` does not preserve the rank-1 ``r ⊗ c``
 factorisation in any obvious way; deriving a sound factored variant
 is left as future work.
 
@@ -341,9 +341,9 @@ def adafactor(
             ``v_col``, or scalar ``v``) when ``NoisedPytree`` updates
             are passed.  Defaults to ``False``; Adafactor's relative-step
             per-tensor normalization already plays BC's role for this
-            optimizer.  No effect when ``SecondMomentNoiseOutput`` is
-            passed — Adafactor does not consume the privatised ``g²``
-            stream (deriving a sound factored variant is future work).
+            optimizer. No effect when ``SecondMomentNoiseOutput`` is passed —
+            Adafactor does not consume the JME aggregate-square stream
+            (deriving a sound factored variant is future work).
 
     Returns:
         A ``torchopt.base.GradientTransformation``.

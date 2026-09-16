@@ -325,36 +325,29 @@ fraction query. Returns an `AdaClip` process composable with `poisson()`
 step = dpsgd_acc.poisson(dpsgd_acc.adaclip(dpsgd_acc.gaussian(0.5), fraction_noise_std=0.05, expected_batch_size=256), 0.01)
 ```
 
-### Private second-moment release
+### Projected JME
 
-When the noise mechanism produces both gradients **and** squared gradients
-(via `clipped_grad(..., second_moment=True)`), the joint paired release uses
-sensitivity-proportional Mahalanobis allocation in the runtime σ split (see
-the [paired second-moment release](noise.md#paired-second-moment-release)
-section). The Mahalanobis
-budget collapses to a single sensitivity-1 Gaussian release at the same
-noise multiplier, so **privacy accounting is exactly the underlying
-first-moment mechanism**:
+`opaque.dpsgd.noise.jme_noise` projects the normalized aggregate, forms its
+clean element-wise square, and calibrates both Gaussian streams from their exact
+constrained joint sensitivity. After whitening, the mechanism is dominated by
+a sensitivity-one Gaussian release at the same noise multiplier.
 
 ```python
-import opaque.accounting as acc
-
-# DP-SGD: same chain as first-moment-only
-step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.8), sample_rate=batch_size / dataset_size)
-training = step * num_steps
-
-# DP-FTRL with BandMF: same chain as first-moment-only
-proc = dpftrl_acc.poisson(
-    dpftrl_acc.mf_gaussian(1.0, strategy),
+step = dpsgd_acc.poisson(
+    dpsgd_acc.gaussian(0.8),
     sample_rate=batch_size / dataset_size,
-    n_steps=num_steps,
 )
+training = step * num_steps
 ```
 
-There is no separate `second_moment` transformation to wrap and no `ρ` knob:
-the runtime σ on each stream already absorbs the joint cost. Use the
-underlying mechanism factories (`dpsgd_acc.gaussian`, `dpftrl_acc.band_mf`,
-…) directly.
+There is no separate accounting transformation: the runtime scales already
+whiten the full query. This is a conservative dominating-PLD statement, not a
+claim that every nonlinear JME query has the identical actual PLD.
+
+The documented result is for plain independent Poisson sampling. Truncated,
+parallel/replicated, horizon-allocation, and DP-FTRL/MF variants require
+separate multi-contribution derivations. See
+[Projected JME](../mechanisms/dp-sgd/jme.md).
 
 ### `eps_delta(epsilon, delta=0.0) -> DpProcess`
 

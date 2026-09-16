@@ -4,8 +4,8 @@ Single canonical home for the data types that connect clipping →
 noise → optimizer:
 
 - **Pytree wrappers**: ``ClippedPytree`` (post-clipping), ``NoisedPytree``
-  (post-noise), and the paired-stream outputs
-  ``SecondMomentClippingOutput`` / ``SecondMomentNoiseOutput``.
+  (post-noise), and ``SecondMomentNoiseOutput`` for a private aggregate-square
+  optimizer handoff.
 - **Per-group container**: ``PerGroup`` — a dict-like that flows through
   the entire pipeline carrying per-parameter-group scalar values.
 - **Abstract state bases**: ``ClipState`` and ``NoiseState`` — markers
@@ -127,9 +127,7 @@ class PerGroup:
 
         Element-wise multiplication requires the same ``groups`` mapping
         and the same set of group names; the result has each group's
-        value multiplied with its peer.  This is what makes
-        ``clipping_norm * clipping_norm`` produce per-group squared
-        sensitivities for the paired second-moment release.
+        value multiplied with its peer.
         """
         if isinstance(other, PerGroup):
             if other.groups != self.groups:
@@ -414,43 +412,18 @@ class NoisedPytree(ClippedPytree):
 
 
 # ===========================================================================
-# Paired-stream outputs (private second moment)
+# Private aggregate-square optimizer handoff
 # ===========================================================================
 
 
-class SecondMomentClippingOutput(NamedTuple):
-    """Pre-noise paired-stream input to a noise mechanism.
-
-    Symmetric with :class:`SecondMomentNoiseOutput` but on the
-    *pre-noise* side: where the output pairs two ``NoisedPytree``s
-    (post-noise), this pairs two ``ClippedPytree``s (pre-noise).
-    Each carries its own ``max_norm``.
-
-    Constructed by clipping when the user requests paired-stream
-    output (per-example squaring inside the vmap loop).  The presence
-    of this type at a noise mechanism's input switches the mechanism
-    into paired-stream mode without an explicit constructor flag.
-
-    Attributes:
-        grads: Clipped per-example summed gradients (``Σᵢ gᵢ``).
-        squared_grads: Clipped per-example summed squared gradients
-            (``Σᵢ gᵢ²``).  The squaring happens per-example inside the
-            clipping loop so the second-stream sensitivity is ``C²``
-            (per record) and the streams are jointly DP-accountable.
-    """
-
-    grads: ClippedPytree
-    squared_grads: ClippedPytree
-
-
 class SecondMomentNoiseOutput(NamedTuple):
-    """Noise output with private first and second moment streams.
+    """JME output with private first and aggregate-square streams.
 
     Attributes:
-        noisy_grads: Noised clipped gradients for the optimizer's first
-            moment / update direction.
-        noisy_squared_grads: Noised element-wise squared clipped gradients
-            for optimizers with a second moment accumulator.
+        noisy_grads: Noised projected aggregate for the optimizer's first
+            moment and update direction.
+        noisy_squared_grads: Separately noised element-wise square of the
+            clean projected aggregate for the optimizer's second moment.
     """
 
     noisy_grads: NoisedPytree
@@ -486,7 +459,6 @@ __all__ = [
     "NoisedPytree",
     "ParamPath",
     "PerGroup",
-    "SecondMomentClippingOutput",
     "SecondMomentNoiseOutput",
     "TensorPytree",
     "clipped",

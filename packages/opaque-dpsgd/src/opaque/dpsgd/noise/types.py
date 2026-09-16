@@ -5,6 +5,11 @@ from opaque.api.dpsgd.noise.types import (
     GaussianNoiseInput,
     GaussianNoiseOutput,
     GaussianNoiseState,
+    JmeAllocation,
+    JmeNoiseFn,
+    JmeNoiseInput,
+    JmeNoiseOutput,
+    JmeNoiseState,
 )
 
 __all__ = [
@@ -12,4 +17,9 @@ __all__ = [
     "GaussianNoiseInput",
     "GaussianNoiseOutput",
     "GaussianNoiseState",
+    "JmeAllocation",
+    "JmeNoiseFn",
+    "JmeNoiseInput",
+    "JmeNoiseOutput",
+    "JmeNoiseState",
 ]

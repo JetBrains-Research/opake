@@ -5,34 +5,28 @@ from opaque.api.auditing._coin_flip import (
     _COIN_FLIP_DOMAIN,
 )
 from opaque.api.dpftrl.noise._engine import MF_GAUSSIAN_STREAM_FOLD
-from opaque.api.dpftrl.noise._second_moment import (
-    SECOND_MOMENT_FIRST_STREAM_FOLD,
-    SECOND_MOMENT_SECOND_STREAM_FOLD,
-)
 from opaque.api.dpftrl.sampling._b_min_sep import B_MIN_SEP_STREAM_FOLD
 from opaque.api.dpftrl.sampling._balls_in_bins import BALLS_IN_BINS_STREAM_FOLD
 from opaque.api.dpftrl.sampling._poisson import CYCLIC_POISSON_STREAM_FOLD
 from opaque.api.dpsgd.clipping._adaptive import ADAPTIVE_CLIPPING_STREAM_FOLD
 from opaque.api.dpsgd.noise._gaussian import GAUSSIAN_STREAM_FOLD
+from opaque.api.dpsgd.noise._jme import (
+    JME_FIRST_STREAM_FOLD,
+    JME_SECOND_STREAM_FOLD,
+)
 from opaque.api.dpsgd.sampling._k_out_of_t import K_OUT_OF_T_STREAM_FOLD
 from opaque.api.dpsgd.sampling._poisson import POISSON_STREAM_FOLD
-from opaque.api.engine.noise_allocation import (
-    PAIRED_FIRST_STREAM_FOLD,
-    PAIRED_SECOND_STREAM_FOLD,
-)
 from opaque.api.transformers._rng import IGNORE_DATA_SKIP_STREAM_FOLD
 from opaque.random import fold_in, key, split
 
 _STREAM_ROOTS = (
-    ("opaque.paired.first", PAIRED_FIRST_STREAM_FOLD),
-    ("opaque.paired.second", PAIRED_SECOND_STREAM_FOLD),
-    ("opaque.dpftrl.second_moment.first", SECOND_MOMENT_FIRST_STREAM_FOLD),
-    ("opaque.dpftrl.second_moment.second", SECOND_MOMENT_SECOND_STREAM_FOLD),
     ("opaque.dpftrl.mf_gaussian", MF_GAUSSIAN_STREAM_FOLD),
     ("opaque.dpftrl.b_min_sep", B_MIN_SEP_STREAM_FOLD),
     ("opaque.dpftrl.balls_in_bins", BALLS_IN_BINS_STREAM_FOLD),
     ("opaque.dpftrl.cyclic_poisson", CYCLIC_POISSON_STREAM_FOLD),
     ("opaque.dpsgd.gaussian", GAUSSIAN_STREAM_FOLD),
+    ("opaque.dpsgd.jme.first", JME_FIRST_STREAM_FOLD),
+    ("opaque.dpsgd.jme.second", JME_SECOND_STREAM_FOLD),
     ("opaque.dpsgd.adaptive_clipping", ADAPTIVE_CLIPPING_STREAM_FOLD),
     ("opaque.dpsgd.poisson", POISSON_STREAM_FOLD),
     ("opaque.dpsgd.k_out_of_t", K_OUT_OF_T_STREAM_FOLD),

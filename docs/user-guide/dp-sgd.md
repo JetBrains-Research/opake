@@ -93,9 +93,38 @@ noise_fn, noise_state = gaussian_noise(
 ```
 
 For bounded noise support, pass `bound=...` to
-`opaque.dpsgd.noise.gaussian_noise` — same accounting, inverse-CDF
-sampling, and accepts a positive scalar (symmetric `[-B, B]`) or a
-`(low, high)` tuple.
+`opaque.dpsgd.noise.gaussian_noise`. It uses inverse-CDF sampling and accepts a
+positive scalar (symmetric `[-B, B]`) or a `(low, high)` tuple. The standard
+Gaussian accountant does not cover the bounded-output mechanism.
+
+### Projected JME for Adam
+
+To release Adam's clean aggregate square separately instead of squaring the
+noised gradient, use `jme_noise`:
+
+```python
+from opaque.dpsgd.noise import jme_noise
+from opaque.dpsgd.noise.types import JmeAllocation
+
+noise_fn, noise_state = jme_noise(
+    noise_multiplier=noise_multiplier,
+    aggregate_norm=1.0,
+    allocation=JmeAllocation.first_variance_cap(1.5),
+    key=key_noise,
+)
+```
+
+The clipping function remains single-stream. After clipping and any distributed
+sum, `jme_noise` projects the normalized aggregate to `aggregate_norm`, forms
+its clean element-wise square, and noises both values. The resulting
+`SecondMomentNoiseOutput` is routed by supported Opaque optimizers without
+first-stream variance subtraction.
+
+The fixed denominator in `normalize_by` is part of the sensitivity:
+`Delta = clipping_norm / normalize_by`. JME requires scalar clipping, a public
+projection radius and allocation, standard Gaussian noise, and plain independent
+Poisson sampling. See [Projected JME](../mechanisms/dp-sgd/jme.md) for the exact
+add/remove sensitivity and noise scales.
 
 ## 4. Sampling
 
@@ -173,13 +202,13 @@ Restore from the same flat state dict with
 - [Clipping](clipping.md) — fixed, AUTO-S, adaptive variants and
   per-group norms.
 - [Noise](noise.md) — Gaussian (optionally bounded), when to choose
-  which.
+  which, plus projected JME.
 - [Sampling](sampling.md) — Poisson sampler details and the
   truncated-Poisson trade-off.
 - [Accounting](accounting.md) — `DpProcess`, calibration, budgets.
 - [Optimizers](optimizers.md) — DP bias correction and the
   second-moment story.
-- [DP-SGD mechanisms](../mechanisms/dp-sgd/index.md) — Gaussian
-  reference page.
+- [DP-SGD mechanisms](../mechanisms/dp-sgd/index.md) — Gaussian and JME
+  reference pages.
 - [DP-FTRL end-to-end](dp-ftrl.md) — the correlated-noise companion
   pipeline.

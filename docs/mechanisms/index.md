@@ -20,10 +20,11 @@ gradient sum. Simple and broadly applicable.
 | Mechanism | Noise distribution | Support |
 |-----------|--------------------|----------|
 | [Gaussian](dp-sgd/gaussian.md) | $\mathcal{N}(0, \sigma^2)$ | $(-\infty, +\infty)$ |
+| [Projected JME](dp-sgd/jme.md) | Two jointly calibrated Gaussians | $(-\infty, +\infty)$ |
 
 For bounded noise support, pass `bound=B` (or `bound=(low, high)`) to
-`gaussian_noise()` while accounting with `opaque.dpsgd.accounting.gaussian()`.
-See [Gaussian — Bounded noise variant](dp-sgd/gaussian.md#bounded-noise-variant).
+`gaussian_noise()`. The standard Gaussian accountant does not cover this
+experimental bounded-output variant.
 
 ## Correlated noise (DP-FTRL)
 
@@ -33,8 +34,8 @@ the training run. This reduces effective noise on cumulative updates,
 improving accuracy for the same privacy budget — at the cost of
 knowing the total number of steps in advance.
 
-For assumptions (workload vs DP correctness, LR schedules, private
-second-moment caveats), see the [DP-FTRL user guide](../user-guide/dp-ftrl.md).
+For assumptions (workload vs DP correctness and LR schedules), see the
+[DP-FTRL user guide](../user-guide/dp-ftrl.md).
 
 | Mechanism | Strategy | Memory | Best for |
 |-----------|----------|--------|----------|
@@ -50,9 +51,9 @@ second-moment caveats), see the [DP-FTRL user guide](../user-guide/dp-ftrl.md).
 ```
 Need correlated noise across steps (DP-FTRL)?
 │
-├─ No ─── Gaussian (standard DP-SGD)
-│         Pass bound=... to gaussian_noise() for bounded support if desired;
-│         accounting always uses opaque.dpsgd.accounting.gaussian().
+├─ No ─── Need a separately noised clean aggregate square?
+│         ├─ Yes → Projected JME (plain Poisson, scalar clipping)
+│         └─ No  → Gaussian (standard DP-SGD)
 │
 └─ Yes ── Constraints?
           ├─ Zero extra memory → DP-λCGD (PRNG replay)
@@ -75,6 +76,7 @@ mechanisms support all amplification types:
 | Mechanism | `dpsgd_acc.poisson` | `dpsgd_acc.poisson` (truncated) | `dpsgd_acc.k_out_of_t` | `dpftrl_acc.poisson` | `dpftrl_acc.balls_in_bins` |
 |-----------|:-:|:-:|:-:|:-:|:-:|
 | Gaussian | Yes | Yes | Yes | — | — |
+| Projected JME | Yes | No | No | — | — |
 | BandMF | — | — | — | Yes | — |
 | Identity MF | — | — | — | Yes | Yes |
 | BLT | — | — | — | — | Yes |

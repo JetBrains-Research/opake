@@ -36,20 +36,20 @@ params = torchopt.apply_updates(params, updates)
 Noise-aware factories accept `noise_bias_correction=True` to subtract the
 known Gaussian variance carried by `NoisedPytree` updates (off by default;
 flip on to ablate against vanilla). Where applicable they also route
-`SecondMomentNoiseOutput` for private squared-gradient substitution —
+`SecondMomentNoiseOutput` for projected JME aggregate-square substitution —
 an alternative answer to the same v-update bias.
 
 | Factory | DP-aware mode | When to use |
 |---|---|---|
 | **`sgd`** | No second moment; accepts `NoisedPytree` and ignores σ metadata | Canonical DP baseline |
-| **`adam`** | Original Adam/L2 variant with the same BC/private-moment paths as AdamW | Adam parity without decoupled WD |
-| **`adamw`** | Optional φ-EMA on v̂ when `noise_bias_correction=True`; private second moments via `SecondMomentNoiseOutput` | Adam-family fine-tuning when first-momentum and decoupled WD matter |
+| **`adam`** | Original Adam/L2 variant with the same BC/JME paths as AdamW | Adam parity without decoupled WD |
+| **`adamw`** | Optional φ-EMA on v̂ when `noise_bias_correction=True`; projected JME via `SecondMomentNoiseOutput` | Adam-family fine-tuning when first-momentum and decoupled WD matter |
 | **`radam`** | φ-EMA on v̂ in the rectified phase (`ρ_t > 5`); SGD-of-momentum in warmup | Long runs where you want RAdam's variance rectification with DP correction |
 | **`adadelta`** | Two-EMA BC: φ_g on `E[g²]` and per-element φ_dx on `E[Δx²]` | LR-free DP optimizer; useful when learning-rate tuning is hard |
-| **`ademamix`** | φ-EMA on v̂ + private second moments | Long-horizon training (slow EMA captures long-range signal) |
+| **`ademamix`** | φ-EMA on v̂ + projected JME | Long-horizon training (slow EMA captures long-range signal) |
 | **`adafactor`** | Factored second moment; optional per-factor φ-EMA when `noise_bias_correction=True` | Recommended default for DP LM fine-tuning (relative step scaling); see [user guide](../user-guide/optimizers.md) |
 | **`lion`** | No second-moment correction | Smaller state than Adam; vanilla works under noise |
-| **`rmsprop`** | φ-EMA on v + private second moments | Adaptive without first moment; cheaper than Adam |
+| **`rmsprop`** | φ-EMA on v + projected JME | Adaptive without first moment; cheaper than Adam |
 | **`adagrad`** | cumulative `Φ_acc` subtraction | Sparse-gradient settings; **the correction is mandatory** — vanilla Adagrad's denominator runs away under DP noise |
 | **`schedule_free`** | post-processing (transparent forward) | Wrapper around any base optimizer; replaces external LR schedules |
 
@@ -107,41 +107,42 @@ updates, state = optimizer.update(noisy_grads, state, params=p)
 
 Raw pytree updates use standard optimizer math.
 
-### `noisy_squared_grads`
+### Projected JME
 
-Substitutes a privately-estimated `g²` stream in place of squaring the
-(already noised) gradient. `mf_gaussian_noise(..., second_moment_strategy=...)` returns
-a paired output that Opaque optimizers route automatically:
+`jme_noise` returns a `SecondMomentNoiseOutput` whose second field is the
+separately noised clean square of the projected aggregate. Supported Opaque
+optimizers route it in place of squaring the already noised gradient:
 
 ```python
-from opaque.dpftrl.noise import blt_strategy, mf_gaussian_noise
+from opaque.dpsgd.noise import jme_noise
+from opaque.dpsgd.noise.types import JmeAllocation
 from opaque.optimizers import adamw
+from opaque.random import key
 
-strategy = blt_strategy(max_buffers=10)
-second_strategy = blt_strategy(max_buffers=10)
-noise_fn, noise_state = mf_gaussian_noise(
-  grad_template,
-  strategy,
-  n_steps=1000,
-  noise_multiplier=noise_multiplier,
-  key=key(42),
-  second_moment_strategy=second_strategy,
+noise_fn, noise_state = jme_noise(
+    noise_multiplier=noise_multiplier,
+    aggregate_norm=1.0,
+    allocation=JmeAllocation.first_variance_cap(1.5),
+    key=key(42),
 )
 
 optimizer = adamw(lr=1e-3, weight_decay=0.01)
 opt_state = optimizer.init(params)
 
-# Per-step:
-noisy_grads, noise_state = noise_fn(grads, noise_state)
+moments, noise_state = noise_fn(grads, noise_state)
 updates, opt_state = optimizer.update(
-  noisy_grads, opt_state, params=p,
+    moments, opt_state, params=p,
 )
 ```
 
 Reference: Kalinin et al., [arXiv:2502.06597](https://arxiv.org/abs/2502.06597).
 
-`NoisedPytree` metadata and private second-moment outputs are mutually exclusive
-at any single `update()` call; passing both routes raises `ValueError`.
+`NoisedPytree` bias-correction metadata and JME aggregate-square substitution
+are mutually exclusive at a single update. The JME branch does not subtract
+first-stream noise variance from its separately noised square.
+For coupled Adam/L2 weight decay, the optimizer adds the deterministic cross
+terms needed to estimate `(g + weight_decay * params)²`; decoupled AdamW leaves
+the JME square unchanged.
 
 ---
 

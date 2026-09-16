@@ -118,7 +118,9 @@ def make_optimizer_chain(
     scaling, so weight decay enters the EMAs.  The decoupled form leaves
     moment scaling on raw gradients and applies weight decay to the
     update post-moment-scaling but pre-LR-scaling — this is the standard
-    AdamW recipe (Loshchilov & Hutter).
+    AdamW recipe (Loshchilov & Hutter). When the L2 form receives JME
+    moments, it also transforms the clean-square estimate with the deterministic
+    cross terms needed for ``(g + wd * params)²``.
 
     ``update_rms_clip`` (StableAdamW): when set, divides the update by
     ``max(1, rms / threshold)`` after moment scaling and before WD/LR, where
@@ -180,6 +182,33 @@ def make_optimizer_chain(
             },
         )
 
+    def _include_l2_decay_in_second_moment(
+        updates: Any,
+        routed: dict[str, Any],
+        params: Any,
+    ) -> dict[str, Any]:
+        squared = routed.get("noisy_squared_grads")
+        if squared is None or weight_decay == 0.0:
+            return routed
+        if params is None:
+            raise InputTypeError(
+                *(
+                    "L2 weight decay with SecondMomentNoiseOutput requires "
+                    "optimizer.update(..., params=params).",
+                )
+            )
+        adjusted = tree_map(
+            lambda g2, g, p: (
+                g2
+                + 2.0 * weight_decay * p * g
+                + (weight_decay * p) * (weight_decay * p)
+            ),
+            squared,
+            updates,
+            params,
+        )
+        return {**routed, "noisy_squared_grads": adjusted}
+
     wd = torchopt.transform.add_decayed_weights(weight_decay=weight_decay)
     neg_lr = scale_by_neg_lr(lr)
     clip = (
@@ -237,6 +266,7 @@ def make_optimizer_chain(
         ) -> tuple[Any, tuple]:
             s_wd, s_mom, s_clip, s_lr = state
             updates, routed = _route_second_moment_output(updates)
+            routed = _include_l2_decay_in_second_moment(updates, routed, params)
             updates, s_wd = wd.update(updates, s_wd, params=params, inplace=inplace)
             updates, s_mom = moment_scaler.update(
                 updates, s_mom, params=params, inplace=inplace, **routed

@@ -25,9 +25,9 @@ other directly yields the unbiased estimate::
     nu_corrected = max(nu_t − φ_t, floor)
     update = g_t / (√nu_corrected + eps)
 
-``SecondMomentNoiseOutput`` substitutes a private squared-gradient ``g²``
-directly into the ``nu`` update (post-processing); no φ-EMA correction is
-applied in that branch.
+``SecondMomentNoiseOutput`` substitutes the separately noised JME aggregate
+square directly into the ``nu`` update (post-processing); no φ-EMA correction
+is applied in that branch.
 """
 
 from __future__ import annotations

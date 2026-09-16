@@ -122,7 +122,8 @@ from opaque.dpsgd.clipping import auto_clipped_grad, clipped_grad
 from opaque.dpsgd.clipping import adaptive_clipped_grad
 from opaque.distributed import sync
 from opaque.distributed.gradients import sum_gradients_
-from opaque.dpsgd.noise import gaussian_noise
+from opaque.dpsgd.noise import gaussian_noise, jme_noise
+from opaque.dpsgd.noise.types import JmeAllocation
 from opaque.profiling import (
     perf_tracker,
     print_memory,
@@ -142,7 +143,6 @@ from opaque.scheduling.types import Schedule
 from opaque.types import (
     ClippedPytree,
     PerGroup,
-    SecondMomentClippingOutput,
     SecondMomentNoiseOutput,
 )
 from opaque.dpsgd.clipping import per_group
@@ -237,9 +237,7 @@ def _noise_stddev(max_norm, noise_multiplier, *, per_group=True):
 
 
 def _step_clip_norm(grads_tuple):
-    """``.max_norm`` from a clipped pytree, unwrapping the paired SM output."""
-    if isinstance(grads_tuple, SecondMomentClippingOutput):
-        return grads_tuple.grads.max_norm
+    """Return the current scalar or per-group clipping sensitivity."""
     return grads_tuple.max_norm
 
 
@@ -250,15 +248,17 @@ def _step_noise_stddev(noisy_grads):
     return noisy_grads.noise_stddev
 
 
-def _log_private_second_moment() -> None:
-    """Log paired-stream second-moment release.
-
-    Privacy accounting is unchanged from the first-moment-only release —
-    sensitivity-proportional Mahalanobis allocation makes the joint
-    paired PLD identical to ``gaussian(nm)`` (or ``mf_gaussian(nm)``) at
-    the same multiplier.
-    """
-    print("  Second moments: on (sensitivity-proportional allocation)")
+def _log_jme(args) -> None:
+    """Log the explicit projected-JME configuration."""
+    print(
+        f"  JME: on (aggregate_norm={args.jme_aggregate_norm}, "
+        f"allocation={args.jme_allocation})"
+    )
+    if args.jme_allocation == "first_variance_cap":
+        print(
+            "  JME max first-stream variance ratio: "
+            f"{args.jme_max_first_variance_ratio}"
+        )
 
 
 def _select_device(local_rank: int | None = None) -> tuple[torch.device, str]:
@@ -1090,16 +1090,30 @@ def parse_args():
         "for standard gaussian.",
     )
     dp_group.add_argument(
-        "--second-moment",
+        "--jme",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Private squared-gradient stream alongside gradients. "
-        "Off by default; pass ``--second-moment`` to enable.  Requires an "
-        "optimizer that consumes ``SecondMomentNoiseOutput`` "
-        "(adam/adamw/ademamix/rmsprop/radam/adadelta); incompatible "
-        "combinations are warned-and-disabled (not rejected).  Joint noise "
-        "allocation is sensitivity-proportional; privacy accounting is "
-        "gaussian(nm) — same as first-moment-only.",
+        help="Release the projected normalized aggregate and its clean square "
+        "with DP-SGD JME. Requires scalar clipping, standard Gaussian noise, "
+        "plain independent Poisson sampling, and explicit JME configuration.",
+    )
+    dp_group.add_argument(
+        "--jme-aggregate-norm",
+        type=float,
+        default=None,
+        help="Required public L2 projection radius for --jme.",
+    )
+    dp_group.add_argument(
+        "--jme-allocation",
+        choices=["paper_reference", "first_variance_cap"],
+        default=None,
+        help="Required JME first/second noise allocation policy.",
+    )
+    dp_group.add_argument(
+        "--jme-max-first-variance-ratio",
+        type=float,
+        default=None,
+        help="Required with --jme-allocation first_variance_cap.",
     )
     dp_group.add_argument(
         "--per-group-clipping",
@@ -2220,20 +2234,55 @@ def main():
     print(f"  Epochs: {args.num_epochs}")
     print(f"  Expected total steps: ~{args.num_epochs * expected_steps_per_epoch}")
 
-    # --second-moment needs an optimizer that consumes the squared-gradient
-    # stream; on a mismatch warn and drop to single-stream noise rather than fail.
-    _SECOND_MOMENT_OPTIMIZERS = frozenset(
+    _JME_OPTIMIZERS = frozenset(
         {"adam", "adamw", "ademamix", "rmsprop", "radam", "adadelta"}
     )
-    use_second_moment = bool(args.second_moment)
-    if use_second_moment and args.optimizer not in _SECOND_MOMENT_OPTIMIZERS:
-        print(
-            f"\nWARNING: --second-moment requires an optimizer that consumes "
-            f"SecondMomentNoiseOutput ({sorted(_SECOND_MOMENT_OPTIMIZERS)}); "
-            f"got --optimizer {args.optimizer!r}.  Disabling --second-moment "
-            f"for this run."
+    use_jme = bool(args.jme)
+    jme_allocation = None
+    if use_jme:
+        if args.optimizer not in _JME_OPTIMIZERS:
+            raise ValueError(
+                f"--jme requires an optimizer that consumes SecondMomentNoiseOutput "
+                f"({sorted(_JME_OPTIMIZERS)}), got {args.optimizer!r}."
+            )
+        if isinstance(clip_norm, PerGroup):
+            raise ValueError("--jme does not support --per-group-clipping.")
+        if args.noise_mechanism != "gaussian":
+            raise ValueError("--jme requires --noise-mechanism gaussian.")
+        if truncated_batch_size is not None or use_parallel_poisson:
+            raise ValueError(
+                "--jme currently supports only plain independent Poisson sampling; "
+                "truncated and parallel sampling require separate derivations."
+            )
+        if args.jme_aggregate_norm is None or args.jme_aggregate_norm <= 0:
+            raise ValueError("--jme requires a positive --jme-aggregate-norm.")
+        if args.jme_allocation is None:
+            raise ValueError("--jme requires --jme-allocation.")
+        if args.jme_allocation == "paper_reference":
+            if args.jme_max_first_variance_ratio is not None:
+                raise ValueError(
+                    "--jme-max-first-variance-ratio is only valid with "
+                    "--jme-allocation first_variance_cap."
+                )
+            jme_allocation = JmeAllocation.paper_reference()
+        else:
+            if args.jme_max_first_variance_ratio is None:
+                raise ValueError(
+                    "--jme-allocation first_variance_cap requires "
+                    "--jme-max-first-variance-ratio."
+                )
+            jme_allocation = JmeAllocation.first_variance_cap(
+                args.jme_max_first_variance_ratio
+            )
+    elif any(
+        value is not None
+        for value in (
+            args.jme_aggregate_norm,
+            args.jme_allocation,
+            args.jme_max_first_variance_ratio,
         )
-        use_second_moment = False
+    ):
+        raise ValueError("JME-specific arguments require --jme.")
 
     # AdaClip's noisy clipping-rate estimate and the gradient mechanism are
     # separate DP releases, so they need independent RNG streams.
@@ -2243,8 +2292,6 @@ def main():
 
     # Create gradient function based on clipping mode.
     if args.clipping_mode == "adaptive":
-        # ``second_moment`` flows to the inner ``clipped_grad``; the adaptive
-        # threshold update reads first-stream gradient norms regardless.
         grad_fn, clip_state = adaptive_clipped_grad(
             per_example_loss_fn,
             argnums=0,
@@ -2256,7 +2303,6 @@ def main():
             return_aux=True,
             key=quantile_noise_key,
             normalize_by=args.batch_size,
-            second_moment=use_second_moment,
         )
     elif args.clipping_mode == "auto":
         grad_fn, clip_state = auto_clipped_grad(
@@ -2268,7 +2314,6 @@ def main():
             normalize_by=args.batch_size,
             microbatch_size=args.microbatch_size,
             return_aux=True,
-            second_moment=use_second_moment,
         )
     else:
         grad_fn, clip_state = clipped_grad(
@@ -2279,7 +2324,6 @@ def main():
             normalize_by=args.batch_size,
             microbatch_size=args.microbatch_size,
             return_aux=True,
-            second_moment=use_second_moment,
         )
 
     # Calibrate noise multiplier from target privacy budget.
@@ -2313,9 +2357,7 @@ def main():
                 _base_mechanism(nm), expected_batch_size=ebs, num_groups=ng
             )
 
-    # No paired-stream wrap: joint Mahalanobis allocation makes the second-moment
-    # release "free" at runtime σ allocation, so calibration uses the same
-    # gaussian(nm) PLD as the first-moment-only release.
+    # Projected JME is dominated by the same Gaussian PLD after whitening.
 
     _unamplified = mechanism
     if truncated_batch_size is not None:
@@ -2346,8 +2388,8 @@ def main():
         print(
             f"\nUsing fixed noise multiplier: {noise_multiplier:.4f} (skipping calibration)"
         )
-        if use_second_moment:
-            _log_private_second_moment()
+        if use_jme:
+            _log_jme(args)
     else:
         print("\nCalibrating privacy parameters...")
         if use_parallel_poisson:
@@ -2355,8 +2397,8 @@ def main():
         print(f"  Noise mechanism: {args.noise_mechanism}")
         if args.noise_mechanism == "bounded_gaussian":
             print(f"  Noise bound: ±{args.noise_bound}")
-        if use_second_moment:
-            _log_private_second_moment()
+        if use_jme:
+            _log_jme(args)
         print(f"  δ = {args.target_delta:.2e} (n={global_train_size})")
         print(f"  Total steps: {total_steps}")
         print(f"  Sample rate: {sample_rate:.6f}")
@@ -2506,7 +2548,15 @@ def main():
     # Noise functions consume ClippedPytree metadata directly and return
     # NoisedPytree updates carrying the realized per-step stddev.
     initial_bound = clip_norm / args.batch_size
-    if args.noise_mechanism == "bounded_gaussian":
+    if use_jme:
+        assert jme_allocation is not None
+        noise_fn, noise_state = jme_noise(
+            noise_multiplier=noise_multiplier,
+            aggregate_norm=args.jme_aggregate_norm,
+            allocation=jme_allocation,
+            key=gradient_noise_key,
+        )
+    elif args.noise_mechanism == "bounded_gaussian":
         # Pass ``bound`` unconditionally: at ``noise_multiplier=0`` the bounded
         # path still clamps the input to the interval, keeping the mechanism
         # consistent with the user's chosen flag.
@@ -2797,8 +2847,8 @@ def main():
         )
     elif use_parallel_poisson:
         print(f"  Accounting: parallel_poisson (world_size={world_size})")
-    if use_second_moment:
-        _log_private_second_moment()
+    if use_jme:
+        _log_jme(args)
     print(
         f"  Target: ε={args.target_epsilon:.3f}, δ={args.target_delta:.2e} (n={global_train_size})"
     )

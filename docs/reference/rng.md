@@ -217,16 +217,15 @@ Do not reuse these shipped tags:
 
 | Tag | Occupied by |
 | --- | --- |
-| `opaque.dpsgd.gaussian` | `opaque.dpsgd.noise.gaussian_noise` (both streams) |
+| `opaque.dpsgd.gaussian` | `opaque.dpsgd.noise.gaussian_noise` |
+| `opaque.dpsgd.jme.first` / `.second` | projected JME Gaussian streams |
 | `opaque.dpsgd.adaptive_clipping` | adaptive clipping threshold noise |
 | `opaque.dpsgd.poisson` | DP-SGD Poisson sampling |
 | `opaque.dpsgd.k_out_of_t` | DP-SGD k-out-of-t sampling |
 | `opaque.dpftrl.mf_gaussian` | `opaque.dpftrl.noise.mf_gaussian_noise` |
-| `opaque.dpftrl.second_moment.first` / `.second` | paired MF second-moment streams |
 | `opaque.dpftrl.cyclic_poisson` | DP-FTRL cyclic Poisson sampling |
 | `opaque.dpftrl.b_min_sep` | DP-FTRL b-min-separation sampling |
 | `opaque.dpftrl.balls_in_bins` | DP-FTRL balls-in-bins sampling |
-| `opaque.paired.first` / `opaque.paired.second` | paired first/second-moment streams |
 | `opaque.auditing.canary_selection` / `opaque.auditing.coin_flip` | `opaque.auditing.coin_flip` |
 | `opaque.transformers.ignore_data_skip` | trainer Poisson restart after skipped sampler state |
 

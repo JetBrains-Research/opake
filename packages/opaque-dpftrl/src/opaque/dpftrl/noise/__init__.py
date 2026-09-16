@@ -3,10 +3,6 @@
 Public API:
 
 - :func:`mf_gaussian_noise` — strategy-based dispatcher (SGD + Polyak momentum).
-- ``mf_gaussian_noise(..., second_moment_strategy=...)`` — optional paired stream
-  for private second moments (Adam-style optimizers); requires
-  ``second_moment_strategy`` at construction and
-  ``SecondMomentClippingOutput`` at runtime.
 
 Strategy factories:
 
@@ -16,14 +12,13 @@ Strategy factories:
 
 Strategy types and noise state classes (``BandMfStrategy``, ``BltStrategy``,
 ``BisrStrategy``, ``BsrStrategy``, ``IdentityStrategy``,
-``LambdaCgdStrategy``, ``MfStrategy``, ``MFNoiseState``,
-``SecondMomentMFNoiseState``) live in :mod:`opaque.dpftrl.noise.types`.
+``LambdaCgdStrategy``, ``MfStrategy``, ``MFNoiseState``) live in
+:mod:`opaque.dpftrl.noise.types`.
 
 References:
     - BandMF: https://arxiv.org/abs/2306.08153
     - BLT: https://arxiv.org/abs/2404.16706
     - Multi-epoch BLT: https://arxiv.org/abs/2408.08868
-    - Private second moments: https://arxiv.org/abs/2502.06597
 """
 
 from opaque.api.dpftrl.noise import (

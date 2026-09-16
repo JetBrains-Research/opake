@@ -4,7 +4,7 @@ Covers all four orthogonal modes:
 
 - vanilla AdamW (no DP kwargs at update)
 - DP-AdamW-BC (``NoisedPytree`` metadata)
-- DP-Adam with a private second-moment stream (``SecondMomentNoiseOutput``)
+- DP-Adam with projected JME moments (``SecondMomentNoiseOutput``)
 - StableAdamW (``update_rms_clip`` constructor knob)
 
 Plus the L2 weight decay branch (``decoupled_weight_decay=False``).
@@ -440,7 +440,7 @@ class TestPerGroupBC:
 class TestSecondMomentMode:
     @pytest.fixture
     def sq_grads(self, grads):
-        # Real private second-moment noise would deliver privatised g²; this synthetic stream
+        # Projected JME supplies a separately noised clean aggregate square; this synthetic stream
         # is enough to exercise the v-update branch.
         return {k: v.pow(2) + 0.01 for k, v in grads.items()}
 
@@ -474,6 +474,48 @@ class TestSecondMomentMode:
         for k in params:
             expected_v = (1 - b2) * sq_grads[k]
             torch.testing.assert_close(adam.nu[k], expected_v)
+
+    def test_coupled_weight_decay_updates_both_jme_moments(self, params, grads):
+        b2 = 0.999
+        weight_decay = 0.2
+        raw_opt = adam(
+            lr=1e-3,
+            betas=(0.9, b2),
+            weight_decay=weight_decay,
+        )
+        jme_opt = adam(
+            lr=1e-3,
+            betas=(0.9, b2),
+            weight_decay=weight_decay,
+        )
+        raw_state = raw_opt.init(params)
+        jme_state = jme_opt.init(params)
+        expected_updates, raw_state = raw_opt.update(
+            grads,
+            raw_state,
+            params=params,
+        )
+        output = SecondMomentNoiseOutput(
+            noised(grads, max_norm=1.0, noise_stddev=0.0),
+            noised(
+                {name: grad.square() for name, grad in grads.items()},
+                max_norm=1.0,
+                noise_stddev=0.0,
+            ),
+        )
+
+        actual_updates, jme_state = jme_opt.update(
+            output,
+            jme_state,
+            params=params,
+        )
+
+        torch.testing.assert_close(actual_updates, expected_updates)
+        raw_adam = _adam_state(raw_state)
+        jme_adam = _adam_state(jme_state)
+        for name in params:
+            torch.testing.assert_close(jme_adam.mu[name], raw_adam.mu[name])
+            torch.testing.assert_close(jme_adam.nu[name], raw_adam.nu[name])
 
     def test_second_moment_output_rejects_clipped_stream(self, params, grads, sq_grads):
         opt = adamw(lr=1e-3)

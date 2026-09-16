@@ -9,9 +9,8 @@ clipped queries preserves the per-record max_norm; averaging divides it by world
 size.  Summing independent Gaussian-noised local queries scales ``noise_stddev``
 by ``sqrt(world_size)``; averaging scales it by ``1 / sqrt(world_size)``.
 
-Paired-stream wrappers (:class:`~opaque.types.SecondMomentClippingOutput`,
-:class:`~opaque.types.SecondMomentNoiseOutput`) recurse into both child
-wrappers so both streams participate in the collective.
+The :class:`~opaque.types.SecondMomentNoiseOutput` optimizer handoff recurses
+into both noised children so both streams participate in the collective.
 """
 
 from __future__ import annotations
@@ -28,7 +27,6 @@ from opaque.api.engine.types import (
     ClippedPytree,
     NoisedPytree,
     PerGroup,
-    SecondMomentClippingOutput,
     SecondMomentNoiseOutput,
 )
 from opaque.exceptions import ConfigurationError, InputTypeError, OperationError
@@ -154,11 +152,6 @@ def reduce_pytree_(pytree: Any, op: str = "sum") -> None:
     stays unchanged.  Use :func:`reduce_pytree` for reductions such as noised
     ``sum`` or clipped/noised ``mean`` that need updated metadata.
     """
-    if isinstance(pytree, SecondMomentClippingOutput):
-        reduce_pytree_(pytree.grads, op=op)
-        reduce_pytree_(pytree.squared_grads, op=op)
-        return
-
     if isinstance(pytree, SecondMomentNoiseOutput):
         reduce_pytree_(pytree.noisy_grads, op=op)
         reduce_pytree_(pytree.noisy_squared_grads, op=op)
@@ -204,15 +197,9 @@ def reduce_pytree(pytree: Any, op: str = "sum") -> Any:
     """Return a pytree with each tensor leaf reduced; input unchanged.
 
     When passed ``ClippedPytree`` or ``NoisedPytree``, preserves and updates the
-    wrapper metadata for supported ``sum`` and ``mean`` reductions.  Paired
-    second-moment wrappers recurse into both child streams.
+    wrapper metadata for supported ``sum`` and ``mean`` reductions.
+    ``SecondMomentNoiseOutput`` recurses into both child streams.
     """
-    if isinstance(pytree, SecondMomentClippingOutput):
-        return SecondMomentClippingOutput(
-            reduce_pytree(pytree.grads, op=op),
-            reduce_pytree(pytree.squared_grads, op=op),
-        )
-
     if isinstance(pytree, SecondMomentNoiseOutput):
         return SecondMomentNoiseOutput(
             reduce_pytree(pytree.noisy_grads, op=op),

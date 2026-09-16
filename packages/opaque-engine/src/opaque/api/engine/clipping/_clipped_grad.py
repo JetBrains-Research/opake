@@ -20,7 +20,6 @@ from opaque.api.engine.clipping._helpers import (
 from opaque.api.engine.functional._transform_stack import (
     under_differentiating_transform,
 )
-from opaque.api.engine.pytree import tree_map
 from opaque.api.engine.types import PerGroup, clipped
 from opaque.exceptions import ConfigurationError
 
@@ -92,7 +91,6 @@ def clipped_grad(
     batch_argnums: int | tuple[int, ...] = 1,
     return_aux: bool = False,
     return_stats: bool = False,
-    second_moment: bool = False,
     pre_clipping_transform: Callable = lambda x: x,
     microbatch_size: int | None = None,
     dtype: torch.dtype | None = None,
@@ -187,8 +185,6 @@ def clipped_grad(
             clip-norm and the across-batch sum). ``None`` (default) auto-promotes
             bf16/fp16 to float32 for numerical stability. Independent of
             ``dtype`` (which controls the *output* dtype).
-        second_moment: Whether to accumulate the clipped-gradient second
-            moment required by DP-FTRL noise mechanisms.
     Returns:
         Tuple of (:class:`ClippedGradFn`, clip_state) where:
         - clipped_grad_fn: A function that computes the sum of clipped per-example gradients.
@@ -213,9 +209,6 @@ def clipped_grad(
     loss_fn = normalize_fun_to_return_aux(loss_fn, has_aux)
 
     output_max_norm = clipping_norm / normalize_by
-    output_squared_max_norm = (
-        (clipping_norm * clipping_norm) / normalize_by if second_moment else None
-    )
 
     def _empty_batch_response(args, state):
         """Short-circuit for empty batches: zero grads + empty aux, no vmap.
@@ -229,23 +222,7 @@ def clipped_grad(
         zeros = empty_clipped_grads_like(
             args, argnums_tuple, pre_clipping_transform, dtype
         )
-        if second_moment:
-            from opaque.api.engine.types import SecondMomentClippingOutput
-
-            grads = SecondMomentClippingOutput(
-                grads=clipped(zeros, max_norm=output_max_norm),
-                squared_grads=clipped(
-                    tree_map(
-                        lambda x: (
-                            torch.zeros_like(x) if isinstance(x, torch.Tensor) else x
-                        ),
-                        zeros,
-                    ),
-                    max_norm=output_squared_max_norm,
-                ),
-            )
-        else:
-            grads = clipped(zeros, max_norm=output_max_norm)
+        grads = clipped(zeros, max_norm=output_max_norm)
         if return_aux:
             empty = torch.empty(0)
             # Per-group steps report ``clipping_rate=None`` (rates live in
@@ -305,7 +282,6 @@ def clipped_grad(
         normalize_by=normalize_by,
         return_aux=return_aux,
         return_stats=return_stats,
-        second_moment=second_moment,
         microbatch_size=microbatch_size,
         dtype=dtype,
         compute_dtype=compute_dtype,

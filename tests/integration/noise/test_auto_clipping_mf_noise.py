@@ -23,12 +23,7 @@ tests cover all six MF strategies — ``identity``, ``band_mf``, ``blt``,
    accepted by ``mf_gaussian_noise`` (PR #192), AUTO-S delivers a constant
    per-group bound that flows through the per-group noise allocator
    identically to fixed clipping.
-5. **Second-moment AUTO-S × paired MF** — ``auto_clipped_grad(...,
-   second_moment=True)`` returns a :class:`SecondMomentClippingOutput`
-   with constant ``R / B`` and ``R² / B`` bounds; ``mf_gaussian_noise(...,
-   second_moment_strategy=...)`` consumes it and the paired
-   Mahalanobis allocation matches the equivalent fixed-clipping path.
-6. **Negative regression guard** — adaptive clipping × MF still raises
+5. **Negative regression guard** — adaptive clipping × MF still raises
    the constant-max_norm latch error, locking the only scenario the
    library legitimately rejects.
 
@@ -60,8 +55,6 @@ from opaque.types import (
     ClippedPytree,
     NoisedPytree,
     PerGroup,
-    SecondMomentClippingOutput,
-    SecondMomentNoiseOutput,
     clipped,
 )
 
@@ -414,116 +407,6 @@ class TestPerGroupAutoSxMf:
             assert na.noise_stddev.values[g] == pytest.approx(
                 nf.noise_stddev.values[g], abs=1e-9
             )
-
-
-# ------------------------------------------------------------------ second-moment
-
-
-@pytest.mark.parametrize("strategy_name", _ALL_STRATEGY_NAMES)
-class TestSecondMomentAutoSxMf:
-    """Second-moment AUTO-S × paired ``mf_gaussian_noise``.
-
-    AUTO-S with ``second_moment=True`` produces a
-    :class:`SecondMomentClippingOutput` with bounds ``R / B`` (first
-    moment) and ``R² / B`` (second moment), both data-independent
-    constants.  ``mf_gaussian_noise(..., second_moment_strategy=...)`` consumes
-    it and applies the joint Mahalanobis allocation; the result must
-    agree with the fixed-clipping path at the same ``R``.
-    """
-
-    def test_paired_release_runs_end_to_end(self, strategy_name):
-        torch.manual_seed(0)
-        params = torch.randn(N_FEATURES)
-        grad_fn, clip_state = auto_clipped_grad(
-            _scalar_loss_fn,
-            argnums=0,
-            batch_argnums=(1, 2),
-            R=R,
-            normalize_by=BATCH_SIZE,
-            second_moment=True,
-        )
-        first_strategy = _make_strategy(strategy_name)
-        # Avoid reusing the same strategy object's streaming state when the
-        # mechanism allocates two independent streams.  ``identity`` and
-        # ``lambda_cgd`` are stateless modulo their RNG keys, but for the
-        # streaming-matrix strategies we want two independent factories.
-        second_strategy = _make_strategy(strategy_name)
-        noise_fn, noise_state = mf_gaussian_noise(
-            params,
-            first_strategy,
-            **_NOISE_PART,
-            noise_multiplier=NOISE_MULTIPLIER,
-            key=key(19),
-            second_moment_strategy=second_strategy,
-        )
-        for _ in range(N_STEPS):
-            x = torch.randn(BATCH_SIZE, N_FEATURES) * 5.0
-            y = torch.randn(BATCH_SIZE) * 5.0
-            grads, clip_state = grad_fn(params, x, y, state=clip_state)
-            assert isinstance(grads, SecondMomentClippingOutput)
-            out, noise_state = noise_fn(grads, noise_state)
-            assert isinstance(out, SecondMomentNoiseOutput)
-        assert float(grads.grads.max_norm) == pytest.approx(R / BATCH_SIZE, abs=1e-9)
-        assert float(grads.squared_grads.max_norm) == pytest.approx(
-            (R * R) / BATCH_SIZE, abs=1e-9
-        )
-
-    def test_paired_calibration_matches_fixed_clipping(self, strategy_name):
-        """AUTO-S(R) + paired MF == fixed-clipping(C=R) + paired MF."""
-        torch.manual_seed(0)
-        params = torch.randn(N_FEATURES)
-        auto_fn, auto_state = auto_clipped_grad(
-            _scalar_loss_fn,
-            argnums=0,
-            batch_argnums=(1, 2),
-            R=R,
-            normalize_by=BATCH_SIZE,
-            second_moment=True,
-        )
-        fixed_fn, fixed_state = clipped_grad(
-            _scalar_loss_fn,
-            argnums=0,
-            batch_argnums=(1, 2),
-            clipping_norm=R,
-            normalize_by=BATCH_SIZE,
-            second_moment=True,
-        )
-        auto_noise_fn, auto_noise_state = mf_gaussian_noise(
-            params,
-            _make_strategy(strategy_name),
-            **_NOISE_PART,
-            noise_multiplier=NOISE_MULTIPLIER,
-            key=key(23),
-            second_moment_strategy=_make_strategy(strategy_name),
-        )
-        fixed_noise_fn, fixed_noise_state = mf_gaussian_noise(
-            params,
-            _make_strategy(strategy_name),
-            **_NOISE_PART,
-            noise_multiplier=NOISE_MULTIPLIER,
-            key=key(23),
-            second_moment_strategy=_make_strategy(strategy_name),
-        )
-        x = torch.randn(BATCH_SIZE, N_FEATURES) * 5.0
-        y = torch.randn(BATCH_SIZE) * 5.0
-        ga, _ = auto_fn(params, x, y, state=auto_state)
-        gf, _ = fixed_fn(params, x, y, state=fixed_state)
-        # Same per-stream bound.
-        assert float(ga.grads.max_norm) == pytest.approx(
-            float(gf.grads.max_norm), abs=1e-9
-        )
-        assert float(ga.squared_grads.max_norm) == pytest.approx(
-            float(gf.squared_grads.max_norm), abs=1e-9
-        )
-        # Same paired Mahalanobis stddevs after the dispatcher.
-        na, _ = auto_noise_fn(ga, auto_noise_state)
-        nf, _ = fixed_noise_fn(gf, fixed_noise_state)
-        assert float(na.noisy_grads.noise_stddev) == pytest.approx(
-            float(nf.noisy_grads.noise_stddev), abs=1e-9
-        )
-        assert float(na.noisy_squared_grads.noise_stddev) == pytest.approx(
-            float(nf.noisy_squared_grads.noise_stddev), abs=1e-9
-        )
 
 
 # ------------------------------------------------------------------ negative

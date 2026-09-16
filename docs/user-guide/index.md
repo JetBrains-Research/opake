@@ -50,8 +50,7 @@ combines them.
 ### Integration
 
 - **[Optimizers](optimizers.md)** — TorchOpt functional optimizers
-  with DP-SGD bias correction and the private second-moment story
-  for DP-FTRL.
+  with DP-SGD bias correction and projected JME aggregate-square routing.
 - **[Serialization (API reference)](../reference/serialization.md)** —
   Checkpoint explicit state with
   `opaque.serialization.state_dict` / `from_state_dict`.

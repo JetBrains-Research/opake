@@ -214,7 +214,6 @@ def auto_clipped_grad(
     pre_clipping_transform: Callable = lambda x: x,
     microbatch_size: int | None = None,
     dtype: Any = None,
-    second_moment: bool = False,
 ) -> tuple[Callable, AutoClipState]:
     r"""Create a function that computes the sum of AUTO-S scaled per-example gradients.
 
@@ -252,14 +251,6 @@ def auto_clipped_grad(
             sensitivity guarantee. Default is identity function.
         microbatch_size: Process the batch in chunks of this size.
         dtype: Optional accumulation dtype for the summed gradient.
-        second_moment: If True, also accumulate the per-example sum of
-            element-wise squared scaled gradients and return a
-            :class:`~opaque.types.SecondMomentClippingOutput` carrying
-            both streams.  Privacy accounting is unchanged
-            (``gaussian(noise_multiplier)`` for DP-SGD or any standard MF
-            mechanism for DP-FTRL); the sensitivity-proportional joint
-            Mahalanobis allocation gives the paired release the same PLD
-            as a single first-moment release.
         return_stats: If True, return :class:`ClippingStats` beside the
             gradient. Cannot be combined with ``return_aux``.
 
@@ -324,7 +315,6 @@ def auto_clipped_grad(
         pre_clipping_transform=pre_clipping_transform,
         microbatch_size=microbatch_size,
         dtype=dtype,
-        second_moment=second_moment,
         _scale_fn=scale_fn,
     )
 

@@ -2,10 +2,9 @@
 
 The strategy + amplification-context tuple selects a streaming matrix
 via the polymorphic :meth:`MfStrategy.streaming_matrix` query.  This
-file is a thin shell over that polymorphism, the engine's input
-validation, and the second-moment dispatch — all heavy lifting lives in
-:mod:`_engine`, :mod:`_second_moment`, :mod:`_distributed`, and the
-per-strategy files.
+file is a thin shell over that polymorphism and the engine's input
+validation; all heavy lifting lives in :mod:`_engine`, :mod:`_distributed`,
+and the per-strategy files.
 
 Realized per-step σ (bug fix): under correlated MF noise the actual
 per-coordinate noise variance at step ``t`` is
@@ -32,7 +31,7 @@ from torch.autograd.profiler import record_function
 from opaque.api.engine.noise_allocation import per_group_noise_stddev
 from opaque.exceptions import InputTypeError
 from opaque.random.types import RngKey
-from opaque.types import NoisedPytree, PerGroup, SecondMomentClippingOutput
+from opaque.types import NoisedPytree, PerGroup
 
 from ._distributed import mf_per_group_sync_fingerprint_for_latch
 from ._engine import (
@@ -44,7 +43,6 @@ from ._engine import (
     _validate_constant_max_norm,
 )
 from ._identity import IdentityStrategy
-from ._second_moment import SecondMomentMFNoiseState, make_second_moment_mf_noise
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -62,10 +60,9 @@ def mf_gaussian_noise(
     noise_multiplier: float,
     key: RngKey,
     compute_dtype: torch.dtype = torch.float32,
-    second_moment_strategy: MfStrategy | None = None,
 ) -> tuple[
-    Callable[..., tuple[Any, MFNoiseState | SecondMomentMFNoiseState]],
-    MFNoiseState | SecondMomentMFNoiseState,
+    Callable[..., tuple[Any, MFNoiseState]],
+    MFNoiseState,
 ]:
     """Create a correlated noise mechanism for the given MF strategy.
 
@@ -74,20 +71,8 @@ def mf_gaussian_noise(
     context; :class:`LambdaCgdStrategy` uses a PRNG-replay path (no
     streaming matrix is materialized).
 
-    The returned ``noise_fn`` dispatches on its input type:
-
-    - ``ClippedPytree`` → ``NoisedPytree`` (single-stream noise).
-    - ``SecondMomentClippingOutput`` → ``SecondMomentNoiseOutput``
-      (paired-stream noise; only when ``second_moment_strategy`` was
-      supplied at construction).
-
-    The paired-stream release uses the sensitivity-proportional joint
-    Mahalanobis allocation
-    (:func:`~opaque.api.engine.noise_allocation.paired_noise_stddevs`)
-    with the MF translation ``nm / ‖C₁‖`` as the joint effective
-    multiplier so the joint PLD matches the single-stream MF Gaussian
-    accountant at ``(noise_multiplier, ‖C₁‖)``.  ``PerGroup``
-    ``max_norm`` is supported on both streams.
+    The returned ``noise_fn`` accepts a ``ClippedPytree`` and returns a
+    ``NoisedPytree``. ``PerGroup`` ``max_norm`` is supported.
 
     Args:
         grad_template: Pytree with same structure/shapes as gradients.
@@ -106,28 +91,12 @@ def mf_gaussian_noise(
             the noise distribution. Type stability on the public boundary is
             preserved: the input pytree's dtype is matched on output (input
             upcast to ``compute_dtype``, noise added, downcast at return).
-        second_moment_strategy: Optional explicit strategy recipe for
-            the squared-gradient stream.
-
     Returns:
         A tuple ``(noise_fn, state)`` for the training loop.
     """
     resolved_noise_multiplier = _resolve_noise_multiplier(noise_multiplier)
     if not isinstance(key, RngKey):
         raise InputTypeError(*(f"key must be RngKey, got {type(key)}",))
-
-    if second_moment_strategy is not None:
-        return make_second_moment_mf_noise(
-            grad_template,
-            strategy,
-            second_moment_strategy,
-            n_steps=n_steps,
-            min_sep=min_sep,
-            max_participations=max_participations,
-            noise_multiplier=resolved_noise_multiplier,
-            key=key,
-            compute_dtype=compute_dtype,
-        )
 
     raw_noise_fn, raw_state, row_l2_at = _make_raw_mf_noise(
         grad_template,
@@ -150,15 +119,6 @@ def mf_gaussian_noise(
         clipped_grads: Any,
         st: MFNoiseState,
     ) -> tuple[NoisedPytree, MFNoiseState]:
-        if isinstance(clipped_grads, SecondMomentClippingOutput):
-            raise InputTypeError(
-                *(
-                    "mf_gaussian_noise was constructed without `second_moment_strategy` "
-                    "and cannot consume SecondMomentClippingOutput inputs.  Either "
-                    "pass a single-stream ClippedPytree, or rebuild the noise "
-                    "function with `second_moment_strategy=...`.",
-                )
-            )
         clipped_grads = _expect_clipped(clipped_grads, op="mf_gaussian_noise")
         max_norm = _validate_constant_max_norm(
             clipped_grads, st._first_max_norm, op="mf_gaussian_noise"

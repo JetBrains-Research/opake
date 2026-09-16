@@ -1,8 +1,8 @@
-"""DP-SGD noise mechanisms façade — Gaussian (optionally bounded).
+"""DP-SGD noise mechanisms façade — Gaussian and projected JME.
 
-State (``GaussianNoiseState``) lives in :mod:`opaque.dpsgd.noise.types`.
+States and JME allocation types live in :mod:`opaque.dpsgd.noise.types`.
 """
 
-from opaque.api.dpsgd.noise import gaussian_noise
+from opaque.api.dpsgd.noise import gaussian_noise, jme_noise
 
-__all__ = ["gaussian_noise"]
+__all__ = ["gaussian_noise", "jme_noise"]

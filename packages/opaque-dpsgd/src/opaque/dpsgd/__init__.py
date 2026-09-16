@@ -6,13 +6,14 @@ Gaussian noise (optionally bounded — Chen and Hale,
 and the standard + truncated Poisson samplers. Fixed and AUTO-S clipping live in
 :mod:`opaque.dpsgd.clipping` (AUTO-S keeps a constant per-record sensitivity
 bound).  Functional optimizers (including the universal ``adamw`` with
-DP bias-correction and private second-moment paths) live in
+DP bias-correction and JME second-moment routing) live in
 :mod:`opaque.optimizers`.
 
 Clipping state and aux types (including ``AdaptiveClipState``,
 ``AdaptiveClippedGradAux``, and AUTO-S types) live in
-:mod:`opaque.dpsgd.clipping.types`.  ``GaussianNoiseState`` lives in
-:mod:`opaque.dpsgd.noise.types`.
+:mod:`opaque.dpsgd.clipping.types`. ``GaussianNoiseState``, ``JmeNoiseState``,
+and ``JmeAllocation`` live in :mod:`opaque.dpsgd.noise.types`; the projected
+JME factory lives in :mod:`opaque.dpsgd.noise`.
 
 The :mod:`opaque.dpsgd.accounting` subpackage (DP-SGD-specific privacy
 accounting factories, requires ``opaque-accounting``) is **lazy-imported**:
@@ -34,7 +35,7 @@ from opaque.dpsgd.clipping import (
     clipped_grad,
     per_group,
 )
-from opaque.dpsgd.noise import gaussian_noise
+from opaque.dpsgd.noise import gaussian_noise, jme_noise
 from opaque.dpsgd.sampling import PoissonSampler
 
 if TYPE_CHECKING:
@@ -78,6 +79,7 @@ __all__ = [
     "per_group",
     # Noise mechanisms
     "gaussian_noise",
+    "jme_noise",
     # Sampling
     "PoissonSampler",
 ]

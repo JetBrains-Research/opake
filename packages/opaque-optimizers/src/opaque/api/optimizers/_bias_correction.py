@@ -29,8 +29,8 @@ is bounded.  The additive ``ε`` in ``√v̂_corrected + ε`` is what keeps the
 denominator away from zero.
 
 The separate ``bc_floor`` clamp seen in some optimizers belongs to the
-*private second-moment* branch (``noisy_squared_grads``), where ``v̂``
-comes from an externally privatised ``g²`` stream and can be genuinely
+JME branch (``noisy_squared_grads``), where ``v̂`` comes from a separately
+noised clean aggregate-square stream and can be genuinely
 negative — not to this φ-EMA path.
 
 This module is mechanism-agnostic.  ``noise_stddev`` is a number (or a

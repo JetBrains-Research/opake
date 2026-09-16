@@ -21,8 +21,8 @@ DP-aware modes mirror :func:`opaque.optimizers._adamw`:
 
 - ``noise_bias_correction=True`` activates the φ-EMA correction on
   the second moment when ``NoisedPytree`` updates are passed.
-- ``SecondMomentNoiseOutput`` updates substitute an externally
-  privatised ``g²`` stream in place of squaring the noised gradient.
+- ``SecondMomentNoiseOutput`` updates substitute the separately noised JME
+  aggregate square in place of squaring the noised gradient.
   Both BC and the second-moment substitution target the same source
   of bias; pick one per training run.
 

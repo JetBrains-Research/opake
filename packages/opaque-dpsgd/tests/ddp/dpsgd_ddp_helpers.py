@@ -22,7 +22,8 @@ from opaque_test_support import (
 
 from opaque.distributed import sum_gradients, sync
 from opaque.dpsgd.clipping import adaptive_clipped_grad, clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
+from opaque.dpsgd.noise import gaussian_noise, jme_noise
+from opaque.dpsgd.noise.types import JmeAllocation
 from opaque.functional import make_functional
 from opaque.pytree import tree_leaves
 from opaque.random import key
@@ -641,5 +642,39 @@ def _worker_per_group_adaptive_one_rank_empty_gloo(
         token = torch.tensor([float(rank + 1)])
         dist.all_reduce(token, op=dist.ReduceOp.SUM)
         assert abs(token.item() - sum(range(1, world_size + 1))) < 1e-5
+    finally:
+        _cleanup_ddp()
+
+
+def _worker_jme_after_global_sum_gloo(
+    rank: int,
+    world_size: int,
+    port: int,
+) -> None:
+    _setup_gloo(rank, world_size, port)
+    try:
+        local = clipped(
+            torch.tensor([1.0 if rank == 0 else -1.0, 0.0]),
+            max_norm=0.25,
+        )
+        aggregate = sum_gradients(local)
+        noise_fn, noise_state = jme_noise(
+            noise_multiplier=0.0,
+            aggregate_norm=1.0,
+            allocation=JmeAllocation.paper_reference(),
+            key=key(407),
+        )
+        output, noise_state = noise_fn(aggregate, noise_state)
+        noise_state = sync(noise_state)
+
+        torch.testing.assert_close(
+            output.noisy_grads.pytree,
+            torch.zeros(2),
+        )
+        torch.testing.assert_close(
+            output.noisy_squared_grads.pytree,
+            torch.zeros(2),
+        )
+        assert noise_state._step_counter == 1
     finally:
         _cleanup_ddp()

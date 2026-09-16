@@ -68,7 +68,8 @@ max_participations.
 - Bandwidth is **fixed** (bidiagonal inverse); correlation is controlled by a single \(\lambda\). Does **not** accept `momentum` (use `bisr_strategy` with bandwidth > 2 for momentum-aware coefficients).
 - Learning-rate schedules are not strategy parameters. The temporary `lr_schedule` compatibility argument rejects non-`None` values; pass the schedule only to the optimizer.
 - Uses **Balls-in-Bins** amplification like other epoch-structured MF mechanisms; sampler semantics must match accounting.
-- **Private second moments (DP-Adam)**: auto-deriving the second-moment strategy is **not supported** for λCGD. Pass `second_moment_strategy` explicitly.
+- **Projected JME**: not supported for DP-FTRL/MF because one protected record
+  may affect multiple strategy rows.
 - Broader MF context: [Correlated noise (DP-FTRL)](../../user-guide/dp-ftrl.md).
 
 ## Noise generation

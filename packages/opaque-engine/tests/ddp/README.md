@@ -11,7 +11,7 @@ workers can import `engine_ddp_helpers` under pytest's importlib mode.
 - `test_collectives.py` — reduce / all-reduce on tensors and pytrees
 - `test_local_shard.py` — `local_shard` dataset slicing
 - `test_profiler_sync.py` — `TrainingProfiler` + `sync` under NCCL
-- `test_second_moment_reduce.py` — gloo CPU: paired second-moment `reduce_pytree`
+- `test_second_moment_reduce.py` — gloo CPU: JME optimizer-handoff `reduce_pytree`
 - `test_sync_aux_empty_batch.py` — gloo CPU: empty-vs-nonempty `sync(aux)` collective parity
 
 ## Running

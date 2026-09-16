@@ -17,6 +17,8 @@ Opaque provides several noise mechanisms:
 - **`gaussian_noise()`** — Gaussian noise; pass `bound=B` (or
   `bound=(low, high)`) for the bounded Gaussian mechanism (renormalized
   density on the interval — no point masses at the boundaries).
+- **`jme_noise()`** — Projected joint release of the normalized aggregate and
+  its clean square for supported adaptive optimizers.
 
 ### Correlated Noise (DP-FTRL / Matrix Factorization)
 
@@ -33,17 +35,18 @@ Strategy factories (passed to `mf_gaussian_noise()`):
 
 All noise functions return `(noise_fn, state)`, where
 `noise_fn(grads, state) -> (noisy_grads, new_state)`.
-When private second moments are enabled, the noisy value is a
-`SecondMomentNoiseOutput` carrying both `noisy_grads` and
-`noisy_squared_grads`.
+`jme_noise` returns a `SecondMomentNoiseOutput` carrying the noised projected
+aggregate and its separately noised clean square.
 
 ### State Classes
 
 - **`NoiseState`** — Abstract base class for all noise state types. Defines `_step_counter` and `_rng_key`.
-- **`SecondMomentNoiseOutput`** — Paired first/squared-gradient output for private second moments.
+- **`SecondMomentNoiseOutput`** — Projected JME first/aggregate-square optimizer handoff.
 - **`GaussianNoiseState`** — State for `gaussian_noise()`. Holds step counter and RNG key.
+- **`JmeNoiseState`** — State for `jme_noise()`, including RNG position,
+  aggregate radius, allocation, and noise multiplier.
+- **`JmeAllocation`** — Required paper-reference or first-variance-cap allocation policy.
 - **`MFNoiseState`** — State for `mf_gaussian_noise()`. Holds internal correlation state, step counter, and RNG key.
-- **`SecondMomentMFNoiseState`** — Paired-stream MF state used by `mf_gaussian_noise(..., second_moment_strategy=...)`.
 
 ### Distributed Sync Helpers
 
@@ -53,45 +56,29 @@ across ranks. It auto-dispatches based on type:
 - **`sync(GaussianNoiseState)`** — Validate RNG key and step counter match across ranks.
   The bounded Gaussian path (`gaussian_noise(..., bound=...)`) also returns
   `GaussianNoiseState`, so `sync()` handles it automatically.
+- **`sync(JmeNoiseState)`** — Validate both RNG streams, step counter, radius,
+  and allocation configuration.
 - **`sync(MFNoiseState)`** — Validate MF noise state matches across ranks.
 
 **See also**: [Noise Addition User Guide](../user-guide/noise.md)
 
-## Paired second-moment release
+## Projected JME
 
-When `clipped_grad(..., second_moment=True)` produces a
-`SecondMomentClippingOutput`, both `gaussian_noise` (DP-SGD; bounded or not)
-and `mf_gaussian_noise(..., second_moment_strategy=...)` (DP-FTRL) consume it and
-emit a `SecondMomentNoiseOutput` with paired noise on both streams.
+`jme_noise` accepts an already globally aggregated scalar `ClippedPytree`,
+projects it to a required public L2 radius, forms the clean element-wise square,
+and emits both values as `SecondMomentNoiseOutput`. Its required
+`JmeAllocation` selects either the paper-reference allocation or a
+first-stream variance cap.
 
-The runtime σ allocation is **sensitivity-proportional** and works
-identically for scalar `max_norm` and per-group `PerGroup` `max_norm`. For
-each group \(g\) (single-group `K=1` for scalar clipping), let
-\(\Delta^{(1)}_g\) be the first-stream per-record bound (`C_g / n` for
-averaged clipping, or `ζ · ‖C₁‖` strategy-amplified for DP-FTRL) and
-\(\Delta^{(2)}_g\) the second-stream per-record bound (`C_g² / n` derived
-from the same clip; `ζ² · ‖C₂‖` for DP-FTRL). Then with noise multiplier
-\(\text{nm}\), set
+The complete release uses the exact constrained add/remove sensitivity. After
+whitening by its two realized standard deviations, it is dominated by
+`dpsgd_acc.gaussian(noise_multiplier)`. Plain independent Poisson sampling may
+use the ordinary Poisson accountant; bounded Gaussian, `PerGroup`, truncated or
+parallel sampling, and MF noise are unsupported.
 
-\[
-  S := \sum_h \bigl(\Delta^{(1)}_h + \Delta^{(2)}_h\bigr),\qquad
-  \sigma^{(1)}_g := \text{nm}\sqrt{\Delta^{(1)}_g\,S},\qquad
-  \sigma^{(2)}_g := \text{nm}\sqrt{\Delta^{(2)}_g\,S}.
-\]
-
-This satisfies the joint Mahalanobis budget with equality:
-
-\[
-  \sum_{g,i} \Bigl(\frac{\Delta^{(i)}_g}{\sigma^{(i)}_g}\Bigr)^2
-  = \frac{1}{\text{nm}^2}.
-\]
-
-So the paired release has **the same PLD as a single sensitivity-1
-Gaussian release at the joint effective multiplier** passed to
-`paired_noise_stddevs` (see its docstring: no-op for DP-SGD; divide by
-`‖C₁‖` for DP-FTRL). Accounting is plain `gaussian(nm)` for DP-SGD and the
-underlying `mf_gaussian(nm, …)` for DP-FTRL; there is no separate
-transformation wrapper and no `ρ` knob.
+See [Projected JME](../mechanisms/dp-sgd/jme.md) for the exact statistics,
+sensitivity branches, allocation semantics, noise scales, and adjacency
+assumptions.
 
 `mf_gaussian_noise` accepts scalar or `PerGroup` `max_norm` on `ClippedPytree`
 inputs. Single-stream IID stddevs for `PerGroup` bounds match the
@@ -110,6 +97,10 @@ from a Gaussian renormalized over the interval (Chen and Hale, 2024).
 Bounds are absolute, in the same units as the gradient / clip norm.
 
 ::: opaque.dpsgd.noise.gaussian_noise
+
+## Projected JME
+
+::: opaque.dpsgd.noise.jme_noise
 
 ## Matrix Factorization Noise
 
@@ -156,12 +147,17 @@ Bounds are absolute, in the same units as the gradient / clip norm.
       show_source: true
       heading_level: 3
 
-::: opaque.dpftrl.noise.types.MFNoiseState
+::: opaque.dpsgd.noise.types.JmeNoiseState
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.dpftrl.noise.types.SecondMomentMFNoiseState
+::: opaque.dpsgd.noise.types.JmeAllocation
+    options:
+      show_source: true
+      heading_level: 3
+
+::: opaque.dpftrl.noise.types.MFNoiseState
     options:
       show_source: true
       heading_level: 3
@@ -169,5 +165,6 @@ Bounds are absolute, in the same units as the gradient / clip norm.
 ## Distributed Synchronization
 
 Use `opaque.distributed.sync(state)` — it auto-dispatches on the state's
-type to the right sync function. `GaussianNoiseState` and `MFNoiseState`
-both register handlers at import time, so no named sync call is required.
+type to the right sync function. `GaussianNoiseState`, `JmeNoiseState`, and
+`MFNoiseState` register handlers at import time, so no named sync call is
+required.

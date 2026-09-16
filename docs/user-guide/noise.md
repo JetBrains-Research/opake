@@ -12,7 +12,7 @@ For mathematical details, privacy analysis, and parameter guidance for
 each mechanism, see the [Mechanisms](../mechanisms/index.md) reference.
 
 For MF-specific assumptions (workload fidelity vs DP correctness, LR schedules,
-private second moments, BSR scope), see [Correlated noise (DP-FTRL)](dp-ftrl.md).
+and BSR scope), see [Correlated noise (DP-FTRL)](dp-ftrl.md).
 
 ## Gaussian noise
 
@@ -177,14 +177,43 @@ the per-coordinate interval.
 Treat `bound=` as experimental: `dpsgd_acc.gaussian()` does **not** cover the
 bounded output.
 
-`gaussian_noise` (bounded or not) accepts the same paired-stream input:
-when a `SecondMomentClippingOutput` (from
-``clipped_grad(..., second_moment=True)``) flows in, the function returns
-a `SecondMomentNoiseOutput` with both streams noised under the joint
-sensitivity-proportional Mahalanobis allocation (scalar case:
-``σ¹ = nm·sqrt(Δ¹·S)``, ``σ² = nm·sqrt(Δ²·S)``, ``S = Δ¹+Δ²``; with
-:class:`~opaque.types.PerGroup` bounds, ``S`` sums ``Δ¹_g+Δ²_g`` over
-groups).  Each stream is independently sampled with the same ``bound``.
+## Projected JME (DP-SGD)
+
+`jme_noise` privately releases a normalized clipped aggregate and its clean
+element-wise square for Adam-family optimizers. The aggregate is first projected
+to an explicit public L2 radius, so variable Poisson batch sizes cannot make the
+square query unbounded.
+
+```python
+from opaque.dpsgd.noise import jme_noise
+from opaque.dpsgd.noise.types import JmeAllocation
+
+noise_fn, noise_state = jme_noise(
+    noise_multiplier=noise_multiplier,
+    aggregate_norm=1.0,
+    allocation=JmeAllocation.first_variance_cap(1.5),
+    key=key(42),
+)
+
+# `grads` is the scalar ClippedPytree returned by clipped_grad after any
+# distributed sum.
+moments, noise_state = noise_fn(grads, noise_state)
+updates, opt_state = optimizer.update(moments, opt_state, params=params)
+```
+
+The allocation is explicit because no nonzero lambda is universally optimal
+under add/remove adjacency. `paper_reference()` reproduces the paper's
+identity-strategy convention; `first_variance_cap(kappa)` minimizes
+second-stream variance while limiting first-stream variance inflation to
+`kappa`.
+
+After whitening, the joint release is dominated by
+`dpsgd_acc.gaussian(noise_multiplier)`. This accounting statement applies to
+plain independent Poisson sampling. `PerGroup`, bounded Gaussian, truncated or
+parallel Poisson, horizon allocation, and MF noise are unsupported.
+
+See [Projected JME](../mechanisms/dp-sgd/jme.md) for the exact clean statistics,
+normalization, sensitivity, lambda, realized scales, and adjacency assumptions.
 
 ## Matrix-factorization noise (DP-FTRL)
 
@@ -311,42 +340,6 @@ will not match nested leaves.
 `DPTrainer` / examples still use flat trainable params from
 `make_functional(..., partition_trainable=True)` by choice; custom loops
 may pass any tensor pytree.
-
-### Private second moments
-
-MF noise can release both noisy gradients and a private squared-gradient stream
-for adaptive optimizers:
-
-```python
-from opaque.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
-from opaque.random import key
-
-strategy = band_mf_strategy(bands=10, momentum=0.9)
-second_strategy = band_mf_strategy(bands=10, momentum=0.999)
-
-noise_fn, noise_state = mf_gaussian_noise(
-    params,
-    strategy,
-    n_steps=1000,
-    noise_multiplier=noise_multiplier,
-    key=key(42),
-    second_moment_strategy=second_strategy,
-)
-
-# `grads` is a SecondMomentClippingOutput when clipped_grad was called
-# with second_moment=True; the noise function dispatches polymorphically.
-noise_output, noise_state = noise_fn(grads, noise_state)
-updates, opt_state = optimizer.update(
-    noise_output,
-    opt_state,
-    params=params,
-)
-```
-
-`second_moment_strategy` is explicit by design: the squared-gradient workload
-can differ from the first-moment workload. Opaque optimizers route
-`SecondMomentNoiseOutput` automatically when they support private squared
-gradients.
 
 In distributed training, pass the same `key(seed)` on all ranks to produce
 identical noise. See [Distributed Training](distributed.md) and
@@ -488,15 +481,6 @@ proc = dpftrl_acc.balls_in_bins(
     n_steps=steps_per_epoch * num_epochs,
 )
 
-# Private second moments — accounting is unchanged from first-moment-only.
-# The runtime σ allocation absorbs the joint cost via the
-# sensitivity-proportional Mahalanobis budget; calibrate against the same
-# MF mechanism PLD used for the first-moment-only release.
-proc = dpftrl_acc.balls_in_bins(
-    dpftrl_acc.mf_gaussian(1.0, strategy),
-    num_bins=steps_per_epoch,
-    n_steps=steps_per_epoch * num_epochs,
-)
 ```
 
 See [Privacy Accounting — Matrix factorization mechanisms](accounting.md#matrix-factorization-mechanisms)

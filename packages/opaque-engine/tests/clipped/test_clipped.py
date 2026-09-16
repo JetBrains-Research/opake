@@ -110,12 +110,7 @@ def test_unsupported_operations_raise_helpful_error(device):
 
 
 def test_per_group_elementwise_product():
-    """``PerGroup * PerGroup`` multiplies per-group values element-wise.
-
-    This is what enables ``clipping_norm * clipping_norm`` to produce
-    the squared per-group sensitivities consumed by the paired second-
-    moment release.
-    """
+    """``PerGroup * PerGroup`` multiplies per-group values element-wise."""
     a = PerGroup(
         groups={"p1": "g1", "p2": "g2"},
         values={"g1": 2.0, "g2": 3.0},
@@ -132,10 +127,8 @@ def test_per_group_elementwise_product():
     assert result.values == {"g1": 8.0, "g2": 15.0}
 
 
-def test_per_group_self_squared_for_second_moment_sensitivity():
-    """``pg * pg`` yields per-group squared values — used to derive
-    second-stream sensitivities from per-group clipping norms.
-    """
+def test_per_group_self_multiplication():
+    """``pg * pg`` yields per-group squared values."""
     pg = PerGroup(
         groups={"layer.weight": "layer", "head.weight": "head"},
         values={"layer": 2.0, "head": 0.5},

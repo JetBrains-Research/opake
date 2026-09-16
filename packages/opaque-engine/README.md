@@ -5,7 +5,7 @@ that downstream stacks (`opaque-dpsgd`, `opaque-dpftrl`,
 `opaque-auditing`, `opaque-patches`, `opaque-transformers`) need:
 
 - `opaque.api.engine.types` — `ClippedPytree`, `NoisedPytree`,
-  `PerGroup`, `ClipState`, `NoiseState`, paired second-moment outputs.
+  `PerGroup`, `ClipState`, `NoiseState`, and the JME optimizer handoff.
 - `opaque.api.engine.pytree` — torch-pytree ops (`tree_map`,
   `partition`, `merge`, `global_norm`, …).
 - `opaque.api.engine.random` — `RngKey` (uint32 tensor), `key`,
@@ -14,8 +14,8 @@ that downstream stacks (`opaque-dpsgd`, `opaque-dpftrl`,
   handler registration with the base-side serialization registry.
 - `opaque.api.engine.distributed` — DDP collectives, sync registry,
   detection helpers.
-- `opaque.api.engine.noise_allocation` — per-group / paired-stream
-  noise stddev math, shared between DP-SGD and DP-FTRL.
+- `opaque.api.engine.noise_allocation` — per-group noise stddev math,
+  shared between DP-SGD and DP-FTRL.
 - `opaque.api.engine.clipping` — fixed + AUTO-S clipping primitives
   (constant-sensitivity; usable by both DP-SGD and DP-FTRL).
 - `opaque.api.engine.functional` — `make_functional`,

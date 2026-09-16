@@ -186,27 +186,40 @@ optimizer = adamw(lr=1e-3, weight_decay=0.01, noise_bias_correction=True)
 updates, opt_state = optimizer.update(noisy_grads, opt_state, params=params)
 ```
 
-### `noisy_squared_grads`: privately-estimated second moments
+### Projected JME aggregate squares
 
-**Idea:** instead of squaring the noisy gradient (which amplifies
-noise), use a *separately privatized* estimate of $g_t^2$ from a
-second noise stream.
+Instead of squaring the noisy gradient, `jme_noise` separately noises a clean
+aggregate square:
 
-Private second-moment estimation maintains two independent correlated
-noise streams — one for $g_t$ (first moment) and one for $g_t^2$
-(second moment).  The optimizer receives both and uses each for its
-respective EMA:
+\[
+a_t=\sum_i\operatorname{clip}(g_{t,i},C)/z,\qquad
+x_t=\Pi_R(a_t),
+\]
 
-$$\mu_t = \beta_1 \mu_{t-1} + (1-\beta_1) \tilde{g}_t, \qquad
-v_t = \beta_2 v_{t-1} + (1-\beta_2) \widetilde{g^2}_t$$
+\[
+\widetilde x_t=x_t+\xi_t,\qquad
+\widetilde{x_t^2}=x_t\odot x_t+\eta_t.
+\]
 
-The extra stream has a configuration-dependent privacy cost; calibrate the
-complete mechanism.
+The optimizer receives both values and uses each for its corresponding EMA:
 
-This mode requires an MF noise mechanism with
-`mf_gaussian_noise(..., second_moment_strategy=...)`, so it
-applies to **DP-FTRL** training, not standard DP-SGD with i.i.d. Gaussian
-noise.
+\[
+\mu_t=\beta_1\mu_{t-1}+(1-\beta_1)\widetilde x_t,\qquad
+v_t=\beta_2v_{t-1}+(1-\beta_2)\widetilde{x_t^2}.
+\]
+
+The separately noised square is routed through `SecondMomentNoiseOutput`; the
+optimizer does not subtract first-stream noise variance in this branch. JME and
+noise-variance bias correction are alternatives.
+
+With coupled Adam/L2 weight decay, Opaque deterministically transforms the two
+JME streams to estimate `(g + weight_decay * params)²`. Decoupled AdamW applies
+weight decay after moment scaling and leaves the JME square unchanged.
+
+Projected JME is DP-SGD-only. It requires scalar clipping, a fixed public
+aggregate radius, an explicit allocation policy, standard Gaussian noise, and
+plain independent Poisson sampling. See
+[Projected JME](../mechanisms/dp-sgd/jme.md).
 
 ### Choosing from measurements
 
@@ -215,7 +228,7 @@ learning rate, schedule, and bias correction together.
 
 ### When to use which
 
-The bias-correction (BC) and private-second-moment paths target the same
+The bias-correction (BC) and JME paths target the same
 v-update bias by different means; they are alternatives.  BC default is
 **off** — turn it on once you've tuned LR; see
 [Choosing from measurements](#choosing-from-measurements)
@@ -229,31 +242,26 @@ above.
 | LR-robust alternative to AdamW | `radam` | Rectification gate flattens LR sensitivity to ±0.1% across ±3× |
 | Sign-based, lowest memory | `lion` | No second moment; sharp LR optimum (~AdamW LR / 10) |
 | DP-FTRL without an Adam-family update | `sgd` | No second moment to correct |
-| DP-FTRL with Adam, private second moments | `adamw(...) + SecondMomentNoiseOutput` | Substitutes a privatized `g²` stream for squaring noised gradients |
-| DP-FTRL with Adam, no extra budget | `adamw(noise_bias_correction=True)` | BC alternative when the second-moment overhead isn't acceptable |
+| DP-SGD with a separately noised clean square | `adamw(...) + jme_noise(...)` | Uses projected JME instead of squaring noised gradients |
+| DP-FTRL with Adam | `adamw(...)` | Single correlated gradient stream; JME is not supported for repeated MF rows |
 | Sparse gradients under DP | `adagrad` | `noise_bias_correction=True` is essentially mandatory — without it the un-decaying accumulator absorbs `t·σ²` |
 | RMSprop user under DP | `rmsprop` | LR-sensitive; tune carefully (lr=1e-4 worked in our sweep, 5e-4 diverged) |
 
-## AdamW With Private Second Moments
+## AdamW with projected JME
 
 ```python
-from opaque.dpftrl.noise import band_mf_strategy, mf_gaussian_noise
+from opaque.dpsgd.noise import jme_noise
+from opaque.dpsgd.noise.types import JmeAllocation
 from opaque.optimizers import adamw
+from opaque.random import key
 
-# Strategy: momentum=beta1 (Adam's first moment workload)
-strategy = band_mf_strategy(bands=8, momentum=0.9)
-second_strategy = band_mf_strategy(bands=8, momentum=0.999)
-
-# Noise: passing second_moment_strategy creates two MF streams (g, g²).
-noise_fn, noise_state = mf_gaussian_noise(
-    grad_template, strategy,
-    n_steps=1000,
+noise_fn, noise_state = jme_noise(
     noise_multiplier=noise_multiplier,
+    aggregate_norm=1.0,
+    allocation=JmeAllocation.first_variance_cap(1.5),
     key=key(42),
-    second_moment_strategy=second_strategy,
 )
 
-# Optimizer: decoupled weight decay, callable LR schedule.
 optimizer = adamw(lr=lr_schedule_fn, betas=(0.9, 0.999), weight_decay=0.01)
 opt_state = optimizer.init(params)
 ```
@@ -263,9 +271,9 @@ opt_state = optimizer.init(params)
 ```python
 for batch in dataloader:
     grads, clip_state = grad_fn(params, batch, state=clip_state)
-    noisy_grads, noise_state = noise_fn(grads, noise_state)
+    moments, noise_state = noise_fn(grads, noise_state)
     updates, opt_state = optimizer.update(
-        noisy_grads, opt_state,
+        moments, opt_state,
         params=params,
     )
     params = torchopt.apply_updates(params, updates)
@@ -273,32 +281,23 @@ for batch in dataloader:
 
 ### Accounting
 
-Privacy accounting for the paired release uses the same underlying
-mechanism PLD as the first-moment-only release: the runtime σ allocation
-is sensitivity-proportional, so the joint Mahalanobis budget collapses to
-a single sensitivity-1 Gaussian release at the same noise multiplier.
+After whitening by its two runtime scales, projected JME is dominated by a
+sensitivity-one Gaussian release at the same noise multiplier. Plain independent
+Poisson sampling therefore uses the standard DP-SGD chain:
 
 ```python
-strategy = band_mf_strategy(bands=bands)
-mechanism = dpftrl_acc.mf_gaussian(nm, strategy)
-process = dpftrl_acc.poisson(mechanism, sample_rate=q, n_steps=n)
+step = dpsgd_acc.poisson(dpsgd_acc.gaussian(nm), sample_rate=q)
+process = step * num_steps
 ```
 
-Same pattern for DP-SGD: just `dpsgd_acc.gaussian(nm)` (or
-`dpsgd_acc.adaclip(dpsgd_acc.gaussian(nm), ...)`) — no transformation
-wrapper. AUTO-S clipping (`auto_clipped_grad(..., second_moment=True)`)
-calibrates against the same plain `dpsgd_acc.gaussian(nm)` because AUTO-S
-contributes no extra threshold-quantile cost.
-
-### CLI
+### CLI example
 
 ```bash
-python examples/train_dpftrl.py --preset smoke --optimizer adamw --mechanism blt --second-moment
+python examples/train_dpsgd.py --preset smoke --optimizer adamw \
+  --jme --jme-aggregate-norm 1.0 \
+  --jme-allocation first_variance_cap \
+  --jme-max-first-variance-ratio 1.5
 ```
-
-Works with MF mechanisms supported by `mf_gaussian_noise`: `band_mf`, `blt`,
-`bisr`, `bsr`, and `lambda_cgd`.  In second-moment mode, pass
-`second_moment_strategy` explicitly.
 
 ## DP-specific optimizer considerations
 

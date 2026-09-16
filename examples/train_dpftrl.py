@@ -7,13 +7,9 @@ combined with the correct optimizer.
 
 KEY DIFFERENCES FROM DP-SGD (train_dpsgd.py):
 
-  1. Optimizer: SGD with Polyak momentum (default), or one of the
-     Opaque-built v-using optimizers (``adamw``, ``ademamix``).  For
-    adaptive optimizers, pair with ``--second-moment`` to activate a
-    private squared-gradient stream.  The optimizer consumes the
-    privately-estimated ``g²`` stream alongside standard noised gradients.
-    ``lion`` is also exposed but has no v, so ``--second-moment`` is
-    rejected for it.
+  1. Optimizer: SGD with Polyak momentum (default), or an Opaque-built
+    adaptive optimizer. DP-FTRL releases one correlated gradient stream;
+    private aggregate-square JME is a DP-SGD-only mechanism.
 
   2. Clipping: Fixed scalar norm or fixed per-group norms (``--per-group-clipping``).
      Adaptive clipping is not supported (sensitivity must stay constant across
@@ -27,8 +23,6 @@ KEY DIFFERENCES FROM DP-SGD (train_dpsgd.py):
 
   5. Noise: Fixed stddev, correlated across steps via C^{-1} streaming
      multiplication. Cannot change noise level mid-training.
-    With ``--second-moment`` (Adam-family only): two independent MF noise
-    streams, calibrated via joint first+second moment sensitivity.
 
 MECHANISMS:
 
@@ -74,18 +68,10 @@ USAGE:
   # Non-DP baseline (no noise, no privacy accounting, same loop)
   python examples/train_dpftrl.py --preset mellum-kstack --mechanism none
 
-    # Adam-family without private second moments (single-stream MF noise)
+    # Adam-family on the single correlated gradient stream
   python examples/train_dpftrl.py --preset smoke --optimizer adamw
 
-    # DP-Adam with private second moments (two MF noise streams)
-    python examples/train_dpftrl.py --preset smoke --optimizer adamw --second-moment
-    python examples/train_dpftrl.py --preset smoke --optimizer adamw --second-moment --mechanism blt
-    python examples/train_dpftrl.py --preset smoke --optimizer adamw --second-moment --beta1 0.9 --beta2 0.999
-
-    # AdEMAMix with private second moments — slow EMA captures long-range gradient signal
-    python examples/train_dpftrl.py --preset smoke --optimizer ademamix --second-moment
-
-    # Lion under MF noise (no private second moment — lion has no second moment)
+    # Lion under MF noise
   python examples/train_dpftrl.py --preset smoke --optimizer lion
 
 REFERENCES:
@@ -96,7 +82,6 @@ REFERENCES:
   - BISR: https://arxiv.org/abs/2505.12128
   - BSR: https://arxiv.org/abs/2405.13763
   - DP-FTRL: https://arxiv.org/abs/2103.00039
-    - Private second moments: https://arxiv.org/abs/2502.06597
 """
 
 # ruff: noqa: E402
@@ -163,11 +148,7 @@ from opaque.scheduling import (
     with_warmup,
 )
 from opaque.scheduling.types import Schedule
-from opaque.types import (
-    PerGroup,
-    SecondMomentClippingOutput,
-    SecondMomentNoiseOutput,
-)
+from opaque.types import PerGroup
 
 try:
     import wandb
@@ -460,11 +441,8 @@ def parse_args():
         help=(
             "Optimizer.  ``sgd`` is the canonical DP-FTRL baseline (sgd, "
             "Polyak momentum).  ``adam`` / ``adamw`` / ``ademamix`` are "
-            "Adam-family adaptive optimizers; pair with ``--second-moment`` "
-            "to activate a private squared-gradient stream (``adamw`` / "
-            "``ademamix`` only — the others fall back to single-stream).  "
-            "``lion`` is sign-of-momentum; works under MF noise but has "
-            "no ``v`` so ``--second-moment`` is auto-disabled.  "
+            "Adam-family adaptive optimizers over the single noised gradient "
+            "stream. ``lion`` is sign-of-momentum. "
             "``adafactor`` / ``rmsprop`` / ``adagrad`` are second-moment-"
             "only optimizers (no first-moment EMA, so the MF workload is "
             "the identity — equivalent in noise structure to DP-SGD; the "
@@ -474,21 +452,6 @@ def parse_args():
             "optimizer reads the per-step *realized* σ from "
             "``NoisedPytree.noise_stddev`` so the second-moment EMA "
             "debias is correct for every strategy."
-        ),
-    )
-    train_g.add_argument(
-        "--second-moment",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help=(
-            "Activate private second-moment noise: ``mf_gaussian_noise`` produces a "
-            "privately-estimated ``g²`` stream alongside noised gradients, "
-            "and Opaque optimizers consume it automatically.  Joint noise "
-            "uses sensitivity-proportional Mahalanobis allocation: privacy "
-            "accounting is the underlying MF mechanism at the same noise "
-            "multiplier — no extra cost.  Requires an Adam-family optimizer "
-            "(``adamw`` or ``ademamix``) with a second moment to consume "
-            "the paired stream.  Off by default."
         ),
     )
     train_g.add_argument(
@@ -618,7 +581,7 @@ def parse_args():
         help="Clipping mode: 'fixed' (clipped_grad, threshold = --clipping-norm) "
         "or 'auto' (AUTO-S smooth scaling, sensitivity bound = --clipping-norm). "
         "AUTO-S satisfies MF's constant per-record sensitivity invariant; both "
-        "modes compose with --per-group-clipping and --second-moment.",
+        "modes compose with --per-group-clipping.",
     )
     dp_g.add_argument(
         "--auto-gamma",
@@ -1448,7 +1411,6 @@ def main():
             normalize_by=args.batch_size,
             microbatch_size=args.microbatch_size,
             return_aux=True,
-            second_moment=args.second_moment,
         )
     else:
         grad_fn, clip_state = clipped_grad(
@@ -1459,7 +1421,6 @@ def main():
             normalize_by=args.batch_size,
             microbatch_size=args.microbatch_size,
             return_aux=True,
-            second_moment=args.second_moment,
         )
 
     # Caller-applied torch.compile of the whole DP grad transform (opt-in).
@@ -1521,44 +1482,13 @@ def main():
     if args.target_delta is None:
         args.target_delta = 1.0 / (global_train_size**1.1)
 
-    # Build the accounting mechanism.
-    #
-    # Two orthogonal toggles:
-    #   ``is_adam_family``: optimizer has a first-moment EMA at β₁
-    #     (``adamw``, ``ademamix``, ``lion``).  Drives MF workload
-    #     momentum.
-    #   ``use_second_moment`` (= ``args.second_moment``): switch from
-    #     single-stream MF noise to private first+second moment noise.
-    #     Requires the optimizer to consume ``SecondMomentNoiseOutput``.
-    # "Adam-family" here = optimizer has a first-moment EMA at β₁; drives
-    # the MF workload momentum.  ``adafactor`` / ``rmsprop`` / ``adagrad``
+    # Build the accounting mechanism. "Adam-family" here means the optimizer
+    # has a first-moment EMA at β₁, which drives the MF workload momentum.
+    # ``adafactor`` / ``rmsprop`` / ``adagrad``
     # have only a second-moment accumulator and run on raw gradients in
     # the first-moment slot, so the MF workload momentum stays at 0
     # (configurable via ``--momentum``).
     is_adam_family = args.optimizer in ("adam", "adamw", "ademamix", "lion")
-    use_second_moment = args.second_moment
-
-    # Cross-flag validation: warn-and-disable on mismatch instead of raising.
-    # The ``--second-moment`` knob is auxiliary (it enables a paired-stream
-    # release), so silently degrading to single-stream noise on an
-    # incompatible optimizer / mechanism beats failing the run outright.
-    _SECOND_MOMENT_OPTIMIZERS = frozenset({"adamw", "ademamix"})
-    if use_second_moment and args.optimizer not in _SECOND_MOMENT_OPTIMIZERS:
-        print(
-            f"\nWARNING: --second-moment requires an Adam-family optimizer "
-            f"that consumes ``SecondMomentNoiseOutput`` "
-            f"({sorted(_SECOND_MOMENT_OPTIMIZERS)}); got --optimizer "
-            f"{args.optimizer!r}.  Disabling --second-moment for this run."
-        )
-        use_second_moment = False
-    if use_second_moment and args.mechanism in ("identity", "none"):
-        print(
-            f"\nWARNING: --second-moment requires a correlated MF mechanism "
-            f"to share the squared-stream Mahalanobis budget; got "
-            f"--mechanism {args.mechanism!r}.  Disabling --second-moment "
-            f"for this run."
-        )
-        use_second_moment = False
 
     def _workload_momentum() -> float:
         """Workload momentum for the primary (first moment) strategy."""
@@ -1598,11 +1528,6 @@ def main():
             return None
 
     strategy = _make_strategy(lr_sched=lr_schedule)
-
-    # No paired-stream wrap on the accountant: the joint Mahalanobis
-    # allocation in :func:`mf_gaussian_noise` makes the paired-release PLD
-    # identical to the first-moment-only release at the same noise
-    # multiplier.
 
     acc.set_discretization(
         seed=args.seed,
@@ -1704,10 +1629,6 @@ def main():
         print("\nNon-DP mode: using identity noise with stddev=0...")
     elif args.mechanism == "identity":
         print("\nCreating identity noise (i.i.d. Gaussian, DP-SGD baseline)...")
-    elif use_second_moment:
-        print(
-            f"\nCreating private second-moment noise (β₁={args.beta1}, β₂={args.beta2})..."
-        )
     else:
         print(f"\nCreating MF noise (β={args.momentum})...")
     t0 = time.time()
@@ -1728,21 +1649,7 @@ def main():
         noise_min_sep = _amp.min_sep
         noise_max_part = _amp.max_participations
 
-    if use_second_moment and args.mechanism not in ("identity", "none"):
-        second_strategy = _make_strategy(
-            momentum_override=args.beta2, lr_sched=lr_schedule
-        )
-        noise_fn, noise_state = mf_gaussian_noise(
-            trainable_params,
-            strategy,
-            n_steps=noise_n_steps,
-            min_sep=noise_min_sep,
-            max_participations=noise_max_part,
-            noise_multiplier=noise_multiplier,
-            key=key(args.seed),
-            second_moment_strategy=second_strategy,
-        )
-    elif args.mechanism in ("identity", "none"):
+    if args.mechanism in ("identity", "none"):
         noise_fn, noise_state = mf_gaussian_noise(
             trainable_params,
             identity_strategy(),
@@ -1791,8 +1698,6 @@ def main():
     elif args.optimizer == "adamw":
         from opaque.optimizers import adamw
 
-        # ``--second-moment`` drives the noise side; the same optimizer
-        # consumes ``SecondMomentNoiseOutput`` when the noise output carries it.
         optimizer = adamw(
             lr=lr_callable,
             betas=(args.beta1, args.beta2),
@@ -1874,27 +1779,20 @@ def main():
 
     print("\nDP-FTRL setup:")
     print(f"  Mechanism: {args.mechanism}")
-    second_moment_note = " + private second moment" if use_second_moment else ""
     if is_adam_family:
         print(
-            f"  Optimizer: {args.optimizer}{second_moment_note} "
+            f"  Optimizer: {args.optimizer} "
             f"(β₁={args.beta1}, β₂={args.beta2}, "
             f"ε={args.adam_eps}, weight_decay={args.weight_decay})"
         )
-        if use_second_moment:
-            print(
-                f"  Workload: EMA β₁={args.beta1} (1st moment), β₂={args.beta2} (2nd moment)"
-            )
-        else:
-            print(f"  Workload: EMA β₁={args.beta1} (single-stream MF)")
+        print(f"  Workload: EMA β₁={args.beta1} (single-stream MF)")
         if args.mechanism == "bsr":
             print(
                 f"  BSR workload (α={args.bsr_alpha}, β=β₁={args.beta1}): "
                 "noise strategy uses paper (α,β); independent of optimizer --weight-decay; require α>β."
             )
     else:
-        # sgd / lion (lion technically has β₁ but no second moment; treat like
-        # the SGD-style printout since neither consumes a squared-gradient stream).
+        # SGD-style workload summary.
         print(
             f"  Optimizer: {args.optimizer} (β={args.momentum}, "
             f"weight_decay={args.weight_decay})"
@@ -1921,15 +1819,10 @@ def main():
         print(f"  Clipping norm: {clip_norm} (fixed)")
         print(f"  Sensitivity: {zeta:.6f} (= {clip_norm} / {args.batch_size})")
     print(f"  Noise multiplier (σ): {noise_multiplier:.4f}")
-    if use_second_moment and args.mechanism not in ("identity", "none"):
-        # Per-stream σ is allocated by the dispatcher
-        # (sensitivity-proportional Mahalanobis on the encoded streams) and
-        # surfaces at runtime via ``noise_output.{noisy_grads,noisy_squared_grads}.noise_stddev``.
-        print("  Paired-stream allocation: sensitivity-proportional Mahalanobis")
-    else:
-        print(
-            f"  Base noise stddev: {base_noise_stddev:.6f} (= {noise_multiplier:.4f} × {zeta:.6f})"
-        )
+    print(
+        f"  Base noise stddev: {base_noise_stddev:.6f} "
+        f"(= {noise_multiplier:.4f} × {zeta:.6f})"
+    )
     if identity_sigma is not None:
         ratio = noise_multiplier / identity_sigma
         print(f"  Identity baseline σ: {identity_sigma:.4f} (ratio: {ratio:.2f}×)")
@@ -2045,17 +1938,9 @@ def main():
                     state=clip_state,
                 )
 
-            # ``grads`` is a ``SecondMomentClippingOutput`` when
-            # ``--second-moment`` is on (clipped_grad produced both
-            # streams per-example), or a single ``ClippedPytree``
-            # otherwise — the noise function dispatches polymorphically.
             if is_ddp:
                 clip_state, aux = sync(clip_state, aux)
-                if isinstance(grads, SecondMomentClippingOutput):
-                    sum_gradients_(grads.grads)
-                    sum_gradients_(grads.squared_grads)
-                else:
-                    sum_gradients_(grads)
+                sum_gradients_(grads)
             sp.mark("clip")
 
             noisy_grads, noise_state = noise_fn(grads, noise_state)
@@ -2065,12 +1950,9 @@ def main():
             # is a cheap cross-rank consistency check on the
             # internal step counter and latched sensitivity bound —
             # see :mod:`opaque.dpftrl.noise._distributed`.
-            if is_ddp and not isinstance(noisy_grads, SecondMomentNoiseOutput):
+            if is_ddp:
                 noise_state = sync(noise_state)
-            if isinstance(noisy_grads, SecondMomentNoiseOutput):
-                step_noise_stddev = noisy_grads.noisy_grads.noise_stddev
-            else:
-                step_noise_stddev = noisy_grads.noise_stddev
+            step_noise_stddev = noisy_grads.noise_stddev
             sp.mark("noise")
 
             updates, opt_state = optimizer.update(
@@ -2181,10 +2063,9 @@ def main():
     print(f"Model: {args.model_name}")
     print(f"Dataset: {args.dataset} ({global_train_size} train samples)")
     print(f"\nMechanism: {args.mechanism}")
-    second_moment_suffix = " + private second moment" if use_second_moment else ""
     if is_adam_family:
         print(
-            f"Optimizer: {args.optimizer}{second_moment_suffix} "
+            f"Optimizer: {args.optimizer} "
             f"(β₁={args.beta1}, β₂={args.beta2})"
         )
     else:

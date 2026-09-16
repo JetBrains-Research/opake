@@ -17,7 +17,6 @@ from opaque.api.dpftrl.noise._bsr import BsrStrategy
 from opaque.api.dpftrl.noise._engine import MFNoiseState
 from opaque.api.dpftrl.noise._identity import IdentityStrategy
 from opaque.api.dpftrl.noise._lambda_cgd import LambdaCgdStrategy
-from opaque.api.dpftrl.noise._second_moment import SecondMomentMFNoiseState
 
 if TYPE_CHECKING:
     import torch
@@ -119,5 +118,4 @@ __all__ = [
     "MfStrategy",
     "RawMfNoiseFactoryProvider",
     "RawMfNoiseFactory",
-    "SecondMomentMFNoiseState",
 ]

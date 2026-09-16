@@ -173,11 +173,6 @@ rest of the run. The bound is `noise_multiplier × max_norm`, so each
 step must produce gradients with the same `max_norm` for the privacy
 claim to hold.
 
-For private second-moment estimation, pass
-`second_moment_strategy=...`; the joint allocation is accounted with
-the same mechanism PLD as the first-moment release. See
-[Optimizers](optimizers.md) and [Noise](noise.md).
-
 ## 5. Sampling
 
 DP-FTRL has its own sampler family under `opaque.dpftrl.sampling`:
@@ -209,14 +204,10 @@ optimizer = adamw(lr=1e-3, noise_bias_correction=True)
 opt_state = optimizer.init(params)
 ```
 
-Private second-moment AdamW pairs with `mf_gaussian_noise(...,
-second_moment_strategy=...)` — the noise mechanism produces a
-`SecondMomentNoiseOutput` and the optimizer's DP-aware path consumes
-it. See [Optimizers](optimizers.md) for the full second-moment story.
-
-**Stability under the paired release.** Adam-family stability remains
-workload-dependent. Watch clipping rate and gradient norms; lowering
-the learning rate or using suitable per-group bounds can help.
+DP-FTRL exposes one correlated gradient stream. Projected aggregate-square JME
+is DP-SGD-only because one protected record may affect multiple MF input rows,
+which requires a separate joint sensitivity derivation. Adam-family optimizers
+may still consume the single noised stream normally.
 
 ## 7. End-to-end loop
 

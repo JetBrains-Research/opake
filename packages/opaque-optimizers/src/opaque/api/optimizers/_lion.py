@@ -10,8 +10,8 @@ Reference:
     Chen et al., "Symbolic Discovery of Optimization Algorithms",
     arXiv:2302.06675.
 
-DP notes.  Lion has no second moment, so neither the φ-EMA bias
-correction (DP-AdamW-BC) nor private second-moment substitution apply.
+DP notes. Lion has no second moment, so neither the φ-EMA bias
+correction (DP-AdamW-BC) nor JME aggregate-square substitution applies.
 The update accepts noised gradients unchanged; ``sign()`` produces a
 direction-only step.  No DP-aware mode is provided.
 """

@@ -35,7 +35,6 @@ from opaque.types import (
     ClippedPytree,
     NoisedPytree,
     PerGroup,
-    SecondMomentClippingOutput,
     SecondMomentNoiseOutput,
 )
 
@@ -305,34 +304,6 @@ class TestBoundedGradientAggregation:
         assert isinstance(averaged, NoisedPytree)
         assert averaged.max_norm == pytest.approx(0.5)
         assert averaged.noise_stddev == pytest.approx(0.25)
-
-    def test_sum_gradients_preserves_second_moment_clipping_output(self):
-        out = SecondMomentClippingOutput(
-            grads=ClippedPytree({"w": torch.tensor([1.0, 2.0])}, max_norm=0.5),
-            squared_grads=ClippedPytree({"w": torch.tensor([3.0])}, max_norm=1.0),
-        )
-
-        reduced = sum_gradients(out)
-
-        assert isinstance(reduced, SecondMomentClippingOutput)
-        assert reduced.grads is not out.grads
-        assert reduced.squared_grads is not out.squared_grads
-        assert reduced.grads.max_norm == 0.5
-        assert reduced.squared_grads.max_norm == 1.0
-        torch.testing.assert_close(reduced.grads.pytree["w"], out.grads.pytree["w"])
-        torch.testing.assert_close(
-            reduced.squared_grads.pytree["w"], out.squared_grads.pytree["w"]
-        )
-
-    def test_sum_gradients_inplace_second_moment_clipping_output(self):
-        out = SecondMomentClippingOutput(
-            grads=ClippedPytree({"w": torch.tensor([1.0])}, max_norm=0.5),
-            squared_grads=ClippedPytree({"w": torch.tensor([2.0])}, max_norm=1.0),
-        )
-        result = sum_gradients_(out)
-        assert result is None
-        torch.testing.assert_close(out.grads.pytree["w"], torch.tensor([1.0]))
-        torch.testing.assert_close(out.squared_grads.pytree["w"], torch.tensor([2.0]))
 
     def test_sum_gradients_preserves_second_moment_noise_output(self):
         out = SecondMomentNoiseOutput(
