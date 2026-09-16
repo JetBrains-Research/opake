@@ -357,14 +357,14 @@ def test_forced_forward_chunks_bound_grouped_mm_rows(monkeypatch):
 def test_forced_weight_grad_tiles_share_route_plan(monkeypatch):
     x, gate_up, down, index, weights = _inputs(B=1, T=1, K=1)
     monkeypatch.setattr(_moe_memory, "_MAX_WORKSPACE_BYTES", 3_000)
-    plan_ids = []
-    accumulate = _grouped_moe._accumulate_grouped_AtB
+    sort_rows = []
+    route_sort = _grouped_moe._route_sort
 
-    def recording_accumulate(A, B, plan, *args, **kwargs):
-        plan_ids.append(id(plan))
-        return accumulate(A, B, plan, *args, **kwargs)
+    def recording_route_sort(expert_of_row, n_groups):
+        sort_rows.append(expert_of_row.numel())
+        return route_sort(expert_of_row, n_groups)
 
-    monkeypatch.setattr(_grouped_moe, "_accumulate_grouped_AtB", recording_accumulate)
+    monkeypatch.setattr(_grouped_moe, "_route_sort", recording_route_sort)
 
     def loss(xx, g, d, ii, ww):
         return Opaque_GroupedMoE.apply(xx, g, d, ii, ww).square().mean()
@@ -372,8 +372,7 @@ def test_forced_weight_grad_tiles_share_route_plan(monkeypatch):
     actual = vmap(grad(loss, argnums=(1, 2)), in_dims=(0, None, None, 0, 0))(
         x, gate_up, down, index, weights
     )
-    assert len(plan_ids) >= 2
-    assert plan_ids[::2] == plan_ids[1::2]
+    assert sort_rows == [index.numel(), index.numel()]
     assert actual[0].shape[:2] == (1, gate_up.shape[0])
     assert actual[1].shape[:2] == (1, down.shape[0])
 
