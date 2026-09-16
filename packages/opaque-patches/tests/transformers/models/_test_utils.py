@@ -257,6 +257,7 @@ def build_patched_model_pair(
 _FAMILY_MODULE_PATCH_NAMES = (
     "create_causal_mask",
     "create_sliding_window_causal_mask",
+    "create_recurrent_attention_mask",
     "repeat_kv",
     "eager_attention_forward",
     "apply_rotary_pos_emb",
@@ -512,6 +513,8 @@ def assert_parity_vmap_grad(
     label: str = "",
     apply_model_patches_kwargs: dict | None = None,
     dtype: torch.dtype | None = None,
+    batch: int = 4,
+    seq: int = 12,
 ):
     """Compare vmap gradients against an upstream runtime-compatible reference."""
     torch.manual_seed(0)
@@ -529,7 +532,7 @@ def assert_parity_vmap_grad(
 
     unpatched.train()
     patched.train()
-    batch, seq, vocab = 4, 12, unpatched.config.vocab_size
+    vocab = unpatched.config.vocab_size
     input_ids = torch.randint(0, vocab, (batch, seq), device=device)
     attention_mask = torch.ones(batch, seq, dtype=torch.long, device=device)
     labels = input_ids.clone()
