@@ -200,12 +200,12 @@ def _validate_clipping_norm(clipping_norm: float | PerGroup) -> None:
         )
 
 
-def _tensor_clipping_norm(
+def _prepare_kernel_clipping_norm(
     clipping_norm: float | PerGroup,
     args: tuple[Any, ...],
     batch_argnums: tuple[int, ...],
 ) -> torch.Tensor | PerGroup:
-    """Copy a runtime threshold to the batch device without specializing its value."""
+    """Require a non-empty batch and place its clipping norm on the batch device."""
     batch_leaves = tree_leaves(args[batch_argnums[0]])
     tensor = next(
         (leaf for leaf in batch_leaves if isinstance(leaf, torch.Tensor)), None
@@ -214,6 +214,14 @@ def _tensor_clipping_norm(
         raise ConfigurationError(
             *("Could not determine the device for the runtime clipping norm",)
         )
+    if tensor.shape[0] == 0:
+        raise ConfigurationError(
+            *(
+                "Function-output clipping requires a non-empty batch because "
+                "the output pytree cannot be inferred otherwise.",
+            )
+        )
+
     if isinstance(clipping_norm, PerGroup):
         return PerGroup(
             clipping_norm.groups,
@@ -505,6 +513,9 @@ def clipped_fun(
 
         With ``return_stats=True`` and ``return_aux=False``, the clipped value
         is paired with :class:`ClippingStats`.
+
+    Raises:
+        ConfigurationError: If the batch is empty.
     """
     batch_argnums = _prepare_clipped_fun(
         batch_argnums, clipping_norm, return_aux, return_stats
@@ -662,7 +673,7 @@ def clipped_fun(
                 second_moment,
             )
         )
-        kernel_clipping_norm = _tensor_clipping_norm(
+        kernel_clipping_norm = _prepare_kernel_clipping_norm(
             current_clipping_norm, args, batch_argnums
         )
         in_dims = tuple(0 if i in batch_argnums else None for i in range(len(args)))
