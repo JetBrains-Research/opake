@@ -361,8 +361,9 @@ def _build_privacy_summary(trainer: DPTrainer) -> dict[str, float | str]:
     # this is the declared full-run epsilon, not an incomplete-prefix value.
     if epsilon == "unknown" and trainer._ctx is not None:
         ctx = trainer._ctx
-        epsilon = round(ctx.accounting.epsilon_at(ctx.target_delta), 4)
-        delta = ctx.target_delta
+        if ctx.accounting is not None:
+            epsilon = round(ctx.accounting.epsilon_at(ctx.target_delta), 4)
+            delta = ctx.target_delta
         noise_multiplier = round(ctx.noise_multiplier, 6)
 
     # Fall back to args.
