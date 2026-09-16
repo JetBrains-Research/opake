@@ -63,11 +63,23 @@ must be set.** Neither has a silent default — construction raises if
 both are `None`. The usual configurations are:
 
 - `privacy_target_epsilon=ε` (NM left as `None`) — calibrate the noise
-  multiplier from the budget at `train()` start.
-- `privacy_noise_multiplier=σ` (target_eps left as `None`) — fix the
-  noise multiplier; accounted ε is reported but not constrained.
+  multiplier from the budget at `train()` start and enable privacy accounting.
+- `privacy_noise_multiplier=σ` (target_eps left as `None`) — fixed-noise
+  training. Independently composed DP-SGD runs skip privacy accounting by
+  default; set `privacy_accounting=True` to report the resulting ε without
+  constraining it. Complete-horizon configurations (matrix-factorization
+  mechanisms, k-out-of-t sampling) keep accounting on.
 - For independent DP-SGD only, set both to use a fixed multiplier and
   stop after the accumulated epsilon reaches the target.
+
+Privacy accounting is on by default whenever `privacy_target_epsilon` is set
+or the noise mechanism accounts over the complete horizon; only
+independently composed fixed-noise DP-SGD runs default to off, where
+`privacy_accounting=False` is also an explicit opt-out. Disabled runs do not
+report ε / δ or write `accountant.json` checkpoints. Setting
+`privacy_accounting=False` with a complete-horizon mechanism raises: the
+horizon snapshot is what lets a resumed run detect a changed noise strategy
+or multiplier, so it is always recorded.
 
 Setting `privacy_noise_multiplier=0.0` together with a
 `privacy_target_epsilon` raises: the non-private path can't honour a
