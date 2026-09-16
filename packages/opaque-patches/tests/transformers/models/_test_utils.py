@@ -98,6 +98,7 @@ def assert_vmap_grad(model, device, dtype=None):
     )
     assert len(grads.pytree) > 0
     assert all(torch.isfinite(g).all() for g in grads.pytree.values())
+    return grads
 
 
 # ----------------------------------------------------------------------------

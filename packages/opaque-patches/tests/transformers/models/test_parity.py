@@ -88,8 +88,6 @@ _PARITY_SKIP_FAMILIES = {
 # These families require runtime compatibility shims even for an ordinary
 # forward, so no strict-upstream parity reference is available.
 _STRICT_FORWARD_PARITY_SKIP_FAMILIES = {
-    "deepseek_v4",
-    "gpt_oss",
     "qwen3_next",
 }
 
@@ -99,14 +97,6 @@ _BACKWARD_GRAD_XFAIL_REASONS = {
     "qwen3_next": (
         "Transformers Qwen3-Next calls Cache.get_seq_length on a cache containing "
         "only linear-attention layers"
-    ),
-    "deepseek_v4": (
-        "the required eager-attention compatibility shim omits the upstream "
-        "self-attention sink gradient"
-    ),
-    "gpt_oss": (
-        "the required eager-attention compatibility shim omits the upstream "
-        "self-attention sink gradient"
     ),
 }
 
