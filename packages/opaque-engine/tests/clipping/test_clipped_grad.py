@@ -917,7 +917,7 @@ class TestEmptyBatchStructureAndDtypeParity:
         (x, y), (empty_x, empty_y) = self._batches()
 
         def transform(g):
-            return {"q": g["w"]}
+            return {"q": g["w"] + 7.0}
 
         gf, state = clipped_grad(
             _linear_loss,
@@ -931,6 +931,23 @@ class TestEmptyBatchStructureAndDtypeParity:
         assert empty.pytree["q"].dtype == full.pytree["q"].dtype
         assert torch.all(empty.pytree["q"] == 0)
 
+    def test_nonfinite_transform_template_is_zero(self):
+        params = self._params()
+        _, (empty_x, empty_y) = self._batches()
+
+        def transform(g):
+            return {"q": g["w"] / torch.linalg.vector_norm(g["w"])}
+
+        gf, state = clipped_grad(
+            _linear_loss,
+            batch_argnums=(1, 2),
+            clipping_norm=1.0,
+            pre_clipping_transform=transform,
+        )
+        empty, _ = gf(params, empty_x, empty_y, state=state)
+        assert torch.isfinite(empty.pytree["q"]).all()
+        assert torch.all(empty.pytree["q"] == 0)
+
     def test_second_moment_streams_parity(self):
         from opaque.types import SecondMomentClippingOutput
 
@@ -938,7 +955,7 @@ class TestEmptyBatchStructureAndDtypeParity:
         (x, y), (empty_x, empty_y) = self._batches()
 
         def transform(g):
-            return {"q": g["w"] * 2.0}
+            return {"q": g["w"] * 2.0 + 7.0}
 
         gf, state = clipped_grad(
             _linear_loss,

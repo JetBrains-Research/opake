@@ -614,7 +614,7 @@ class TestAdaptiveEmptyBatchStructureAndDtypeParity:
         params, (x, y), (empty_x, empty_y) = self._params_and_batches()
 
         def transform(g):
-            return {"q": g["w"]}
+            return {"q": g["w"] + 7.0}
 
         grad_fn, clip_state = adaptive_clipped_grad(
             _dict_linear_loss,
@@ -634,7 +634,7 @@ class TestAdaptiveEmptyBatchStructureAndDtypeParity:
         params, (x, y), (empty_x, empty_y) = self._params_and_batches()
 
         def transform(g):
-            return {"q": g["w"]}
+            return {"q": g["w"] + 7.0}
 
         grad_fn, clip_state = adaptive_clipped_grad(
             _dict_linear_loss,

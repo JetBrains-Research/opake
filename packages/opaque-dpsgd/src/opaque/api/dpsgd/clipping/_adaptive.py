@@ -451,9 +451,7 @@ def adaptive_clipped_grad(
         # same bound ``clipped_grad`` would attach on a non-empty step.
         if batch_size_from_args(args, batch_argnums_tuple) == 0:
             new_state = _empty_batch_state(state)
-            # Mirror the inner ``clipped_grad`` output contract: transform the
-            # zero pytree, then cast to the configured output dtype (the
-            # across-batch sum casts to ``dtype`` on non-empty steps).
+            # Build the zero aggregate in the transformed gradient schema.
             zeros = empty_clipped_grads_like(
                 args,
                 argnums_tuple,
