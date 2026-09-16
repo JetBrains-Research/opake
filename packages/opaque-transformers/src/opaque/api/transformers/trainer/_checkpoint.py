@@ -304,14 +304,19 @@ class RuntimeCheckpoint:
         metadata={"compare_on_resume": True, "drift": "shape"},
     )
 
-    # --- MoE router-load release ---------------------------------------
-    router_load_ratio: float | None = field(
+    # --- MoE router auxiliary loss ---------------------------------------
+    # The surrogate coefficient the run trained with (``0.0``: release off).
+    # A resume may not switch the release on or off (the load-noise stream
+    # would restart at step 0 on the same key); a changed coefficient only
+    # changes the trajectory.
+    router_aux_loss_coef: float | None = field(
+        default=None,
+        metadata={"compare_on_resume": True, "drift": "shape"},
+    )
+    router_aux_ratio: float | None = field(
         default=None,
         metadata={"compare_on_resume": True, "drift": "dp_relevant"},
     )
-    # Whether the release was on; a resume may not switch it (the release
-    # stream would restart at step 0 on the same key).
-    router_load: bool | None = None
 
 
 def save_dp_runtime_state(  # noqa: PLR0913
@@ -338,8 +343,8 @@ def save_dp_runtime_state(  # noqa: PLR0913
     learning_rate: float | None = None,
     warmup_steps: int | float | None = None,
     lr_scheduler_kwargs: dict[str, Any] | None = None,
-    router_load_ratio: float | None = None,
-    router_load: bool | None = None,
+    router_aux_loss_coef: float | None = None,
+    router_aux_ratio: float | None = None,
 ) -> None:
     """Save the DP runtime bundle as a :class:`RuntimeCheckpoint`."""
     if not isinstance(clip_state, ClipState):
@@ -379,10 +384,12 @@ def save_dp_runtime_state(  # noqa: PLR0913
         learning_rate=(float(learning_rate) if learning_rate is not None else None),
         warmup_steps=(float(warmup_steps) if warmup_steps is not None else None),
         lr_scheduler_kwargs=lr_scheduler_kwargs,
-        router_load_ratio=(
-            float(router_load_ratio) if router_load_ratio is not None else None
+        router_aux_loss_coef=(
+            float(router_aux_loss_coef) if router_aux_loss_coef is not None else None
         ),
-        router_load=(bool(router_load) if router_load is not None else None),
+        router_aux_ratio=(
+            float(router_aux_ratio) if router_aux_ratio is not None else None
+        ),
     )
     # ``torch.save`` of a dataclass round-trips via pickle.  Kept as
     # pickle to handle the heterogeneous types (tensors inside

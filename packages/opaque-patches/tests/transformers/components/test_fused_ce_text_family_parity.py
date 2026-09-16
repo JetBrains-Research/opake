@@ -137,8 +137,14 @@ def test_fused_ce_explicitly_preserves_logits_for_metrics():
     assert output.logits is not None
 
 
-def test_router_auxiliary_loss_contract_kept_without_loss_only():
-    """Without ``loss_only`` a router-logits request defers to HF's forward."""
+def test_config_default_router_logits_defer_without_loss_only():
+    """Only an explicit router-logits request takes the aux-free route.
+
+    Without ``loss_only`` a call that merely inherits ``output_router_logits``
+    from the config defers to HF's forward, auxiliary loss included; an
+    explicit ``output_router_logits=True`` is answered here (see the model
+    tests) so HF's batch-coupled loss never runs on a per-example call.
+    """
     sentinel = object()
     calls = []
 
@@ -146,17 +152,12 @@ def test_router_auxiliary_loss_contract_kept_without_loss_only():
         calls.append(kwargs)
         return sentinel
 
-    config = types.SimpleNamespace(output_router_logits=False)
+    config = types.SimpleNamespace(output_router_logits=True)
     model = types.SimpleNamespace(config=config)
     forward = _make_fused_ce_causal_lm_forward(original)
     labels = torch.ones(1, 3, dtype=torch.long)
 
-    output = forward(
-        model,
-        labels=labels,
-        output_router_logits=True,
-        loss_only=False,
-    )
+    output = forward(model, labels=labels, loss_only=False)
 
     assert output is sentinel
     assert calls == [
@@ -173,7 +174,6 @@ def test_router_auxiliary_loss_contract_kept_without_loss_only():
             "return_dict": None,
             "cache_position": None,
             "logits_to_keep": 0,
-            "output_router_logits": True,
         }
     ]
 

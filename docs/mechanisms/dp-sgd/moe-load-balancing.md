@@ -269,21 +269,44 @@ into the clipper. For a model with no patches, the loss function calls
 the backbone and the head itself through `functional_call` and computes
 the cross-entropy inline; HF's auxiliary path never runs.
 
-### DPTrainer
+### DPTrainer and SFTTrainer
 
-`TrainingArguments(router_load=True, router_load_max_tokens=<row length>)`
-switches the trainer's clipper to `moe_clipped_grad` and wraps its
-accountant in `moe_aux` with `router_load_ratio` (default 0.02). The
-geometry is read off the model, `alpha` defaults to the model config's
-`router_aux_loss_coef`, the loss closure passes the two forward keywords,
-and every logged step carries `router_load_imbalance` and
-`router_load_noise_std`. The release state rides in the DP runtime
-checkpoint with the other clip states, and DDP ranks synchronize it
-through the trainer's existing state sync. It needs the Gaussian
-mechanism, fixed clipping, and the base per-example causal-LM loss; a
-subclass that overrides `compute_per_example_loss` is rejected at
-construction because its forward cannot hand the router logits to the
-clipper.
+The trainers take TRL's field: `router_aux_loss_coef` on
+`TrainingArguments` (inherited by `SFTConfig`), zero by default. On a
+mixture-of-experts model a non-zero value switches the clipper to
+`moe_clipped_grad` with that coefficient on the surrogate and wraps the
+accountant in `moe_aux`; the DP knobs travel in
+`router_aux_kwargs` (`max_tokens`, `ratio`, `mean_tokens`, `filter_beta`).
+`SFTConfig` derives `max_tokens` from `max_length`, so
+
+```python
+SFTConfig(router_aux_loss_coef=0.01, max_length=1024, ...)
+```
+
+is the whole opt-in, and `SFTConfig.from_trl` copies a TRL config's
+coefficient. `DPTrainer` needs the bound spelled out:
+`TrainingArguments(router_aux_loss_coef=0.01,
+router_aux_kwargs={"max_tokens": 1024})`. The live model config is set
+to `output_router_logits=False` and `router_aux_loss_coef=0.0` for the
+run: the surrogate is added by the clipper, the per-example forwards ask
+for the router logits explicitly, and HF's batch-coupled auxiliary loss,
+whose in-place scatter cannot run under `vmap`, never runs; the original
+flags are written back for `save_pretrained`. A zero coefficient turns
+the model's auxiliary loss off, as in TRL, and a dense model ignores the
+field.
+
+The geometry is read off the model, every logged step carries
+`router_aux_imbalance` and `router_aux_noise_std`, the release state rides
+in the DP runtime checkpoint with the other clip states, a resume may not
+switch the release on or off, and DDP ranks synchronize the state
+through the trainer's existing state sync. The router logits reach the
+clipper through `compute_per_example_loss_and_router_logits`, the seam
+next to `compute_per_example_loss`: `DPTrainer` implements it on its
+causal-LM forward and `SFTTrainer` on each of its loss paths (the fused
+`dft` path asks the backbone, the others the model forward), so a
+subclass with its own per-example loss overrides both. `DPOTrainer` does
+not implement the seam and rejects the coefficient. The release needs
+the Gaussian mechanism and fixed clipping.
 
 ### Choosing the public constants
 

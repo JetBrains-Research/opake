@@ -189,10 +189,12 @@ def _make_fused_ce_causal_lm_forward(
     or :data:`FUSED_LINEAR_CE_ATTR`) or the loss options are unsupported.
     The fused routes return ``logits=None``.
 
-    ``output_router_logits=True`` on a loss-only call returns the backbone's
-    per-layer router logits in a ``MoeCausalLMOutputWithPast`` with
-    ``aux_loss=None``: HF's batch-coupled load-balancing loss has no
-    per-example gradient and is not computed on this path.
+    ``output_router_logits=True`` on any call takes this forward too and
+    returns the backbone's per-layer router logits in a
+    ``MoeCausalLMOutputWithPast`` with ``aux_loss=None``: HF's batch-coupled
+    load-balancing loss has no per-example gradient and is never computed
+    here (its in-place scatter is not vmap-safe either); a call that is not
+    loss-only keeps the eager ``lm_head`` logits.
     """
 
     def forward(
@@ -213,8 +215,11 @@ def _make_fused_ce_causal_lm_forward(
         **kwargs,
     ):
         # The wrapper is inert unless this call explicitly permits a loss-only
-        # result. Inference and logits-consuming labeled calls stay model-native.
-        if labels is None or not loss_only:
+        # result or asks for router logits. Inference and other logits-consuming
+        # calls stay model-native.
+        if not (loss_only and labels is not None) and not kwargs.get(
+            "output_router_logits"
+        ):
             return original(
                 self,
                 input_ids=input_ids,
@@ -282,6 +287,7 @@ def _make_fused_ce_causal_lm_forward(
         fused_enabled = bool(getattr(self, FUSED_LINEAR_CE_ATTR, fused))
         use_fused_ce = (
             loss_only
+            and labels is not None
             and fused_enabled
             and _fused_linear_ce_loss_is_supported(logits_to_keep, kwargs)
             and (
@@ -363,7 +369,11 @@ def _make_fused_ce_causal_lm_forward(
                 else logits_to_keep
             )
             logits = self.lm_head(hidden_states[:, slice_indices, :])
-            loss = self.loss_function(logits, labels, self.vocab_size, **kwargs)
+            loss = (
+                self.loss_function(logits, labels, self.vocab_size, **kwargs)
+                if labels is not None
+                else None
+            )
 
         if not return_dict:
             output = (logits, *outputs[1:])

@@ -168,6 +168,7 @@ clip-noise-step.
 | Method | Override scope |
 |---|---|
 | `compute_per_example_loss(fmodel, params, inputs, *, return_logits=False)` | Per-example loss; called under vmap.  Primary extension point for custom training objectives. |
+| `compute_per_example_loss_and_router_logits(fmodel, params, inputs)` | Per-example `(loss, router_logits, attention_mask, telemetry)` for the MoE release (`router_aux_loss_coef != 0`); a subclass that overrides `compute_per_example_loss` overrides this too. |
 | `prediction_step(model, inputs, prediction_loss_only, ignore_keys=None)` | Override only if the default ModelOutput-shaped eval is wrong for the model. |
 | `evaluation_loop(dataloader, *, description, prediction_loss_only, ignore_keys, metric_key_prefix)` | Override only if the full eval loop needs custom orchestration. |
 | `create_optimizer()` | Override only to swap the functional torchopt optimizer; prefer `optimizer_cls_and_kwargs`. |

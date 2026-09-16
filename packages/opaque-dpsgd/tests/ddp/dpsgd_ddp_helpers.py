@@ -705,6 +705,9 @@ def _expect_release_state_mismatch(state) -> None:
         message = str(exc)
     assert message is not None, "a mismatched release state was not rejected"
     assert "release state" in message
+    # Every rank raised after the same collective; meet once more before the
+    # process group is torn down so no rank exits mid-collective.
+    torch.distributed.barrier()
 
 
 def _worker_moe_sync_ratio_mismatch_gloo(rank: int, world_size: int, port: int) -> None:

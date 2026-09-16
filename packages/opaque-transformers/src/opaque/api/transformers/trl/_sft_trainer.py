@@ -30,7 +30,7 @@ from opaque.alignment.metric import entropy_from_logits, mean_token_accuracy
 from opaque.alignment.sft.collator import language_modeling_collator
 from opaque.alignment.sft.loss import dft_loss, fused_dft_loss, nll_loss
 from opaque.api.transformers.trainer import DPTrainer
-from opaque.exceptions import ConfigurationError
+from opaque.exceptions import ConfigurationError, OperationError
 
 from ._sft_config import SFTConfig
 
@@ -509,21 +509,23 @@ class SFTTrainer(DPTrainer):
     # ------------------------------------------------------------------
     # Fused logits-free loss (plan §E) — last hidden state only
     # ------------------------------------------------------------------
-    def _last_hidden_state(
+    def _backbone_forward(
         self,
         params: dict[str, Any],
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        """Backbone last hidden state ``(T, H)`` only — no lm_head, no all-layers.
+        *,
+        output_router_logits: bool = False,
+    ) -> tuple[torch.Tensor, Any]:
+        """Backbone forward: ``(last_hidden_state, router_logits)`` — no lm_head.
 
         Calls the backbone submodule (resolved via :func:`_resolve_fused_handles`)
         functionally with the backbone-scoped slice of ``params`` (keys under the
         ``"<prefix>."`` namespace, re-rooted to the submodule). Returns just the
         last-layer hidden state — unlike ``output_hidden_states=True``, which
         stacks all ``L+1`` layers and can exceed the ``(T, V)`` logits the fused
-        path is avoiding. The HF backbones in scope return it as ``out[0]`` /
-        ``out.last_hidden_state``.
+        path is avoiding — and, on request, the per-layer router logits of a
+        mixture-of-experts backbone (``None`` otherwise).
 
         Calling the unwrapped backbone (not the inner causal-LM) guarantees a
         ``BaseModelOutputWithPast`` rather than ``CausalLMOutputWithPast``; the
@@ -543,18 +545,99 @@ class SFTTrainer(DPTrainer):
         if unbatched:
             input_ids = input_ids.unsqueeze(0)
             attention_mask = attention_mask.unsqueeze(0)
-        out = torch.func.functional_call(
-            backbone,
-            backbone_params,
-            (),
-            {"input_ids": input_ids, "attention_mask": attention_mask},
-        )
-        hidden = out[0] if isinstance(out, tuple) else out.last_hidden_state
-        return hidden.squeeze(0) if unbatched else hidden
+        kwargs: dict[str, Any] = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        if output_router_logits:
+            kwargs["output_router_logits"] = True
+        out = torch.func.functional_call(backbone, backbone_params, (), kwargs)
+        if isinstance(out, tuple):
+            hidden, router_logits = out[0], None
+        else:
+            hidden = out.last_hidden_state
+            router_logits = getattr(out, "router_logits", None)
+        return (hidden.squeeze(0) if unbatched else hidden), router_logits
+
+    def _last_hidden_state(
+        self,
+        params: dict[str, Any],
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """Backbone last hidden state ``(T, H)`` only (see :meth:`_backbone_forward`)."""
+        return self._backbone_forward(params, input_ids, attention_mask)[0]
 
     # ------------------------------------------------------------------
     # Loss (DP per-example hook)
     # ------------------------------------------------------------------
+    def _per_example_forward(
+        self,
+        fmodel: Callable[..., Any],
+        params: dict[str, Any],
+        inputs: dict[str, Any],
+        *,
+        return_logits: bool,
+        output_router_logits: bool,
+    ) -> tuple[Any, Any, Any]:
+        """One example's ``(loss, logits, router_logits)`` on the configured path.
+
+        ``logits`` is ``None`` on the logits-free fused paths and
+        ``router_logits`` is ``None`` unless requested from a mixture-of-experts
+        model.
+        """
+        extra: dict[str, Any] = (
+            {"output_router_logits": True} if output_router_logits else {}
+        )
+        # Fused logits-free per-example loss when eligible.
+        if self._loss_type == "chunked_nll" or self._fused_nll:
+            # The model computes the fused NLL when given labels (``chunked_nll``
+            # always; eligible ``nll`` reuses the same forward, per-example equal
+            # to ``nll_loss``). Falls back to the eager projection on CPU / non-half.
+            out = fmodel(
+                params,
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                labels=inputs["labels"],
+                **(
+                    {"loss_only": not return_logits}
+                    if self._fused_forward_uses_marker
+                    else {}
+                ),
+                **extra,
+            )
+            return out["loss"], out.get("logits"), out.get("router_logits")
+        if self._fused_dft or (not return_logits and self._fused_dft_loss_only):
+            # ``dft`` has no model-level fused forward, so project the backbone's
+            # last hidden state ``(T, H)`` through ``fused_dft_loss`` (falls back
+            # to the eager logits form on CPU / non-half).
+            if output_router_logits:
+                hidden, router_logits = self._backbone_forward(
+                    params,
+                    inputs["input_ids"],
+                    inputs["attention_mask"],
+                    output_router_logits=True,
+                )
+            else:
+                hidden = self._last_hidden_state(
+                    params, inputs["input_ids"], inputs["attention_mask"]
+                )
+                router_logits = None
+            lm_head_weight = params[self._lm_head_param_name]
+            loss = fused_dft_loss(hidden, lm_head_weight, inputs["labels"])
+            return loss, None, router_logits
+        out = fmodel(
+            params,
+            input_ids=inputs["input_ids"],
+            attention_mask=inputs["attention_mask"],
+            **extra,
+        )
+        if self._compute_loss_func is not None:
+            loss = self._compute_loss_func(out, inputs["labels"])
+        else:
+            loss = self._loss_fn(out.logits, inputs["labels"])
+        return loss, out.logits, out.get("router_logits")
+
     def compute_per_example_loss(
         self,
         fmodel: Callable[..., Any],
@@ -575,48 +658,66 @@ class SFTTrainer(DPTrainer):
         batch coupling). Per-example telemetry lives in
         :meth:`compute_per_example_loss_and_metrics`.
         """
-        # Fused logits-free per-example loss when eligible.
-        if self._loss_type == "chunked_nll" or self._fused_nll:
-            # The model computes the fused NLL when given labels (``chunked_nll``
-            # always; eligible ``nll`` reuses the same forward, per-example equal
-            # to ``nll_loss``). Falls back to the eager projection on CPU / non-half.
-            out = fmodel(
-                params,
-                input_ids=inputs["input_ids"],
-                attention_mask=inputs["attention_mask"],
-                labels=inputs["labels"],
-                **(
-                    {"loss_only": not return_logits}
-                    if self._fused_forward_uses_marker
-                    else {}
-                ),
-            )
-            loss = out["loss"]
-            logits = out.get("logits")  # None on the fused path
-        elif self._fused_dft or (not return_logits and self._fused_dft_loss_only):
-            # ``dft`` has no model-level fused forward, so project the backbone's
-            # last hidden state ``(T, H)`` through ``fused_dft_loss`` (falls back
-            # to the eager logits form on CPU / non-half).
-            hidden = self._last_hidden_state(
-                params, inputs["input_ids"], inputs["attention_mask"]
-            )
-            lm_head_weight = params[self._lm_head_param_name]
-            loss = fused_dft_loss(hidden, lm_head_weight, inputs["labels"])
-            logits = None  # logits-free path
-        else:
-            out = fmodel(
-                params,
-                input_ids=inputs["input_ids"],
-                attention_mask=inputs["attention_mask"],
-            )
-            logits = out.logits
-            if self._compute_loss_func is not None:
-                loss = self._compute_loss_func(out, inputs["labels"])
-            else:
-                loss = self._loss_fn(out.logits, inputs["labels"])
+        loss, logits, _ = self._per_example_forward(
+            fmodel,
+            params,
+            inputs,
+            return_logits=return_logits,
+            output_router_logits=False,
+        )
         if return_logits:
             return loss, logits
         return loss
+
+    def compute_per_example_loss_and_router_logits(
+        self,
+        fmodel: Callable[..., Any],
+        params: dict[str, Any],
+        inputs: dict[str, Any],
+    ) -> tuple[Any, Any, Any, dict[str, Any]]:
+        """The MoE seam: the SFT loss with the model's router logits.
+
+        The same forward as :meth:`compute_per_example_loss` on every loss path,
+        asked for ``output_router_logits`` (the backbone call on the fused
+        ``dft`` path, the model forward otherwise), with the completion
+        telemetry of :meth:`compute_per_example_loss_and_metrics` when logits
+        are available and ``log_completion_metrics`` is on.
+        """
+        want_logits = self._log_completion_metrics
+        loss, logits, router_logits = self._per_example_forward(
+            fmodel,
+            params,
+            inputs,
+            return_logits=want_logits,
+            output_router_logits=True,
+        )
+        if router_logits is None:
+            raise OperationError(
+                *(
+                    "router_aux_loss_coef != 0 but the SFT forward returned no "
+                    "router_logits; the backbone must record its router logits "
+                    "under output_router_logits=True.",
+                )
+            )
+        aux = self._completion_metrics(logits, inputs["labels"]) if want_logits else {}
+        return loss, router_logits, inputs["attention_mask"], aux
+
+    @staticmethod
+    def _completion_metrics(logits: Any, labels: torch.Tensor) -> dict[str, Any]:
+        """``entropy`` / ``mean_token_accuracy`` over the supervised tokens.
+
+        Empty without logits (the logits-free fused paths).
+        """
+        if logits is None:
+            return {}
+        # ``mask`` is the FULL-length supervised mask; ``entropy_from_logits`` and
+        # ``mean_token_accuracy`` both shift internally to next-token alignment
+        # (logits[..., :-1, :] vs mask[..., 1:]), so we pass the full mask here.
+        mask = labels != _IGNORE_INDEX
+        return {
+            "entropy": entropy_from_logits(logits, mask),
+            "mean_token_accuracy": mean_token_accuracy(logits, labels, mask),
+        }
 
     def prediction_step(
         self,
@@ -746,14 +847,4 @@ class SFTTrainer(DPTrainer):
         loss, logits = self.compute_per_example_loss(
             fmodel, params, inputs, return_logits=True
         )
-        if logits is None:
-            return loss, {}
-        labels = inputs["labels"]
-        # ``mask`` is the FULL-length supervised mask; ``entropy_from_logits`` and
-        # ``mean_token_accuracy`` both shift internally to next-token alignment
-        # (logits[..., :-1, :] vs mask[..., 1:]), so we pass the full mask here.
-        mask = labels != _IGNORE_INDEX
-        return loss, {
-            "entropy": entropy_from_logits(logits, mask),
-            "mean_token_accuracy": mean_token_accuracy(logits, labels, mask),
-        }
+        return loss, self._completion_metrics(logits, inputs["labels"])

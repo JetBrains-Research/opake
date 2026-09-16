@@ -20,7 +20,10 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
-from opaque.api.transformers.trainer._training_arguments import TrainingArguments
+from opaque.api.transformers.trainer._training_arguments import (
+    TrainingArguments,
+    _normalize_dict_field,
+)
 
 from ._sft_convert import _convert_trl_sft_config
 
@@ -121,6 +124,12 @@ class SFTConfig(TrainingArguments):
         if self.trust_remote_code:
             self.model_init_kwargs = dict(self.model_init_kwargs or {})
             self.model_init_kwargs["trust_remote_code"] = True
+        # TRL parity: ``router_aux_loss_coef`` alone enables the MoE release.
+        # Its public token bound is the row length the tokenizer truncates to.
+        if self.router_aux_loss_coef and self.max_length is not None:
+            router_aux_kwargs = _normalize_dict_field(self.router_aux_kwargs) or {}
+            router_aux_kwargs.setdefault("max_tokens", int(self.max_length))
+            self.router_aux_kwargs = router_aux_kwargs
         super().__post_init__()
 
     @classmethod
@@ -151,13 +160,14 @@ class SFTConfig(TrainingArguments):
         TRL-specific fields (``dataset_text_field``, ``chat_template_path``,
         ``completion_only_loss``, ``assistant_only_loss``, ``loss_type``,
         ``eos_token``, ``max_length``, ``pad_to_multiple_of``,
-        ``dataset_num_proc``, ``model_init_kwargs``, ``trust_remote_code``) are
-        copied directly.
+        ``dataset_num_proc``, ``model_init_kwargs``, ``trust_remote_code``,
+        ``router_aux_loss_coef``) are copied directly; on a mixture-of-experts
+        model the coefficient enables the DP router-load release with the
+        token bound derived from ``max_length``.
 
         Fields TRL has that opaque does not implement raise
         ``ValueError``: ``packing``, ``padding_free``, ``eval_packing``,
         ``shuffle_dataset``, ``truncation_mode='keep_end'``, and ``pad_token``.
-        A nonzero ``router_aux_loss_coef`` warns and trains as if it were 0.
 
         HF-inherited fields go through the same translation as
         :meth:`TrainingArguments.from_hf` — same DP-knob requirement, same

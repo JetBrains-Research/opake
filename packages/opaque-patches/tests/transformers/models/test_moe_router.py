@@ -289,16 +289,31 @@ class TestLossOnlyForward:
             assert torch.equal(loss_r, loss_c)
             torch.testing.assert_close(loss_r, loss_d, atol=1e-5, rtol=1e-5)
 
-    def test_without_loss_only_hf_contract_is_kept(self, device):
+    def test_explicit_router_logits_skip_hf_aux_on_every_route(self, device):
+        """An explicit ``output_router_logits=True`` never runs HF's batch aux.
+
+        The config default keeps the stock forward and its auxiliary loss; an
+        explicit request takes the aux-free route, loss-only or not, with or
+        without labels.
+        """
         model, _ = _tiny_mellum(device)
         input_ids, mask, labels = _ragged_batch(device, [12, 8], 12)
+        coef = model.config.router_aux_loss_coef
         with _restored_class_forwards(model):
             apply_model_patches(model)
             with torch.no_grad():
-                hf = model(
+                model.config.output_router_logits = True
+                hf = model(input_ids=input_ids, attention_mask=mask, labels=labels)
+                model.config.output_router_logits = False
+                eager = model(
                     input_ids=input_ids,
                     attention_mask=mask,
                     labels=labels,
+                    output_router_logits=True,
+                )
+                unlabeled = model(
+                    input_ids=input_ids,
+                    attention_mask=mask,
                     output_router_logits=True,
                 )
                 ours = model(
@@ -310,11 +325,18 @@ class TestLossOnlyForward:
                 )
             assert hf.aux_loss is not None
             assert hf.logits is not None
-            assert ours.aux_loss is None
+            for out in (eager, unlabeled, ours):
+                assert out.aux_loss is None
+                assert len(out.router_logits) == L
             assert ours.logits is None
-            assert len(ours.router_logits) == L
-            # HF adds ``coef * aux`` to the loss; ours is the plain CE.
-            expected_hf = ours.loss + model.config.router_aux_loss_coef * hf.aux_loss
+            assert unlabeled.loss is None
+            torch.testing.assert_close(eager.logits, hf.logits, atol=1e-5, rtol=1e-5)
+            torch.testing.assert_close(
+                unlabeled.logits, hf.logits, atol=1e-5, rtol=1e-5
+            )
+            # HF adds ``coef * aux`` to the loss; ours is the plain CE on both routes.
+            torch.testing.assert_close(eager.loss, ours.loss, atol=1e-5, rtol=1e-5)
+            expected_hf = ours.loss + coef * hf.aux_loss
             torch.testing.assert_close(hf.loss, expected_hf, atol=1e-5, rtol=1e-5)
 
     def test_config_default_requests_router_logits_in_loss_only(self, device):

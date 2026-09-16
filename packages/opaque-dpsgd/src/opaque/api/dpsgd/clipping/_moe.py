@@ -57,6 +57,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+#: Key of the private per-example load inside the clipper's aux payload.
+_LOAD_AUX_KEY = "__router_load__"
+
 #: Fold-in tag of the load-release noise stream.
 MOE_LOAD_STREAM_FOLD = "opaque.clipping.moe_load"
 
@@ -214,6 +217,7 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
     mean_tokens: float | None = None,
     alpha: float,
     filter_beta: float = 0.99,
+    has_aux: bool = False,
     return_aux: bool = False,
     return_stats: bool = False,
     pre_clipping_transform: Callable = lambda x: x,
@@ -227,7 +231,9 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
     ``loss_fn(params, *batch)`` is evaluated on one example and returns
     ``(loss, router_logits, attention_mask)``: the scalar loss, one ``(T, E)``
     router-logits tensor per routed layer, and the token mask (``None``
-    counts every position).  The returned function differentiates
+    counts every position); with ``has_aux`` a fourth item, a dict of
+    per-example tensors, rides ``loss_aux`` as in :func:`clipped_grad`.  The
+    returned function differentiates
     ``loss + alpha * E * w_x * <f_tilde - k/E, P(x)>`` (value-neutrally, so
     reported losses stay the plain ``loss``), clips and sums per-example
     gradients like :func:`clipped_grad`, and releases the batch mean of the
@@ -263,8 +269,11 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
         alpha: Coefficient of the surrogate (the model's router aux-loss
             coefficient).
         filter_beta: Bias-corrected EMA coefficient of the load estimate.
-        return_aux: Also return per-example diagnostics with ``loss_aux``
-            removed (the per-example load is private).
+        has_aux: ``loss_fn`` returns ``(loss, router_logits, attention_mask,
+            aux)``; ``aux`` is returned on ``loss_aux``.
+        return_aux: Also return per-example diagnostics; ``loss_aux`` carries
+            the ``has_aux`` dict (``None`` without it) and never the
+            per-example load, which is private.
         return_stats: Return aggregate clipping statistics instead.
         pre_clipping_transform: As in :func:`clipped_grad`.
         microbatch_size: As in :func:`clipped_grad`.
@@ -319,7 +328,13 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
     shifted = tuple(i + 1 for i in batch_positions)
 
     def wrapped(params, f_tilde, *rest, **kwargs):
-        loss, router_logits, attention_mask = loss_fn(params, *rest, **kwargs)
+        if has_aux:
+            loss, router_logits, attention_mask, user_aux = loss_fn(
+                params, *rest, **kwargs
+            )
+        else:
+            loss, router_logits, attention_mask = loss_fn(params, *rest, **kwargs)
+            user_aux = {}
         h_layers, probs, n_tokens = router_load_and_probs(
             router_logits, attention_mask, top_k=top_k, num_layers=num_layers
         )
@@ -329,7 +344,7 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
         )
         augmented = loss + alpha * (surrogate - surrogate.detach())
         load = weight * centred_load(h_layers, top_k=top_k, valid_tokens=n_tokens)
-        return augmented, load.detach()
+        return augmented, {_LOAD_AUX_KEY: load.detach(), **dict(user_aux)}
 
     inner_fn, _ = clipped_grad(
         wrapped,
@@ -401,13 +416,17 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
             )
         f_tilde = state.f_tilde.to(_first_device(params))
         (grads, aux), _ = inner_fn(params, f_tilde, *rest, state=None, **kwargs)
-        local = _local_load_mean(aux.loss_aux)
+        payload = dict(aux.loss_aux) if aux.loss_aux is not None else {}
+        local = _local_load_mean(payload.pop(_LOAD_AUX_KEY, None))
         if is_distributed():
             new_state = replace(state, _local_load=local, _pending=True)
         else:
             new_state = _release(state, local)
         if return_aux:
-            return (grads, replace(aux, loss_aux=None)), new_state
+            return (
+                grads,
+                replace(aux, loss_aux=payload if has_aux else None),
+            ), new_state
         if return_stats:
             stats: ClippingStats = _compute_clipping_stats(
                 aux.grad_norms,

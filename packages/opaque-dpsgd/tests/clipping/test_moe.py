@@ -59,7 +59,7 @@ def _loss_fn(params, x, mask, y):
     return loss, logits, mask
 
 
-def _factory(**overrides):
+def _factory(loss_fn=_loss_fn, **overrides):
     kwargs = {
         "clipping_norm": 1.0,
         "normalize_by": 4.0,
@@ -74,7 +74,7 @@ def _factory(**overrides):
         "alpha": 0.1,
     }
     kwargs.update(overrides)
-    return moe_clipped_grad(_loss_fn, **kwargs)
+    return moe_clipped_grad(loss_fn, **kwargs)
 
 
 def _random_logits(seed, num_layers=L, seq_len=T):
@@ -401,6 +401,27 @@ class TestRelease:
         _, s2 = grad_fn(params, x, mask, y, state=s1)
         _, s2r = grad_fn(params, x, mask, y, state=restored)
         assert torch.equal(s2.f_tilde, s2r.f_tilde)
+
+    def test_has_aux_returns_the_user_dict_without_the_load(self):
+        params = _params()
+        x, mask, y = _batch([T, 9, T, 5])
+
+        def loss_with_aux(params, x, mask, y):
+            loss, logits, m = _loss_fn(params, x, mask, y)
+            return loss, logits, m, {"tokens": m.float().sum()}
+
+        grad_fn, state = _factory(loss_with_aux, has_aux=True, return_aux=True)
+        (grads, aux), new = grad_fn(params, x, mask, y, state=state)
+        assert set(aux.loss_aux) == {"tokens"}
+        torch.testing.assert_close(
+            aux.loss_aux["tokens"], torch.tensor([T, 9, T, 5], dtype=torch.float32)
+        )
+        # The aux channel changes neither the gradients nor the release.
+        plain_fn, plain_state = _factory(return_aux=True)
+        (plain_grads, _), plain = plain_fn(params, x, mask, y, state=plain_state)
+        for name in params:
+            torch.testing.assert_close(grads.pytree[name], plain_grads.pytree[name])
+        torch.testing.assert_close(new.f_tilde, plain.f_tilde)
 
     def test_diagnostics_never_carry_the_load(self):
         params = _params()
