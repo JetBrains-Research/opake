@@ -3634,11 +3634,12 @@ unresolved mass is reported through <code>Pld.mc_resolution</code> and placed at
 </tr>
 </tbody>
 </table>
-<p>For large <code>n_steps × resolved_num_mc_samples</code>, the implementation keeps <strong>one copy</strong> of
-the MC random transcripts in <strong>Rust</strong> (compact <code>f64</code> arrays) and reuses them
-for every noise-multiplier probe during calibration (no Python list blow-up).
-Optional cap: set <code>OPAQUE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES</code> (default ~4 GiB);
-use <code>0</code> to disable transcript reuse and fall back to one-shot MC per <code>pld()</code> call.</p>
+<p>The transcript corpus needs <code>24 * n_steps * samples_per_direction</code> bytes.
+Noise calibration reuses it when it fits the
+<code>OPAQUE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES</code> cap (default 4 GiB).
+Oversized corpora emit a <code>RuntimeWarning</code> and use one-shot Monte Carlo;
+setting the cap to <code>0</code> disables reuse without a warning. The sample count
+and privacy bound are identical with either path.</p>
 <div class="admonition note">
 <p class="admonition-title">Without amplification</p>
 <p>You can also use BandMF without subsampling by omitting the

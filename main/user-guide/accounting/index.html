@@ -4369,6 +4369,13 @@ setting keeps its current value:</p>
 produce an advisory warning but are not capped. An <code>epsilon_at(delta)</code> query
 uses <code>min(mc_resolution, delta / 2)</code>, so smaller requested deltas automatically
 increase the sample count.</p>
+<p>B-min-sep and correlated Balls-in-Bins reuse Monte Carlo draws across noise
+probes when their transcript corpora fit the cache. Each cache defaults to
+4 GiB; configure them with <code>OPAQUE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES</code> and
+<code>OPAQUE_BNB_TRANSCRIPT_CACHE_MAX_BYTES</code>, respectively. Oversized entries emit
+a <code>RuntimeWarning</code> with the required bytes and cap, then use one-shot accounting.
+A cap of <code>0</code> disables reuse without a warning. Cache limits do not change
+accounting precision or bound total process memory.</p>
 <p>Discretization is always conservative: exact privacy-loss atoms, PMF
 coarsening, and histogram buckets are rounded upward to the grid. There is no
 option to request an optimistic or lower-bound accounting result.</p>
