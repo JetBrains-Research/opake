@@ -24,9 +24,12 @@ from opaque.api.engine.clipping import clipped_grad
 from opaque.functional import make_functional
 from opaque.patches.kernels import opaque_rms_norm, opaque_swiglu
 
-pytestmark = pytest.mark.skipif(
-    not torch.cuda.is_available(), reason="opaque-patches kernels require CUDA"
-)
+pytestmark = [
+    pytest.mark.cuda,
+    pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="opaque-patches kernels require CUDA"
+    ),
+]
 
 
 class _RmsNormBlock(nn.Module):

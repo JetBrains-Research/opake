@@ -35,7 +35,10 @@ from opaque.api.patches.kernels.linear_cross_entropy import (
     opaque_linear_cross_entropy_loss,
 )
 
-pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+pytestmark = [
+    pytest.mark.cuda,
+    pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required"),
+]
 
 # bf16 tolerances (lower precision than fp32 due to half-precision inputs)
 RTOL_FORWARD = 5e-3
