@@ -13,6 +13,10 @@ from torch.func import grad, vmap
 
 pytest.importorskip("triton")
 
+from opaque.api.patches.kernels._moe_expert_cast import (
+    clear_expert_shadow_cache,
+    expert_shadow_cache_info,
+)
 from opaque.api.patches.kernels._utils import cast_to_dtype
 from opaque.api.patches.kernels.fused_moe import opaque_fused_moe
 from opaque.api.patches.kernels.lora import (
@@ -28,6 +32,10 @@ pytestmark = [
 ]
 
 _AMP_DTYPES = (torch.float16, torch.bfloat16)
+
+
+def setup_function():
+    clear_expert_shadow_cache()
 
 
 def _clone_args(args, dtype):
@@ -277,6 +285,19 @@ def test_fused_moe_autocast_vmap_grad_with_fp32_weights(amp_dtype):
         torch.testing.assert_close(actual_grad, expected_grad, rtol=2e-2, atol=2e-2)
 
 
+def test_frozen_moe_shadows_follow_nested_autocast_dtype():
+    torch.manual_seed(0)
+    args = _moe_args(False)
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        bf16 = opaque_moe(*args)
+        with torch.autocast("cuda", dtype=torch.float16):
+            fp16 = opaque_moe(*args)
+        bf16_again = opaque_moe(*args)
+    assert bf16.dtype == bf16_again.dtype == torch.bfloat16
+    assert fp16.dtype == torch.float16
+    assert expert_shadow_cache_info()[0] == 4
+
+
 def _forward_memory(call):
     warmup = call()
     torch.cuda.synchronize()
@@ -350,8 +371,14 @@ def test_fused_moe_autocast_cast_peak_is_bounded_per_layer(trainable_experts):
 
     replica_bytes = sum(weight.numel() * 2 for weight in layers[0])
     peak, retained, output = _forward_memory(forward)
-    assert peak < 2.5 * replica_bytes
-    assert retained < replica_bytes
+    if trainable_experts:
+        assert peak < 2.5 * replica_bytes
+        assert retained < replica_bytes
+    else:
+        all_shadow_bytes = layer_count * replica_bytes
+        assert peak < all_shadow_bytes + 2.5 * replica_bytes
+        assert retained <= all_shadow_bytes
+        assert expert_shadow_cache_info() == (2 * layer_count, all_shadow_bytes)
     assert output.dtype == torch.bfloat16
 
 

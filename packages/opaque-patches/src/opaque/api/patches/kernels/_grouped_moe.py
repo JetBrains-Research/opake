@@ -35,6 +35,7 @@ import torch.nn.functional as F
 
 from ._moe_memory import (
     chunk_size,
+    fp32_accumulator_rows,
     grouped_backward_bytes_per_route,
     grouped_forward_bytes_per_route,
 )
@@ -91,27 +92,34 @@ def _fused_moe_forward(x_flat, W1, W2, expert_of_row, tw_row, K):
     E = W1.shape[0]
     I = W1.shape[1] // 2
     dt = x_flat.dtype
-    out = torch.zeros(N, H, dtype=torch.float32, device=x_flat.device)
+    out = torch.empty(N, H, dtype=dt, device=x_flat.device)
     per_route = grouped_forward_bytes_per_route(H, I, x_flat.element_size())
     route_chunk = chunk_size(
         expert_of_row.numel(),
         per_route,
         x_flat.device,
         fixed_bytes=out.numel() * out.element_size(),
+        row_multiple=K,
     )
+    route_chunk = min(route_chunk, fp32_accumulator_rows(N, H) * K)
     for lo in range(0, expert_of_row.numel(), route_chunk):
         hi = min(lo + route_chunk, expert_of_row.numel())
         local_sort, ends = _route_sort(expert_of_row[lo:hi], E)
         sidx = lo + local_sort
         tok_s = torch.div(sidx, K, rounding_mode="floor")
+        token_lo, token_hi = lo // K, hi // K
         x_s = x_flat[tok_s]
         gate_up = _grouped_mm(x_s, W1.mT, ends)
         g, u = gate_up[:, :I], gate_up[:, I:]
         h = F.silu(g.float()).to(dt) * u
         y = _grouped_mm(h, W2.mT, ends)
         yw = (y * tw_row[sidx].unsqueeze(-1)).float()
-        out.index_add_(0, tok_s, yw)
-    return out.to(dt)
+        local_out = torch.zeros(
+            token_hi - token_lo, H, dtype=torch.float32, device=x_flat.device
+        )
+        local_out.index_add_(0, tok_s - token_lo, yw)
+        out[token_lo:token_hi] = local_out.to(dt)
+    return out
 
 
 def _route_groups(real_eor, routes, K, E, tokens_per_sample):
@@ -288,11 +296,7 @@ def _fused_moe_backward(
     I = W1.shape[1] // 2
     dt = x_flat.dtype
     E = W1.shape[0]
-    dx = (
-        torch.zeros(N, H, dtype=torch.float32, device=x_flat.device)
-        if compute_x_grad
-        else None
-    )
+    dx = torch.empty(N, H, dtype=dt, device=x_flat.device) if compute_x_grad else None
     dtw = (
         torch.zeros(N * K, dtype=torch.float32, device=x_flat.device)
         if compute_route_grad
@@ -312,8 +316,13 @@ def _fused_moe_backward(
         if buffer is not None
     )
     route_chunk = chunk_size(
-        real_eor.numel(), per_route, x_flat.device, fixed_bytes=fixed_bytes
+        real_eor.numel(),
+        per_route,
+        x_flat.device,
+        fixed_bytes=fixed_bytes,
+        row_multiple=K,
     )
+    route_chunk = min(route_chunk, fp32_accumulator_rows(N, H) * K)
     weight_grads_fit = (
         not compute_gate_wgrad
         or chunk_size(
@@ -349,6 +358,17 @@ def _fused_moe_backward(
             local_sort, ends = _route_sort(real_eor[lo:hi], E)
             sidx = lo + local_sort
             tok_s = torch.div(sidx, K, rounding_mode="floor")
+            token_lo, token_hi = lo // K, hi // K
+            dx_local = (
+                torch.zeros(
+                    token_hi - token_lo,
+                    H,
+                    dtype=torch.float32,
+                    device=x_flat.device,
+                )
+                if compute_x_grad
+                else None
+            )
             x_s = x_flat[tok_s]
             gate_up = _grouped_mm(x_s, W1.mT, ends)
             g, u = gate_up[:, :I], gate_up[:, I:]
@@ -368,9 +388,10 @@ def _fused_moe_backward(
                     dgu = torch.cat([dh * u * dsilu, dh * silu], dim=-1)
                     if compute_x_grad:
                         dx_s = _grouped_mm(dgu, W1, ends)
-                        dx.index_add_(0, tok_s, dx_s.float())
+                        dx_local.index_add_(0, tok_s - token_lo, dx_s.float())
+            if compute_x_grad:
+                dx[token_lo:token_hi] = dx_local.to(dt)
 
-    dx = None if dx is None else dx.to(dt)
     dtw = None if dtw is None else dtw.reshape(N, K).to(dt)
     if not compute_wgrad:
         return dx, None, None, dtw
