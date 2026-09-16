@@ -272,8 +272,9 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
         has_aux: ``loss_fn`` returns ``(loss, router_logits, attention_mask,
             aux)``; ``aux`` is returned on ``loss_aux``.
         return_aux: Also return per-example diagnostics; ``loss_aux`` carries
-            the ``has_aux`` dict (``None`` without it) and never the
-            per-example load, which is private.
+            the ``has_aux`` dict (``None`` without it, and ``None`` on an empty
+            batch as in :func:`clipped_grad`) and never the per-example load,
+            which is private.
         return_stats: Return aggregate clipping statistics instead.
         pre_clipping_transform: As in :func:`clipped_grad`.
         microbatch_size: As in :func:`clipped_grad`.
@@ -416,8 +417,16 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
             )
         f_tilde = state.f_tilde.to(_first_device(params))
         (grads, aux), _ = inner_fn(params, f_tilde, *rest, state=None, **kwargs)
-        payload = dict(aux.loss_aux) if aux.loss_aux is not None else {}
-        local = _local_load_mean(payload.pop(_LOAD_AUX_KEY, None))
+        if aux.loss_aux is None:
+            # An empty batch carries no per-example payload: its load is zero
+            # and ``loss_aux`` stays ``None``. ``sync(aux)`` skips ``None``
+            # ranks and merges the others' dicts structurally, so an empty
+            # rank must not answer ``{}`` next to a keyed one.
+            payload = None
+            local = _local_load_mean(None)
+        else:
+            payload = dict(aux.loss_aux)
+            local = _local_load_mean(payload.pop(_LOAD_AUX_KEY, None))
         if is_distributed():
             new_state = replace(state, _local_load=local, _pending=True)
         else:

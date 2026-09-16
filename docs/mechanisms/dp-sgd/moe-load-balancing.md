@@ -145,8 +145,10 @@ constant:
 
 The estimate is consumed one step late, so there is no dependency inside
 a step: gradient and load come out of the same per-example transform,
-and at $\beta = 0.99$ the current batch has one percent weight in the
-estimate that multiplies its own gradient. The noise standard deviation
+the step's gradient multiplies $\tilde f_t$, which was fixed before the
+batch was drawn, and the batch's own load enters only the next step's
+constant (with weight $1 - \beta$, one percent at $\beta = 0.99$). The
+noise standard deviation
 of the latent estimate $k/E + \tilde d_t$, before the clamp, is known
 exactly at every step: `MoeClipState.filtered_noise_std` tracks the
 filter's noise variance recursively,
@@ -261,7 +263,11 @@ def loss_fn(params, input_ids, attention_mask, labels):
 
 `loss_only=True` selects the per-example loss forward and HF's own
 `output_router_logits=True` asks the backbone for the router logits; on
-that path the batch-coupled auxiliary loss is neither computed nor added
+that path the batch-coupled auxiliary loss is neither computed nor added.
+A loss function that keeps the logits passes the Opaque-only marker
+`router_aux_loss=False` instead of `loss_only=True` for the same aux-free
+answer; without a marker the patched model keeps HF's contract and an
+explicit `output_router_logits=True` computes and adds the auxiliary loss
 (see [model patches](../../user-guide/huggingface/model-patches.md)).
 `opaque.patches.transformers.moe_geometry(model)` reads `top_k`,
 `num_experts` and `num_layers` off the model as a mapping that unpacks
@@ -289,9 +295,10 @@ coefficient. `DPTrainer` needs the bound spelled out:
 router_aux_kwargs={"max_tokens": 1024})`. The live model config is set
 to `output_router_logits=False` and `router_aux_loss_coef=0.0` for the
 run: the surrogate is added by the clipper, the per-example forwards ask
-for the router logits explicitly, and HF's batch-coupled auxiliary loss,
-whose in-place scatter cannot run under `vmap`, never runs; the original
-flags are written back for `save_pretrained`. A zero coefficient turns
+for the router logits explicitly with the aux-free marker, and HF's
+batch-coupled auxiliary loss, whose in-place scatter cannot run under
+`vmap`, never runs; the original flags are written back for
+`save_pretrained`. A zero coefficient turns
 the model's auxiliary loss off, as in TRL, and a dense model ignores the
 field.
 

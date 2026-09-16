@@ -843,6 +843,7 @@ class DPTrainer:
         supported.
         """
         self._fused_forward_uses_marker = False
+        self._router_aux_forward_marker = False
         try:
             from opaque.patches import apply_model_patches
         except ImportError:
@@ -858,13 +859,13 @@ class DPTrainer:
             **kwargs,
         )
 
-        def accepts_marker(module: Any, *, allow_var_kwargs: bool) -> bool:
+        def accepts_marker(module: Any, name: str, *, allow_var_kwargs: bool) -> bool:
             try:
                 parameters = inspect.signature(module.forward).parameters.values()
             except (TypeError, ValueError):
                 return False
             return any(
-                parameter.name == "loss_only"
+                parameter.name == name
                 or (
                     allow_var_kwargs and parameter.kind is inspect.Parameter.VAR_KEYWORD
                 )
@@ -874,13 +875,20 @@ class DPTrainer:
         # A PEFT wrapper commonly accepts **kwargs while only its nested causal-LM
         # module carries the actual fused forward. Require both facts so an
         # unsupported custom model never receives an unknown marker.
-        self._fused_forward_uses_marker = bool(
-            accepts_marker(self._model, allow_var_kwargs=True)
-            and any(
-                accepts_marker(module, allow_var_kwargs=False)
-                for module in self._model.modules()
+        def installed_marker(name: str) -> bool:
+            return bool(
+                accepts_marker(self._model, name, allow_var_kwargs=True)
+                and any(
+                    accepts_marker(module, name, allow_var_kwargs=False)
+                    for module in self._model.modules()
+                )
             )
-        )
+
+        self._fused_forward_uses_marker = installed_marker("loss_only")
+        # ``router_aux_loss=False`` asks the patched forward for router logits
+        # without HF's batch-coupled auxiliary loss on any route, the custom
+        # ``compute_loss_func`` one (which keeps the logits) included.
+        self._router_aux_forward_marker = installed_marker("router_aux_loss")
 
     def _router_aux_text_config(self) -> Any | None:
         """The model's text config (``None`` for a model without a config)."""
@@ -900,9 +908,10 @@ class DPTrainer:
         the live config is set to ``output_router_logits=False`` and
         ``router_aux_loss_coef=0.0`` for the run: HF's batch-coupled auxiliary
         loss never runs under ``vmap`` (its in-place scatter cannot), the
-        per-example forwards ask for router logits explicitly, and the clipper
-        adds the surrogate. Dense models ignore the coefficient. The model's
-        original flags are restored around ``save_pretrained``.
+        per-example forwards ask for router logits explicitly with the
+        patched forward's aux-free marker, and the clipper adds the
+        surrogate. Dense models ignore the coefficient. The model's original
+        flags are restored around ``save_pretrained``.
         """
         a = self.args
         self._moe_geometry: dict[str, int] | None = None
@@ -2668,17 +2677,22 @@ class DPTrainer:
         The ``moe_clipped_grad`` contract used when ``router_aux_loss_coef`` is
         non-zero on a mixture-of-experts model: the same forward as
         :meth:`compute_per_example_loss`, called with
-        ``output_router_logits=True`` (TRL's ``compute_loss`` does the same),
-        returning the model's per-layer ``(T, E)`` router logits and the token
-        mask next to the loss, plus the per-example telemetry dict of
+        ``output_router_logits=True`` (TRL's ``compute_loss`` does the same)
+        and, on a patched model, the Opaque marker ``router_aux_loss=False``
+        so HF's batch-coupled auxiliary loss is never computed, returning the
+        model's per-layer ``(T, E)`` router logits and the token mask next to
+        the loss, plus the per-example telemetry dict of
         :meth:`compute_per_example_loss_and_metrics` (empty here). A subclass
         that overrides :meth:`compute_per_example_loss` overrides this hook
         too; the harness rejects the coefficient otherwise.
         """
+        request: dict[str, Any] = {"output_router_logits": True}
+        if self._router_aux_forward_marker:
+            request["router_aux_loss"] = False
         loss, _, output = self._forward_per_example(
             fmodel,
             params,
-            {**inputs, "output_router_logits": True},
+            {**inputs, **request},
             return_logits=False,
         )
         router_logits = output.get("router_logits")

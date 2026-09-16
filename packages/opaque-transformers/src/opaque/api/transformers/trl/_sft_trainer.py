@@ -284,11 +284,16 @@ class SFTTrainer(DPTrainer):
             preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         )
         forward_parameters = inspect.signature(self._model.forward).parameters.values()
-        self._fused_forward_uses_marker = any(
-            parameter.name == "loss_only"
-            or parameter.kind is inspect.Parameter.VAR_KEYWORD
-            for parameter in forward_parameters
-        )
+
+        def accepts_marker(name: str) -> bool:
+            return any(
+                parameter.name == name
+                or parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in forward_parameters
+            )
+
+        self._fused_forward_uses_marker = accepts_marker("loss_only")
+        self._router_aux_forward_marker = accepts_marker("router_aux_loss")
 
     # ------------------------------------------------------------------
     # PEFT: trainability of cloned-in token embeddings
@@ -586,9 +591,13 @@ class SFTTrainer(DPTrainer):
         ``router_logits`` is ``None`` unless requested from a mixture-of-experts
         model.
         """
-        extra: dict[str, Any] = (
-            {"output_router_logits": True} if output_router_logits else {}
-        )
+        # Router logits are requested with the patched forward's aux-free
+        # marker so HF's batch-coupled auxiliary loss never runs per example.
+        extra: dict[str, Any] = {}
+        if output_router_logits:
+            extra["output_router_logits"] = True
+            if self._router_aux_forward_marker:
+                extra["router_aux_loss"] = False
         # Fused logits-free per-example loss when eligible.
         if self._loss_type == "chunked_nll" or self._fused_nll:
             # The model computes the fused NLL when given labels (``chunked_nll``
@@ -679,7 +688,8 @@ class SFTTrainer(DPTrainer):
 
         The same forward as :meth:`compute_per_example_loss` on every loss path,
         asked for ``output_router_logits`` (the backbone call on the fused
-        ``dft`` path, the model forward otherwise), with the completion
+        ``dft`` path, the model forward with the aux-free marker
+        ``router_aux_loss=False`` otherwise), with the completion
         telemetry of :meth:`compute_per_example_loss_and_metrics` when logits
         are available and ``log_completion_metrics`` is on.
         """

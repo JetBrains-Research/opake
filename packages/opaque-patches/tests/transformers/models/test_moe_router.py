@@ -3,8 +3,9 @@
 """MoE router helpers: geometry, fp32 router, loss-only forward with router logits.
 
 Tiny random-init Mellum 2.0 models (E = 8, k = 2, L = 2) exercise
-``moe_geometry``, the opt-in fp32 router and the loss-only causal-LM forward's
-``output_router_logits`` contract on every cross-entropy route.
+``moe_geometry``, the opt-in fp32 router and the patched causal-LM forward's
+router-logits contract on every cross-entropy route: aux-free under the Opaque
+markers (``loss_only=True``, ``router_aux_loss=False``), HF-native otherwise.
 """
 
 from __future__ import annotations
@@ -289,12 +290,12 @@ class TestLossOnlyForward:
             assert torch.equal(loss_r, loss_c)
             torch.testing.assert_close(loss_r, loss_d, atol=1e-5, rtol=1e-5)
 
-    def test_explicit_router_logits_skip_hf_aux_on_every_route(self, device):
-        """An explicit ``output_router_logits=True`` never runs HF's batch aux.
+    def test_router_aux_loss_marker_skips_hf_aux_on_every_route(self, device):
+        """``router_aux_loss=False`` never runs HF's batch aux, loss-only or not.
 
-        The config default keeps the stock forward and its auxiliary loss; an
-        explicit request takes the aux-free route, loss-only or not, with or
-        without labels.
+        The marker takes the aux-free route with or without labels and with or
+        without ``loss_only``: the loss is the plain CE and the logits are the
+        model's.
         """
         model, _ = _tiny_mellum(device)
         input_ids, mask, labels = _ragged_batch(device, [12, 8], 12)
@@ -310,11 +311,13 @@ class TestLossOnlyForward:
                     attention_mask=mask,
                     labels=labels,
                     output_router_logits=True,
+                    router_aux_loss=False,
                 )
                 unlabeled = model(
                     input_ids=input_ids,
                     attention_mask=mask,
                     output_router_logits=True,
+                    router_aux_loss=False,
                 )
                 ours = model(
                     input_ids=input_ids,
@@ -322,6 +325,7 @@ class TestLossOnlyForward:
                     labels=labels,
                     loss_only=True,
                     output_router_logits=True,
+                    router_aux_loss=False,
                 )
             assert hf.aux_loss is not None
             assert hf.logits is not None
@@ -338,6 +342,56 @@ class TestLossOnlyForward:
             torch.testing.assert_close(eager.loss, ours.loss, atol=1e-5, rtol=1e-5)
             expected_hf = ours.loss + coef * hf.aux_loss
             torch.testing.assert_close(hf.loss, expected_hf, atol=1e-5, rtol=1e-5)
+
+    def test_explicit_router_logits_keep_hf_native_without_a_marker(self, device):
+        """``output_router_logits=True`` alone keeps HF's forward, aux loss included.
+
+        The patched model answers an ordinary call exactly as the config-default
+        request does: the auxiliary loss is computed and ``coef * aux`` is on
+        the loss; only the Opaque markers take the aux-free route.
+        """
+        model, _ = _tiny_mellum(device)
+        input_ids, mask, labels = _ragged_batch(device, [12, 8], 12)
+        coef = model.config.router_aux_loss_coef
+        with _restored_class_forwards(model):
+            apply_model_patches(model)
+            with torch.no_grad():
+                model.config.output_router_logits = True
+                by_config = model(
+                    input_ids=input_ids, attention_mask=mask, labels=labels
+                )
+                model.config.output_router_logits = False
+                explicit = model(
+                    input_ids=input_ids,
+                    attention_mask=mask,
+                    labels=labels,
+                    output_router_logits=True,
+                )
+                unlabeled = model(
+                    input_ids=input_ids,
+                    attention_mask=mask,
+                    output_router_logits=True,
+                )
+                plain = model(
+                    input_ids=input_ids,
+                    attention_mask=mask,
+                    labels=labels,
+                    loss_only=True,
+                )
+            for out in (by_config, explicit, unlabeled):
+                assert out.aux_loss is not None
+                assert out.logits is not None
+                assert len(out.router_logits) == L
+            assert unlabeled.loss is None
+            assert plain.aux_loss is None
+            torch.testing.assert_close(explicit.loss, by_config.loss)
+            torch.testing.assert_close(explicit.aux_loss, by_config.aux_loss)
+            torch.testing.assert_close(
+                explicit.loss,
+                plain.loss + coef * explicit.aux_loss,
+                atol=1e-5,
+                rtol=1e-5,
+            )
 
     def test_config_default_requests_router_logits_in_loss_only(self, device):
         model, _ = _tiny_mellum(device)

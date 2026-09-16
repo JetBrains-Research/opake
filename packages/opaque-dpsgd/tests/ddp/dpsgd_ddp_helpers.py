@@ -673,7 +673,14 @@ def _moe_loss(params: dict, x: torch.Tensor, mask: torch.Tensor, y: torch.Tensor
     return loss, logits, mask
 
 
-def _moe_factory(**overrides):
+def _moe_loss_with_aux(
+    params: dict, x: torch.Tensor, mask: torch.Tensor, y: torch.Tensor
+):
+    loss, logits, m = _moe_loss(params, x, mask, y)
+    return loss, logits, m, {"tokens": m.float().sum()}
+
+
+def _moe_factory(loss_fn=_moe_loss, **overrides):
     from opaque.dpsgd.clipping import moe_clipped_grad
     from opaque.random import key
 
@@ -691,7 +698,7 @@ def _moe_factory(**overrides):
         "alpha": 0.2,
     }
     kwargs.update(overrides)
-    return moe_clipped_grad(_moe_loss, **kwargs)
+    return moe_clipped_grad(loss_fn, **kwargs)
 
 
 def _expect_release_state_mismatch(state) -> None:
@@ -734,6 +741,47 @@ def _worker_moe_sync_pending_disagreement_gloo(
         if rank == 0:
             _, state = grad_fn(params, x[:2], mask[:2], y[:2], state=state)
         _expect_release_state_mismatch(state)
+    finally:
+        _cleanup_ddp()
+
+
+def _worker_moe_sync_one_rank_empty_gloo(
+    rank: int, world_size: int, port: int, out_path: str
+) -> None:
+    """An empty rank next to a keyed-``has_aux`` rank syncs state and aux."""
+    from opaque.distributed import sync
+
+    _setup_gloo(rank, world_size, port)
+    try:
+        params, x, mask, y = _moe_fixture()
+        grad_fn, state = _moe_factory(
+            loss_fn=_moe_loss_with_aux, has_aux=True, return_aux=True
+        )
+        rows = slice(0, 0) if rank == 0 else slice(0, 2)
+        (grads, aux), state = grad_fn(params, x[rows], mask[rows], y[rows], state=state)
+        if rank == 0:
+            assert aux.loss_aux is None
+            assert aux.batch_size == 0
+        else:
+            assert set(aux.loss_aux) == {"tokens"}
+        synced_state, synced_aux = sync(state, aux)
+        assert not synced_state._pending
+        assert synced_state.step == 1
+        assert synced_aux.batch_size == 2
+        assert set(synced_aux.loss_aux) == {"tokens"}
+        torch.testing.assert_close(
+            synced_aux.loss_aux["tokens"], mask[:2].sum(1).float()
+        )
+        gathered = [None] * world_size
+        dist.all_gather_object(gathered, synced_state.f_tilde)
+        assert all(torch.equal(gathered[0], other) for other in gathered[1:])
+        reduced = {}
+        for name, value in grads.pytree.items():
+            total = value.clone()
+            dist.all_reduce(total, op=dist.ReduceOp.SUM)
+            reduced[name] = total
+        if rank == 0:
+            torch.save({"grads": reduced, "f_tilde": synced_state.f_tilde}, out_path)
     finally:
         _cleanup_ddp()
 

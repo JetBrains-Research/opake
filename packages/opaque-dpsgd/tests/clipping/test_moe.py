@@ -423,6 +423,26 @@ class TestRelease:
             torch.testing.assert_close(grads.pytree[name], plain_grads.pytree[name])
         torch.testing.assert_close(new.f_tilde, plain.f_tilde)
 
+    def test_empty_batch_keeps_loss_aux_none_with_has_aux(self):
+        """An empty draw carries no payload: ``loss_aux`` stays ``None``.
+
+        ``sync(aux)`` skips ``None`` ranks and merges the others' dicts
+        structurally, so an empty rank must not answer ``{}`` next to a keyed
+        one.
+        """
+        params = _params()
+        x, mask, y = _batch([T, 9])
+
+        def loss_with_aux(params, x, mask, y):
+            loss, logits, m = _loss_fn(params, x, mask, y)
+            return loss, logits, m, {"tokens": m.float().sum()}
+
+        grad_fn, state = _factory(loss_with_aux, has_aux=True, return_aux=True)
+        (_, aux), new = grad_fn(params, x[:0], mask[:0], y[:0], state=state)
+        assert aux.loss_aux is None
+        assert aux.batch_size == 0
+        assert new.step == 1
+
     def test_diagnostics_never_carry_the_load(self):
         params = _params()
         x, mask, y = _batch([T, 9, T, 5])

@@ -208,7 +208,12 @@ Disable with `apply_model_patches(model, moe=False)`.
 **Router logits.** The loss-only forward accepts HF's `output_router_logits=True`
 next to `loss_only=True` and returns the per-layer router logits with
 `aux_loss=None`; HF's batch-coupled aux loss has no per-example gradient and is
-not computed on that path. This is what the
+not computed on that path. The Opaque-only marker `router_aux_loss=False` gives
+the same aux-free answer on a call that keeps the logits (no `loss_only`), which
+is how the trainers ask when a custom loss or a metric consumes the logits.
+Without a marker the patched model keeps HF's contract: an explicit
+`output_router_logits=True` computes and adds the auxiliary loss exactly as the
+unpatched forward does. This is what the
 [MoE load balancing](../../mechanisms/dp-sgd/moe-load-balancing.md) mechanism
 consumes, and `opaque.patches.transformers.moe_geometry(model)` reads
 `top_k`, `num_experts` and `num_layers` off the model for it.

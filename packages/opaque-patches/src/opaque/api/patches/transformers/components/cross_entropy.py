@@ -189,15 +189,20 @@ def _make_fused_ce_causal_lm_forward(
     or :data:`FUSED_LINEAR_CE_ATTR`) or the loss options are unsupported.
     The fused routes return ``logits=None``.
 
-    ``output_router_logits=True`` on any call takes this forward too and
-    returns the backbone's per-layer router logits in a
+    ``router_aux_loss=False`` is the second Opaque-only marker: it takes this
+    forward on any call, loss-only or not, with or without labels, and a call
+    that is not loss-only keeps the eager ``lm_head`` logits. Under either
+    marker the router logits requested with ``output_router_logits``
+    (explicitly or from the config) come back in a
     ``MoeCausalLMOutputWithPast`` with ``aux_loss=None``: HF's batch-coupled
     load-balancing loss has no per-example gradient and is never computed
-    here (its in-place scatter is not vmap-safe either); a call that is not
-    loss-only keeps the eager ``lm_head`` logits.
+    here (its in-place scatter is not vmap-safe either). A call without a
+    marker is model-native, an explicit ``output_router_logits=True``
+    included: HF computes and adds its auxiliary loss exactly as the
+    unpatched forward does.
     """
 
-    def forward(
+    def forward(  # noqa: PLR0913, PLR0917 - the HF causal-LM signature
         self,
         input_ids=None,
         attention_mask=None,
@@ -212,14 +217,14 @@ def _make_fused_ce_causal_lm_forward(
         cache_position=None,
         logits_to_keep: int | torch.Tensor = 0,
         loss_only: bool = False,
+        router_aux_loss: bool = True,
         **kwargs,
     ):
-        # The wrapper is inert unless this call explicitly permits a loss-only
-        # result or asks for router logits. Inference and other logits-consuming
-        # calls stay model-native.
-        if not (loss_only and labels is not None) and not kwargs.get(
-            "output_router_logits"
-        ):
+        # The wrapper is inert unless this call carries an Opaque marker: a
+        # loss-only result, or router logits without HF's auxiliary loss.
+        # Inference and other model-native calls, an explicit
+        # ``output_router_logits=True`` included, keep the original forward.
+        if not (loss_only and labels is not None) and router_aux_loss:
             return original(
                 self,
                 input_ids=input_ids,

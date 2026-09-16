@@ -137,13 +137,13 @@ def test_fused_ce_explicitly_preserves_logits_for_metrics():
     assert output.logits is not None
 
 
-def test_config_default_router_logits_defer_without_loss_only():
-    """Only an explicit router-logits request takes the aux-free route.
+def test_router_logits_requests_defer_without_a_marker():
+    """Only an Opaque marker takes the aux-free route.
 
-    Without ``loss_only`` a call that merely inherits ``output_router_logits``
-    from the config defers to HF's forward, auxiliary loss included; an
-    explicit ``output_router_logits=True`` is answered here (see the model
-    tests) so HF's batch-coupled loss never runs on a per-example call.
+    Without ``loss_only`` or ``router_aux_loss=False`` a call that asks for
+    router logits, from the config default or explicitly, defers to HF's
+    forward with the request intact, auxiliary loss included; the markers
+    never reach it.
     """
     sentinel = object()
     calls = []
@@ -156,26 +156,29 @@ def test_config_default_router_logits_defer_without_loss_only():
     model = types.SimpleNamespace(config=config)
     forward = _make_fused_ce_causal_lm_forward(original)
     labels = torch.ones(1, 3, dtype=torch.long)
+    native = {
+        "input_ids": None,
+        "attention_mask": None,
+        "position_ids": None,
+        "past_key_values": None,
+        "inputs_embeds": None,
+        "labels": labels,
+        "use_cache": None,
+        "output_attentions": None,
+        "output_hidden_states": None,
+        "return_dict": None,
+        "cache_position": None,
+        "logits_to_keep": 0,
+    }
 
-    output = forward(model, labels=labels, loss_only=False)
+    assert forward(model, labels=labels, loss_only=False) is sentinel
+    assert calls == [native]
 
-    assert output is sentinel
-    assert calls == [
-        {
-            "input_ids": None,
-            "attention_mask": None,
-            "position_ids": None,
-            "past_key_values": None,
-            "inputs_embeds": None,
-            "labels": labels,
-            "use_cache": None,
-            "output_attentions": None,
-            "output_hidden_states": None,
-            "return_dict": None,
-            "cache_position": None,
-            "logits_to_keep": 0,
-        }
-    ]
+    config.output_router_logits = False
+    assert forward(model, labels=labels, output_router_logits=True) is sentinel
+    assert calls[1] == {**native, "output_router_logits": True}
+    assert forward(model, output_router_logits=True, router_aux_loss=True) is sentinel
+    assert calls[2] == {**native, "labels": None, "output_router_logits": True}
 
 
 def test_marker_false_delegates_to_original_forward():

@@ -281,15 +281,30 @@ class TestDPTrainer:
         assert not _rows(trainer)
 
     def test_custom_loss_func_trains(self, tmp_path):
+        """A custom loss keeps the logits; the aux-free marker carries the request."""
+        seen: list[tuple[bool, bool]] = []
+
+        def custom_loss(output, labels):
+            seen.append(
+                (
+                    output.get("router_logits") is not None,
+                    output.get("aux_loss") is None,
+                )
+            )
+            return output["loss"]
+
         trainer = DPTrainer(
             model=_tiny_mellum(),
             args=_args(tmp_path, max_steps=1),
             train_dataset=_RaggedDS(),
             data_collator=_collate,
-            compute_loss_func=lambda output, labels: output["loss"],
+            compute_loss_func=custom_loss,
         )
+        assert trainer._router_aux_forward_marker is True
         assert trainer.train().global_step == 1
         assert len(_rows(trainer)) == 1
+        assert any(has_router for has_router, _ in seen)
+        assert all(aux_free for _, aux_free in seen)
 
     def test_trains_with_the_fused_routes_off(self, tmp_path):
         trainer = DPTrainer(
