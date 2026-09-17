@@ -221,14 +221,7 @@ def clipped_grad(
     )
 
     def _empty_batch_response(args, state):
-        """Short-circuit for empty batches: zero grads + empty aux, no vmap.
-
-        Mirrors the non-empty step's output structure and dtype: the
-        ``pre_clipping_transform`` is applied to the zero pytree and leaves
-        are cast to the configured ``dtype`` (as the across-batch sum does
-        on non-empty steps), so downstream buffers stay stable across empty
-        and non-empty draws.
-        """
+        """Return zero gradients and empty diagnostics without vmap."""
         zeros = empty_clipped_grads_like(
             args, argnums_tuple, pre_clipping_transform, dtype
         )

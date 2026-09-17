@@ -110,9 +110,12 @@ def linear_nll_sum(
         # under autocast ``hidden`` is half but the lm_head ``weight`` is fp32,
         # which would mismatch the kernel's ``tl.dot``. No-op when autocast off.
         hidden, weight = kernel_mod.follow_autocast(hidden, weight)
-        return kernel_mod.Opaque_LinearCrossEntropyLoss.apply(
-            hidden, weight, labels, -100, 0, 0.0, use_token_scaling, 1.0
+        nll_sum, _lse, _valids, _token_weight = (
+            kernel_mod.Opaque_LinearCrossEntropyLoss.apply(
+                hidden, weight, labels, -100, 0, 0.0, use_token_scaling, 1.0
+            )
         )
+        return nll_sum
 
     # Non-CUDA: the chunked kernel streams the matmul + LSE in fp32 itself, so a
     # mixed bf16-hidden / fp32-weight pair needs no follow_autocast reconciliation.

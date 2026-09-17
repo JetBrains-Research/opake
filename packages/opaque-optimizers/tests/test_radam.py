@@ -70,13 +70,11 @@ class TestRectificationMath:
         expected_rho_inf = 2.0 / (1.0 - b2) - 1.0
         assert rho_at_huge_t == pytest.approx(expected_rho_inf, rel=1e-3)
 
-    def test_rectification_undefined_in_warmup(self):
-        """``r_t`` is None when ``ρ_t ≤ 5``."""
-        # β₂=0.999 → warmup is the first ~6 steps (ρ_1≈3, ρ_5≈3.99,
-        # ρ_6≈4.99, ρ_7≈5.99 crosses the threshold).  Exact transition
-        # depends on b2; we just assert the early steps return None.
-        for t in [1, 2, 3, 4, 5]:
+    def test_rectification_warmup_transition(self):
+        """The default β₂ enters the rectified branch at step 6."""
+        for t in range(1, 6):
             assert _rectification(b2=0.999, t=t) is None
+        assert _rectification(b2=0.999, t=6) is not None
 
     def test_rectification_defined_long_term(self):
         """For ``t`` past warmup, ``r_t`` is real and converges to 1."""
@@ -266,6 +264,25 @@ class TestSecondMomentSubstitution:
         phi = _state(state).phi
         assert isinstance(phi, dict)
         assert all(v == 0.0 for v in phi.values())
+
+    def test_negative_squared_stream_bounded(self, params, grads):
+        sq = {k: -torch.ones_like(v) for k, v in grads.items()}
+        lr = 1e-3
+        betas = (0.9, 0.999)
+        opt = radam(lr=lr, betas=betas)
+        state = opt.init(params)
+        output = SecondMomentNoiseOutput(
+            noised(grads, max_norm=1.0, noise_stddev=0.1),
+            noised(sq, max_norm=1.0, noise_stddev=0.1),
+        )
+        for step in range(1, 9):
+            updates, state = opt.update(output, state, params=params)
+            r_t = _rectification(b2=betas[1], t=step)
+            for update in updates.values():
+                assert torch.isfinite(update).all()
+                if r_t is not None:
+                    atol = torch.finfo(update.dtype).eps
+                    assert update.abs().max().item() <= lr * r_t + atol
 
 
 # ---------------------------------------------------------------------------

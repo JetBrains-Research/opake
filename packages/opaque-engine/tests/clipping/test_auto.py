@@ -463,6 +463,20 @@ class TestAutoClippedFun:
         torch.testing.assert_close(result, expected, rtol=1e-5, atol=1e-6)
         assert new_state == state
 
+    @pytest.mark.parametrize(
+        "microbatch_size",
+        [None, 2],
+        ids=["full-batch", "microbatch"],
+    )
+    def test_rejects_empty_batch(self, microbatch_size):
+        fn, state = auto_clipped_fun(
+            lambda value: value,
+            R=1.0,
+            microbatch_size=microbatch_size,
+        )
+        with pytest.raises(ConfigurationError, match="requires a non-empty batch"):
+            fn(torch.empty(0, 3), state=state)
+
     def test_return_stats_preserves_sanitized_output(self):
         fn, state = auto_clipped_fun(
             lambda x: x,
@@ -497,7 +511,7 @@ class TestAutoClippedGradEmptyBatchParity:
         y = torch.randn(8, dtype=torch.bfloat16)
 
         def transform(g):
-            return {"q": g["w"]}
+            return {"q": g["w"] + 7.0}
 
         gf, state = auto_clipped_grad(
             self._loss,

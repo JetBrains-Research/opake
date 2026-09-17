@@ -295,16 +295,19 @@ class TestSecondMomentSubstitution:
 
     def test_negative_squared_stream_bounded(self, params, grads):
         sq = {k: -torch.ones_like(v) for k, v in grads.items()}
-        opt = adadelta(rho=0.9)
+        lr = 1.0
+        opt = adadelta(lr=lr, rho=0.9)
         state = opt.init(params)
         output = SecondMomentNoiseOutput(
             noised(grads, max_norm=1.0, noise_stddev=0.1),
             noised(sq, max_norm=1.0, noise_stddev=0.1),
         )
-        updates, _ = opt.update(output, state, params=params)
-        for k in updates:
-            assert torch.isfinite(updates[k]).all()
-            assert updates[k].abs().max().item() < 10.0
+        for _ in range(8):
+            updates, state = opt.update(output, state, params=params)
+            for k in updates:
+                assert torch.isfinite(updates[k]).all()
+                atol = torch.finfo(updates[k].dtype).eps
+                assert torch.all(updates[k].abs() <= lr * grads[k].abs() + atol)
 
     def test_mode_switch_does_not_double_correct(self, params, grads):
         """``NoisedPytree`` → ``SecondMomentNoiseOutput`` mid-run must not

@@ -7,6 +7,103 @@ import torch
 from opaque.api.patches.transformers.components.attention import vmap_repeat_kv
 
 
+def _has_mask_hooks(or_mask_function, and_mask_function) -> bool:
+    """Whether a caller supplied custom attention-mask composition."""
+    return or_mask_function is not None or and_mask_function is not None
+
+
+def _mask_positions(
+    cache_position: torch.Tensor,
+    *,
+    past_seen_tokens: int,
+    seq_len: int,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return absolute query and key positions in the local mask layout."""
+    cache_pos_flat = cache_position.view(-1)
+    if cache_pos_flat.shape[0] == seq_len:
+        query_positions = cache_pos_flat
+    else:
+        query_positions = torch.arange(
+            past_seen_tokens, past_seen_tokens + seq_len, device=device
+        )
+    key_positions = torch.cat(
+        [query_positions, torch.arange(past_seen_tokens, device=device)]
+    )
+    return query_positions, key_positions
+
+
+def _evaluate_mask_hook(
+    hook,
+    *,
+    batch_size: int,
+    query_positions: torch.Tensor,
+    key_positions: torch.Tensor,
+    device: torch.device,
+) -> torch.Tensor:
+    """Evaluate a Transformers mask hook on broadcastable index tensors."""
+    batch_indices = torch.arange(batch_size, device=device).view(-1, 1, 1, 1)
+    head_indices = torch.zeros(1, device=device, dtype=torch.long)
+    query_indices = query_positions.view(1, 1, -1, 1)
+    key_indices = key_positions.view(1, 1, 1, -1)
+    result = hook(batch_indices, head_indices, query_indices, key_indices)
+    if isinstance(result, torch.Tensor):
+        return result.to(device=device, dtype=torch.bool)
+    return torch.tensor(result, device=device, dtype=torch.bool)
+
+
+def _apply_mask_hooks(
+    mask: torch.Tensor,
+    *,
+    or_mask_function,
+    and_mask_function,
+    query_positions: torch.Tensor,
+    key_positions: torch.Tensor,
+) -> torch.Tensor:
+    """Compose custom hooks after the base causal or sliding-window mask."""
+    if not _has_mask_hooks(or_mask_function, and_mask_function):
+        return mask
+
+    allowed = mask if mask.dtype == torch.bool else mask == 0
+    hook_args = {
+        "batch_size": mask.shape[0],
+        "query_positions": query_positions,
+        "key_positions": key_positions,
+        "device": mask.device,
+    }
+    if or_mask_function is not None:
+        allowed = torch.logical_or(
+            allowed, _evaluate_mask_hook(or_mask_function, **hook_args)
+        )
+    if and_mask_function is not None:
+        allowed = torch.logical_and(
+            allowed, _evaluate_mask_hook(and_mask_function, **hook_args)
+        )
+
+    if mask.dtype == torch.bool:
+        return allowed
+    return torch.where(
+        allowed,
+        torch.zeros((), dtype=mask.dtype, device=mask.device),
+        torch.full(
+            (), torch.finfo(mask.dtype).min, dtype=mask.dtype, device=mask.device
+        ),
+    )
+
+
+def _apply_padding_mask(
+    mask: torch.Tensor, attention_mask: torch.Tensor | None
+) -> torch.Tensor:
+    """Keep padding masked after custom composition has widened attention."""
+    if attention_mask is None:
+        return mask
+    if attention_mask.ndim == 1:
+        attention_mask = attention_mask.unsqueeze(0)
+    return mask.masked_fill(
+        attention_mask[:, None, None, :] == 0, torch.finfo(mask.dtype).min
+    )
+
+
 def _active_mask_dtype(input_embeds: torch.Tensor) -> torch.dtype:
     """Dtype the causal mask must use under autocast.
 
@@ -82,8 +179,6 @@ def _can_use_compact_sdpa_sliding_window(
     past_key_values,
     cache_position: torch.Tensor | None,
     allow_is_causal_skip: bool,
-    or_mask_function,
-    and_mask_function,
     block_sequence_ids: torch.Tensor | None,
 ) -> bool:
     """Whether a patched SDPA forward can apply the window in query chunks."""
@@ -96,8 +191,6 @@ def _can_use_compact_sdpa_sliding_window(
         and getattr(config, "_attn_implementation", None) == "sdpa"
         and _safe_seq_length(past_key_values) == 0
         and cache_position is None
-        and or_mask_function is None
-        and and_mask_function is None
         and block_sequence_ids is None
         and (
             not torch.is_grad_enabled()
@@ -129,15 +222,15 @@ def vmap_create_compact_sdpa_sliding_window_causal_mask(
     :func:`vmap_create_sliding_window_causal_mask` and its dense fallback.
     """
     input_embeds = inputs_embeds if inputs_embeds is not None else input_embeds
-    if _can_use_compact_sdpa_sliding_window(
+    if not _has_mask_hooks(
+        or_mask_function, and_mask_function
+    ) and _can_use_compact_sdpa_sliding_window(
         config,
         input_embeds,
         attention_mask,
         past_key_values,
         cache_position,
         allow_is_causal_skip,
-        or_mask_function,
-        and_mask_function,
         block_sequence_ids,
     ):
         return None
@@ -183,7 +276,10 @@ def vmap_create_causal_mask(
     ``block_sequence_ids``. All callers use keywords, so the flexible signature
     handles both.
     """
+    has_mask_hooks = _has_mask_hooks(or_mask_function, and_mask_function)
     input_embeds = inputs_embeds if inputs_embeds is not None else input_embeds
+    if has_mask_hooks:
+        allow_is_causal_skip = False
     # When no padding mask is provided AND the attention backend handles
     # causality internally (SDPA uses is_causal=True, flash uses masking
     # kernels), return None to avoid materializing the full mask tensor.
@@ -235,6 +331,12 @@ def vmap_create_causal_mask(
         cache_position = torch.arange(
             past_seen_tokens, target_length, device=input_embeds.device
         )
+    query_positions, key_positions = _mask_positions(
+        cache_position,
+        past_seen_tokens=past_seen_tokens,
+        seq_len=seq_len,
+        device=input_embeds.device,
+    )
 
     # Mask dtype follows autocast so SDPA's attn_mask matches the bf16 query.
     mask_dtype = _active_mask_dtype(input_embeds)
@@ -297,22 +399,15 @@ def vmap_create_causal_mask(
         # Single token: can attend to all cached tokens
         causal_mask[..., :, :target_length] = 0.0
 
-    # Apply attention_mask if provided (padding mask)
-    if attention_mask is not None:
-        # attention_mask: (batch, seq) with 1 for valid, 0 for padding
-        if attention_mask.ndim == 1:
-            # Under vmap: (seq,) -> (1, seq)
-            attention_mask = attention_mask.unsqueeze(0)
+    causal_mask = _apply_mask_hooks(
+        causal_mask,
+        or_mask_function=or_mask_function,
+        and_mask_function=and_mask_function,
+        query_positions=query_positions,
+        key_positions=key_positions,
+    )
 
-        # Expand to 4D: (batch, 1, 1, target_length)
-        attention_mask = attention_mask[:, None, None, :]
-
-        # Combine: set padding positions to -inf
-        causal_mask = causal_mask.masked_fill(
-            attention_mask == 0, torch.finfo(mask_dtype).min
-        )
-
-    return causal_mask
+    return _apply_padding_mask(causal_mask, attention_mask)
 
 
 def vmap_create_sliding_window_causal_mask(
@@ -349,7 +444,10 @@ def vmap_create_sliding_window_causal_mask(
     Signature is version-agnostic: v4 uses ``input_embeds`` + ``cache_position``,
     v5 renames to ``inputs_embeds`` and drops ``cache_position``.
     """
+    has_mask_hooks = _has_mask_hooks(or_mask_function, and_mask_function)
     input_embeds = inputs_embeds if inputs_embeds is not None else input_embeds
+    if has_mask_hooks:
+        allow_is_causal_skip = False
     sliding_window = getattr(config, "sliding_window", None)
     attn_impl = getattr(config, "_attn_implementation", None)
     past_seen_tokens = _safe_seq_length(past_key_values)
@@ -369,7 +467,14 @@ def vmap_create_sliding_window_causal_mask(
         target_length = _query_length(input_embeds)
         if allow_is_causal_skip and target_length <= sliding_window:
             return None
-        return _sdpa_sliding_window_mask(input_embeds, sliding_window)
+        positions = torch.arange(target_length, device=input_embeds.device)
+        return _apply_mask_hooks(
+            _sdpa_sliding_window_mask(input_embeds, sliding_window),
+            or_mask_function=or_mask_function,
+            and_mask_function=and_mask_function,
+            query_positions=positions,
+            key_positions=positions,
+        )
 
     if (
         allow_is_causal_skip
@@ -386,8 +491,6 @@ def vmap_create_sliding_window_causal_mask(
         attention_mask=attention_mask,
         past_key_values=past_key_values,
         position_ids=position_ids,
-        or_mask_function=or_mask_function,
-        and_mask_function=and_mask_function,
         cache_position=cache_position,
         allow_is_causal_skip=allow_is_causal_skip,
     )
@@ -396,7 +499,27 @@ def vmap_create_sliding_window_causal_mask(
         return None
 
     if sliding_window is None:
-        return causal_mask
+        seq_len = causal_mask.shape[-2]
+        if cache_position is None:
+            cache_position = torch.arange(
+                past_seen_tokens, past_seen_tokens + seq_len, device=causal_mask.device
+            )
+        query_positions, key_positions = _mask_positions(
+            cache_position,
+            past_seen_tokens=past_seen_tokens,
+            seq_len=seq_len,
+            device=causal_mask.device,
+        )
+        return _apply_padding_mask(
+            _apply_mask_hooks(
+                causal_mask,
+                or_mask_function=or_mask_function,
+                and_mask_function=and_mask_function,
+                query_positions=query_positions,
+                key_positions=key_positions,
+            ),
+            attention_mask,
+        )
 
     # causal_mask shape: (batch_size, 1, seq_len, target_length)
     seq_len = causal_mask.shape[-2]
@@ -409,28 +532,14 @@ def vmap_create_sliding_window_causal_mask(
             past_seen_tokens, past_seen_tokens + seq_len, device=device
         )
 
-    # Absolute positions for every key slot in column order.
-    # vmap_create_causal_mask lays the key dimension out as:
-    #   cols 0..seq_len-1        → current tokens at cache_position[0..seq_len-1]
-    #   cols seq_len..target_length-1 → past cached tokens at absolute positions 0..past_seen_tokens-1
-    # (When past_seen_tokens == 0 the second slice is empty and
-    #  key_abs_positions == cache_position == torch.arange(seq_len).)
-    cache_pos_flat = cache_position.view(-1)
-    if cache_pos_flat.shape[0] == seq_len:
-        # Normal or vmap-without-batch-dim: cache_position is (seq_len,).
-        query_abs_positions = cache_pos_flat  # (seq_len,)
-        key_abs_positions = torch.cat(
-            [cache_pos_flat, torch.arange(past_seen_tokens, device=device)]
-        )  # (target_length,)
-    else:
-        # vmap-with-batch-dim: cache_position is (batch * seq_len,).
-        # Fall back to contiguous positions starting at past_seen_tokens.
-        query_abs_positions = torch.arange(
-            past_seen_tokens, past_seen_tokens + seq_len, device=device
-        )
-        key_abs_positions = torch.cat(
-            [query_abs_positions, torch.arange(past_seen_tokens, device=device)]
-        )  # (target_length,)
+    # vmap_create_causal_mask lays the key dimension out as current tokens
+    # followed by cached tokens, so custom hooks receive matching absolute indices.
+    query_abs_positions, key_abs_positions = _mask_positions(
+        cache_position,
+        past_seen_tokens=past_seen_tokens,
+        seq_len=seq_len,
+        device=device,
+    )
 
     # window_in_mask[q, k] = True  iff  k_abs >= q_abs - sliding_window + 1
     # shape: (seq_len, target_length)
@@ -444,7 +553,54 @@ def vmap_create_sliding_window_causal_mask(
         torch.finfo(mask_dtype).min,
     )
 
-    return causal_mask
+    return _apply_padding_mask(
+        _apply_mask_hooks(
+            causal_mask,
+            or_mask_function=or_mask_function,
+            and_mask_function=and_mask_function,
+            query_positions=query_abs_positions,
+            key_positions=key_abs_positions,
+        ),
+        attention_mask,
+    )
+
+
+def vmap_create_recurrent_attention_mask(
+    config,
+    inputs_embeds: torch.Tensor | None = None,
+    attention_mask: torch.Tensor | None = None,
+    past_key_values=None,
+    **kwargs,
+) -> torch.Tensor | None:
+    """Build a vmap-safe padding mask for recurrent attention layers.
+
+    Transformers skips all-ones masks with a data-dependent Python branch.
+    Returning the trimmed mask instead is numerically identical and keeps padded
+    examples distinct under ``vmap``. Both ordinary 2D masks and batchless 1D
+    masks produced by per-example transforms are supported.
+    """
+    if inputs_embeds is None or attention_mask is None:
+        return None
+    if attention_mask.ndim not in (1, 2):
+        return None
+    query_length = _query_length(inputs_embeds)
+    if query_length == 1:
+        return None
+    return attention_mask[..., -query_length:].contiguous()
+
+
+def vmap_update_linear_attention_mask(
+    self, attention_mask: torch.Tensor | None, cache_position: torch.Tensor
+) -> torch.Tensor | None:
+    """Compatibility shim for Qwen3-Next before the shared mask helper existed."""
+    if attention_mask is None:
+        return None
+    # Cache continuation carries a mask wider than the current query positions.
+    # Its recurrent state is already initialized, so preserve upstream's no-mask
+    # behavior without inspecting tensor values in Python control flow.
+    if attention_mask.shape[-1] != cache_position.shape[-1]:
+        return None
+    return attention_mask
 
 
 def _vmap_safe_ignore_causal_mask_sdpa(*args, **kwargs) -> bool:
@@ -471,6 +627,7 @@ def apply_masking_patches(*, vmap_masking: bool = True) -> None:
     Patches:
     - transformers.masking_utils.create_causal_mask
     - transformers.masking_utils.create_sliding_window_causal_mask (Gemma2/Gemma3)
+    - transformers.masking_utils.create_recurrent_attention_mask (Qwen3-Next)
     - transformers.masking_utils._ignore_causal_mask_sdpa (vmap-safe)
     - transformers.integrations.sdpa_attention.repeat_kv
 
@@ -492,6 +649,11 @@ def apply_masking_patches(*, vmap_masking: bool = True) -> None:
         if hasattr(masking_utils, "create_sliding_window_causal_mask"):
             masking_utils.create_sliding_window_causal_mask = (
                 vmap_create_sliding_window_causal_mask
+            )
+
+        if hasattr(masking_utils, "create_recurrent_attention_mask"):
+            masking_utils.create_recurrent_attention_mask = (
+                vmap_create_recurrent_attention_mask
             )
 
         # Patch _ignore_causal_mask_sdpa for sliding-window models (Gemma2, Phi-3, Mistral).

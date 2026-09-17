@@ -113,6 +113,25 @@ def test_linear_nll_sum_mixed_bf16_fp32_weight_is_safe():
     assert torch.isfinite(out)
 
 
+@pytest.mark.cuda
+def test_linear_nll_sum_cuda_matches_eager_shifted_sum():
+    """The Triton route returns the eager per-example ``Σ CE`` over shifted tokens."""
+    pytest.importorskip(_fused_lce._LCE_KERNEL_PATH)
+    torch.manual_seed(0)
+    hidden = torch.randn(9, 16, device="cuda", dtype=torch.bfloat16)
+    weight = torch.randn(32, 16, device="cuda", dtype=torch.bfloat16)
+    labels = torch.randint(0, 32, (9,), device="cuda")
+    labels[3] = -100
+
+    got = _fused_lce.linear_nll_sum(hidden, weight, labels)
+
+    logits = hidden[:-1].float() @ weight.float().T
+    want = torch.nn.functional.cross_entropy(
+        logits, labels[1:], ignore_index=-100, reduction="sum"
+    )
+    torch.testing.assert_close(got.float(), want, rtol=1e-2, atol=1e-2)
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------

@@ -35,7 +35,10 @@ from opaque.api.patches.kernels.linear_cross_entropy import (
     opaque_linear_cross_entropy_loss,
 )
 
-pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+pytestmark = [
+    pytest.mark.cuda,
+    pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required"),
+]
 
 # bf16 tolerances (lower precision than fp32 due to half-precision inputs)
 RTOL_FORWARD = 5e-3
@@ -115,7 +118,7 @@ def opaque_linear_ce(
     weight tensor.
     """
     logit_scale = 1.0 if scaling == 0 else 1.0 / scaling
-    nll_sum = Opaque_LinearCrossEntropyLoss.apply(
+    nll_sum, _lse, _valids, _token_weight = Opaque_LinearCrossEntropyLoss.apply(
         hidden_states,
         weight,
         labels,
@@ -411,6 +414,22 @@ class TestLinearCEBackward:
         )
 
 
+@pytest.mark.cuda
+def test_bare_grad_matches_reference(assert_precision):
+    """A bare ``torch.func.grad`` takes a path ``vmap(grad(...))`` never hits."""
+    torch.manual_seed(0)
+    batch, seq_len, hidden_dim, vocab = 2, 33, 64, 256
+    hidden = torch.randn(
+        batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16
+    )
+    weight = torch.randn(vocab, hidden_dim, device="cuda", dtype=torch.bfloat16)
+    labels = torch.randint(0, vocab, (batch, seq_len), device="cuda")
+
+    got = grad(lambda w: opaque_linear_ce(hidden, w, labels))(weight)
+    want = grad(lambda w: pytorch_linear_ce(hidden, w, labels))(weight)
+    assert_precision(got.float(), want.float(), rtol=RTOL_BACKWARD, atol=ATOL_BACKWARD)
+
+
 @pytest.mark.parametrize("vmapped", [False, True], ids=["direct", "vmap"])
 @pytest.mark.parametrize("use_token_scaling", [False, True], ids=["plain", "scaled"])
 @pytest.mark.parametrize("has_ignored", [False, True], ids=["all-valid", "ignored"])
@@ -446,7 +465,7 @@ def test_backward_reuses_forward_statistics(
     def loss(h, w, lab):
         return Opaque_LinearCrossEntropyLoss.apply(
             h, w, lab, -100, 0, 0.0, use_token_scaling
-        )
+        )[0]
 
     if vmapped:
         vmap(grad(loss, (0, 1)), in_dims=(0, None, 0))(hidden, weight, labels)
@@ -1101,8 +1120,8 @@ class TestLinearCEWrapper:
         weight = torch.randn(vocab, hidden_dim, device="cuda", dtype=torch.bfloat16)
         labels = torch.randint(0, vocab, (batch, seq_len), device="cuda")
 
-        # Manual: .apply() returns nll_sum, reduce ourselves
-        nll_sum = Opaque_LinearCrossEntropyLoss.apply(
+        # Manual: .apply() returns nll_sum first, reduce ourselves
+        nll_sum, _lse, _valids, _token_weight = Opaque_LinearCrossEntropyLoss.apply(
             hidden,
             weight,
             labels,

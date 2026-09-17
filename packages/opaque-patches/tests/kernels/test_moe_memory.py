@@ -108,25 +108,6 @@ def test_grouped_backward_backend_multiplier():
     assert _moe_memory.grouped_backward_bytes_per_route(16, 32, 2) == 3 * base
 
 
-def test_memory_aware_route_selection():
-    estimate = _moe_memory.MoEWorkspaceEstimate(
-        dense_bytes=8_000, grouped_bytes=20_000, required_weight_grad_bytes=0
-    )
-    assert _moe_memory.use_grouped_route(
-        estimate, experts=32, min_experts=16, budget_bytes=32_000
-    )
-    assert not _moe_memory.use_grouped_route(
-        estimate, experts=32, min_experts=16, budget_bytes=10_000
-    )
-
-    sparse_saves_memory = _moe_memory.MoEWorkspaceEstimate(
-        dense_bytes=40_000, grouped_bytes=12_000, required_weight_grad_bytes=0
-    )
-    assert _moe_memory.use_grouped_route(
-        sparse_saves_memory, experts=8, min_experts=16, budget_bytes=16_000
-    )
-
-
 def test_opaque_moe_dispatch_respects_workspace_budget(monkeypatch):
     x, gate_up, down, index, weights = _inputs(B=1)
     x, index, weights = x[0], index[0], weights[0]
@@ -137,30 +118,37 @@ def test_opaque_moe_dispatch_respects_workspace_budget(monkeypatch):
         "apply",
         staticmethod(lambda *args: sentinel),
     )
-    monkeypatch.setattr(moe_kernel, "_workspace_budget_bytes", lambda device: 10_000)
+    from opaque.api.patches.kernels import _moe_dispatch
+
+    original_decision = _moe_dispatch.moe_dispatch_decision
     monkeypatch.setattr(
-        moe_kernel,
-        "estimate_moe_workspace",
-        lambda *args, **kwargs: _moe_memory.MoEWorkspaceEstimate(
-            dense_bytes=8_000,
-            grouped_bytes=20_000,
-            required_weight_grad_bytes=0,
+        _moe_dispatch,
+        "moe_dispatch_decision",
+        lambda *args, **kwargs: _moe_dispatch.MoEDispatchDecision(
+            "dense",
+            "test",
+            1,
+            2,
+            original_decision(*args, **kwargs).features,
         ),
     )
     dense = moe_kernel.opaque_moe(x, gate_up, down, index, weights)
     assert dense.shape == x.shape
 
     monkeypatch.setattr(
-        moe_kernel,
-        "estimate_moe_workspace",
-        lambda *args, **kwargs: _moe_memory.MoEWorkspaceEstimate(
-            dense_bytes=20_000,
-            grouped_bytes=8_000,
-            required_weight_grad_bytes=0,
+        _moe_dispatch,
+        "moe_dispatch_decision",
+        lambda *args, **kwargs: _moe_dispatch.MoEDispatchDecision(
+            "grouped",
+            "test",
+            2,
+            1,
+            original_decision(*args, **kwargs).features,
         ),
     )
     assert moe_kernel.opaque_moe(x, gate_up, down, index, weights) is sentinel
 
+    monkeypatch.setattr(_moe_dispatch, "moe_dispatch_decision", original_decision)
     dense_weights = weights.new_zeros(weights.shape[0], gate_up.shape[0])
     dense_weights.scatter_add_(-1, index, weights)
     dense_result = moe_kernel.opaque_moe(

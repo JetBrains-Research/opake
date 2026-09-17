@@ -48,11 +48,25 @@ def _has_kernel_runtime() -> bool:
 
 
 def _is_hf_pretrained_model(model: nn.Module) -> bool:
-    """Whether ``model`` is a Hugging Face model expected to receive compat patches."""
+    """Whether ``model`` is or wraps a Hugging Face pretrained model."""
     try:
         from transformers import PreTrainedModel
     except ImportError:
         return False
+
+    try:
+        from peft import PeftMixedModel, PeftModel
+    except ImportError:
+        pass
+    else:
+        if isinstance(model, (PeftModel, PeftMixedModel)):
+            get_base_model = getattr(model, "get_base_model", None)
+            model = (
+                get_base_model()
+                if get_base_model is not None
+                else model.base_model.model
+            )
+
     return isinstance(model, PreTrainedModel)
 
 

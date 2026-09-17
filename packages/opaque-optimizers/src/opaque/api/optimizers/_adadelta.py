@@ -250,7 +250,11 @@ def _scale_by_adadelta(
             else:
                 v_g_corrected = v_g_t
             if noisy_squared_grads is not None:
-                v_g_corrected = torch.clamp(v_g_corrected, min=0.0)
+                v_g_corrected = torch.where(
+                    v_g_corrected > 0,
+                    v_g_corrected,
+                    updates_node * updates_node,
+                )
 
             if (
                 noise_bias_correction

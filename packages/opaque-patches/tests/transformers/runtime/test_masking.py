@@ -8,7 +8,9 @@ import torch
 from opaque.api.patches.transformers.runtime.masking import (
     vmap_create_causal_mask,
     vmap_create_compact_sdpa_sliding_window_causal_mask,
+    vmap_create_recurrent_attention_mask,
     vmap_create_sliding_window_causal_mask,
+    vmap_update_linear_attention_mask,
 )
 from opaque.patches import apply_runtime_patches
 
@@ -140,6 +142,166 @@ def test_vmap_causal_mask_preserves_all_valid_sdpa_fast_path():
     torch.vmap(torch.func.grad(create_mask), in_dims=(None, 0))(parameter, padded)
     assert len(created_masks) == 1
     assert created_masks[0] is not None
+
+
+@pytest.mark.parametrize(
+    ("input_shape", "mask", "expected"),
+    [
+        ((3, 4), [0, 1, 1, 0, 1], [1, 0, 1]),
+        ((1, 3, 4), [[0, 1, 1, 0, 1]], [[1, 0, 1]]),
+    ],
+)
+def test_recurrent_attention_mask_trims_batchless_and_batched_padding(
+    input_shape, mask, expected
+):
+    result = vmap_create_recurrent_attention_mask(
+        config=object(),
+        inputs_embeds=torch.randn(input_shape),
+        attention_mask=torch.tensor(mask),
+    )
+    assert torch.equal(result, torch.tensor(expected))
+    assert result.is_contiguous()
+
+
+def test_recurrent_attention_mask_preserves_per_example_padding_under_vmap():
+    inputs_embeds = torch.randn(3, 4)
+    masks = torch.tensor([[1, 1, 1, 1], [0, 1, 1, 1], [1, 1, 0, 1]])
+
+    result = torch.vmap(
+        lambda mask: vmap_create_recurrent_attention_mask(
+            config=object(),
+            inputs_embeds=inputs_embeds,
+            attention_mask=mask,
+        )
+    )(masks)
+
+    assert torch.equal(result, masks[:, -inputs_embeds.shape[0] :])
+
+
+def test_legacy_linear_attention_mask_preserves_prefill_and_skips_cache():
+    padded = torch.tensor([[0, 1, 1]])
+    prefill = vmap_update_linear_attention_mask(
+        object(), padded, cache_position=torch.arange(3)
+    )
+    cached = vmap_update_linear_attention_mask(
+        object(), torch.ones(1, 4), cache_position=torch.tensor([3])
+    )
+
+    assert prefill is padded
+    assert cached is None
+
+
+def test_legacy_linear_attention_mask_is_vmap_safe():
+    masks = torch.tensor([[1, 1, 1], [0, 1, 1], [1, 0, 1]])
+    result = torch.vmap(
+        lambda mask: vmap_update_linear_attention_mask(
+            object(), mask, cache_position=torch.arange(3)
+        )
+    )(masks)
+    assert torch.equal(result, masks)
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        vmap_create_causal_mask,
+        vmap_create_sliding_window_causal_mask,
+        vmap_create_compact_sdpa_sliding_window_causal_mask,
+    ],
+    ids=["causal", "sliding", "compact-sliding"],
+)
+def test_mask_hooks_compose_before_fast_paths(builder):
+    """Custom composition materializes the mask instead of taking the None path."""
+    config = type(
+        "Cfg",
+        (),
+        {
+            "_attn_implementation": "sdpa",
+            "sliding_window": 16,
+            "attention_dropout": 0.0,
+        },
+    )()
+
+    def allow_future(_batch_idx, _head_idx, query_idx, key_idx):
+        return key_idx > query_idx
+
+    def keep_diagonal(_batch_idx, _head_idx, query_idx, key_idx):
+        return key_idx == query_idx
+
+    mask = builder(
+        config,
+        inputs_embeds=torch.randn(1, 8, 8),
+        attention_mask=None,
+        past_key_values=None,
+        or_mask_function=allow_future,
+        and_mask_function=keep_diagonal,
+    )
+
+    assert mask is not None
+    allowed = mask if mask.dtype == torch.bool else mask == 0
+    assert torch.equal(allowed, torch.eye(8, dtype=torch.bool).view(1, 1, 8, 8))
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        vmap_create_causal_mask,
+        vmap_create_sliding_window_causal_mask,
+        vmap_create_compact_sdpa_sliding_window_causal_mask,
+    ],
+    ids=["causal", "sliding", "compact-sliding"],
+)
+def test_mask_hooks_do_not_unmask_padding(builder):
+    config = type("Cfg", (), {"_attn_implementation": "sdpa", "sliding_window": 16})()
+
+    def allow_everything(*_):
+        return True
+
+    mask = builder(
+        config,
+        inputs_embeds=torch.randn(1, 4, 8),
+        attention_mask=torch.tensor([[1, 1, 1, 0]], dtype=torch.bool),
+        or_mask_function=allow_everything,
+    )
+    allowed = mask if mask.dtype == torch.bool else mask == 0
+
+    assert not torch.any(allowed[..., -1])
+
+
+def test_mask_hooks_receive_batch_indices():
+    config = type("Cfg", (), {"_attn_implementation": "eager"})()
+
+    def allow_everything_for_second_batch(batch_idx, _head_idx, _query_idx, _key_idx):
+        return batch_idx == 1
+
+    mask = vmap_create_causal_mask(
+        config,
+        inputs_embeds=torch.randn(2, 4, 8),
+        or_mask_function=allow_everything_for_second_batch,
+    )
+    allowed = mask == 0
+
+    assert torch.equal(allowed[0, 0], torch.ones(4, 4, dtype=torch.bool).tril())
+    assert torch.all(allowed[1, 0])
+
+
+def test_mask_hooks_work_under_vmap():
+    config = type("Cfg", (), {"_attn_implementation": "eager"})()
+    input_embeds = torch.randn(1, 4, 8)
+
+    def allow_future(_batch_idx, _head_idx, query_idx, key_idx):
+        return key_idx > query_idx
+
+    masks = torch.vmap(
+        lambda attention_mask: vmap_create_causal_mask(
+            config,
+            inputs_embeds=input_embeds,
+            attention_mask=attention_mask,
+            or_mask_function=allow_future,
+        )
+    )(torch.ones(3, 4, dtype=torch.bool))
+
+    assert torch.all(masks == 0)
 
 
 class TestSlidingWindowCausalMask:

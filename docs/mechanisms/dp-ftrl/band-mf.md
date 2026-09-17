@@ -168,11 +168,12 @@ Training scripts can select it with `--band-mf-sampling b_min_sep` (see
 |---------------|:---------:|-------|
 | `b_min_sep()` | Yes | Confidence-bounded MC PLD; samples derive from `mc_resolution=1e-5` and `mc_failure_probability=1e-6` |
 
-For large `n_steps × resolved_num_mc_samples`, the implementation keeps **one copy** of
-the MC random transcripts in **Rust** (compact `f64` arrays) and reuses them
-for every noise-multiplier probe during calibration (no Python list blow-up).
-Optional cap: set `OPAQUE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES` (default ~4 GiB);
-use `0` to disable transcript reuse and fall back to one-shot MC per `pld()` call.
+The transcript corpus needs `24 * n_steps * samples_per_direction` bytes.
+Noise calibration reuses it when it fits the
+`OPAQUE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES` cap (default 4 GiB).
+Oversized corpora emit a `RuntimeWarning` and use one-shot Monte Carlo;
+setting the cap to `0` disables reuse without a warning. The sample count
+and privacy bound are identical with either path.
 
 !!! note "Without amplification"
     You can also use BandMF without subsampling by omitting the

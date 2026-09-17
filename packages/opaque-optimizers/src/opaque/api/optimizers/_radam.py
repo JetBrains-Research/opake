@@ -235,13 +235,14 @@ def _scale_by_radam(
 
         # ---- noisy_squared_grads branch (no φ correction needed) ----
         if noisy_squared_grads is not None:
-            result = tree_map(
-                lambda m, v: (
-                    r_t * (m / bc1) / (torch.clamp(v / bc2, min=bc_floor).sqrt() + eps)
-                ),
-                new_mu,
-                new_nu,
-            )
+
+            def _compute_sm(m: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+                m_hat = m / bc1
+                v_hat = v / bc2
+                v_eff = torch.where(v_hat > 0, v_hat, m_hat * m_hat).clamp(min=bc_floor)
+                return r_t * m_hat / (v_eff.sqrt() + eps)
+
+            result = tree_map(_compute_sm, new_mu, new_nu)
             return result, RAdamState(mu=new_mu, nu=new_nu, phi=new_phi, step=t)
 
         if not noise_bias_correction:

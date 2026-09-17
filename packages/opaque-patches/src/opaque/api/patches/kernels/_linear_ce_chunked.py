@@ -275,10 +275,9 @@ class _ChunkedLinearCE(torch.autograd.Function):
 
     generate_vmap_rule = True
 
-    @classmethod
-    def apply(cls, *args):
-        """Return per-token loss while retaining internal statistics outputs."""
-        return super().apply(*args)[0]
+    # ``apply`` must not project the outputs down to the loss: a bare
+    # ``torch.func.grad`` hands whatever ``apply`` returns to ``setup_context``
+    # as ``output``.  Callers unpack ``(nll, lse, token_weight)``.
 
     @staticmethod
     def forward(
@@ -428,14 +427,15 @@ def linear_nll_sum_chunked(
 ):
     """Unreduced NLL sum over non-ignored tokens.
 
-    Drop-in for ``Opaque_LinearCrossEntropyLoss.apply`` (same positional args,
-    same return): HF-style label shift (position ``i`` predicts ``labels[i+1]``);
-    the caller handles the mean reduction. Ignored positions contribute zero.
+    Takes the same positional args as ``Opaque_LinearCrossEntropyLoss.apply``
+    and returns the sum alone: HF-style label shift (position ``i`` predicts
+    ``labels[i+1]``); the caller handles the mean reduction. Ignored positions
+    contribute zero.
     """
     e = hidden_states[..., :-1, :].contiguous().flatten(0, -2)  # (N, D)
     targets = labels[..., 1:].contiguous().flatten()  # (N,)
     plan = _tile_plan(e, weight, chunk_vocab)
-    nll = _ChunkedLinearCE.apply(
+    nll, _lse, _token_weight = _ChunkedLinearCE.apply(
         e,
         weight,
         targets,

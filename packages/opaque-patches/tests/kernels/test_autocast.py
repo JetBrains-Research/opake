@@ -32,9 +32,12 @@ from opaque.patches.kernels import (
     opaque_swiglu,
 )
 
-pytestmark = pytest.mark.skipif(
-    not torch.cuda.is_available(), reason="autocast + opaque kernels require CUDA"
-)
+pytestmark = [
+    pytest.mark.cuda,
+    pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="autocast + opaque kernels require CUDA"
+    ),
+]
 
 
 # ----------------------------------------------------------------------------

@@ -41,7 +41,10 @@ from opaque.api.patches.kernels.lora import (
     _LoRAWBackwardLite,
 )
 
-pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+pytestmark = [
+    pytest.mark.cuda,
+    pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required"),
+]
 
 SCALING = 0.1
 

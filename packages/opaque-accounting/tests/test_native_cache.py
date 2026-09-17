@@ -84,23 +84,39 @@ def test_lru_eviction_by_bytes() -> None:
     assert c.get_or_create(("c",), lambda: 99) == 30
 
 
-def test_oversize_entry_returns_none() -> None:
-    called = [0]
+@pytest.mark.parametrize("atomic", [False, True])
+@pytest.mark.parametrize("cap", [0, 50, 100])
+def test_admission_warns_only_for_oversized_entries(atomic, cap) -> None:
+    calls = 0
 
     def factory() -> int:
-        called[0] += 1
-        return 1
+        nonlocal calls
+        calls += 1
+        return 7
 
-    c = NativeCache(
-        name="big",
+    cache = NativeCache(
+        name="transcripts",
         max_bytes_env=None,
-        default_max_bytes=50,
+        default_max_bytes=cap,
         max_entries=10,
         nbytes_estimate=lambda _k: 100,
         destructor=lambda _h: None,
     )
-    assert c.get_or_create(("x",), factory) is None
-    assert called[0] == 0
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("default")
+        for _ in range(3):
+            if atomic:
+                result = cache.with_handle(("x",), factory, lambda handle: handle)
+            else:
+                result = cache.get_or_create(("x",), factory)
+            assert result == (7 if cap == 100 else None)
+
+    assert calls == (1 if cap == 100 else 0)
+    assert len(caught) == (1 if cap == 50 else 0)
+    if caught:
+        assert caught[0].category is RuntimeWarning
+        assert "100 bytes" in str(caught[0].message)
+        assert "50-byte" in str(caught[0].message)
 
 
 def test_clear_releases_all_handles() -> None:

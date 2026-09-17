@@ -87,6 +87,7 @@ def _args(
     clipping_norm: float | str = 1.0,
     sampling_mode: str = "auto",
     sampling_kwargs: dict[str, object] | None = None,
+    privacy_accounting: bool | None = None,
 ) -> TrainingArguments:
     kwargs = dict(_MF_TEST_KWARGS[mechanism]) if mechanism in _MF_TEST_KWARGS else {}
     return TrainingArguments(
@@ -99,6 +100,7 @@ def _args(
         privacy_noise_mechanism_kwargs=kwargs,
         sampling_mode=sampling_mode,
         sampling_kwargs=sampling_kwargs,
+        privacy_accounting=privacy_accounting,
         privacy_noise_multiplier=noise_multiplier,
         privacy_target_epsilon=target_epsilon,
         clipping_norm=clipping_norm,
@@ -810,6 +812,9 @@ class TestGaussianPathUnchanged:
             output_dir=str(tmp_path / "gaussian"),
             mechanism="gaussian",
             max_steps=4,
+            # Independent DP-SGD steps default to accounting off; opt in so
+            # the wiring check still exercises the ε-reporting surface.
+            privacy_accounting=True,
         )
         torch.manual_seed(0)
         trainer = DPTrainer(
@@ -841,6 +846,9 @@ class TestNonPrivateZeroNoise:
             mechanism=mechanism,
             max_steps=max_steps,
             noise_multiplier=0.0,
+            # The reported epsilon is the surface under test; independent
+            # DP-SGD steps default to accounting off, so opt in explicitly.
+            privacy_accounting=True,
         )
         torch.manual_seed(0)
         trainer = DPTrainer(

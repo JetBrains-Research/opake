@@ -531,6 +531,9 @@ def test_epoch_driven_resume_does_not_overshoot_budget(gpt2_lora, lm_dataset, tm
         "clipping_norm": 1.0,
         "privacy_noise_multiplier": nm,
         "privacy_target_delta": delta,
+        # The budget-overshoot check needs the accountant; independent
+        # DP-SGD steps default to accounting off, so opt in explicitly.
+        "privacy_accounting": True,
         "use_cpu": True,
         "report_to": [],
         "num_train_epochs": 2,

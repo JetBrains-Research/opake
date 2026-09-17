@@ -31,7 +31,6 @@ from ._moe_memory import (
     dense_backward_bytes_per_row,
     dense_routing_bytes_per_row,
     estimate_moe_workspace,
-    use_grouped_route,
 )
 
 try:
@@ -568,13 +567,6 @@ class Opaque_MoE(torch.autograd.Function):
         )
 
 
-# Sparse compute pays off past a break-even expert count, but its gathered
-# activations can use more memory than dense execution for large K/I/H. The
-# dispatcher therefore combines this measured speed gate with the explicit
-# workspace estimates below instead of routing on expert count alone.
-_SPARSE_MOE_MIN_EXPERTS = 16
-
-
 def opaque_moe(x, gate_up_proj, down_proj, top_k_index, top_k_weights, *, grouped=True):
     """MoE expert FFN. Autograd + ``vmap(grad)`` (DP-SGD) flow through the
     two-Function pair above.
@@ -585,12 +577,9 @@ def opaque_moe(x, gate_up_proj, down_proj, top_k_index, top_k_weights, *, groupe
     ``grouped_moe`` gate, so a dense run still keeps the vmap-safe experts
     ``forward`` installed for DP correctness.
 
-    With ``grouped=True`` the dispatch is:
-    - CUDA bf16/fp16 + Triton -> sparse grouped-GEMM Triton ``Opaque_FusedMoE``;
-    - otherwise, when ``torch._grouped_mm`` is available, compare conservative
-      dense/grouped workspace estimates against the internal device-memory budget
-      and the grouped speed gate;
-    - otherwise -> dense ``Opaque_MoE``.
+    With ``grouped=True``, a deterministic cost model selects dense, grouped
+    PyTorch, or Triton execution from backend, dtype, geometry, expert
+    trainability, route concentration, and achievable bounded chunk sizes.
 
     Every route chunks temporary activations to the same internal budget. The
     required trainable-expert per-example gradients remain unchunked outputs;
@@ -602,34 +591,39 @@ def opaque_moe(x, gate_up_proj, down_proj, top_k_index, top_k_weights, *, groupe
     """
     if x.is_cuda:
         x, top_k_weights = _follow_cuda_autocast(x, top_k_weights)
-    if grouped and top_k_weights.shape[-1] != gate_up_proj.shape[0]:
-        if _TRITON_AVAILABLE and x.is_cuda:
-            if x.dtype in (torch.bfloat16, torch.float16):
-                from .fused_moe import Opaque_FusedMoE
+    from ._grouped_moe import Opaque_GroupedMoE, grouped_mm_available
+    from ._moe_dispatch import moe_dispatch_decision
 
-                return Opaque_FusedMoE.apply(
-                    x, gate_up_proj, down_proj, top_k_index, top_k_weights
-                )
-        else:
-            from ._grouped_moe import Opaque_GroupedMoE, grouped_mm_available
+    estimate = estimate_moe_workspace(
+        x,
+        gate_up_proj,
+        down_proj,
+        top_k_index,
+        compute_gate_wgrad=gate_up_proj.requires_grad,
+        compute_down_wgrad=down_proj.requires_grad,
+    )
+    decision = moe_dispatch_decision(
+        x,
+        gate_up_proj,
+        down_proj,
+        top_k_index,
+        top_k_weights,
+        estimate=estimate,
+        budget_bytes=_workspace_budget_bytes(x.device),
+        grouped_enabled=grouped,
+        grouped_available=grouped_mm_available(),
+        triton_available=_TRITON_AVAILABLE,
+    )
+    if decision.backend == "triton":
+        from .fused_moe import Opaque_FusedMoE
 
-            estimate = estimate_moe_workspace(
-                x,
-                gate_up_proj,
-                down_proj,
-                top_k_index,
-                compute_gate_wgrad=gate_up_proj.requires_grad,
-                compute_down_wgrad=down_proj.requires_grad,
-            )
-            if grouped_mm_available() and use_grouped_route(
-                estimate,
-                experts=gate_up_proj.shape[0],
-                min_experts=_SPARSE_MOE_MIN_EXPERTS,
-                budget_bytes=_workspace_budget_bytes(x.device),
-            ):
-                return Opaque_GroupedMoE.apply(
-                    x, gate_up_proj, down_proj, top_k_index, top_k_weights
-                )
+        return Opaque_FusedMoE.apply(
+            x, gate_up_proj, down_proj, top_k_index, top_k_weights
+        )
+    if decision.backend == "grouped":
+        return Opaque_GroupedMoE.apply(
+            x, gate_up_proj, down_proj, top_k_index, top_k_weights
+        )
     return Opaque_MoE.apply(x, gate_up_proj, down_proj, top_k_index, top_k_weights)
 
 

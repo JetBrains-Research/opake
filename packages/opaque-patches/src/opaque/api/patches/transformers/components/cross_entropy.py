@@ -357,7 +357,7 @@ def _make_fused_ce_causal_lm_forward(
                 )
                 nll_sum = ce_loss_fn(*ce_args, chunk_vocab=chunk_vocab)
             else:
-                nll_sum = ce_loss_fn(*ce_args)
+                nll_sum, _lse, _valids, _token_weight = ce_loss_fn(*ce_args)
 
             # Always reduce with mean-over-non-ignored-tokens; per-batch
             # reductions would break DP-SGD per-example sensitivity.

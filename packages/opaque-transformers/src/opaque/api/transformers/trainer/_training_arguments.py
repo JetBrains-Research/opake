@@ -556,6 +556,13 @@ class TrainingArguments:
     privacy_target_epsilon: float | None = None
     #: Defaults at training setup to ``1 / dataset_size**1.1`` when unset.
     privacy_target_delta: float | None = None
+    #: Whether to maintain and report a privacy accountant. Defaults to
+    #: ``False`` only for independently composed DP-SGD runs with a fixed
+    #: noise multiplier; ``True`` when an epsilon target is set or the noise
+    #: mechanism accounts over the complete horizon (matrix-factorization
+    #: mechanisms, k-out-of-t sampling). Explicit ``False`` with a
+    #: complete-horizon configuration raises.
+    privacy_accounting: bool | None = None
 
     # ---- Clipping (mode + JSON-style args, HF ``optim_args`` pattern) ---
     clipping_mode: str = "fixed"
@@ -597,7 +604,8 @@ class TrainingArguments:
 
     # ---- Resume policy --------------------------------------------------
     # There is no "resume without DP state" opt-in.  ``resume_from_checkpoint``
-    # requires a *complete* DP checkpoint (dp_state + optimizer + accountant);
+    # requires a *complete* DP checkpoint (dp_state + optimizer, plus an
+    # accountant when privacy accounting is enabled);
     # a weights-only export is not resumable.  To start a fresh DP run from
     # arbitrary weights (public-data warmup, an HF checkpoint, a pretrained
     # model), load them at construction via ``model=...`` — the run begins
@@ -1234,6 +1242,22 @@ class TrainingArguments:
                     "budget); neither was provided.",
                 )
             )
+        if self.privacy_accounting is not None and not isinstance(
+            self.privacy_accounting, bool
+        ):
+            raise ConfigurationError(
+                *(
+                    "privacy_accounting must be a bool or None; got "
+                    f"{self.privacy_accounting!r}.",
+                )
+            )
+        if self.privacy_accounting is False and self.privacy_target_epsilon is not None:
+            raise ConfigurationError(
+                *(
+                    "privacy_target_epsilon requires privacy_accounting=True. "
+                    "Drop the target for fixed-noise training without accounting.",
+                )
+            )
         if (
             self.privacy_noise_multiplier is not None
             and self.privacy_noise_multiplier == 0.0
@@ -1355,6 +1379,33 @@ class TrainingArguments:
                     f"privacy_noise_mechanism={self.privacy_noise_mechanism!r}; "
                     f"allowed: {sorted(_ALLOWED_SAMPLERS[self.privacy_noise_mechanism])} "
                     f"(omit sampling_mode or set 'auto' to pick automatically).",
+                )
+            )
+
+        # Privacy-accounting default (needs the resolved sampling_mode, so it
+        # runs after sampler validation).  Independently composed DP-SGD
+        # steps with a fixed multiplier skip the per-step PLD fold unless
+        # opted in.  Complete-horizon configurations (matrix-factorization
+        # mechanisms, k-out-of-t) keep accounting on: the horizon-process
+        # snapshot is also what resume uses to reject noise-strategy /
+        # multiplier drift, so an explicit False there is refused instead of
+        # silently weakening resume.
+        _complete_horizon = (
+            self.privacy_noise_mechanism != "gaussian"
+            or self.sampling_mode == "k_out_of_t"
+        )
+        if self.privacy_accounting is None:
+            self.privacy_accounting = (
+                self.privacy_target_epsilon is not None or _complete_horizon
+            )
+        elif self.privacy_accounting is False and _complete_horizon:
+            raise ConfigurationError(
+                *(
+                    "privacy_accounting=False is only supported for "
+                    "independently composed DP-SGD steps "
+                    "(privacy_noise_mechanism='gaussian' with a per-step "
+                    "sampler); this configuration accounts over the complete "
+                    "horizon. Omit privacy_accounting or set it to True.",
                 )
             )
 
