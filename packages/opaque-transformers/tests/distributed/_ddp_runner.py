@@ -627,8 +627,78 @@ def scenario_non_divisible_population_trimmed(
 # ---------------------------------------------------------------------------
 
 
+def scenario_sampler_lineage_chained_resume(
+    rank: int,
+    world_size: int,
+    output_dir: str,
+    use_cpu: bool = False,
+    **_,
+) -> None:
+    """checkpoint -> ``ignore_data_skip`` resume -> checkpoint -> normal resume.
+
+    The second checkpoint's sampler stream is rooted at the restart fold; the
+    final normal resume must continue that lineage on every rank rather than
+    a key rebuilt from the plain arguments, which would replay the coins the
+    pre-restart prefix already spent.
+    """
+    from opaque.api.transformers._rng import IGNORE_DATA_SKIP_STREAM_FOLD
+    from opaque.api.transformers.trainer import _checkpoint as ckpt
+    from opaque.random import fold_in, key
+
+    cfg = TinyConfig()
+    ds = TinyDataset(n=32, seq_len=8, vocab=cfg.vocab_size)
+    seed = 7
+
+    def run(max_steps: int, resume: str | None = None, **overrides) -> None:
+        args = TrainingArguments(
+            output_dir=output_dir,
+            per_device_train_batch_size=2,
+            max_steps=max_steps,
+            save_steps=2,
+            save_strategy="steps",
+            save_total_limit=10,
+            logging_strategy="no",
+            seed=seed,
+            privacy_noise_multiplier=1.0,
+            clipping_norm=1.0,
+            report_to=[],
+            use_cpu=use_cpu,
+            use_compat_patches=False,
+            **overrides,
+        )
+        trainer = DPTrainer(
+            model=TinyForCausalLM(cfg),
+            args=args,
+            train_dataset=ds,
+            data_collator=_collate,
+        )
+        trainer.train(resume_from_checkpoint=resume)
+        dist.barrier()
+
+    run(2)
+    run(4, resume=f"{output_dir}/checkpoint-2", ignore_data_skip=True)
+    run(6, resume=f"{output_dir}/checkpoint-4")
+
+    if rank == 0:
+        base = key(seed)
+        restart = fold_in(base, IGNORE_DATA_SKIP_STREAM_FOLD, 2)
+        c2, c4, c6 = (
+            ckpt.load_dp_runtime_state(f"{output_dir}/checkpoint-{step}/dp_state.pt")
+            for step in (2, 4, 6)
+        )
+        assert c2.sampler_stream_key == {"seed": base.seed, "impl": base.impl}
+        assert c4.sampler_stream_key == {"seed": restart.seed, "impl": restart.impl}
+        # The normal resume carried the rebased lineage forward ...
+        assert c6.sampler_stream_key == c4.sampler_stream_key
+        # ... and rank 0 kept drawing from the rebased stream, not the base one.
+        assert c6.sampler_state["key_seed"] == c4.sampler_state["key_seed"]
+        assert c6.sampler_state["key_seed"] != c2.sampler_state["key_seed"]
+        assert c6.sampler_state["consumed"] == c4.sampler_state["consumed"] + 2
+
+
 SCENARIOS = {
     "runtime_foundation": scenario_runtime_foundation,
+    "sampler_lineage_chained_resume": scenario_sampler_lineage_chained_resume,
     "per_rank_partition": scenario_per_rank_partition,
     "eval_gather": scenario_eval_gather,
     "eval_gather_empty_rank": scenario_eval_gather_empty_rank,

@@ -34,7 +34,7 @@ import sys
 import time
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torchopt
@@ -65,7 +65,8 @@ from opaque.exceptions import (
 from opaque.functional import make_functional
 from opaque.optimizers.types import ScheduleFreeState
 from opaque.profiling import PerfTracker, perf_tracker
-from opaque.random import key, split
+from opaque.random import fold_in, key, split
+from opaque.random.types import RngKey
 from opaque.serialization import (
     from_state_dict as opaque_from_state_dict,
 )
@@ -92,8 +93,6 @@ from transformers.trainer_utils import (
 )
 from transformers.utils import find_labels
 
-if TYPE_CHECKING:
-    from opaque.random.types import RngKey
 from . import _checkpoint as ckpt
 from . import _distributed, _dpftrl, _eval, _hub
 from ._callback import (
@@ -206,6 +205,51 @@ def _resolve_drift_disposition(
     return drift
 
 
+def _stream_key_state(stream_key: RngKey | None) -> dict[str, Any] | None:
+    """Checkpoint form of a pre-rank sampler stream key."""
+    if stream_key is None:
+        return None
+    return {"seed": int(stream_key.seed), "impl": str(stream_key.impl)}
+
+
+def _rank_local_sampler_state(
+    saved_state: Mapping[str, Any], template_sampler: Any, world_size: int
+) -> Mapping[str, Any]:
+    """Re-key a rank-0 sampler snapshot onto this rank's own sampler stream.
+
+    The snapshot is written once, by world rank 0, and carries rank 0's
+    rank-folded stream key (``key_seed`` / ``key_impl``); installing it
+    verbatim would put rank 0's coins on every rank and correlate the ranks'
+    draws, which the Poisson / b-min-sep amplification does not allow.  The
+    returned snapshot carries ``template_sampler``'s own key instead, so only
+    the cursor is taken from the snapshot; the caller builds the template
+    from the checkpoint's pre-rank stream key (see
+    :meth:`DPTrainer._restore_sampler`), so rank ``r`` continues exactly the
+    stream it drew before the checkpoint.  At ``world_size == 1`` and for
+    keyless (deterministic) snapshots the snapshot is returned unchanged.
+
+    Raises:
+        CheckpointError: If the snapshot carries a stream key but the template
+            sampler has none to substitute.
+    """
+    if world_size <= 1 or "key_seed" not in saved_state:
+        return saved_state
+    template_key = getattr(template_sampler, "_stream_key", None)
+    if template_key is None:
+        raise CheckpointError(
+            *(
+                "Sampler snapshot carries a stream key but the template "
+                f"{type(template_sampler).__name__} exposes none; cannot restore "
+                "a rank-local sampling stream under DDP.",
+            )
+        )
+    local_state = dict(saved_state)
+    local_state["key_seed"] = int(template_key.seed)
+    if "key_impl" in local_state:
+        local_state["key_impl"] = str(template_key.impl)
+    return local_state
+
+
 def _compile_strict_chunk(
     fn: Callable, *, backend: str | Callable, mode: str
 ) -> Callable:
@@ -256,6 +300,10 @@ class _TrainingContext:
     # for this run — 0 unless a prior ``ignore_data_skip`` resume rebased the
     # sampler stream. Set once in ``_inner_training_loop`` before iteration.
     sampler_step_offset: int = 0
+    # Pre-rank sampler stream key (before the DDP rank fold), persisted with
+    # the checkpoint so a DDP resume folds each rank from the checkpoint's
+    # lineage rather than from the current arguments.
+    sampler_stream_key: RngKey | None = None
     save_steps_resolved: int = 0
     # Configured clip threshold (scalar or PerGroup).  Adaptive mode
     # overrides this each step via ``clip_state.clipping_norm``; fixed
@@ -1296,6 +1344,11 @@ class DPTrainer:
                 ctx,
                 resume_path=resume_path,
                 saved_sampler_state=saved_sampler_state,
+                saved_stream_key=(
+                    runtime_payload.sampler_stream_key
+                    if runtime_payload is not None
+                    else None
+                ),
                 ignore_keys_for_eval=ignore_keys_for_eval,
             )
         finally:
@@ -1759,12 +1812,55 @@ class DPTrainer:
             mf=mf,
         )
 
+    def _restore_sampler(
+        self,
+        ctx: _TrainingContext,
+        saved_sampler_state: Mapping[str, Any],
+        saved_stream_key: Mapping[str, Any] | None,
+    ) -> None:
+        """Install the checkpoint's sampler cursor on this rank's stream.
+
+        The template sampler is built from the checkpoint's pre-rank stream
+        key (an ``ignore_data_skip`` restart fold and the seed it was trained
+        with included), not from the current arguments, so under DDP rank
+        ``r`` continues ``fold_in(key, r)`` exactly where the checkpoint left
+        it.  DDP checkpoints must carry that key: without it, the rank-local
+        stream cannot be recovered safely.
+        """
+        from opaque.serialization import from_state_dict
+
+        if saved_stream_key is None:
+            if self._ddp.world_size > 1:
+                raise CheckpointError(
+                    *(
+                        "Cannot resume this checkpoint under DDP: it does not "
+                        "record sampler stream lineage. Start a new DDP run to "
+                        "create a resumable checkpoint.",
+                    )
+                )
+        else:
+            ctx.sampler_stream_key = RngKey(
+                seed=int(saved_stream_key["seed"]), impl=str(saved_stream_key["impl"])
+            )
+            ctx.current_sampler = None  # rebuild the template on that lineage
+        if ctx.current_sampler is None:
+            self._train_dataloader = None
+            self.get_train_dataloader()  # populates ctx.current_sampler
+            self._train_dataloader = None  # drop the cached loader
+        ctx.current_sampler = from_state_dict(
+            ctx.current_sampler,
+            _rank_local_sampler_state(
+                saved_sampler_state, ctx.current_sampler, self._ddp.world_size
+            ),
+        )
+
     def _inner_training_loop(
         self,
         ctx: _TrainingContext,
         *,
         resume_path: str | None = None,
         saved_sampler_state: dict[str, Any] | None = None,
+        saved_stream_key: Mapping[str, Any] | None = None,
         ignore_keys_for_eval: list[str] | None = None,
     ) -> TrainOutput:
         """Epoch/step loop with Poisson sampling."""
@@ -1865,19 +1961,15 @@ class DPTrainer:
             and saved_sampler_state is not None
             and not a.ignore_data_skip
         ):
-            from opaque.serialization import from_state_dict
-
             # Need a template sampler whose ``data_source`` matches the
             # saved length so ``from_state_dict`` can validate.  Build
             # one (without caching the loader yet), then replace it
             # with the restored cursor before the actual loader binds.
-            if ctx.current_sampler is None:
-                self._train_dataloader = None
-                self.get_train_dataloader()  # populates ctx.current_sampler
-                self._train_dataloader = None  # drop the cached loader
-            ctx.current_sampler = from_state_dict(
-                ctx.current_sampler, saved_sampler_state
-            )
+            # Under DDP the snapshot (written by rank 0) is re-keyed onto
+            # this rank's fold of the checkpoint's pre-rank stream key, so
+            # each rank resumes *its own* pre-checkpoint stream (see
+            # :func:`_rank_local_sampler_state`).
+            self._restore_sampler(ctx, saved_sampler_state, saved_stream_key)
 
         train_loader = self.get_train_dataloader()
         # Snapshot the ``global_step`` at which ``consumed`` is 0, before
@@ -3897,12 +3989,13 @@ class DPTrainer:
         # denominator used here (see :meth:`_effective_train_dataset_size`),
         # so runtime and accountant cannot drift apart.
         #
-        # Resume caveat (multi-GPU only): the sampler snapshot is
-        # self-contained (carries its own key) and is written once on rank
-        # 0, so resuming a DDP run currently restores rank 0's per-rank key
-        # on every rank, re-introducing the cross-rank correlation after the
-        # resume point.  Fully fixing that needs per-rank sampler snapshots;
-        # tracked for the multi-GPU work and validated there.
+        # Resume (multi-GPU): the sampler snapshot is self-contained (carries
+        # its own key) and is written once on rank 0.  The resume path in
+        # :meth:`train` therefore re-keys the snapshot onto the rank-folded
+        # key of this rank's freshly built template sampler
+        # (:func:`_rank_local_sampler_state`) before ``from_state_dict``, so
+        # only the cursor is taken from the snapshot and every rank resumes
+        # its own pre-checkpoint stream with cross-rank coins independent.
         if self._ddp.world_size > 1:
             from opaque.distributed import local_shard
 
@@ -3949,18 +4042,21 @@ class DPTrainer:
         # re-instantiation; the outer epoch loop is purely a synthetic
         # boundary layer for HF callbacks.
         if ctx.current_sampler is None:
-            from opaque.random import fold_in
-
-            sampler_key = key(a.data_seed if a.data_seed is not None else a.seed)
-            if ctx.sampler_restart_step is not None:
-                # Restart ignored Poisson state on a cursor-derived stream so
-                # the post-resume steps do not replay the Bernoulli draws the
-                # discarded prefix already spent.
-                sampler_key = fold_in(
-                    sampler_key,
-                    IGNORE_DATA_SKIP_STREAM_FOLD,
-                    ctx.sampler_restart_step,
-                )
+            if getattr(ctx, "sampler_stream_key", None) is None:
+                sampler_key = key(a.data_seed if a.data_seed is not None else a.seed)
+                if ctx.sampler_restart_step is not None:
+                    # Restart ignored Poisson state on a cursor-derived stream
+                    # so the post-resume steps do not replay the Bernoulli
+                    # draws the discarded prefix already spent.
+                    sampler_key = fold_in(
+                        sampler_key,
+                        IGNORE_DATA_SKIP_STREAM_FOLD,
+                        ctx.sampler_restart_step,
+                    )
+                # The pre-rank key is what a checkpoint records, so a DDP
+                # resume folds each rank from the same lineage.
+                ctx.sampler_stream_key = sampler_key
+            sampler_key = ctx.sampler_stream_key
             # Per-rank independent sampling: fold the rank into the key so
             # each shard draws a distinct Bernoulli(q) mask (see the block
             # comment above).  No-op at world_size == 1, preserving the
@@ -5330,6 +5426,7 @@ class DPTrainer:
             clip_state=ctx.clip_state,
             noise_state=ctx.noise_state,
             sampler_state=sampler_state,
+            sampler_stream_key=_stream_key_state(ctx.sampler_stream_key),
             sample_rate=ctx.sample_rate,
             target_delta=ctx.target_delta,
             noise_multiplier=ctx.noise_multiplier,
