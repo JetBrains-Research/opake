@@ -225,19 +225,13 @@ large-expert MoE (`E >= 16`) with `torch._grouped_mm` available uses the MPS/CPU
 `Opaque_GroupedMoE` variant. Smaller MoEs (e.g. Mixtral-8) and fp32 / no-Triton
 hosts stay on the dense path.
 
-**All-valid-rows policy.** `opaque.patches.set_all_valid_rows(flag)` tells the
-vmap-safe causal-mask builder whether every collated row is fully valid (no
-padding). Each row must remain exactly one protected example; this is not
-sequence packing, which Opaque does not support. With `True` the SDPA
-`is_causal` fast path is allowed without inspecting the batch; with `False` the
-mask is always materialised when an attention mask is given, so an example's
-attention kernel never depends on whether a microbatch mate is padded; `None`
-(the module default) probes the batch, which lets one padded record change the
-kernel of every example in its microbatch. `all_valid_rows()` reads the current
-setting. Under DP training the kernel choice must be a public property of the
-data, so `DPTrainer` installs the policy from its `all_valid_rows` argument
-(default `False`) for the duration of `train()` and rejects `None` for a
-private run.
+**Attention masks under vmap.** When evaluating per-example gradients, Opaque
+materialises every supplied padding mask instead of selecting the SDPA
+`is_causal` fast path from the physical microbatch's contents. This ensures a
+row's attention computation is independent of which other rows are padded.
+All-valid batches that omit `attention_mask` continue to use the fast path.
+Opaque does not support packing multiple source examples into one row or
+padding-free batches.
 
 The original dense **Mellum** (`Mellum-4b`, `model_type="llama"`) needs no MoE
 support — it is a Llama checkpoint served by the `llama` family.

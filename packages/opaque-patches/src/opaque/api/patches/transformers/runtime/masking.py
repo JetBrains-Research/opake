@@ -5,47 +5,6 @@
 import torch
 
 from opaque.api.patches.transformers.components.attention import vmap_repeat_kv
-from opaque.exceptions import InputTypeError
-
-# Process-level all-valid-rows policy consulted by ``vmap_create_causal_mask``.
-# ``None`` keeps the data-driven probe of the physical batch; see
-# :func:`set_all_valid_rows`.
-_ALL_VALID_ROWS: bool | None = None
-
-
-def set_all_valid_rows(flag: bool | None) -> None:
-    """Declare whether every collated row is fully valid (no padding).
-
-    Each row must remain exactly one protected example; this is not sequence
-    packing (several records in one row), which Opaque does not support.
-    The causal-mask builder may skip materialising the mask and let SDPA run
-    its ``is_causal`` fast path when no row is padded. By default it decides
-    that by probing the physical (micro)batch, which lets one padded record
-    change the attention kernel of every example in its microbatch. Under DP
-    training the choice must come from a public property of the data:
-
-    - ``True``: the collator guarantees fully valid rows; the fast path is
-      allowed without inspecting the batch.
-    - ``False``: never probe the batch; materialise the mask whenever an
-      attention mask is given, so every example's attention runs the same
-      kernel regardless of its microbatch mates.
-    - ``None`` (module default): probe the batch. Not a private mode;
-      ``DPTrainer`` rejects it for a private run.
-
-    The policy is a process-wide module setting, not thread-local: a caller
-    that sets it for one run (``DPTrainer`` does so for the duration of
-    ``train()``) should read :func:`all_valid_rows` first and put the
-    previous value back afterwards.
-    """
-    global _ALL_VALID_ROWS
-    if flag is not None and not isinstance(flag, bool):
-        InputTypeError.raise_("all_valid_rows must be True, False or None")
-    _ALL_VALID_ROWS = flag
-
-
-def all_valid_rows() -> bool | None:
-    """Current all-valid-rows policy (see :func:`set_all_valid_rows`)."""
-    return _ALL_VALID_ROWS
 
 
 def _active_mask_dtype(input_embeds: torch.Tensor) -> torch.dtype:
@@ -234,21 +193,18 @@ def vmap_create_causal_mask(
     # so we check for actual cached data rather than just None.
     attn_impl = getattr(config, "_attn_implementation", None)
     all_valid_attention = attention_mask is None
-    policy = _ALL_VALID_ROWS
     is_padding_mask = (
         not all_valid_attention and attention_mask.ndim <= 2  # noqa: PLR2004 - padding masks are 1D/2D
     )
-    if is_padding_mask and policy is not None:
-        # Public policy: never inspect the batch content (see
-        # ``set_all_valid_rows``).
-        all_valid_attention = policy
-    elif is_padding_mask and not torch.compiler.is_compiling():
+    if is_padding_mask and not torch.compiler.is_compiling():
         try:
             functorch = torch._C._functorch
-            physical_mask = attention_mask
-            while functorch.is_functorch_wrapped_tensor(physical_mask):
-                physical_mask = functorch.get_unwrapped(physical_mask)
-            all_valid_attention = bool(physical_mask.all())
+            # Reducing an unwrapped physical mask would make a vmapped row's
+            # attention path depend on whether its microbatch mates are padded.
+            # Retain the fast path for ordinary forwards, but materialize a
+            # supplied mask while evaluating vmapped per-example gradients.
+            if not functorch.is_functorch_wrapped_tensor(attention_mask):
+                all_valid_attention = bool(attention_mask.all())
         except (AttributeError, RuntimeError):
             all_valid_attention = False
 

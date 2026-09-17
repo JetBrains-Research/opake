@@ -833,9 +833,6 @@ class DPTrainer:
         custom model. Non-HF ``nn.Module`` models log a warning and remain
         supported.
         """
-        # Masking policy ``_train_once`` installs for the run and restores
-        # afterwards (``None``: the runtime's data-driven probe).
-        self._all_valid_rows_policy: bool | None = self.args.all_valid_rows
         self._fused_forward_uses_marker = False
         try:
             from opaque.patches import apply_model_patches
@@ -1161,38 +1158,6 @@ class DPTrainer:
             return result
 
     def _train_once(
-        self,
-        *,
-        resume_from_checkpoint: str | bool | os.PathLike[str] | None,
-        microbatch_size_override: int | None,
-        ignore_keys_for_eval: list[str] | None,
-    ) -> TrainOutput:
-        # The all-valid-rows policy is process-wide: install this trainer's
-        # for the run and put the previous value back afterwards.
-        previous_policy = self._install_all_valid_rows_policy()
-        try:
-            return self._train_once_with_policy(
-                resume_from_checkpoint=resume_from_checkpoint,
-                microbatch_size_override=microbatch_size_override,
-                ignore_keys_for_eval=ignore_keys_for_eval,
-            )
-        finally:
-            self._restore_all_valid_rows_policy(previous_policy)
-
-    def _install_all_valid_rows_policy(self) -> bool | None:
-        """Install this trainer's all-valid-rows policy; return the previous one."""
-        from opaque.patches import all_valid_rows, set_all_valid_rows
-
-        previous = all_valid_rows()
-        set_all_valid_rows(getattr(self, "_all_valid_rows_policy", None))
-        return previous
-
-    def _restore_all_valid_rows_policy(self, previous: bool | None) -> None:
-        from opaque.patches import set_all_valid_rows
-
-        set_all_valid_rows(previous)
-
-    def _train_once_with_policy(
         self,
         *,
         resume_from_checkpoint: str | bool | os.PathLike[str] | None,
