@@ -26,6 +26,7 @@ from opaque.api.transformers.trainer._dp_trainer import DPTrainer
 from opaque.dpsgd.accounting.mechanisms.types import MoeAux
 from opaque.dpsgd.clipping.types import MoeClipState
 from opaque.exceptions import CheckpointError, ConfigurationError
+from opaque.functional import make_functional
 from opaque.transformers import TrainingArguments
 from opaque.transformers.trl import DPOConfig, DPOTrainer, SFTConfig, SFTTrainer
 
@@ -117,6 +118,7 @@ _COMMON = {
     "per_device_train_batch_size": 4,
     "max_steps": 3,
     "privacy_noise_multiplier": 1.0,
+    "privacy_accounting": True,
     "clipping_norm": 1.0,
     "router_aux_loss_coef": COEF,
     "learning_rate": 1e-3,
@@ -549,35 +551,136 @@ class TestSFTTrainer:
         eager = log_completion_metrics and loss_type != "chunked_nll"
         assert all(("entropy" in row) == eager for row in rows)
 
-    def test_dpo_rejects_the_coefficient(self, tmp_path):
-        datasets = pytest.importorskip("datasets")
-        pairs = datasets.Dataset.from_list(
-            [
-                {
-                    "chosen_input_ids": [3, 4, 5, 6, 7],
-                    "rejected_input_ids": [3, 4, 5, 8, 9],
-                    "chosen_completion_mask": [0, 0, 0, 1, 1],
-                    "rejected_completion_mask": [0, 0, 0, 1, 1],
-                }
-                for _ in range(8)
-            ]
-        )
-        args = DPOConfig(
-            **{
-                **_COMMON,
-                "output_dir": str(tmp_path),
-                "max_length": 8,
-                "router_aux_kwargs": {"max_tokens": 8},
+
+def _dpo_pairs():
+    datasets = pytest.importorskip("datasets")
+    g = torch.Generator().manual_seed(3)
+    prompt_len = 3
+    rows = []
+    for _ in range(8):
+        prompt = torch.randint(3, VOCAB, (prompt_len,), generator=g).tolist()
+        n_c = int(torch.randint(2, SEQ - prompt_len + 1, (1,), generator=g))
+        n_r = int(torch.randint(2, SEQ - prompt_len + 1, (1,), generator=g))
+        rows.append(
+            {
+                "chosen_input_ids": prompt
+                + torch.randint(3, VOCAB, (n_c,), generator=g).tolist(),
+                "rejected_input_ids": prompt
+                + torch.randint(3, VOCAB, (n_r,), generator=g).tolist(),
+                "chosen_completion_mask": [0] * prompt_len + [1] * n_c,
+                "rejected_completion_mask": [0] * prompt_len + [1] * n_r,
             }
         )
-        with pytest.raises(ConfigurationError, match="DPOTrainer"):
-            DPOTrainer(
-                model=_tiny_mellum(),
-                ref_model=_tiny_mellum(),
-                args=args,
-                train_dataset=pairs,
-                processing_class=_stub_tokenizer(),
+    return datasets.Dataset.from_list(rows)
+
+
+def _dpo_args(output_dir, **overrides):
+    kwargs = {
+        **_COMMON,
+        "output_dir": str(output_dir),
+        "max_steps": 2,
+        "max_length": SEQ,
+        "router_aux_kwargs": {"ratio": 0.5},
+    }
+    kwargs.update(overrides)
+    return DPOConfig(**kwargs)
+
+
+class TestDPOTrainer:
+    def test_pair_token_bound_from_max_length(self, tmp_path):
+        """Both sides carry the prompt, so the pair bound is twice ``max_length``."""
+        assert _dpo_args(tmp_path).router_aux_kwargs == {
+            "ratio": 0.5,
+            "max_tokens": 2 * SEQ,
+        }
+        explicit = _dpo_args(tmp_path, router_aux_kwargs={"max_tokens": 5})
+        assert explicit.router_aux_kwargs == {"max_tokens": 5}
+        off = _dpo_args(tmp_path, router_aux_loss_coef=0.0)
+        assert off.router_aux_kwargs == {"ratio": 0.5}
+
+    @pytest.mark.parametrize(
+        ("log_completion_metrics", "use_weighting"),
+        [(True, False), (False, False), (False, True)],
+    )
+    def test_trains_on_every_loss_path(
+        self, tmp_path, log_completion_metrics, use_weighting
+    ):
+        model = _tiny_mellum()
+        trainer = DPOTrainer(
+            model=model,
+            ref_model=_tiny_mellum(),
+            args=_dpo_args(
+                tmp_path,
+                log_completion_metrics=log_completion_metrics,
+                use_weighting=use_weighting,
+            ),
+            train_dataset=_dpo_pairs(),
+            processing_class=_stub_tokenizer(),
+        )
+        assert trainer._router_aux_enabled
+        assert trainer._router_aux_factory_kwargs["max_tokens"] == 2 * SEQ
+        assert _text_config(model).output_router_logits is False
+        # WPO consumes logits, so it keeps the eager path; the other two rows
+        # are eligible for the fused log-prob path, which the metrics gate
+        # switches off per step when the completion telemetry is on.
+        assert trainer._use_fused_logp is (not use_weighting)
+        out = trainer.train()
+        assert out.global_step == 2
+        assert torch.isfinite(torch.tensor(out.training_loss))
+        rows = _rows(trainer)
+        assert len(rows) == 2
+        assert all(row["router_aux_noise_std"] > 0 for row in rows)
+        # The reward telemetry rides next to the release on every path.
+        assert all(any(key.startswith("rewards/") for key in row) for row in rows)
+        assert MoeAux.__name__ in repr(trainer._accountant.process)
+
+    def test_seam_joins_the_pair_along_the_token_axis(self, tmp_path):
+        """The clipper sees one example: both sides' router logits and masks."""
+        trainer = DPOTrainer(
+            model=_tiny_mellum(),
+            args=_dpo_args(tmp_path, loss_type="simpo"),
+            train_dataset=_dpo_pairs(),
+            processing_class=_stub_tokenizer(),
+        )
+        batch = next(iter(trainer.get_train_dataloader()))
+        tensors = {k: v for k, v in batch.items() if torch.is_tensor(v)}
+        fmodel, params = make_functional(trainer._model)
+
+        def seam(example):
+            return trainer.compute_per_example_loss_and_router_logits(
+                fmodel, params, example
             )
+
+        def side(example, name):
+            out = fmodel(
+                params,
+                input_ids=example[f"{name}_input_ids"],
+                attention_mask=example[f"{name}_attention_mask"],
+                output_router_logits=True,
+                router_aux_loss=False,
+            )
+            assert out.aux_loss is None
+            return out.router_logits
+
+        loss, router_logits, mask, aux = torch.func.vmap(seam)(tensors)
+        chosen = torch.func.vmap(lambda ex: side(ex, "chosen"))(tensors)
+        rejected = torch.func.vmap(lambda ex: side(ex, "rejected"))(tensors)
+        assert torch.isfinite(loss).all()
+        assert len(router_logits) == L
+        for layer in range(L):
+            torch.testing.assert_close(
+                router_logits[layer],
+                torch.cat([chosen[layer], rejected[layer]], dim=1),
+            )
+        assert torch.equal(
+            mask,
+            torch.cat(
+                [tensors["chosen_attention_mask"], tensors["rejected_attention_mask"]],
+                dim=1,
+            ),
+        )
+        assert aux
+        assert all(torch.is_tensor(value) for value in aux.values())
 
 
 def test_state_type_is_registered_for_sync():

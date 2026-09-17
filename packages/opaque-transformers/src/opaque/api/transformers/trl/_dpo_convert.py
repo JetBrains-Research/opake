@@ -14,7 +14,6 @@ from opaque.exceptions import ConfigurationError, InputTypeError
 
 from ._convert import (
     _convert_trl_config,
-    _drop_router_aux_loss,
     _import_trl,
     _reject_if_truthy,
     _reject_pad_token,
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
 
 TRL_DPO_DIRECT_FIELDS: frozenset[str] = frozenset(
     {
+        "router_aux_loss_coef",
         "model_init_kwargs",
         "trust_remote_code",
         "disable_dropout",
@@ -137,7 +137,6 @@ TRL_DPO_DROP_FIELDS: dict[str, str | Callable[[Any], str | None]] = {
         "reference heads; this TRL flag is silently honored at its True "
         "mode and ignored otherwise."
     ),
-    "router_aux_loss_coef": _drop_router_aux_loss,
 }
 
 

@@ -66,16 +66,6 @@ def _reject_pad_token(value: Any) -> str | None:
     return None
 
 
-def _drop_router_aux_loss(value: Any) -> str | None:
-    if not value:
-        return None  # already 0 — nothing is being withheld.
-    return (
-        "the MoE router load-balancing term is available through SFTTrainer "
-        "only (DPOTrainer's preference loss does not hand the router logits to "
-        "the clipper); training proceeds as if the coefficient were 0.0"
-    )
-
-
 def _convert_trl_config(
     trl_cfg: Any,
     *,

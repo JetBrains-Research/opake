@@ -275,13 +275,15 @@ into the clipper. For a model with no patches, the loss function calls
 the backbone and the head itself through `functional_call` and computes
 the cross-entropy inline; HF's auxiliary path never runs.
 
-### DPTrainer and SFTTrainer
+### DPTrainer, SFTTrainer and DPOTrainer
 
 The trainers take TRL's field: `router_aux_loss_coef` on
-`TrainingArguments` (inherited by `SFTConfig`), zero by default. On a
+`TrainingArguments` (inherited by `SFTConfig` and `DPOConfig`), zero by
+default. On a
 mixture-of-experts model a non-zero value switches the clipper to
-`moe_clipped_grad` with that coefficient on the surrogate and wraps the
-accountant in `moe_aux`; the DP knobs travel in
+`moe_clipped_grad` with that coefficient on the surrogate and, with
+`privacy_accounting` on, wraps the accountant in `moe_aux`; the DP knobs
+travel in
 `router_aux_kwargs` (`max_tokens`, `ratio`, `mean_tokens`, `filter_beta`).
 `SFTConfig` derives `max_tokens` from `max_length`, so
 
@@ -290,7 +292,11 @@ SFTConfig(router_aux_loss_coef=0.01, max_length=1024, ...)
 ```
 
 is the whole opt-in, and `SFTConfig.from_trl` copies a TRL config's
-coefficient. `DPTrainer` needs the bound spelled out:
+coefficient. `DPOConfig` does the same with twice `max_length`: the
+preference pair is the protected unit and both of its sequences carry
+the prompt, the token set HF's auxiliary loss measures over TRL's
+concatenated chosen and rejected batch. `DPTrainer` needs the bound
+spelled out:
 `TrainingArguments(router_aux_loss_coef=0.01,
 router_aux_kwargs={"max_tokens": 1024})`. The live model config is set
 to `output_router_logits=False` and `router_aux_loss_coef=0.0` for the
@@ -309,11 +315,13 @@ switch the release on or off, and DDP ranks synchronize the state
 through the trainer's existing state sync. The router logits reach the
 clipper through `compute_per_example_loss_and_router_logits`, the seam
 next to `compute_per_example_loss`: `DPTrainer` implements it on its
-causal-LM forward and `SFTTrainer` on each of its loss paths (the fused
-`dft` path asks the backbone, the others the model forward), so a
-subclass with its own per-example loss overrides both. `DPOTrainer` does
-not implement the seam and rejects the coefficient. The release needs
-the Gaussian mechanism and fixed clipping.
+causal-LM forward, `SFTTrainer` on each of its loss paths (the fused
+`dft` path asks the backbone, the others the model forward) and
+`DPOTrainer` on its pair forward, where the chosen and rejected router
+logits and masks are concatenated along the token axis so the clipper
+sees the pair as one example; a subclass with its own per-example loss
+overrides both. The release needs the Gaussian mechanism and fixed
+clipping.
 
 ### Choosing the public constants
 

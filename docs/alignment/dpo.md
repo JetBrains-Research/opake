@@ -197,6 +197,16 @@ half precision with `opaque-alignment[patches]`, eager fallback
 otherwise). Like the fused SFT losses it is strictly per-example — pass
 one sequence and let the outer `vmap` batch it.
 
+**Mixture-of-experts policies.** `DPOConfig(router_aux_loss_coef=0.01,
+max_length=1024)` is the opt-in for the DP
+[MoE load-balancing](../mechanisms/dp-sgd/moe-load-balancing.md) release,
+TRL's field with TRL's meaning. `DPOTrainer` runs the pair forward above
+with the router logits of both sides concatenated along the token axis,
+so the released load counts the chosen and rejected sequences of one pair
+together, prompt included, exactly the rows HF's auxiliary loss sees over
+TRL's concatenated batch; the public token bound is therefore twice
+`max_length`. HF's own batch-coupled auxiliary loss never runs.
+
 ### Choosing a per-pair head
 
 The per-pair heads take `(chosen_logratio, rejected_logratio, *, beta, ...)`

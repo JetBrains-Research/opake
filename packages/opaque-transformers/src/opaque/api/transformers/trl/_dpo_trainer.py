@@ -14,6 +14,11 @@ Opaque's per-example :meth:`DPTrainer.compute_per_example_loss_and_metrics` seam
 (loss + reward telemetry in one forward; rewards ride the clipped-grad aux
 channel and the symmetric eval aux). The two forwards (chosen + rejected) are
 folded into the seam since a batched forward has no per-example DP meaning.
+The MoE router-load release runs the same pair forward through
+:meth:`DPOTrainer.compute_per_example_loss_and_router_logits`, with the router
+logits and attention masks of both sides concatenated along the token axis, so
+the clipper sees the pair as one example — the token set HF's auxiliary loss
+measures over TRL's concatenated chosen + rejected batch.
 
 The reference policy enters via precompute: a one-shot pass attaches per-example
 ``ref_chosen_logps`` / ``ref_rejected_logps`` columns the collator emits as
@@ -70,7 +75,7 @@ from opaque.api.transformers.trainer._distributed import resolve_ddp_state
 
 # Single source of truth for PEFT detection (handles PeftModel + PeftMixedModel).
 from opaque.api.transformers.trainer._dp_trainer import _is_peft_model
-from opaque.exceptions import ConfigurationError, InputTypeError
+from opaque.exceptions import ConfigurationError, InputTypeError, OperationError
 
 from ._dpo_config import _REFERENCE_FREE_HEADS, DPOConfig
 
@@ -111,6 +116,28 @@ _NORM_LOSSES = frozenset({"ipo", "sigmoid_norm", "simpo"})
 _SPECIAL_CASED_HEADS = frozenset({"cpo", "orpo"})
 
 _REF_COLUMNS = ("ref_chosen_logps", "ref_rejected_logps")
+
+
+def _concat_pair_router_logits(
+    chosen: Any,
+    rejected: Any,
+    chosen_mask: torch.Tensor,
+    rejected_mask: torch.Tensor,
+) -> tuple[tuple[torch.Tensor, ...] | None, torch.Tensor | None]:
+    """Join both sides' per-layer router logits and masks along the token axis.
+
+    The pair is the protected unit, so its load counts the tokens of both
+    sequences, prompt included: the rows HF's auxiliary loss sees in TRL's
+    concatenated chosen + rejected batch. ``(None, None)`` when a side returned
+    no router logits (a dense model, or a backbone that did not record its
+    routers), so the seam can reject the run.
+    """
+    if chosen is None or rejected is None:
+        return None, None
+    logits = tuple(
+        torch.cat([c, r], dim=-2) for c, r in zip(chosen, rejected, strict=True)
+    )
+    return logits, torch.cat([chosen_mask, rejected_mask], dim=-1)
 
 
 def _json_value(value: Any, *, path: str = "value") -> Any:
@@ -998,21 +1025,24 @@ class DPOTrainer(DPTrainer):
     # ------------------------------------------------------------------
     # Fused logits-free policy logp (plan §E)
     # ------------------------------------------------------------------
-    def _last_hidden_state(
+    def _backbone_forward(
         self,
         params: dict[str, Any],
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        """Backbone last hidden state ``(T, H)`` only — no lm_head, no all-layers.
+        *,
+        output_router_logits: bool = False,
+    ) -> tuple[torch.Tensor, Any]:
+        """Backbone forward: ``(last_hidden_state, router_logits)`` — no lm_head.
 
         Calls the backbone submodule (resolved via :func:`_resolve_fused_handles`)
         functionally with the backbone-scoped slice of ``params`` (the keys under
         the ``"<prefix>."`` namespace, re-rooted to the submodule). This returns
         just the last-layer hidden state — unlike ``output_hidden_states=True``,
         which stacks all ``L+1`` layers and can exceed the ``(T, V)`` logits the
-        fused path is avoiding. The HF backbones in scope return the hidden state
-        as ``out[0]`` / ``out.last_hidden_state``.
+        fused path is avoiding — and, on request, the per-layer router logits of
+        a mixture-of-experts backbone (``None`` otherwise). The HF backbones in
+        scope return the hidden state as ``out[0]`` / ``out.last_hidden_state``.
 
         The backbone-prefix is a dotted path so ``attrgetter`` walks PEFT wrappers
         correctly — calling the unwrapped backbone (not the inner causal-LM)
@@ -1033,14 +1063,28 @@ class DPOTrainer(DPTrainer):
         if unbatched:
             input_ids = input_ids.unsqueeze(0)
             attention_mask = attention_mask.unsqueeze(0)
-        out = torch.func.functional_call(
-            backbone,
-            backbone_params,
-            (),
-            {"input_ids": input_ids, "attention_mask": attention_mask},
-        )
-        hidden = out[0] if isinstance(out, tuple) else out.last_hidden_state
-        return hidden.squeeze(0) if unbatched else hidden
+        kwargs: dict[str, Any] = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        if output_router_logits:
+            kwargs["output_router_logits"] = True
+        out = torch.func.functional_call(backbone, backbone_params, (), kwargs)
+        if isinstance(out, tuple):
+            hidden, router_logits = out[0], None
+        else:
+            hidden = out.last_hidden_state
+            router_logits = getattr(out, "router_logits", None)
+        return (hidden.squeeze(0) if unbatched else hidden), router_logits
+
+    def _last_hidden_state(
+        self,
+        params: dict[str, Any],
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """Backbone last hidden state ``(T, H)`` only (see :meth:`_backbone_forward`)."""
+        return self._backbone_forward(params, input_ids, attention_mask)[0]
 
     def _fused_logp(
         self,
@@ -1049,9 +1093,13 @@ class DPOTrainer(DPTrainer):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
         completion_mask: torch.Tensor,
-    ) -> torch.Tensor:
+        *,
+        output_router_logits: bool = False,
+    ) -> tuple[torch.Tensor, Any]:
         """One side's summed policy logp via the logits-free fused primitive.
 
+        Returns ``(logp, router_logits)``; the router logits are the backbone's
+        per-layer stack when requested and ``None`` otherwise.
         ``length_normalized=False`` (summed): ``dpo_loss`` derives any per-token
         mean per head, so a single summed logp serves every head — matching the
         eager ``sequence_logp`` call it replaces. ``fmodel`` is accepted for
@@ -1059,30 +1107,52 @@ class DPOTrainer(DPTrainer):
         directly to avoid the lm_head projection).
         """
         del fmodel  # the backbone forward is what we need, not the lm_head forward
-        hidden = self._last_hidden_state(params, input_ids, attention_mask)
+        hidden, router_logits = self._backbone_forward(
+            params, input_ids, attention_mask, output_router_logits=output_router_logits
+        )
         lm_head_weight = params[self._lm_head_param_name]
-        return fused_sequence_logp(
+        logp = fused_sequence_logp(
             hidden, lm_head_weight, input_ids, completion_mask, length_normalized=False
         )
+        return logp, router_logits
 
-    def compute_per_example_loss_and_metrics(
+    def _pair_loss(
         self,
         fmodel: Callable[..., Any],
         params: dict[str, Any],
         inputs: dict[str, Any],
-    ) -> tuple[Any, dict[str, Any]]:
-        """One preference pair's DPO ``(loss, rewards/*)`` (vmap-batched).
+        *,
+        output_router_logits: bool,
+    ) -> tuple[Any, dict[str, Any], Any, Any]:
+        """One preference pair's ``(loss, rewards/*, router_logits, mask)``.
 
-        This is the rich :class:`DPTrainer` seam: two policy forwards (chosen,
-        rejected) → per-sequence summed logps → the configured head(s), plus the
-        per-example reward telemetry. The harness carries the telemetry through
-        the clipped-grad aux channel (logged every training step) and aggregates
-        it in the eval loop (``eval_rewards/*``). The reference enters as the
-        constant ``ref_*_logps`` (precomputed, or TR-DPO's per-step values from
-        :meth:`_augment_inputs`), so no second model runs inside ``vmap``.
+        The body shared by the two seams: two policy forwards (chosen,
+        rejected) → per-sequence summed logps → the configured head(s), plus
+        the per-example reward telemetry. The harness carries the telemetry
+        through the clipped-grad aux channel (logged every training step) and
+        aggregates it in the eval loop (``eval_rewards/*``). The reference
+        enters as the constant ``ref_*_logps`` (precomputed, or TR-DPO's
+        per-step values from :meth:`_augment_inputs`), so no second model runs
+        inside ``vmap``.
+
+        With ``output_router_logits`` both forwards also return the backbone's
+        per-layer router logits, and the two sides come back concatenated
+        along the token axis with the matching attention mask, so the MoE
+        clipper sees the pair as one example; otherwise the last two items are
+        ``None``.
         """
+        c_ids, r_ids = inputs["chosen_input_ids"], inputs["rejected_input_ids"]
+        c_mask = inputs["chosen_attention_mask"]
+        r_mask = inputs["rejected_attention_mask"]
         c_cmask = inputs["chosen_completion_mask"]
         r_cmask = inputs["rejected_completion_mask"]
+        # Router logits are requested with the patched forward's aux-free
+        # marker so HF's batch-coupled auxiliary loss never runs per example.
+        extra: dict[str, Any] = {}
+        if output_router_logits:
+            extra["output_router_logits"] = True
+            if self._router_aux_forward_marker:
+                extra["router_aux_loss"] = False
 
         # FUSED PATH: on an eligible run compute the policy logps through
         # ``fused_sequence_logp`` over the backbone's last hidden state, never
@@ -1092,32 +1162,30 @@ class DPOTrainer(DPTrainer):
         # telemetry is on, because ``entropy`` / ``logits/*`` / ``mean_token_acc``
         # all consume full logits.
         if self._use_fused_logp and not self._log_completion_metrics:
-            chosen_logp = self._fused_logp(
+            chosen_logp, c_router = self._fused_logp(
                 fmodel,
                 params,
-                inputs["chosen_input_ids"],
-                inputs["chosen_attention_mask"],
+                c_ids,
+                c_mask,
                 c_cmask,
+                output_router_logits=output_router_logits,
             )
-            rejected_logp = self._fused_logp(
+            rejected_logp, r_router = self._fused_logp(
                 fmodel,
                 params,
-                inputs["rejected_input_ids"],
-                inputs["rejected_attention_mask"],
+                r_ids,
+                r_mask,
                 r_cmask,
+                output_router_logits=output_router_logits,
             )
             chosen_out = rejected_out = None
         else:
-            chosen_out = fmodel(
-                params,
-                input_ids=inputs["chosen_input_ids"],
-                attention_mask=inputs["chosen_attention_mask"],
-            )
+            chosen_out = fmodel(params, input_ids=c_ids, attention_mask=c_mask, **extra)
             rejected_out = fmodel(
-                params,
-                input_ids=inputs["rejected_input_ids"],
-                attention_mask=inputs["rejected_attention_mask"],
+                params, input_ids=r_ids, attention_mask=r_mask, **extra
             )
+            c_router = getattr(chosen_out, "router_logits", None)
+            r_router = getattr(rejected_out, "router_logits", None)
 
             c_lp_kwargs: dict[str, Any] = {}
             r_lp_kwargs: dict[str, Any] = {}
@@ -1127,13 +1195,10 @@ class DPOTrainer(DPTrainer):
                 r_lp_kwargs = {"ld_alpha": self._ld_alpha, "shared_prefix_len": r_sp}
 
             chosen_logp = sequence_logp(
-                chosen_out.logits, inputs["chosen_input_ids"], c_cmask, **c_lp_kwargs
+                chosen_out.logits, c_ids, c_cmask, **c_lp_kwargs
             )
             rejected_logp = sequence_logp(
-                rejected_out.logits,
-                inputs["rejected_input_ids"],
-                r_cmask,
-                **r_lp_kwargs,
+                rejected_out.logits, r_ids, r_cmask, **r_lp_kwargs
             )
 
         # Log-ratio pair for reference-using heads (== policy logp when the run
@@ -1158,10 +1223,8 @@ class DPOTrainer(DPTrainer):
         # carries no gradient (``wpo_weights`` detaches), so per-example DP is
         # preserved.
         if self._use_weighting:
-            weight = self._wpo_weight(
-                chosen_out.logits, inputs["chosen_input_ids"], c_cmask
-            ) * self._wpo_weight(
-                rejected_out.logits, inputs["rejected_input_ids"], r_cmask
+            weight = self._wpo_weight(chosen_out.logits, c_ids, c_cmask) * (
+                self._wpo_weight(rejected_out.logits, r_ids, r_cmask)
             )
             loss = loss * weight
 
@@ -1171,17 +1234,69 @@ class DPOTrainer(DPTrainer):
         # fused path is active — so passing ``None`` here is safe.
         chosen_logits = chosen_out.logits if chosen_out is not None else None
         rejected_logits = rejected_out.logits if rejected_out is not None else None
-        return loss, self._reward_aux(
+        aux = self._reward_aux(
             chosen_logratio=chosen_lr,
             rejected_logratio=rejected_lr,
             chosen_logp=chosen_logp,
             rejected_logp=rejected_logp,
             chosen_logits=chosen_logits,
             rejected_logits=rejected_logits,
-            chosen_input_ids=inputs["chosen_input_ids"],
+            chosen_input_ids=c_ids,
             chosen_completion_mask=c_cmask,
             rejected_completion_mask=r_cmask,
         )
+        if not output_router_logits:
+            return loss, aux, None, None
+        router_logits, mask = _concat_pair_router_logits(
+            c_router, r_router, c_mask, r_mask
+        )
+        return loss, aux, router_logits, mask
+
+    def compute_per_example_loss_and_metrics(
+        self,
+        fmodel: Callable[..., Any],
+        params: dict[str, Any],
+        inputs: dict[str, Any],
+    ) -> tuple[Any, dict[str, Any]]:
+        """One preference pair's DPO ``(loss, rewards/*)`` (vmap-batched).
+
+        This is the rich :class:`DPTrainer` seam; see :meth:`_pair_loss` for
+        the forward it runs.
+        """
+        loss, aux, _, _ = self._pair_loss(
+            fmodel, params, inputs, output_router_logits=False
+        )
+        return loss, aux
+
+    def compute_per_example_loss_and_router_logits(
+        self,
+        fmodel: Callable[..., Any],
+        params: dict[str, Any],
+        inputs: dict[str, Any],
+    ) -> tuple[Any, Any, Any, dict[str, Any]]:
+        """The MoE seam: the pair loss with both sides' router logits.
+
+        The same pair forward as :meth:`compute_per_example_loss_and_metrics`,
+        asked for ``output_router_logits`` (the backbone call on the fused
+        log-prob path, the model forward with the aux-free marker otherwise).
+        The chosen and rejected router logits are concatenated along the token
+        axis with the matching attention mask, so the clipper's load counts
+        both sequences of the pair, prompt included, as HF's auxiliary loss
+        does over TRL's concatenated batch; the reward telemetry rides along
+        as the aux dict.
+        """
+        loss, aux, router_logits, mask = self._pair_loss(
+            fmodel, params, inputs, output_router_logits=True
+        )
+        if router_logits is None:
+            raise OperationError(
+                *(
+                    "router_aux_loss_coef != 0 but the DPO forwards returned no "
+                    "router_logits; the backbone must record its router logits "
+                    "under output_router_logits=True.",
+                )
+            )
+        return loss, router_logits, mask, aux
 
     def compute_per_example_loss(
         self,

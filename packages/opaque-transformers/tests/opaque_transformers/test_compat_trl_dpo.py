@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 
 # TRL is the optional ``opaque[trl]`` extra.
@@ -128,50 +126,35 @@ def test_loss_type_aot_rejected(tmp_path):
     "router_aux_loss_coef" not in _DPO_FIELDS,
     reason="TRL does not expose router_aux_loss_coef",
 )
-def test_router_aux_loss_is_dropped_with_a_warning(tmp_path):
-    """A deliberately set MoE aux-loss coefficient converts, loudly, to no-op."""
-    with pytest.warns(RuntimeWarning, match="router_aux_loss_coef"):
-        cfg = DPOConfig.from_trl(
-            _trl_dpo_args(tmp_path, router_aux_loss_coef=0.5),
-            privacy_noise_multiplier=0.8,
-            clipping_norm=1.0,
-        )
-    assert cfg is not None
+def test_router_aux_loss_coef_is_copied(tmp_path):
+    """TRL's MoE coefficient carries over: it is the opt-in for the DP release.
+
+    On a mixture-of-experts model the coefficient enables the router-load
+    release; the preference pair is the protected unit and both of its
+    sequences carry the prompt, so the token bound is twice ``max_length``. A
+    dense model ignores it, as in TRL.
+    """
+    cfg = DPOConfig.from_trl(
+        _trl_dpo_args(tmp_path, router_aux_loss_coef=0.5, max_length=64),
+        privacy_noise_multiplier=0.8,
+        clipping_norm=1.0,
+    )
+    assert cfg.router_aux_loss_coef == pytest.approx(0.5)
+    assert cfg.router_aux_kwargs == {"max_tokens": 128}
 
 
 @pytest.mark.skipif(
     "router_aux_loss_coef" not in _DPO_FIELDS,
     reason="TRL does not expose router_aux_loss_coef",
 )
-def test_trl_default_router_aux_loss_is_dropped_silently(tmp_path):
-    """TRL's own non-zero default is not a user request, so it warns about nothing."""
-    default_coef = trl.DPOConfig.__dataclass_fields__["router_aux_loss_coef"].default
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        cfg = DPOConfig.from_trl(
-            _trl_dpo_args(tmp_path, router_aux_loss_coef=default_coef),
-            privacy_noise_multiplier=0.8,
-            clipping_norm=1.0,
-        )
-    assert cfg is not None
-    assert not [w for w in caught if "router_aux_loss_coef" in str(w.message)]
-
-
-@pytest.mark.skipif(
-    "router_aux_loss_coef" not in _DPO_FIELDS,
-    reason="TRL does not expose router_aux_loss_coef",
-)
-def test_router_aux_loss_switched_off_is_dropped_silently(tmp_path):
-    """Asking for no aux loss gets no aux loss, so there is nothing to warn about."""
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        cfg = DPOConfig.from_trl(
-            _trl_dpo_args(tmp_path, router_aux_loss_coef=0.0),
-            privacy_noise_multiplier=0.8,
-            clipping_norm=1.0,
-        )
-    assert cfg is not None
-    assert not [w for w in caught if "router_aux_loss_coef" in str(w.message)]
+def test_router_aux_loss_switched_off_stays_off(tmp_path):
+    cfg = DPOConfig.from_trl(
+        _trl_dpo_args(tmp_path, router_aux_loss_coef=0.0),
+        privacy_noise_multiplier=0.8,
+        clipping_norm=1.0,
+    )
+    assert cfg.router_aux_loss_coef == 0.0
+    assert cfg.router_aux_kwargs == {}
 
 
 @pytest.mark.skipif(

@@ -22,7 +22,10 @@ from typing import Any
 
 import torch
 
-from opaque.api.transformers.trainer._training_arguments import TrainingArguments
+from opaque.api.transformers.trainer._training_arguments import (
+    TrainingArguments,
+    _normalize_dict_field,
+)
 from opaque.exceptions import ConfigurationError
 
 from ._dpo_convert import _convert_trl_dpo_config
@@ -145,6 +148,14 @@ class DPOConfig(TrainingArguments):
         if self.trust_remote_code:
             self.model_init_kwargs = dict(self.model_init_kwargs or {})
             self.model_init_kwargs["trust_remote_code"] = True
+        # TRL parity: ``router_aux_loss_coef`` alone enables the MoE release.
+        # The preference pair is the protected unit and both of its sequences
+        # carry the prompt, so the public token bound is twice the length each
+        # side is truncated to.
+        if self.router_aux_loss_coef and self.max_length is not None:
+            router_aux_kwargs = _normalize_dict_field(self.router_aux_kwargs) or {}
+            router_aux_kwargs.setdefault("max_tokens", 2 * int(self.max_length))
+            self.router_aux_kwargs = router_aux_kwargs
         super().__post_init__()
 
         # TRL's own validations, not DP-driven rejections.
@@ -237,8 +248,10 @@ class DPOConfig(TrainingArguments):
         ``sync_ref_model``, ``ref_model_mixup_alpha``,
         ``ref_model_sync_steps``, ``precompute_ref_batch_size``,
         ``disable_dropout``, ``max_length``, ``pad_to_multiple_of``,
-        ``dataset_num_proc``, ``model_init_kwargs``, ``trust_remote_code``) are
-        copied directly.
+        ``dataset_num_proc``, ``model_init_kwargs``, ``trust_remote_code``,
+        ``router_aux_loss_coef``) are copied directly; on a mixture-of-experts
+        model the coefficient enables the DP router-load release with the pair
+        token bound, twice ``max_length``.
 
         ``loss_type`` is validated per-element against opaque's implemented
         heads; the TRL 1.x ``aot`` / ``aot_unpaired`` Adversarial Optimal
@@ -247,9 +260,7 @@ class DPOConfig(TrainingArguments):
 
         Fields TRL has that opaque does not implement raise
         ``ValueError``: ``padding_free``, ``truncation_mode='keep_end'``, and
-        ``pad_token``. A nonzero ``router_aux_loss_coef`` warns and trains as
-        if it were 0: the MoE router-load release is available through
-        ``SFTTrainer`` only.
+        ``pad_token``.
 
         HF-inherited fields go through the same translation as
         :meth:`TrainingArguments.from_hf` — same DP-knob requirement, same

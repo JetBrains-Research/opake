@@ -1741,8 +1741,8 @@ def _dpo_fused_logps(trainer, batch):
 
     def fn(tp, c_ids, c_mask, c_cmask, r_ids, r_mask, r_cmask):
         params = {**frozen, **tp}
-        c = trainer._fused_logp(fmodel, params, c_ids, c_mask, c_cmask)
-        r = trainer._fused_logp(fmodel, params, r_ids, r_mask, r_cmask)
+        c, _ = trainer._fused_logp(fmodel, params, c_ids, c_mask, c_cmask)
+        r, _ = trainer._fused_logp(fmodel, params, r_ids, r_mask, r_cmask)
         return c, r
 
     vmapped = torch.vmap(fn, in_dims=(None,) + (0,) * 6)
