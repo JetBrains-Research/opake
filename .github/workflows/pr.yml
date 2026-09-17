@@ -291,7 +291,7 @@ jobs:
       - name: Execute accounting documentation
         run: |
           uv run python examples/quickstart.py
-          uv run python -m doctest packages/opaque-accounting/src/opaque/accounting/__init__.py
+          uv run python -m doctest packages/opake-accounting/src/opake/accounting/__init__.py
           for notebook in \
             accounting_and_calibration.ipynb \
             dp_sgd_training.ipynb \

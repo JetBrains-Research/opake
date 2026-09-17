@@ -1,13 +1,13 @@
 [workspace]
-members = ["packages/opaque-accounting"]
+members = ["packages/opake-accounting"]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
-authors = ["Opaque Contributors"]
+authors = ["Opake Contributors"]
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/JetBrains-Research/opaque"
+repository = "https://github.com/JetBrains-Research/opake"
 keywords = ["differential-privacy", "privacy", "dp-sgd"]
 
 [workspace.lints.rust]

@@ -1,6 +1,6 @@
 # Installation
 
-> **Work in progress:** Opaque is research software under active development.
+> **Work in progress:** Opake is research software under active development.
 > Its differential-privacy mechanisms, accounting, and privacy guarantees are
 > still being validated and may change. Do not rely on it for production or
 > compliance-sensitive privacy guarantees without independent validation for
@@ -13,38 +13,38 @@
 
 ## From JetBrains Packages
 
-Install `opaque` as the single public package entry point:
+Install `opake` as the single public package entry point:
 
 ```bash
-pip install opaque \
+pip install opake \
   --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/
 ```
 
 Or with `uv`:
 
 ```bash
-uv add opaque \
+uv add opake \
   --index https://packages.jetbrains.team/pypi/p/fed/python/simple/
 ```
 
 ### Extras
 
 ```bash
-pip install "opaque[auditing]"      # + opaque-auditing (empirical privacy auditing)
-pip install "opaque[dpftrl]"        # + opaque-dpftrl (correlated-noise mechanisms)
-pip install "opaque[transformers]"  # + opaque-transformers + opaque-patches[transformers]
-pip install "opaque[all]"           # everything above
+pip install "opake[auditing]"      # + opake-auditing (empirical privacy auditing)
+pip install "opake[dpftrl]"        # + opake-dpftrl (correlated-noise mechanisms)
+pip install "opake[transformers]"  # + opake-transformers + opake-patches[transformers]
+pip install "opake[all]"           # everything above
 ```
 
 ## From Source
 
-Clone the repository when developing Opaque, inspecting its implementation, or
+Clone the repository when developing Opake, inspecting its implementation, or
 running its test suite. For ordinary use, prefer the published package above.
 
 ```bash
 # Clone the repository
-git clone https://github.com/JetBrains-Research/opaque.git
-cd opaque
+git clone https://github.com/JetBrains-Research/opake.git
+cd opake
 
 # Install with uv (recommended)
 uv sync --group dev --all-packages --extra all
@@ -78,21 +78,21 @@ Visit <http://localhost:8000> to view the docs.
 ```python
 from importlib.metadata import version
 
-print("opaque-base version:", version("opaque-base"))
-print("opaque-engine version:", version("opaque-engine"))
-print("opaque-dpsgd version:", version("opaque-dpsgd"))
+print("opake-base version:", version("opake-base"))
+print("opake-engine version:", version("opake-engine"))
+print("opake-dpsgd version:", version("opake-dpsgd"))
 ```
 
-`opaque` itself is a [PEP 420] namespace with no top-level Python code, so
+`opake` itself is a [PEP 420] namespace with no top-level Python code, so
 query the installed distributions individually.
 
 ## PyCharm
 
 In PyCharm, select the `uv` interpreter for the project where you ran
-`uv add`. Code completion and Quick Documentation follow Opaque's public façade
-imports, such as `opaque.dpsgd.clipping`, `opaque.dpsgd.noise`, and
-`opaque.accounting`; avoid copying `opaque.api.*` paths from implementation
-tracebacks into application code. Clone Opaque and use an editable workspace
+`uv add`. Code completion and Quick Documentation follow Opake's public façade
+imports, such as `opake.dpsgd.clipping`, `opake.dpsgd.noise`, and
+`opake.accounting`; avoid copying `opake.api.*` paths from implementation
+tracebacks into application code. Clone Opake and use an editable workspace
 only when you need to debug or change its implementation.
 
 [PEP 420]: https://peps.python.org/pep-0420/

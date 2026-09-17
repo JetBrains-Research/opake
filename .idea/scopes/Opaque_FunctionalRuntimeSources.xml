@@ -1,3 +1,0 @@
-<component name="DependencyValidationManager">
-  <scope name="Opaque_FunctionalRuntimeSources" pattern="file[opaque-accounting]:src/opaque/api/accounting/core//*||file[opaque-dpftrl]:src/opaque/api/accounting/dpftrl/amplification//*||file[opaque-dpftrl]:src/opaque/api/dpftrl/noise//*||file[opaque-dpftrl]:src/opaque/api/dpftrl/sampling//*||file[opaque-dpsgd]:src/opaque/api/accounting/dpsgd/amplification//*||file[opaque-dpsgd]:src/opaque/api/accounting/dpsgd/mechanisms//*||file[opaque-dpsgd]:src/opaque/api/dpsgd/clipping//*||file[opaque-dpsgd]:src/opaque/api/dpsgd/noise//*||file[opaque-engine]:src/opaque/api/engine//*||file[opaque-optimizers]:src//*" />
-</component>

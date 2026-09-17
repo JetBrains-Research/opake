@@ -43,35 +43,35 @@ jobs:
       - name: Preflight build version
         run: bash .github/scripts/set_build_versions.sh "${{ inputs.version }}"
 
-      - name: Build opaque
+      - name: Build opake
         run: uv build . --wheel --out-dir dist
 
-      - name: Build opaque-base
-        run: uv build packages/opaque-base --wheel --out-dir dist
+      - name: Build opake-base
+        run: uv build packages/opake-base --wheel --out-dir dist
 
-      - name: Build opaque-engine
-        run: uv build packages/opaque-engine --wheel --out-dir dist
+      - name: Build opake-engine
+        run: uv build packages/opake-engine --wheel --out-dir dist
 
-      - name: Build opaque-optimizers
-        run: uv build packages/opaque-optimizers --wheel --out-dir dist
+      - name: Build opake-optimizers
+        run: uv build packages/opake-optimizers --wheel --out-dir dist
 
-      - name: Build opaque-dpsgd
-        run: uv build packages/opaque-dpsgd --wheel --out-dir dist
+      - name: Build opake-dpsgd
+        run: uv build packages/opake-dpsgd --wheel --out-dir dist
 
-      - name: Build opaque-dpftrl
-        run: uv build packages/opaque-dpftrl --wheel --out-dir dist
+      - name: Build opake-dpftrl
+        run: uv build packages/opake-dpftrl --wheel --out-dir dist
 
-      - name: Build opaque-auditing
-        run: uv build packages/opaque-auditing --wheel --out-dir dist
+      - name: Build opake-auditing
+        run: uv build packages/opake-auditing --wheel --out-dir dist
 
-      - name: Build opaque-patches
-        run: uv build packages/opaque-patches --wheel --out-dir dist
+      - name: Build opake-patches
+        run: uv build packages/opake-patches --wheel --out-dir dist
 
-      - name: Build opaque-transformers
-        run: uv build packages/opaque-transformers --wheel --out-dir dist
+      - name: Build opake-transformers
+        run: uv build packages/opake-transformers --wheel --out-dir dist
 
-      - name: Build opaque-alignment
-        run: uv build packages/opaque-alignment --wheel --out-dir dist
+      - name: Build opake-alignment
+        run: uv build packages/opake-alignment --wheel --out-dir dist
 
       - name: Validate wheel metadata
         run: >-
@@ -86,7 +86,7 @@ jobs:
           retention-days: ${{ inputs.retention-days }}
 
   build-native-artifacts:
-    name: opaque-accounting (${{ matrix.target.label }})
+    name: opake-accounting (${{ matrix.target.label }})
     runs-on: ${{ matrix.target.runner }}
     strategy:
       fail-fast: false
@@ -143,7 +143,7 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
         with:
           command: build
-          working-directory: packages/opaque-accounting
+          working-directory: packages/opake-accounting
           target: ${{ matrix.target.target }}
           manylinux: ${{ matrix.target.manylinux }}
           args: >-
@@ -160,7 +160,7 @@ jobs:
 
       - name: Build sdist
         if: matrix.target.kind == 'sdist'
-        run: uv build packages/opaque-accounting --sdist --out-dir dist
+        run: uv build packages/opake-accounting --sdist --out-dir dist
 
       - name: Validate wheel metadata
         if: matrix.target.kind == 'wheel'
@@ -182,7 +182,7 @@ jobs:
           import ctypes
           from pathlib import Path
 
-          native = next(Path("wheel-import").glob("**/opaque_accounting.abi3.so"))
+          native = next(Path("wheel-import").glob("**/opake_accounting.abi3.so"))
           ctypes.CDLL(str(native))
           PY
 
@@ -206,6 +206,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ inputs.artifact-prefix }}-opaque-accounting-${{ matrix.target.artifact }}
+          name: ${{ inputs.artifact-prefix }}-opake-accounting-${{ matrix.target.artifact }}
           path: dist/${{ matrix.target.pattern }}
           retention-days: ${{ inputs.retention-days }}

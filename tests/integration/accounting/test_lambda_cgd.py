@@ -5,10 +5,10 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-import opaque.dpftrl.accounting as ftrl_acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.api.accounting.core._base import DpProcess
-from opaque.dpftrl.noise import bisr_strategy, lambda_cgd_strategy
+import opake.dpftrl.accounting as ftrl_acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.api.accounting.core._base import DpProcess
+from opake.dpftrl.noise import bisr_strategy, lambda_cgd_strategy
 
 
 def _lambda_cgd_mech(noise_multiplier: float = 1.0, **kw):
@@ -127,7 +127,7 @@ class TestBnbAmplification:
 
     def test_bnb_rejects_non_accepted_type(self):
         """BnB rejects BandMf (should use poisson)."""
-        from opaque.dpftrl.noise import band_mf_strategy
+        from opake.dpftrl.noise import band_mf_strategy
 
         with pytest.raises(TypeError):
             ftrl_acc.balls_in_bins(

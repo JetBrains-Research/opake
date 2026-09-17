@@ -1,11 +1,11 @@
 # Random Number Generation API
 
-Opaque provides immutable, JAX-style RNG key semantics with explicit key
+Opake provides immutable, JAX-style RNG key semantics with explicit key
 threading for deterministic and reproducible DP training.
 
 ## Overview
 
-The `opaque.random` module provides:
+The `opake.random` module provides:
 
 - **Core primitives**: `RngKey`, `split()`, `fold_in()` — Functional RNG with immutable keys
 - **Convenience helpers**:
@@ -20,11 +20,11 @@ The `opaque.random` module provides:
 
 ```python
 # Core primitives
-from opaque.random import split, fold_in, key, generator_from_key
-from opaque.random.types import RngKey
+from opake.random import split, fold_in, key, generator_from_key
+from opake.random.types import RngKey
 
 # Convenience helpers
-from opaque.random import random_key, set_reproducible_pytorch_seed
+from opake.random import random_key, set_reproducible_pytorch_seed
 ```
 
 ### Creating Keys
@@ -71,7 +71,7 @@ step_rank_key = fold_in(base_key, step, rank)
 
 ```python
 # Set all PyTorch/CUDNN seeds from RngKey
-from opaque.random import set_reproducible_pytorch_seed, key, fold_in
+from opake.random import set_reproducible_pytorch_seed, key, fold_in
 
 set_reproducible_pytorch_seed(key(42))
 
@@ -92,14 +92,14 @@ for step in range(num_steps):
 @dataclass(frozen=True)
 class RngKey:
     seed: int
-    impl: str = "opaque_threefry_like"
+    impl: str = "opake_threefry_like"
 ```
 
 Immutable RNG key. Thread explicitly through functions for deterministic randomness.
 
 **Attributes:**
 - `seed`: Integer seed value (main key material)
-- `impl`: Implementation identifier (default: "opaque_threefry_like")
+- `impl`: Implementation identifier (default: "opake_threefry_like")
 
 ### Functions
 
@@ -108,7 +108,7 @@ Immutable RNG key. Thread explicitly through functions for deterministic randomn
 Create an RngKey from an integer seed.
 
 ```python
-from opaque.random import key
+from opake.random import key
 
 k = key(42)
 ```
@@ -127,7 +127,7 @@ k = key(42)
 Create a nondeterministic RngKey using system entropy.
 
 ```python
-from opaque.random import random_key
+from opake.random import random_key
 
 k = random_key()  # Each call returns different key
 ```
@@ -143,7 +143,7 @@ Useful for prototyping and experiments. For reproducible training, use `key()` w
 Split a key into `num` deterministically derived child keys.
 
 ```python
-from opaque.random import split, key
+from opake.random import split, key
 
 k = key(42)
 k1, k2 = split(k, num=2)
@@ -173,7 +173,7 @@ Accepts a variable number of int/str arguments. Each value is folded
 sequentially, so `fold_in(k, a, b)` equals `fold_in(fold_in(k, a), b)`.
 
 ```python
-from opaque.random import fold_in, key
+from opake.random import fold_in, key
 
 base_key = key(42)
 
@@ -217,18 +217,18 @@ Do not reuse these shipped tags:
 
 | Tag | Occupied by |
 | --- | --- |
-| `opaque.dpsgd.gaussian` | `opaque.dpsgd.noise.gaussian_noise` (both streams) |
-| `opaque.dpsgd.adaptive_clipping` | adaptive clipping threshold noise |
-| `opaque.dpsgd.poisson` | DP-SGD Poisson sampling |
-| `opaque.dpsgd.k_out_of_t` | DP-SGD k-out-of-t sampling |
-| `opaque.dpftrl.mf_gaussian` | `opaque.dpftrl.noise.mf_gaussian_noise` |
-| `opaque.dpftrl.second_moment.first` / `.second` | paired MF second-moment streams |
-| `opaque.dpftrl.cyclic_poisson` | DP-FTRL cyclic Poisson sampling |
-| `opaque.dpftrl.b_min_sep` | DP-FTRL b-min-separation sampling |
-| `opaque.dpftrl.balls_in_bins` | DP-FTRL balls-in-bins sampling |
-| `opaque.paired.first` / `opaque.paired.second` | paired first/second-moment streams |
-| `opaque.auditing.canary_selection` / `opaque.auditing.coin_flip` | `opaque.auditing.coin_flip` |
-| `opaque.transformers.ignore_data_skip` | trainer Poisson restart after skipped sampler state |
+| `opake.dpsgd.gaussian` | `opake.dpsgd.noise.gaussian_noise` (both streams) |
+| `opake.dpsgd.adaptive_clipping` | adaptive clipping threshold noise |
+| `opake.dpsgd.poisson` | DP-SGD Poisson sampling |
+| `opake.dpsgd.k_out_of_t` | DP-SGD k-out-of-t sampling |
+| `opake.dpftrl.mf_gaussian` | `opake.dpftrl.noise.mf_gaussian_noise` |
+| `opake.dpftrl.second_moment.first` / `.second` | paired MF second-moment streams |
+| `opake.dpftrl.cyclic_poisson` | DP-FTRL cyclic Poisson sampling |
+| `opake.dpftrl.b_min_sep` | DP-FTRL b-min-separation sampling |
+| `opake.dpftrl.balls_in_bins` | DP-FTRL balls-in-bins sampling |
+| `opake.paired.first` / `opake.paired.second` | paired first/second-moment streams |
+| `opake.auditing.canary_selection` / `opake.auditing.coin_flip` | `opake.auditing.coin_flip` |
+| `opake.transformers.ignore_data_skip` | trainer Poisson restart after skipped sampler state |
 
 A component's stream is deterministic for a given caller key, configuration,
 and call sequence. Split the key or fold in an instance or rank identifier when
@@ -248,7 +248,7 @@ streams must differ.
 Create a deterministic `torch.Generator` from an RngKey.
 
 ```python
-from opaque.random import generator_from_key, key
+from opake.random import generator_from_key, key
 import torch
 
 k = key(42)
@@ -273,7 +273,7 @@ example, dropout or initialization) a key derived separately from DP operations.
 Configure PyTorch and cuDNN for reproducible training from a single RngKey.
 
 ```python
-from opaque.random import key, fold_in, set_reproducible_pytorch_seed
+from opake.random import key, fold_in, set_reproducible_pytorch_seed
 
 # At training start
 set_reproducible_pytorch_seed(key(42))
@@ -304,9 +304,9 @@ your workload.
 **Example:**
 
 ```python
-from opaque.random import key, fold_in, split, set_reproducible_pytorch_seed
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.dpsgd.sampling import PoissonSampler
+from opake.random import key, fold_in, split, set_reproducible_pytorch_seed
+from opake.dpsgd.noise import gaussian_noise
+from opake.dpsgd.sampling import PoissonSampler
 
 # Setup framework reproducibility once
 set_reproducible_pytorch_seed(key(42))
@@ -336,7 +336,7 @@ for step in range(1000):
 Split master key for different components:
 
 ```python
-from opaque.random import split, key
+from opake.random import split, key
 
 master = key(42)
 sampling_key, noise_key, init_key = split(master, num=3)
@@ -351,7 +351,7 @@ model = initialize_model(init_key)  # If using jax
 Thread key through loop, splitting at each step:
 
 ```python
-from opaque.random import split, key
+from opake.random import split, key
 
 k = key(42)
 for step in range(100):
@@ -365,7 +365,7 @@ for step in range(100):
 
 ```python
 import torch.distributed as dist
-from opaque.random import key, fold_in
+from opake.random import key, fold_in
 
 rank = dist.get_rank()
 base = key(42)
@@ -381,7 +381,7 @@ for step in range(steps):
 **Manual approach** (for reference):
 
 ```python
-from opaque.random import split, key
+from opake.random import split, key
 
 master = key(42)
 sampling_key, noise_master = split(master, num=2)
@@ -403,7 +403,7 @@ Ensure all randomness uses RngKey:
 
 ```python
 # Correct: Use RngKey throughout
-from opaque.random import set_reproducible_pytorch_seed, key, fold_in
+from opake.random import set_reproducible_pytorch_seed, key, fold_in
 
 set_reproducible_pytorch_seed(key(42))  # Framework
 base = key(42)
@@ -447,7 +447,7 @@ noise_fn, noise_state = gaussian_noise(
 Use `fold_in()` for deterministic resume:
 
 ```python
-from opaque.random import fold_in, key
+from opake.random import fold_in, key
 
 base_key = key(42)
 

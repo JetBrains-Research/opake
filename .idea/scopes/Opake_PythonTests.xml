@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Opake_PythonTests" pattern="file:tests//*||file:*/tests//*" />
+</component>

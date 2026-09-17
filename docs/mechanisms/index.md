@@ -3,7 +3,7 @@
 A **mechanism** is a randomized algorithm that adds noise to a query
 result to provide differential privacy. The mechanism determines the
 noise distribution, its support, and how privacy loss is computed.
-Opaque implements two families:
+Opake implements two families:
 
 - **[DP-SGD mechanisms](dp-sgd/index.md)** — independent (per-step)
   noise. Simple, broadly applicable, composes step-by-step.
@@ -52,7 +52,7 @@ Need correlated noise across steps (DP-FTRL)?
           ├─ Zero extra memory → DP-λCGD (PRNG replay)
           ├─ Asymptotically optimal → BISR (generalizes λCGD)
           ├─ Closed-form workload (α>β) → BSR (NeurIPS 2024)
-          ├─ n < 5000 → BandMF + opaque.dpftrl.accounting.poisson (good default)
+          ├─ n < 5000 → BandMF + opake.dpftrl.accounting.poisson (good default)
           └─ n > 5000, multi-epoch → BLT (memory-efficient)
 ```
 
@@ -76,20 +76,20 @@ mechanisms support all amplification types:
 | BISR | — | — | — | — | Yes |
 | BSR | — | — | — | — | Yes |
 
-- **`opaque.dpsgd.accounting.poisson`**: DP-SGD per-step Poisson
+- **`opake.dpsgd.accounting.poisson`**: DP-SGD per-step Poisson
   subsampling ($q$ per example).
-- **`opaque.dpsgd.accounting.poisson` (truncated)**: Same factory with
+- **`opake.dpsgd.accounting.poisson` (truncated)**: Same factory with
   `truncated_batch_size` and `dataset_size`; caps batches (weaker
   privacy than plain Poisson at the same $q$ unless noise is
   recalibrated).
-- **`opaque.dpsgd.accounting.k_out_of_t`**: DP-SGD block or total k-out-of-t
+- **`opake.dpsgd.accounting.k_out_of_t`**: DP-SGD block or total k-out-of-t
   allocation. Block accounting is exact; total allocation uses the block
   reduction as a conservative upper bound.
-- **`opaque.dpftrl.accounting.poisson`**: DP-FTRL whole-process Poisson
+- **`opake.dpftrl.accounting.poisson`**: DP-FTRL whole-process Poisson
   amplification (`BandMf` / `IdentityMf` inner, `n_steps` required).
   For `BandMf` this is the cyclic-participation analysis
   ($\lceil n/b\rceil$ independent groups).
-- **`opaque.dpftrl.accounting.balls_in_bins`**: Random-partition
+- **`opake.dpftrl.accounting.balls_in_bins`**: Random-partition
   amplification with the assignment **fixed across epochs**. Used with
   BLT, DP-λCGD, BISR, BSR, and identity MF. Not interchangeable with
   `dpsgd_acc.k_out_of_t(..., allocation="block")`, which draws each block independently — the two
@@ -102,10 +102,10 @@ mechanisms support all amplification types:
 ## Quick comparison
 
 ```python
-import opaque.accounting as acc                  # cross-cutting primitives
-import opaque.dpsgd.accounting as dpsgd_acc      # DP-SGD factories
-import opaque.dpftrl.accounting as dpftrl_acc    # DP-FTRL factories
-from opaque.dpftrl.noise import band_mf_strategy, lambda_cgd_strategy
+import opake.accounting as acc                  # cross-cutting primitives
+import opake.dpsgd.accounting as dpsgd_acc      # DP-SGD factories
+import opake.dpftrl.accounting as dpftrl_acc    # DP-FTRL factories
+from opake.dpftrl.noise import band_mf_strategy, lambda_cgd_strategy
 
 # --- Independent noise ---
 gauss = dpsgd_acc.poisson(dpsgd_acc.gaussian(1.0), sample_rate=0.01) * 1000

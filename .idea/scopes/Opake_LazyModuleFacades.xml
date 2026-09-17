@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Opake_LazyModuleFacades" pattern="file[opake-dpftrl]:src/opake/dpftrl/__init__.py||file[opake-dpsgd]:src/opake/dpsgd/__init__.py" />
+</component>

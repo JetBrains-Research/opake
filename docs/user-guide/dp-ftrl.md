@@ -4,7 +4,7 @@ This guide walks through the full DP-FTRL pipeline: pick a
 matrix-factorization strategy, calibrate the noise multiplier for the
 *whole training run*, clip gradients, add correlated MF noise, run a
 torchopt step, and checkpoint state. Every import on this page comes
-from the `opaque.dpftrl.*` public façade.
+from the `opake.dpftrl.*` public façade.
 
 For DP-FTRL theory and a side-by-side comparison of mechanisms, see
 [DP-FTRL mechanisms](../mechanisms/dp-ftrl/index.md). For the DP-SGD
@@ -41,7 +41,7 @@ the accountant, and a streaming representation for efficient noise
 generation.
 
 ```python
-from opaque.dpftrl.noise import (
+from opake.dpftrl.noise import (
     band_mf_strategy,    # numerical Toeplitz optimization
     blt_strategy,        # buffered linear Toeplitz, multi-epoch
     bisr_strategy,       # banded inverse square root
@@ -63,8 +63,8 @@ first, then build the matching accounting mechanism using its
 sensitivity / Gram matrix:
 
 ```python
-import opaque.accounting as acc                  # cross-cutting
-import opaque.dpftrl.accounting as dpftrl_acc    # DP-FTRL factories
+import opake.accounting as acc                  # cross-cutting
+import opake.dpftrl.accounting as dpftrl_acc    # DP-FTRL factories
 
 # Same strategy that will go into mf_gaussian_noise below.
 strategy = band_mf_strategy(bands=10)
@@ -82,7 +82,7 @@ noise_multiplier = result.param
 ```
 
 Three amplification factories under
-`opaque.dpftrl.accounting` — pick the one that matches your sampler:
+`opake.dpftrl.accounting` — pick the one that matches your sampler:
 
 - `dpftrl_acc.poisson(...)` — Poisson subsampling (cyclic-Poisson
   under banded MF).
@@ -117,12 +117,12 @@ privacy-based early stopping are unsupported for these correlated mechanisms.
 ## 3. Clipping
 
 Same engine clipping primitives as DP-SGD, just imported from
-`opaque.dpftrl.clipping`. Adaptive clipping is **not** available
+`opake.dpftrl.clipping`. Adaptive clipping is **not** available
 under DP-FTRL — its threshold drifts across steps, violating the
 constant per-step sensitivity assumption MF privacy proofs require.
 
 ```python
-from opaque.dpftrl.clipping import clipped_grad
+from opake.dpftrl.clipping import clipped_grad
 
 def loss_fn(params, batch):
     return loss
@@ -148,11 +148,11 @@ important than tuning one.
 
 ## 4. Noise
 
-`opaque.dpftrl.noise.mf_gaussian_noise` injects correlated noise:
+`opake.dpftrl.noise.mf_gaussian_noise` injects correlated noise:
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise
+from opake.random import key
 
 # grad_template is the structure of clipped_grad's output —
 # typically a ClippedPytree from a single warm-up call.
@@ -180,10 +180,10 @@ the same mechanism PLD as the first-moment release. See
 
 ## 5. Sampling
 
-DP-FTRL has its own sampler family under `opaque.dpftrl.sampling`:
+DP-FTRL has its own sampler family under `opake.dpftrl.sampling`:
 
 ```python
-from opaque.dpftrl.sampling import (
+from opake.dpftrl.sampling import (
     CyclicPoissonSampler,    # banded MF: cyclic Poisson subsampling
     BMinSepSampler,          # b-min-separation
     BallsInBinsSampler,      # fixed-partition
@@ -203,7 +203,7 @@ calibration.
 Same surface as DP-SGD:
 
 ```python
-from opaque.optimizers import adamw
+from opake.optimizers import adamw
 
 optimizer = adamw(lr=1e-3, noise_bias_correction=True)
 opt_state = optimizer.init(params)
@@ -222,8 +222,8 @@ the learning rate or using suitable per-group bounds can help.
 
 ```python
 import torch
-from opaque.serialization import state_dict
-from opaque.functional import make_functional
+from opake.serialization import state_dict
+from opake.functional import make_functional
 
 fmodel, params = make_functional(model)
 for step, batch in enumerate(sampler):
@@ -244,7 +244,7 @@ torch.save(state_dict(ckpt), "step.pt")
 
 ## Runnable references
 
-- [`examples/train_dpftrl.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpftrl.py)
+- [`examples/train_dpftrl.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpftrl.py)
   — full DP-FTRL training script.
 - `tests/integration/test_dpftrl_pipeline.py` — minimal smoke test
   exercising the same flow on a tiny LlamaConfig + LoRA model (and

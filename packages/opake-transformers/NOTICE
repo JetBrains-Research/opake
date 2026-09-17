@@ -1,0 +1,40 @@
+Opake
+======
+
+Copyright 2025 Opake Authors
+
+Licensed under the Apache License, Version 2.0 (the "License"); see
+LICENSE in this directory for the full text.
+
+This package includes software developed by third parties whose
+licenses and copyright notices are reproduced below. Per-file SPDX and
+copyright headers in the relevant source files identify which third
+party each file derives from.
+
+
+------------------------------------------------------------------------
+Hugging Face Transformers (Apache-2.0)
+------------------------------------------------------------------------
+
+The following files contain trainer/config structure adapted from
+Hugging Face Transformers (https://github.com/huggingface/transformers),
+distributed under the Apache License, Version 2.0, and then modified for
+Opake's functional per-example DP training flow:
+
+  opake/api/transformers/trainer/_dp_trainer.py
+  opake/api/transformers/trainer/_training_arguments.py
+
+
+------------------------------------------------------------------------
+Hugging Face TRL (Apache-2.0)
+------------------------------------------------------------------------
+
+The following files contain trainer/config structure adapted from
+Hugging Face TRL (https://github.com/huggingface/trl), distributed under
+the Apache License, Version 2.0, and then modified for Opake's
+per-example DP flow:
+
+  opake/api/transformers/trl/_dpo_trainer.py
+  opake/api/transformers/trl/_sft_trainer.py
+  opake/api/transformers/trl/_dpo_config.py
+  opake/api/transformers/trl/_sft_config.py

@@ -30,11 +30,11 @@ from transformers import (
     LlamaConfig,
 )
 
-from opaque.api.engine.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.functional import make_functional
-from opaque.patches import apply_model_patches
-from opaque.random import key
+from opake.api.engine.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.functional import make_functional
+from opake.patches import apply_model_patches
+from opake.random import key
 
 QWEN2_REPO = "Qwen/Qwen2-0.5B"
 

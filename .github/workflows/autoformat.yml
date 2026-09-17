@@ -73,8 +73,8 @@ jobs:
 
       - name: Check Rust formatting and linting
         run: |
-          cargo fmt --manifest-path packages/opaque-accounting/Cargo.toml -- --check
-          cargo clippy --manifest-path packages/opaque-accounting/Cargo.toml -- -D warnings
+          cargo fmt --manifest-path packages/opake-accounting/Cargo.toml -- --check
+          cargo clippy --manifest-path packages/opake-accounting/Cargo.toml -- -D warnings
 
   format-rust-fix:
     name: Auto-fix Rust formatting
@@ -94,11 +94,11 @@ jobs:
 
       - name: Auto-fix Rust formatting and linting
         run: |
-          cargo fmt --manifest-path packages/opaque-accounting/Cargo.toml
-          cargo clippy --manifest-path packages/opaque-accounting/Cargo.toml --fix --allow-dirty --allow-staged
+          cargo fmt --manifest-path packages/opake-accounting/Cargo.toml
+          cargo clippy --manifest-path packages/opake-accounting/Cargo.toml --fix --allow-dirty --allow-staged
 
       - name: Commit formatting changes
         uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7.2.0
         with:
           commit_message: "ci: auto-format Rust with fmt + clippy"
-          file_pattern: "packages/opaque-accounting/**/*.rs"
+          file_pattern: "packages/opake-accounting/**/*.rs"

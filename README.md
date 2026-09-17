@@ -1,14 +1,14 @@
-# Opaque
+# Opake
 
 Functional DP-SGD and DP-FTRL for PyTorch.
 
-Opaque provides composable primitives for differentially private model
+Opake provides composable primitives for differentially private model
 training in PyTorch: per-example gradient clipping, calibrated noise
 injection, privacy accounting, and Poisson sampling. Built on `torch.func`,
 it uses a functional API with explicit state — no hooks, no subclassing, no
 hidden mutation.
 
-> **Work in progress:** Opaque is research software under active development.
+> **Work in progress:** Opake is research software under active development.
 > Its differential-privacy mechanisms, accounting, and privacy guarantees are
 > still being validated and may change. Do not rely on it for production or
 > compliance-sensitive privacy guarantees without independent validation for
@@ -18,76 +18,76 @@ hidden mutation.
 [![Python 3.11-3.13](https://img.shields.io/badge/python-3.11--3.13-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.9+](https://img.shields.io/badge/pytorch-2.9+-red.svg)](https://pytorch.org/)
 [![JetBrains Research](https://jb.gg/badges/research.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
-[![CI](https://github.com/JetBrains-Research/opaque/actions/workflows/ci.yml/badge.svg)](https://github.com/JetBrains-Research/opaque/actions/workflows/ci.yml)
+[![CI](https://github.com/JetBrains-Research/opake/actions/workflows/ci.yml/badge.svg)](https://github.com/JetBrains-Research/opake/actions/workflows/ci.yml)
 
-**[Documentation](https://jetbrains-research.github.io/opaque/)**
+**[Documentation](https://jetbrains-research.github.io/opake/)**
 
 ## Packages
 
-Install and depend on `opaque` only. The repository is implemented as
-[PEP 420] namespace packages under the shared `opaque.*` namespace:
+Install and depend on `opake` only. The repository is implemented as
+[PEP 420] namespace packages under the shared `opake.*` namespace:
 
 | Distribution | Import roots | Purpose |
 |---|---|---|
-| `opaque` | — | Convenience installer; pulls in a curated bundle of sub-packages |
-| `opaque-base` | `opaque.serialization` | Pure-Python serialization registry + dispatcher; the seam every other wheel registers handlers against |
-| `opaque-engine` | `opaque.{types,pytree,random,distributed,functional,scheduling,profiling}` | Torch substrate: pytree wrappers (`ClippedPytree` / `NoisedPytree` / `PerGroup`), `RngKey`, fixed + AUTO-S clipping, schedules + warmup, DDP plumbing, profiler |
-| `opaque-optimizers` | `opaque.optimizers` | Torchopt-based functional optimizer chain (DP-aware AdamW-BC and friends) |
-| `opaque-dpsgd` | `opaque.dpsgd` | Gaussian / per-group noise, Poisson samplers, adaptive clipping, DP-SGD-specific accounting factories |
-| `opaque-dpftrl` | `opaque.dpftrl` | DP-FTRL mechanisms (BLT, BSR, BiSR, band-MF, λ-CGD), private second moments, correlated-noise samplers, DP-FTRL-specific accounting factories |
-| `opaque-auditing` | `opaque.auditing` | Empirical privacy auditing (one-run, coin-flip, loss attacks) |
-| `opaque-patches` | `opaque.patches` | Unified patching entrypoint for PyTorch checkpointing, Hugging Face compat wrappers, Triton kernels, and PEFT/LoRA fusion |
-| `opaque-transformers` | `opaque.transformers` | Hugging Face trainer + integration; TRL-style `SFTTrainer` / `DPOTrainer` (`opaque.transformers.trl`) built on `DPTrainer` |
-| `opaque-alignment` | `opaque.alignment` | Functional, mechanism-agnostic DP-safe SFT / DPO primitives: per-example losses, log-prob helpers, collators, reference helpers, reward metrics |
-| `opaque-accounting` | `opaque.accounting` | PLD privacy accounting (Rust/PyO3 backend); torch-free standalone |
+| `opake` | — | Convenience installer; pulls in a curated bundle of sub-packages |
+| `opake-base` | `opake.serialization` | Pure-Python serialization registry + dispatcher; the seam every other wheel registers handlers against |
+| `opake-engine` | `opake.{types,pytree,random,distributed,functional,scheduling,profiling}` | Torch substrate: pytree wrappers (`ClippedPytree` / `NoisedPytree` / `PerGroup`), `RngKey`, fixed + AUTO-S clipping, schedules + warmup, DDP plumbing, profiler |
+| `opake-optimizers` | `opake.optimizers` | Torchopt-based functional optimizer chain (DP-aware AdamW-BC and friends) |
+| `opake-dpsgd` | `opake.dpsgd` | Gaussian / per-group noise, Poisson samplers, adaptive clipping, DP-SGD-specific accounting factories |
+| `opake-dpftrl` | `opake.dpftrl` | DP-FTRL mechanisms (BLT, BSR, BiSR, band-MF, λ-CGD), private second moments, correlated-noise samplers, DP-FTRL-specific accounting factories |
+| `opake-auditing` | `opake.auditing` | Empirical privacy auditing (one-run, coin-flip, loss attacks) |
+| `opake-patches` | `opake.patches` | Unified patching entrypoint for PyTorch checkpointing, Hugging Face compat wrappers, Triton kernels, and PEFT/LoRA fusion |
+| `opake-transformers` | `opake.transformers` | Hugging Face trainer + integration; TRL-style `SFTTrainer` / `DPOTrainer` (`opake.transformers.trl`) built on `DPTrainer` |
+| `opake-alignment` | `opake.alignment` | Functional, mechanism-agnostic DP-safe SFT / DPO primitives: per-example losses, log-prob helpers, collators, reference helpers, reward metrics |
+| `opake-accounting` | `opake.accounting` | PLD privacy accounting (Rust/PyO3 backend); torch-free standalone |
 
 [PEP 420]: https://peps.python.org/pep-0420/
 
 ### Import layout
 
 ```
-opaque.serialization                                       <- opaque-base
-opaque.{types,pytree}                                      <- opaque-engine
-opaque.{random,distributed}                                <- opaque-engine
-opaque.{functional,scheduling,profiling}                   <- opaque-engine
-opaque.optimizers                                          <- opaque-optimizers
-opaque.dpsgd.{clipping,noise,sampling,accounting}          <- opaque-dpsgd
-opaque.dpftrl.{clipping,noise,sampling,accounting}         <- opaque-dpftrl
-opaque.auditing                                            <- opaque-auditing
-opaque.patches.{kernels,torch,transformers,peft}           <- opaque-patches
-opaque.transformers{,.trl}                                 <- opaque-transformers
-opaque.alignment.{sft,dpo,data,metric}                     <- opaque-alignment
-opaque.accounting                                          <- opaque-accounting
+opake.serialization                                       <- opake-base
+opake.{types,pytree}                                      <- opake-engine
+opake.{random,distributed}                                <- opake-engine
+opake.{functional,scheduling,profiling}                   <- opake-engine
+opake.optimizers                                          <- opake-optimizers
+opake.dpsgd.{clipping,noise,sampling,accounting}          <- opake-dpsgd
+opake.dpftrl.{clipping,noise,sampling,accounting}         <- opake-dpftrl
+opake.auditing                                            <- opake-auditing
+opake.patches.{kernels,torch,transformers,peft}           <- opake-patches
+opake.transformers{,.trl}                                 <- opake-transformers
+opake.alignment.{sft,dpo,data,metric}                     <- opake-alignment
+opake.accounting                                          <- opake-accounting
 ```
 
 ## Installation
 
 ```bash
 # From JetBrains Packages
-pip install opaque \
+pip install opake \
   --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/
 
 # Or with uv
-uv add opaque \
+uv add opake \
   --index https://packages.jetbrains.team/pypi/p/fed/python/simple/
 ```
 
 Extras:
 
 ```bash
-pip install "opaque[auditing]"      # empirical privacy auditing
-pip install "opaque[dpftrl]"        # correlated-noise DP-FTRL components
-pip install "opaque[transformers]"  # Hugging Face + patching components
-pip install "opaque[all]"           # all optional components
+pip install "opake[auditing]"      # empirical privacy auditing
+pip install "opake[dpftrl]"        # correlated-noise DP-FTRL components
+pip install "opake[transformers]"  # Hugging Face + patching components
+pip install "opake[all]"           # all optional components
 ```
 
 ### Patching
 
 Hugging Face and checkpoint patches are applied explicitly through
-`opaque.patches`:
+`opake.patches`:
 
 ```python
-from opaque.patches import apply_model_patches, apply_runtime_patches
+from opake.patches import apply_model_patches, apply_runtime_patches
 
 apply_runtime_patches()
 
@@ -99,7 +99,7 @@ apply_model_patches(model)
 loss-mapping fixes. `apply_model_patches(model)` wires compat wrappers and
 Triton kernels into the specific model instance, including PEFT/LoRA modules.
 
-See the [model-patches guide](https://jetbrains-research.github.io/opaque/latest/user-guide/huggingface/model-patches/)
+See the [model-patches guide](https://jetbrains-research.github.io/opake/latest/user-guide/huggingface/model-patches/)
 for patching details, model compatibility, and tuning knobs.
 
 ## Example
@@ -108,11 +108,11 @@ A minimal DP-SGD training loop:
 
 ```python
 import torch
-import opaque.accounting as acc                # cross-cutting (calibrate, budget)
-import opaque.dpsgd.accounting as dpsgd_acc    # DP-SGD per-step factories
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key
+import opake.accounting as acc                # cross-cutting (calibrate, budget)
+import opake.dpsgd.accounting as dpsgd_acc    # DP-SGD per-step factories
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key
 
 def loss_fn(params, x, y):
     return ((x @ params - y) ** 2).sum()
@@ -140,7 +140,7 @@ lr = 0.01
 for batch_x, batch_y in dataloader:
     grads, clip_state = grad_fn(params, batch_x, batch_y, state=clip_state)
     noisy_grads, noise_state = noise_fn(grads, noise_state)
-    params = params - lr * noisy_grads.pytree  # or wire opaque.optimizers
+    params = params - lr * noisy_grads.pytree  # or wire opake.optimizers
 ```
 
 ## Features
@@ -157,18 +157,18 @@ for batch_x, batch_y in dataloader:
   balls-in-bins, b-min-separation, and sequential batch samplers.
 - **Privacy auditing**: empirical privacy validation via membership inference.
 - **Distributed training**: DDP-compatible with synchronized noise and
-  gradient aggregation via `opaque.distributed`.
+  gradient aggregation via `opake.distributed`.
 - **Hugging Face compatibility**: automatic `vmap` patching for LLaMA, Mistral,
   Qwen2/3, Phi-3, Gemma/Gemma2, Granite, Cohere/Cohere2, plus fused Triton
-  kernels via `opaque.patches`.
+  kernels via `opake.patches`.
 
 ## Documentation
 
-- [Documentation](https://jetbrains-research.github.io/opaque/)
-- [Getting Started](https://jetbrains-research.github.io/opaque/latest/getting-started/quickstart/)
-- [User Guide](https://jetbrains-research.github.io/opaque/latest/user-guide/)
-- [Tutorials](https://jetbrains-research.github.io/opaque/latest/tutorials/)
-- [API Reference](https://jetbrains-research.github.io/opaque/latest/reference/)
+- [Documentation](https://jetbrains-research.github.io/opake/)
+- [Getting Started](https://jetbrains-research.github.io/opake/latest/getting-started/quickstart/)
+- [User Guide](https://jetbrains-research.github.io/opake/latest/user-guide/)
+- [Tutorials](https://jetbrains-research.github.io/opake/latest/tutorials/)
+- [API Reference](https://jetbrains-research.github.io/opake/latest/reference/)
 - [Examples](examples)
 
 ## Development

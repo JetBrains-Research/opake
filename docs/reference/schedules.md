@@ -2,7 +2,7 @@
 
 Pure-Python step-indexed scalar schedules. Each public function
 returns a plain `Callable[[int], float]` that plugs straight into
-`torchopt.adamw(lr=...)` or Opaque factories such as
+`torchopt.adamw(lr=...)` or Opake factories such as
 [`adamw`](optimizers.md), `adam`, and
 `sgd`.
 TorchOpt's `scale_by_neg_lr` advances the schedule via the
@@ -30,7 +30,7 @@ warmup ramp.
 
 ```python
 import torchopt
-from opaque.scheduling import with_warmup, cosine_schedule
+from opake.scheduling import with_warmup, cosine_schedule
 
 W, N, base_lr = 100, 10000, 1e-3
 
@@ -59,7 +59,7 @@ directly to TorchOpt's `lr` argument; `with_warmup` accepts a float
 as the same shorthand.
 
 ```python
-from opaque.scheduling import constant_schedule, with_warmup
+from opake.scheduling import constant_schedule, with_warmup
 
 schedule = constant_schedule(1e-3)
 
@@ -86,7 +86,7 @@ Linear interpolation from `init_value` to `end_value` over
 hold at `end_value`.
 
 ```python
-from opaque.scheduling import linear_schedule
+from opake.scheduling import linear_schedule
 
 # 1e-3 → 0 over 1000 steps.
 sched = linear_schedule(1e-3, 0.0, transition_steps=1000)
@@ -112,7 +112,7 @@ Polynomial transition from `init_value` to `end_value`:
 flatter early phase and steeper late drop.
 
 ```python
-from opaque.scheduling import polynomial_schedule
+from opake.scheduling import polynomial_schedule
 
 sched = polynomial_schedule(1e-3, 1e-7, power=2.0, transition_steps=1000)
 ```
@@ -142,7 +142,7 @@ clamps the result (lower bound for `decay_rate < 1`, upper bound for
 `decay_rate > 1`).
 
 ```python
-from opaque.scheduling import exponential_schedule
+from opake.scheduling import exponential_schedule
 
 # Halve LR every 1000 steps, but never below 1e-5.
 sched = exponential_schedule(1e-3, decay_rate=0.5, transition_steps=1000, end_value=1e-5)
@@ -177,7 +177,7 @@ that bottoms out at `end_value` exactly when `progress == 1`; values
 greater than `0.5` produce additional oscillations clamped at zero.
 
 ```python
-from opaque.scheduling import cosine_schedule
+from opake.scheduling import cosine_schedule
 
 # Single half-cosine from 1e-3 to 0 over 1,000 steps.
 sched = cosine_schedule(1e-3, 0.0, transition_steps=1000)
@@ -205,7 +205,7 @@ returns `init_value`; at `s = T` returns `init_value / sqrt(2)`; at
 `s = 3T` returns `init_value / 2`.
 
 ```python
-from opaque.scheduling import inverse_sqrt_schedule
+from opake.scheduling import inverse_sqrt_schedule
 
 # Decay from 1e-3 with timescale 1000.  At step 1000: ~7.07e-4.
 sched = inverse_sqrt_schedule(1e-3, transition_steps=1000)
@@ -230,7 +230,7 @@ Decay following `factor = 1 - sqrt(progress)` from `init_value` at
 faster early than late.  Held at `end_value` after the transition.
 
 ```python
-from opaque.scheduling import one_minus_sqrt_schedule
+from opake.scheduling import one_minus_sqrt_schedule
 
 # Drops 1e-3 -> 1e-5 with concave shape over 1000 steps.
 sched = one_minus_sqrt_schedule(1e-3, 1e-5, transition_steps=1000)
@@ -284,7 +284,7 @@ standard "warmup, then decay" shape:
 | later                                              | `schedule(step)` as configured      |
 
 ```python
-from opaque.scheduling import with_warmup, linear_schedule, cosine_schedule
+from opake.scheduling import with_warmup, linear_schedule, cosine_schedule
 
 base_lr, W, N = 1e-3, 100, 1000
 decay_steps = N - W
@@ -335,7 +335,7 @@ Before `transition_begin` returns `schedule(0)`; after the final
 cycle, returns `schedule(cycle_length)`.
 
 ```python
-from opaque.scheduling import cosine_schedule, with_restarts
+from opake.scheduling import cosine_schedule, with_restarts
 
 # SGDR: cosine annealing repeated 4 times over 4000 steps.
 inner = cosine_schedule(1e-3, 0.0, transition_steps=1000)
@@ -390,7 +390,7 @@ from any checkpoint inside the stable region and run only the decay
 tail without re-running the warmup.
 
 ```python
-from opaque.scheduling import warmup_stable_decay
+from opake.scheduling import warmup_stable_decay
 
 schedule = warmup_stable_decay(
     init_value=1e-3,

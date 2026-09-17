@@ -1,7 +1,7 @@
-Opaque
+Opake
 ======
 
-Copyright 2025 Opaque Authors
+Copyright 2025 Opake Authors
 
 Licensed under the Apache License, Version 2.0 (the "License"); see
 LICENSE in the project root for the full text.
@@ -23,8 +23,8 @@ License. They carry an SPDX-License-Identifier of
 "Apache-2.0 AND BSD-2-Clause" and the LinkedIn copyright line in their
 file headers.
 
-  packages/opaque-patches/src/opaque/api/patches/kernels/rms_norm.py
-  packages/opaque-patches/src/opaque/api/patches/kernels/fused_add_rms_norm.py
+  packages/opake-patches/src/opake/api/patches/kernels/rms_norm.py
+  packages/opake-patches/src/opake/api/patches/kernels/fused_add_rms_norm.py
 
 BSD 2-Clause License text:
 
@@ -62,15 +62,15 @@ Unsloth (Apache-2.0)
 
 The following files contain Triton kernels derived from the Unsloth
 project (https://github.com/unslothai/unsloth), distributed under the
-Apache License, Version 2.0. Adapted to Opaque's vmap-friendly
-new-style autograd dispatch (Opaque_* + _Backward + setup_context).
+Apache License, Version 2.0. Adapted to Opake's vmap-friendly
+new-style autograd dispatch (Opake_* + _Backward + setup_context).
 
-  packages/opaque-patches/src/opaque/api/patches/kernels/_utils.py
-  packages/opaque-patches/src/opaque/api/patches/kernels/swiglu.py
-  packages/opaque-patches/src/opaque/api/patches/kernels/geglu.py
-  packages/opaque-patches/src/opaque/api/patches/kernels/rope_embedding.py
-  packages/opaque-patches/src/opaque/api/patches/kernels/cross_entropy.py
-  packages/opaque-patches/src/opaque/api/patches/kernels/lora.py
+  packages/opake-patches/src/opake/api/patches/kernels/_utils.py
+  packages/opake-patches/src/opake/api/patches/kernels/swiglu.py
+  packages/opake-patches/src/opake/api/patches/kernels/geglu.py
+  packages/opake-patches/src/opake/api/patches/kernels/rope_embedding.py
+  packages/opake-patches/src/opake/api/patches/kernels/cross_entropy.py
+  packages/opake-patches/src/opake/api/patches/kernels/lora.py
 
 
 ------------------------------------------------------------------------
@@ -81,11 +81,11 @@ The following file contains Triton kernels derived from Apple's
 cut_cross_entropy project
 (https://github.com/apple/ml-cross-entropy, ICLR 2025), distributed
 under the Apache License, Version 2.0. Simplified to drop bias /
-Kahan / VocabOrdering / dLSE / shift handling and adapted to Opaque's
+Kahan / VocabOrdering / dLSE / shift handling and adapted to Opake's
 vmap-friendly autograd dispatch.
 
-  packages/opaque-patches/src/opaque/api/patches/kernels/_utils.py
-  packages/opaque-patches/src/opaque/api/patches/kernels/linear_cross_entropy.py
+  packages/opake-patches/src/opake/api/patches/kernels/_utils.py
+  packages/opake-patches/src/opake/api/patches/kernels/linear_cross_entropy.py
 
 
 ------------------------------------------------------------------------
@@ -96,12 +96,12 @@ The following files contain accounting structure and privacy-metric
 surface adapted from Google DP Accounting
 (https://github.com/google/differential-privacy/tree/main/python/dp_accounting),
 distributed under the Apache License, Version 2.0, and then reworked for
-Opaque's PLD process algebra and native backend:
+Opake's PLD process algebra and native backend:
 
-  packages/opaque-accounting/src/opaque/api/accounting/core/_base.py
-  packages/opaque-accounting/src/opaque/api/accounting/core/_accountant.py
-  packages/opaque-accounting/src/opaque/api/accounting/core/_budgets.py
-  packages/opaque-accounting/src/opaque/api/accounting/core/calibration.py
+  packages/opake-accounting/src/opake/api/accounting/core/_base.py
+  packages/opake-accounting/src/opake/api/accounting/core/_accountant.py
+  packages/opake-accounting/src/opake/api/accounting/core/_budgets.py
+  packages/opake-accounting/src/opake/api/accounting/core/calibration.py
 
 
 Random-allocation reference implementation (Apache-2.0)
@@ -111,10 +111,10 @@ The following files contain random-allocation accounting/sampling
 structure adapted from the ICML 2026 reference implementation for
 "Efficient privacy loss accounting for subsampling and random allocation",
 distributed under the Apache License, Version 2.0, and then reworked for
-Opaque's DP-SGD accounting and sampler APIs:
+Opake's DP-SGD accounting and sampler APIs:
 
-  packages/opaque-dpsgd/src/opaque/api/accounting/dpsgd/amplification/_k_out_of_t.py
-  packages/opaque-dpsgd/src/opaque/api/dpsgd/sampling/_k_out_of_t.py
+  packages/opake-dpsgd/src/opake/api/accounting/dpsgd/amplification/_k_out_of_t.py
+  packages/opake-dpsgd/src/opake/api/dpsgd/sampling/_k_out_of_t.py
 
 
 ------------------------------------------------------------------------
@@ -124,10 +124,10 @@ Hugging Face Transformers (Apache-2.0)
 The following files contain trainer/config structure adapted from
 Hugging Face Transformers (https://github.com/huggingface/transformers),
 distributed under the Apache License, Version 2.0, and then modified for
-Opaque's functional per-example DP training flow:
+Opake's functional per-example DP training flow:
 
-  packages/opaque-transformers/src/opaque/api/transformers/trainer/_dp_trainer.py
-  packages/opaque-transformers/src/opaque/api/transformers/trainer/_training_arguments.py
+  packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py
+  packages/opake-transformers/src/opake/api/transformers/trainer/_training_arguments.py
 
 
 ------------------------------------------------------------------------
@@ -136,10 +136,10 @@ Hugging Face TRL (Apache-2.0)
 
 The following files contain trainer/config structure adapted from
 Hugging Face TRL (https://github.com/huggingface/trl), distributed under
-the Apache License, Version 2.0, and then modified for Opaque's
+the Apache License, Version 2.0, and then modified for Opake's
 per-example DP flow:
 
-  packages/opaque-transformers/src/opaque/api/transformers/trl/_dpo_trainer.py
-  packages/opaque-transformers/src/opaque/api/transformers/trl/_sft_trainer.py
-  packages/opaque-transformers/src/opaque/api/transformers/trl/_dpo_config.py
-  packages/opaque-transformers/src/opaque/api/transformers/trl/_sft_config.py
+  packages/opake-transformers/src/opake/api/transformers/trl/_dpo_trainer.py
+  packages/opake-transformers/src/opake/api/transformers/trl/_sft_trainer.py
+  packages/opake-transformers/src/opake/api/transformers/trl/_dpo_config.py
+  packages/opake-transformers/src/opake/api/transformers/trl/_sft_config.py

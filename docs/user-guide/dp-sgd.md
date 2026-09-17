@@ -26,8 +26,8 @@ updates.
 Calibrate the noise multiplier to your privacy budget before training:
 
 ```python
-import opaque.accounting as acc            # cross-cutting (compose, calibrate)
-import opaque.dpsgd.accounting as dpsgd_acc  # DP-SGD factories
+import opake.accounting as acc            # cross-cutting (compose, calibrate)
+import opake.dpsgd.accounting as dpsgd_acc  # DP-SGD factories
 
 dataset_size = 50_000
 batch_size = 256
@@ -49,12 +49,12 @@ amplification; `* num_steps` composes across the run. The resulting
 
 ## 2. Clipping
 
-`opaque.dpsgd.clipping.clipped_grad` wraps a per-example loss
+`opake.dpsgd.clipping.clipped_grad` wraps a per-example loss
 function in `vmap(grad(...))` semantics, clips each per-example
 gradient to a fixed norm, and sums:
 
 ```python
-from opaque.dpsgd.clipping import clipped_grad
+from opake.dpsgd.clipping import clipped_grad
 
 def loss_fn(params, batch):
     # ... per-example loss (NO mean over batch) ...
@@ -70,19 +70,19 @@ grad_fn, clip_state = clipped_grad(
 ```
 
 For automatic threshold tuning across steps:
-`opaque.dpsgd.clipping.adaptive_clipped_grad`
+`opake.dpsgd.clipping.adaptive_clipped_grad`
 ([Andrew et al., 2021](https://arxiv.org/abs/1905.03871)).
-For AUTO-S smooth scaling: `opaque.dpsgd.clipping.auto_clipped_grad`
+For AUTO-S smooth scaling: `opake.dpsgd.clipping.auto_clipped_grad`
 ([Bu et al., 2023](https://arxiv.org/abs/2206.07136)).
 
 ## 3. Noise
 
-`opaque.dpsgd.noise.gaussian_noise` adds calibrated Gaussian noise to
+`opake.dpsgd.noise.gaussian_noise` adds calibrated Gaussian noise to
 the clipped gradient sum:
 
 ```python
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key, split
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key, split
 
 key_sampling, key_noise = split(key(42), num=2)
 
@@ -97,7 +97,7 @@ noise_fn, noise_state = gaussian_noise(
 DP-SGD pairs with Poisson subsampling:
 
 ```python
-from opaque.dpsgd.sampling import PoissonSampler
+from opake.dpsgd.sampling import PoissonSampler
 
 sampler = PoissonSampler(
     dataset, sample_rate=sample_rate, n_steps=num_steps, key=key_sampling,
@@ -112,7 +112,7 @@ to match.
 ## 5. Optimizer
 
 ```python
-from opaque.optimizers import adamw
+from opake.optimizers import adamw
 
 optimizer = adamw(
     lr=1e-3,
@@ -122,7 +122,7 @@ optimizer = adamw(
 opt_state = optimizer.init(params)
 ```
 
-`opaque.optimizers` ships `adamw`, `adam`, `sgd`, `radam`,
+`opake.optimizers` ships `adamw`, `adam`, `sgd`, `radam`,
 `adafactor`, `lion`, `ademamix`, `schedule_free`, plus a few torchopt
 re-exports. The `noise_bias_correction=True` flag corrects the
 biased second moment that arises when the optimizer sees noised
@@ -134,8 +134,8 @@ gradients.
 import torch
 import torchopt
 from torch.utils.data import DataLoader
-from opaque.functional import make_functional
-from opaque.serialization import state_dict
+from opake.functional import make_functional
+from opake.serialization import state_dict
 
 fmodel, params = make_functional(model)
 loader = DataLoader(dataset, batch_sampler=sampler)
@@ -163,11 +163,11 @@ torch.save(state_dict(ckpt), "step.pt")
 ```
 
 Restore from the same flat state dict with
-`opaque.serialization.from_state_dict`.
+`opake.serialization.from_state_dict`.
 
 ## Runnable references
 
-- [`examples/train_dpsgd.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpsgd.py)
+- [`examples/train_dpsgd.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpsgd.py)
   — full causal-LM training script.
 - `tests/integration/test_dpsgd_pipeline.py` — minimal smoke test
   exercising the same flow on a tiny LlamaConfig + LoRA model

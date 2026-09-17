@@ -1,7 +1,7 @@
 # Optimizers
 
-Opaque ships its own functional optimizer library at
-[`opaque.optimizers`](../reference/optimizers.md): Opaque-built factories with a
+Opake ships its own functional optimizer library at
+[`opake.optimizers`](../reference/optimizers.md): Opake-built factories with a
 common wrapper-aware update surface (`sgd`, `adam`, `adamw`, `radam`, `lion`,
 `ademamix`, `adafactor`, `rmsprop`, `adagrad`, `adadelta`, `schedule_free`).
 Every factory carries DP-aware behaviour selectable at construction time and
@@ -16,13 +16,13 @@ passing `NoisedPytree` or `SecondMomentNoiseOutput` updates.
 
 ## Why functional optimizers
 
-Opaque's gradient pipeline is functional: every function takes state
+Opake's gradient pipeline is functional: every function takes state
 in and returns new state out.  The optimizer factories follow the same
 pattern:
 
 ```python
 import torchopt
-from opaque.optimizers import adamw
+from opake.optimizers import adamw
 
 optimizer = adamw(lr=1e-3, weight_decay=0.01)
 opt_state = optimizer.init(params)
@@ -38,10 +38,10 @@ No hidden mutable state.  Every piece of the training loop is explicit.
 
 ```python
 import torchopt
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.optimizers import adamw
-from opaque.random import key
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.optimizers import adamw
+from opake.random import key
 
 # Gradient pipeline
 grad_fn, clip_state = clipped_grad(
@@ -71,7 +71,7 @@ DP noise inflation of the second moment (see [Choosing from measurements](#choos
 below). Pass `NoisedPytree` updates from a DP noise mechanism:
 
 ```python
-from opaque.optimizers import adafactor
+from opake.optimizers import adafactor
 
 optimizer = adafactor(lr=5e-4, weight_decay=0.01)
 # `update_rms_clip=1.0` (the default) clips one model-wide/global RMS,
@@ -84,7 +84,7 @@ Use `noise_bias_correction=True` only when the LR has been tuned for
 the workload (see [Choosing from measurements](#choosing-from-measurements)):
 
 ```python
-from opaque.optimizers import adamw
+from opake.optimizers import adamw
 
 optimizer = adamw(lr=1.5e-4, weight_decay=0.01)
 # Plain Adam (no decoupled WD): adamw(..., decoupled_weight_decay=False).
@@ -93,12 +93,12 @@ optimizer = adamw(lr=1.5e-4, weight_decay=0.01)
 ```
 
 **SGD** (`sgd`) is the canonical DP baseline. No second
-moment is corrected, but the Opaque wrapper accepts `NoisedPytree` updates so
+moment is corrected, but the Opake wrapper accepts `NoisedPytree` updates so
 the training loop stays uniform. `E[g + ξ] = g` and momentum's variance is
 bounded. Good debugging baseline:
 
 ```python
-from opaque.optimizers import sgd
+from opake.optimizers import sgd
 optimizer = sgd(lr=0.01, momentum=0.9)
 ```
 
@@ -108,7 +108,7 @@ the same flavor of φ-EMA subtraction as AdamW; it is off by default.
 Enable it to ablate:
 
 ```python
-from opaque.optimizers import rmsprop
+from opake.optimizers import rmsprop
 optimizer = rmsprop(lr=1e-2, alpha=0.99, noise_bias_correction=True)
 ```
 
@@ -118,7 +118,7 @@ absorbs `t·σ²` over training; `noise_bias_correction=True`
 subtracts a matching cumulative term:
 
 ```python
-from opaque.optimizers import adagrad
+from opake.optimizers import adagrad
 optimizer = adagrad(lr=1e-2, noise_bias_correction=True)
 ```
 
@@ -126,7 +126,7 @@ Whether the correction helps in practice depends on the workload —
 ablate against `noise_bias_correction=False`.
 
 **AdEMAMix**, **Adafactor**, **Lion**, **schedule-free** — see the
-[API reference](../reference/optimizers.md#whats-in-opaqueoptimizers) for
+[API reference](../reference/optimizers.md#whats-in-opakeoptimizers) for
 their DP modes.
 
 ## The second-moment problem in DP training
@@ -142,7 +142,7 @@ learning rates.  The $2g_t \xi_t$ cross-term averages out but adds
 variance.  Gaussian noise with variance $\sigma^2$ adds an expected
 bias of $\sigma^2$ to every component of $\hat{v}_t$.
 
-Opaque provides two independent corrections, both selected at
+Opake provides two independent corrections, both selected at
 `update()` time.  They address the same problem from different
 angles and **must not be combined** in the same call — using both
 would double-correct the second moment.
@@ -176,7 +176,7 @@ When a raw pytree update is passed, each optimizer reduces to its standard
 math. `NoisedPytree` updates supply the realized per-step σ metadata.
 
 ```python
-from opaque.optimizers import adamw
+from opake.optimizers import adamw
 
 # Without correction — standard AdamW math.
 optimizer = adamw(lr=1e-3, weight_decay=0.01)
@@ -237,8 +237,8 @@ above.
 ## AdamW With Private Second Moments
 
 ```python
-from opaque.dpftrl.noise import band_mf_strategy, mf_gaussian_noise
-from opaque.optimizers import adamw
+from opake.dpftrl.noise import band_mf_strategy, mf_gaussian_noise
+from opake.optimizers import adamw
 
 # Strategy: momentum=beta1 (Adam's first moment workload)
 strategy = band_mf_strategy(bands=8, momentum=0.9)
@@ -380,7 +380,7 @@ Schedule-free averages optimizer iterates. Its DP variance reduction depends
 on their covariance, so there is no universal $\sqrt{n}$ reduction.
 
 ```python
-from opaque.optimizers import adamw, schedule_free
+from opake.optimizers import adamw, schedule_free
 
 optimizer = schedule_free(
     adamw(lr=1e-3, noise_bias_correction=True), beta=0.9
@@ -407,7 +407,7 @@ the current parameters and does not depend on the training data.
 
 ### Gradient accumulation
 
-Opaque does not use gradient accumulation in the HF-style `step ÷ K`
+Opake does not use gradient accumulation in the HF-style `step ÷ K`
 sense.  Instead, `clipped_grad` processes the entire batch (possibly
 in microbatches) and returns the sum of clipped gradients in one
 call.  You pass the full noisy gradient directly to the optimizer —
@@ -416,12 +416,12 @@ no manual accumulation is needed.
 ## Learning rate schedules
 
 Standard LR schedules work with DP training.  Linear warmup followed
-by cosine decay is common for DP fine-tuning.  Use Opaque's
+by cosine decay is common for DP fine-tuning.  Use Opake's
 [scheduling primitives](../reference/schedules.md):
 
 ```python
-from opaque.optimizers import adamw
-from opaque.scheduling import cosine_schedule, with_warmup
+from opake.optimizers import adamw
+from opake.scheduling import cosine_schedule, with_warmup
 
 decay = cosine_schedule(
     init_value=1e-3, end_value=0.0,
@@ -441,11 +441,11 @@ the wrapper's averaging is the implicit schedule.
 ## Checkpoint round-tripping
 
 The optimizer state is a `torchopt` chain tuple of dataclasses; flatten
-it to a serializable dict via `opaque.serialization`:
+it to a serializable dict via `opake.serialization`:
 
 ```python
-from opaque.optimizers import adamw
-from opaque.serialization import from_state_dict, state_dict
+from opake.optimizers import adamw
+from opake.serialization import from_state_dict, state_dict
 
 opt = adamw(lr=1e-3, weight_decay=0.01, noise_bias_correction=True)
 state = opt.init(params)
@@ -465,7 +465,7 @@ cleanly from older checkpoints.
 
 ## Practical notes
 
-**Do not clip optimizer updates.** Opaque clips *gradients* before the
+**Do not clip optimizer updates.** Opake clips *gradients* before the
 optimizer sees them.  Clipping after the optimizer would distort the
 adaptive state.
 

@@ -20,9 +20,9 @@ supplies the horizon and participation pattern when it asks the recipe for its
 in one place.
 
 ```python
-from opaque.dpftrl.noise import bisr_strategy
-import opaque.accounting as acc           # cross-cutting balls_in_bins
-import opaque.dpftrl.accounting as dpftrl_acc  # DP-FTRL factories
+from opake.dpftrl.noise import bisr_strategy
+import opake.accounting as acc           # cross-cutting balls_in_bins
+import opake.dpftrl.accounting as dpftrl_acc  # DP-FTRL factories
 
 # 1. Create a strategy recipe
 strategy = bisr_strategy(
@@ -78,8 +78,8 @@ not applied a second time as a separate workload operator.
 ## Noise generation
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, bisr_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, bisr_strategy
+from opake.random import key
 
 strategy = bisr_strategy(
     bandwidth=4,
@@ -110,7 +110,7 @@ for normalized BISR. Runtime state keeps only the newest
 per step, independent of the training horizon once `n_steps >= p`.
 
 This bounded ring is the complete `O(p)` execution design required by
-[issue #795](https://github.com/JetBrains-Research/opaque/issues/795). It is not
+[issue #795](https://github.com/JetBrains-Research/opake/issues/795). It is not
 a zero-buffer design: a large model or bandwidth can still make the retained
 pytrees significant. PRNG replay could trade that persistent tensor storage for
 extra noise generation, but replay and a reusable generic banded-inverse
@@ -128,14 +128,14 @@ noise path does not allocate its `n_steps - 1` model-shaped history.
     past iid draws. These layouts are not safely interchangeable. Restoring a
     standalone legacy BISR noise state fails with a targeted BISR checkpoint
     error; a full trainer checkpoint may instead fail first at its outer bundle
-    version. Resume either form with the Opaque version that created it. This
+    version. Resume either form with the Opake version that created it. This
     rejection is intentional; the bounded-state change does not attempt a
     legacy-state migration.
 
     Exact continuation from a bounded-layout checkpoint requires the same BISR
     execution identity and base noise scale as the original run, in addition to
     the saved iid window. Open
-    [issue #789](https://github.com/JetBrains-Research/opaque/issues/789) tracks
+    [issue #789](https://github.com/JetBrains-Research/opake/issues/789) tracks
     the separate, urgent problem where calibrated DP-FTRL resume can rebuild a
     mechanism with a different noise multiplier. This bounded-state change does
     not fix or relax that resume requirement.

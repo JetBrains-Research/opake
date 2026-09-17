@@ -22,9 +22,9 @@ This separation keeps accounting constructors simple and avoids duplicating
 mechanism parameters in two places.
 
 ```python
-from opaque.dpftrl.noise import lambda_cgd_strategy
-import opaque.accounting as acc           # cross-cutting balls_in_bins
-import opaque.dpftrl.accounting as dpftrl_acc  # DP-FTRL factories
+from opake.dpftrl.noise import lambda_cgd_strategy
+import opake.accounting as acc           # cross-cutting balls_in_bins
+import opake.dpftrl.accounting as dpftrl_acc  # DP-FTRL factories
 
 # 1. Create a strategy recipe
 strategy = lambda_cgd_strategy(lambda_=0.9)
@@ -76,8 +76,8 @@ arXiv v2 and is computed from normalized column inner products.
 ## Noise generation
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, lambda_cgd_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, lambda_cgd_strategy
+from opake.random import key
 
 strategy = lambda_cgd_strategy(lambda_=0.9)
 noise_fn, state = mf_gaussian_noise(

@@ -6,7 +6,7 @@ rank, and runs a single DP step (clip → noise → cross-rank
 mechanisms. This is a one-step smoke — not a training run.
 
 Combines DDP × patches × Qwen2 × DP-SGD/DP-FTRL. Multi-GPU primitive
-coverage lives under ``packages/opaque-*/tests/ddp/``; this file
+coverage lives under ``packages/opake-*/tests/ddp/``; this file
 verifies the user-facing pipeline holds together with HF-Hub model
 weights and the patches enabled.
 
@@ -27,25 +27,25 @@ import torch
 pytest.importorskip("transformers")
 pytest.importorskip("peft")
 
-from opaque_test_support import (
+from opake_test_support import (
     cleanup_process_group as _cleanup_ddp,
 )
-from opaque_test_support import (
+from opake_test_support import (
     setup_nccl as _setup_ddp,
 )
-from opaque_test_support import (
+from opake_test_support import (
     spawn as _spawn,
 )
 from peft import LoraConfig, get_peft_model
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
-from opaque.api.engine.clipping import clipped_grad
-from opaque.distributed import sum_gradients
-from opaque.dpftrl.noise import identity_strategy, mf_gaussian_noise
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.functional import make_functional
-from opaque.patches import apply_model_patches
-from opaque.random import fold_in, key
+from opake.api.engine.clipping import clipped_grad
+from opake.distributed import sum_gradients
+from opake.dpftrl.noise import identity_strategy, mf_gaussian_noise
+from opake.dpsgd.noise import gaussian_noise
+from opake.functional import make_functional
+from opake.patches import apply_model_patches
+from opake.random import fold_in, key
 
 QWEN2_REPO = "Qwen/Qwen2-0.5B"
 

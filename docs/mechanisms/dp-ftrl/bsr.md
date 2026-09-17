@@ -2,7 +2,7 @@
 
 **BSR** (Kalinin & Lampert, NeurIPS 2024) is a matrix factorization mechanism whose **strategy matrix** is a **banded lower-triangular Toeplitz** matrix obtained from the **matrix square root** of the paper's workload \(A_{\alpha,\beta}\) (multiplicative decay \(\alpha\), Polyak momentum \(\beta\)).
 
-Opaque exposes **closed-form coefficients** (Theorem 1 in the paper): no L-BFGS optimization step at initialization.
+Opake exposes **closed-form coefficients** (Theorem 1 in the paper): no L-BFGS optimization step at initialization.
 
 - **Paper**: [Banded Square Root Matrix Factorization for Differentially Private Model Training](https://arxiv.org/abs/2405.13763)
 - **Strategy matrix**: Banded lower-triangular Toeplitz \(C^{|p|}_{\alpha,\beta}\)
@@ -14,9 +14,9 @@ Opaque exposes **closed-form coefficients** (Theorem 1 in the paper): no L-BFGS 
 ## Accounting
 
 ```python
-from opaque.dpftrl.noise import bsr_strategy
-import opaque.accounting as acc           # cross-cutting balls_in_bins
-import opaque.dpftrl.accounting as dpftrl_acc  # DP-FTRL factories
+from opake.dpftrl.noise import bsr_strategy
+import opake.accounting as acc           # cross-cutting balls_in_bins
+import opake.dpftrl.accounting as dpftrl_acc  # DP-FTRL factories
 
 strategy = bsr_strategy(
     bandwidth=8,
@@ -57,8 +57,8 @@ eps = training.epsilon_at(1e-5)
 ## Noise generation
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, bsr_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, bsr_strategy
+from opake.random import key
 
 strategy = bsr_strategy(
     bandwidth=8,

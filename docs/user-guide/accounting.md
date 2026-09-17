@@ -1,7 +1,7 @@
 # Privacy Accounting
 
 Privacy accounting tracks how much privacy budget is consumed during training.
-Opaque uses Privacy Loss Distributions (PLD) computed by a Rust engine for
+Opake uses Privacy Loss Distributions (PLD) computed by a Rust engine for
 numerically tight composition bounds. The API is built around composable
 `DpProcess` objects that represent privacy mechanisms.
 
@@ -15,24 +15,24 @@ factories live next to its runtime:
 
 | Module | Provides | Ships with |
 |--------|----------|------------|
-| `opaque.accounting` | Cross-cutting primitives — composition (`compose`, `repeat`, `cached`), `calibrate`, generic mechanisms (`identity`, `nonprivate`, `eps_delta`), `Accountant`, and the shared PLD / discretization stack. | `opaque-accounting` |
-| `opaque.dpsgd.accounting` | DP-SGD factories — `gaussian`, `adaclip`, `poisson` (plain or truncated via `truncated_batch_size` / `dataset_size`), `parallel_poisson`, `k_out_of_t`. | `opaque-dpsgd` |
-| `opaque.dpftrl.accounting` | DP-FTRL factories — `mf_gaussian`, `poisson` (whole-process, parameterized by `n_steps`), `b_min_sep`, `balls_in_bins`. | `opaque-dpftrl` |
+| `opake.accounting` | Cross-cutting primitives — composition (`compose`, `repeat`, `cached`), `calibrate`, generic mechanisms (`identity`, `nonprivate`, `eps_delta`), `Accountant`, and the shared PLD / discretization stack. | `opake-accounting` |
+| `opake.dpsgd.accounting` | DP-SGD factories — `gaussian`, `adaclip`, `poisson` (plain or truncated via `truncated_batch_size` / `dataset_size`), `parallel_poisson`, `k_out_of_t`. | `opake-dpsgd` |
+| `opake.dpftrl.accounting` | DP-FTRL factories — `mf_gaussian`, `poisson` (whole-process, parameterized by `n_steps`), `b_min_sep`, `balls_in_bins`. | `opake-dpftrl` |
 
 Private second moments do **not** use a separate accounting wrapper: the joint gradient + squared-gradient release is handled in the runtime σ split (sensitivity-proportional Mahalanobis allocation), so calibration stays on the same underlying mechanism PLD as first-moment-only training. See [Noise API](../reference/noise.md#paired-second-moment-release).
 
-Both algorithm-specific namespaces re-export from the shared `opaque-accounting`
+Both algorithm-specific namespaces re-export from the shared `opake-accounting`
 implementation; the split is purely organisational. The `Accountant` interactive
-container is on `opaque.accounting` directly (`from opaque.accounting import
+container is on `opake.accounting` directly (`from opake.accounting import
 Accountant`); calibration helpers (`calibrate`, `epsilon_budget`, etc.) live
 there too.
 
 The mechanism factories themselves (`gaussian`, `poisson`, `mf_gaussian`, …) are
 **only** on the algorithm-specific namespaces. Use the namespace that matches
-your training run (`opaque.dpsgd.accounting` or `opaque.dpftrl.accounting`) —
+your training run (`opake.dpsgd.accounting` or `opake.dpftrl.accounting`) —
 the per-step (DP-SGD) vs whole-process (DP-FTRL) distinction is part of the
 import path, on purpose. The algorithm-specific subpackages are
-*lazy-imported* from `opaque.dpsgd` / `opaque.dpftrl`, so the Rust PLD
+*lazy-imported* from `opake.dpsgd` / `opake.dpftrl`, so the Rust PLD
 extension only loads when accounting is actually used.
 
 ## Core concepts
@@ -44,8 +44,8 @@ produce new `DpProcess` instances. Privacy metrics are computed on demand from
 the underlying PLD.
 
 ```python
-import opaque.accounting as acc
-import opaque.dpsgd.accounting as dpsgd_acc
+import opake.accounting as acc
+import opake.dpsgd.accounting as dpsgd_acc
 
 # Mechanism constructors return DpProcess instances.  Cross-cutting
 # primitives (composition, calibration) live at acc; algorithm-specific
@@ -111,7 +111,7 @@ eps = g.epsilon_at(delta=1e-5)
 
 Standard Poisson-subsampled mechanism. Each example is included independently
 with probability `sample_rate`. This provides privacy amplification through
-subsampling. Plain Poisson accepts any Opaque `DpProcess` as its base
+subsampling. Plain Poisson accepts any Opake `DpProcess` as its base
 mechanism. Use the capped form only when training truncates draws; it requires
 `gaussian()`, `adaclip()`, or `nonprivate()` as its base.
 
@@ -246,8 +246,8 @@ runtime context to the amplifier's horizon and participation pattern. A recipe
 can resolve to different encoders under different contexts.
 
 ```python
-from opaque.dpftrl.noise import band_mf_strategy
-import opaque.dpftrl.accounting as dpftrl_acc
+from opake.dpftrl.noise import band_mf_strategy
+import opake.dpftrl.accounting as dpftrl_acc
 
 # Strategy is a recipe; the amplifier supplies the horizon at PLD time.
 strategy = band_mf_strategy(bands=10, momentum=0.95)
@@ -289,7 +289,7 @@ runtime horizon and participation bounds. This BLT example assumes at most five
 contributions per protected unit, at least 1000 rounds apart:
 
 ```python
-from opaque.dpftrl.noise import blt_strategy
+from opake.dpftrl.noise import blt_strategy
 
 strategy = blt_strategy(max_buffers=10)
 
@@ -354,7 +354,7 @@ Monte Carlo.
 The DP-SGD analogue is
 `dpsgd_acc.k_out_of_t(..., allocation="block")`, which draws an independent
 partition in every block. Do not mix the two: this accountant is for the
-fixed-assignment sampler `opaque.dpftrl.sampling.BallsInBinsSampler`.
+fixed-assignment sampler `opake.dpftrl.sampling.BallsInBinsSampler`.
 
 ```python
 strategy = lambda_cgd_strategy(lambda_=0.9)
@@ -472,7 +472,7 @@ The `Accountant` class provides step-by-step privacy tracking during training.
 It wraps a `DpProcess` and provides budget checking.
 
 ```python
-from opaque.accounting import Accountant
+from opake.accounting import Accountant
 
 acct = Accountant(budget=acc.epsilon_budget(3.0, delta=1e-5))
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(noise_multiplier), sample_rate)
@@ -498,10 +498,10 @@ DP-FTRL accountants are whole-process mechanisms: `dpftrl_acc.poisson`,
 the process once rather than once per training step:
 
 ```python
-import opaque.accounting as acc
-import opaque.dpftrl.accounting as dpftrl_acc
-from opaque.accounting import Accountant
-from opaque.dpftrl.noise import band_mf_strategy
+import opake.accounting as acc
+import opake.dpftrl.accounting as dpftrl_acc
+from opake.accounting import Accountant
+from opake.dpftrl.noise import band_mf_strategy
 
 strategy = band_mf_strategy(bands=64)
 process = dpftrl_acc.poisson(
@@ -520,8 +520,8 @@ do not support prefix privacy queries or privacy-based early stopping.
 ### Serialization
 
 ```python
-from opaque.accounting import Accountant
-from opaque.serialization import from_state_dict, state_dict
+from opake.accounting import Accountant
+from opake.serialization import from_state_dict, state_dict
 
 flat = state_dict(acct)
 # ... torch.save(flat, path) / flat = torch.load(path) ...
@@ -542,7 +542,7 @@ discretization. Each call updates only the named parameters; every other
 setting keeps its current value:
 
 ```python
-from opaque.accounting import set_discretization
+from opake.accounting import set_discretization
 
 # Tighter (slower)
 set_discretization(discretization=1e-5, max_grid_size=50_000_000)
@@ -574,8 +574,8 @@ increase the sample count.
 
 B-min-sep and correlated Balls-in-Bins reuse Monte Carlo draws across noise
 probes when their transcript corpora fit the cache. Each cache defaults to
-4 GiB; configure them with `OPAQUE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES` and
-`OPAQUE_BNB_TRANSCRIPT_CACHE_MAX_BYTES`, respectively. Oversized entries emit
+4 GiB; configure them with `OPAKE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES` and
+`OPAKE_BNB_TRANSCRIPT_CACHE_MAX_BYTES`, respectively. Oversized entries emit
 a `RuntimeWarning` with the required bytes and cap, then use one-shot accounting.
 A cap of `0` disables reuse without a warning. Cache limits do not change
 accounting precision or bound total process memory.

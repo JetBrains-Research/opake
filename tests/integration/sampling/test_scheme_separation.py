@@ -16,9 +16,9 @@ from __future__ import annotations
 
 from itertools import chain
 
-from opaque.dpftrl.sampling import BallsInBinsSampler
-from opaque.dpsgd.sampling import KOutOfTSampler
-from opaque.random import key
+from opake.dpftrl.sampling import BallsInBinsSampler
+from opake.dpsgd.sampling import KOutOfTSampler
+from opake.random import key
 
 _N = 120
 _BINS = 6

@@ -5,14 +5,14 @@ the model update. This is the core operation that makes DP-SGD possible:
 clipping establishes a known sensitivity, which determines how much noise is
 needed for a given privacy guarantee.
 
-Opaque provides three high-level clipping functions:
+Opake provides three high-level clipping functions:
 
-- **`clipped_grad`** ([`opaque.dpsgd.clipping`](../reference/clipping.md)) — Fixed-threshold clipping (recommended default).
-- **`auto_clipped_grad`** ([`opaque.dpsgd.clipping`](../reference/clipping.md)) — AUTO-S automatic scaling, no threshold to tune (Bu et al. NeurIPS 2023). Algorithm-agnostic: composes with both DP-SGD's Gaussian mechanism and DP-FTRL's matrix-factorization mechanisms.
-- **`adaptive_clipped_grad`** ([`opaque.dpsgd.clipping`](../reference/clipping.md)) — Auto-tuned threshold via quantile tracking (Andrew et al. 2021); DP-SGD-only because the threshold drifts across steps.
+- **`clipped_grad`** ([`opake.dpsgd.clipping`](../reference/clipping.md)) — Fixed-threshold clipping (recommended default).
+- **`auto_clipped_grad`** ([`opake.dpsgd.clipping`](../reference/clipping.md)) — AUTO-S automatic scaling, no threshold to tune (Bu et al. NeurIPS 2023). Algorithm-agnostic: composes with both DP-SGD's Gaussian mechanism and DP-FTRL's matrix-factorization mechanisms.
+- **`adaptive_clipped_grad`** ([`opake.dpsgd.clipping`](../reference/clipping.md)) — Auto-tuned threshold via quantile tracking (Andrew et al. 2021); DP-SGD-only because the threshold drifts across steps.
 
 For DP-FTRL, import `clipped_grad`, `auto_clipped_grad`, and `per_group`
-from `opaque.dpftrl.clipping`.
+from `opake.dpftrl.clipping`.
 
 Lower-level building blocks (`clipped_fun`, `clip_pytree`, `auto_scale_pytree`)
 are documented in the [Clipping API Reference](../reference/clipping.md).
@@ -24,7 +24,7 @@ gradients, clips each to a maximum L2 norm, and sums the result. This is the
 primary API for DP-SGD training.
 
 ```python
-from opaque.dpsgd.clipping import clipped_grad
+from opake.dpsgd.clipping import clipped_grad
 
 
 def loss_fn(params, x, y):
@@ -151,11 +151,11 @@ precision described in [Precision](precision.md).
 
 ### Choosing microbatch size
 
-Use `step_perf` from `opaque.profiling` to run a short sweep and
+Use `step_perf` from `opake.profiling` to run a short sweep and
 select the largest stable microbatch that does not OOM:
 
 ```python
-from opaque.profiling import reset_peak_memory, step_perf
+from opake.profiling import reset_peak_memory, step_perf
 
 for candidate_mb in [64, 32, 16, 8, 4, 2, 1]:
     grad_fn, state = clipped_grad(
@@ -182,8 +182,8 @@ tuning the clip norm, you specify a target fraction of gradients that should
 be clipped (the *target quantile*).
 
 ```python
-from opaque.dpsgd.clipping import adaptive_clipped_grad
-from opaque.random import key
+from opake.dpsgd.clipping import adaptive_clipped_grad
+from opake.random import key
 
 grad_fn, clip_state = adaptive_clipped_grad(
     loss_fn,
@@ -233,7 +233,7 @@ Adaptive clipping introduces an additional privacy cost (the noisy clipping
 rate query). Account for it using `dpsgd_acc.adaclip()`:
 
 ```python
-import opaque.dpsgd.accounting as dpsgd_acc
+import opake.dpsgd.accounting as dpsgd_acc
 
 expected_batch_size = sample_rate * dataset_size
 step = dpsgd_acc.poisson(
@@ -256,8 +256,8 @@ state. To keep the adaptive threshold consistent across devices, synchronize
 that state after every step, before the next adaptive-clipping call:
 
 ```python
-import opaque.distributed as dist_utils
-from opaque.distributed import sync
+import opake.distributed as dist_utils
+from opake.distributed import sync
 
 grads, clip_state = grad_fn(params, batch, state=clip_state)
 clip_state = sync(clip_state)  # required: aggregate counts and update next threshold
@@ -273,7 +273,7 @@ required with uneven local batches; the current bound remains
 
 The loss function passed to `clipped_grad` must:
 
-1. **Return a scalar** for each example. Opaque differentiates this scalar to
+1. **Return a scalar** for each example. Opake differentiates this scalar to
    produce per-example gradients.
 2. **Accept batched arguments** at the positions specified by `batch_argnums`.
    These arguments have a batch dimension that `vmap` maps over.
@@ -289,8 +289,8 @@ PyTorch models store parameters internally. To use them with `clipped_grad`,
 convert to functional form:
 
 ```python
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.functional import make_functional
+from opake.dpsgd.clipping import clipped_grad
+from opake.functional import make_functional
 
 fmodel, params = make_functional(model)
 
@@ -349,7 +349,7 @@ Use `per_group` to construct a `PerGroup` from parameter keys and substring
 patterns:
 
 ```python
-from opaque.dpsgd.clipping import clipped_grad, per_group
+from opake.dpsgd.clipping import clipped_grad, per_group
 
 pg = per_group(params, self_attn=1.0, mlp=2.0)
 
@@ -462,8 +462,8 @@ Per-group clipping works with `adaptive_clipped_grad`. Each group's threshold
 adapts independently based on its own clipping rate:
 
 ```python
-from opaque.dpsgd.clipping import adaptive_clipped_grad
-from opaque.random import key
+from opake.dpsgd.clipping import adaptive_clipped_grad
+from opake.random import key
 
 pg = per_group(params, self_attn=1.0, mlp=2.0)
 
@@ -507,7 +507,7 @@ threshold to tune; the effective step size is absorbed into the learning
 rate.
 
 ```python
-from opaque.dpsgd.clipping import auto_clipped_grad
+from opake.dpsgd.clipping import auto_clipped_grad
 
 grad_fn, clip_state = auto_clipped_grad(
     loss_fn,
@@ -538,9 +538,9 @@ on every step, so it flows through `mf_gaussian_noise` exactly as fixed clipping
 does:
 
 ```python
-from opaque.dpsgd.clipping import auto_clipped_grad
-from opaque.dpftrl import band_mf_strategy, mf_gaussian_noise
-from opaque.random import key
+from opake.dpsgd.clipping import auto_clipped_grad
+from opake.dpftrl import band_mf_strategy, mf_gaussian_noise
+from opake.random import key
 
 grad_fn, clip_state = auto_clipped_grad(
     loss_fn,
@@ -576,10 +576,10 @@ carries the sensitivity. Privacy accounting is plain Gaussian DP-SGD — AUTO-S
 introduces no extra data-dependent query:
 
 ```python
-import opaque.accounting as acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key
+import opake.accounting as acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key
 
 noise_fn, noise_state = gaussian_noise(noise_multiplier=noise_multiplier, key=key(42))
 noisy_grads, noise_state = noise_fn(grads, noise_state)
@@ -594,7 +594,7 @@ eps = training.epsilon_at(1e-5)
 Pass a `PerGroup` as `R` to scale each group independently:
 
 ```python
-from opaque.dpsgd.clipping import auto_clipped_grad, per_group
+from opake.dpsgd.clipping import auto_clipped_grad, per_group
 
 pg = per_group(params, self_attn=1.0, mlp=2.0)
 

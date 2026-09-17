@@ -1,0 +1,41 @@
+"""Fused Triton kernels — SwiGLU, GeGLU, RoPE, RMSNorm, fused CE, MoE, LoRA."""
+
+from opake.api.patches.kernels import (
+    ACTIVATION_GEGLU_APPROX,
+    ACTIVATION_GEGLU_EXACT,
+    ACTIVATION_SWIGLU,
+    opake_cross_entropy_loss,
+    opake_fused_add_rms_norm,
+    opake_geglu_approx,
+    opake_geglu_exact,
+    opake_linear_cross_entropy_loss,
+    opake_lora_mlp,
+    opake_lora_qkv,
+    opake_lora_w,
+    opake_moe,
+    opake_rms_norm,
+    opake_rope,
+    opake_rope_qk,
+    opake_slow_rope,
+    opake_swiglu,
+)
+
+__all__ = [
+    "ACTIVATION_GEGLU_APPROX",
+    "ACTIVATION_GEGLU_EXACT",
+    "ACTIVATION_SWIGLU",
+    "opake_cross_entropy_loss",
+    "opake_fused_add_rms_norm",
+    "opake_geglu_approx",
+    "opake_geglu_exact",
+    "opake_linear_cross_entropy_loss",
+    "opake_lora_mlp",
+    "opake_lora_qkv",
+    "opake_lora_w",
+    "opake_moe",
+    "opake_rms_norm",
+    "opake_rope",
+    "opake_rope_qk",
+    "opake_slow_rope",
+    "opake_swiglu",
+]

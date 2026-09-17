@@ -1,4 +1,4 @@
-"""Shared pytest configuration and fixtures for all Opaque packages.
+"""Shared pytest configuration and fixtures for all Opake packages.
 
 Pytest discovers conftest.py by walking up from each test file, so every
 package in the workspace inherits these fixtures automatically.
@@ -20,7 +20,7 @@ os.environ["PYTHONPATH"] = _TEST_SUPPORT + (
     os.pathsep + _previous_pythonpath if _previous_pythonpath else ""
 )
 
-_test_support = importlib.import_module("opaque_test_support")
+_test_support = importlib.import_module("opake_test_support")
 get_default_device = _test_support.get_default_device
 get_default_gpu_device = _test_support.get_default_gpu_device
 _set_random_seed = _test_support.set_random_seed

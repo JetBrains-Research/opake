@@ -1,23 +1,23 @@
-"""§11.6 mechanism-agnostic integration test for ``opaque-alignment``.
+"""§11.6 mechanism-agnostic integration test for ``opake-alignment``.
 
-Per ``docs/development/opaque-alignment-plan.md`` §11.6 (and the §3.2 /
+Per ``docs/development/opake-alignment-plan.md`` §11.6 (and the §3.2 /
 §12.5 mechanism-agnostic contract): the SAME per-example loss closure,
-built only from ``opaque.alignment`` primitives + ``opaque-engine``
+built only from ``opake.alignment`` primitives + ``opake-engine``
 clipping, must run end-to-end under BOTH DP mechanisms —
 
-  * DP-SGD: i.i.d. Gaussian noise (``opaque.dpsgd.noise.gaussian_noise``).
+  * DP-SGD: i.i.d. Gaussian noise (``opake.dpsgd.noise.gaussian_noise``).
   * DP-FTRL: correlated matrix-factorized noise
-    (``opaque.dpftrl.noise.band_mf_strategy`` + ``mf_gaussian_noise``).
+    (``opake.dpftrl.noise.band_mf_strategy`` + ``mf_gaussian_noise``).
 
-``opaque-alignment`` declares no dependency on either mechanism wheel
+``opake-alignment`` declares no dependency on either mechanism wheel
 (plan §5, §12.5); the mechanism is chosen at the call site.  This smoke
 test proves the package contract holds under mechanism substitution: the
 clipped gradients from the shared closure are identical pre-noise, and
 both post-noise gradient trees are finite — only the noise step differs.
 
-This test imports both ``opaque.dpsgd`` and ``opaque.dpftrl`` (outside the
+This test imports both ``opake.dpsgd`` and ``opake.dpftrl`` (outside the
 alignment wheel's dependency cone), so it lives under repo-root
-``tests/integration/`` rather than ``packages/opaque-alignment/tests/``.
+``tests/integration/`` rather than ``packages/opake-alignment/tests/``.
 
 CPU-only, tiny, deterministic; no network.
 """
@@ -27,12 +27,12 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from opaque.alignment.sft.loss import nll_loss
-from opaque.dpftrl.noise import band_mf_strategy, mf_gaussian_noise
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.functional import make_functional
-from opaque.random import key
+from opake.alignment.sft.loss import nll_loss
+from opake.dpftrl.noise import band_mf_strategy, mf_gaussian_noise
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.functional import make_functional
+from opake.random import key
 
 # Mechanism-substitution smoke test runs in well under 5 s on CPU and needs
 # no GPU, so it carries no ``slow`` / ``cuda`` marker (matching the sibling
@@ -82,7 +82,7 @@ def test_same_closure_runs_under_dpsgd_and_dpftrl() -> None:
         logits = fmodel(merged, ids)
         return nll_loss(logits, labs)
 
-    # Shared clipping (opaque-engine) — produces the per-example-clipped,
+    # Shared clipping (opake-engine) — produces the per-example-clipped,
     # batch-summed gradient tree fed identically to both mechanisms.
     grad_fn, clip_state = clipped_grad(
         per_example_loss,
@@ -141,8 +141,8 @@ def test_same_closure_runs_under_dpsgd_and_dpftrl() -> None:
 
 def test_dpo_closure_runs_under_both_mechanisms() -> None:
     """A DPO ``sigmoid`` closure (with ``sequence_logp``) is mechanism-agnostic too."""
-    from opaque.alignment.dpo.loss import sigmoid_loss
-    from opaque.api.alignment.logprob import sequence_logp
+    from opake.alignment.dpo.loss import sigmoid_loss
+    from opake.api.alignment.logprob import sequence_logp
 
     torch.manual_seed(_SEED)
 

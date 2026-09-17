@@ -1,0 +1,172 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Opake" />
+    <inspection_tool class="InjectedReferences" enabled="false" level="ERROR" enabled_by_default="true" />
+    <inspection_tool class="RegExpRedundantEscape" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="RegExpSimplifiable" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+
+    <!-- Ruff owns deterministic lint and convention checks. -->
+    <inspection_tool class="PyBroadExceptionInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyDefaultArgumentInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyIncorrectDocstringInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyMethodMayBeStaticInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPep8NamingInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyProtectedMemberInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyProtocolInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyRedundantParenthesesInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyShadowingBuiltinsInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyShadowingNamesInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PySimplifyBooleanCheckInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyStringConversionWithoutDunderMethodInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyStringFormatInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyTypeHintsInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyUnnecessaryCastInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyUnusedParameterInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <!-- uv's PEP 420 workspace membership and optional extras are not a
+         per-file requirement contract. Qodana audits declared dependencies. -->
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyStubPackagesAdvertiser" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <!-- This checks whether PyPI has a newer release, not whether a declared
+         requirement is satisfiable. Library compatibility is owned by bounds,
+         the lockfile, and CI's dependency matrix. -->
+    <inspection_tool class="DependenciesInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+
+    <!-- JetBrains owns semantic checks that complement Ruff.
+         Scopes describe analyzer-limited code categories, never individual findings. -->
+    <!-- PyCharm 2026.3 incorrectly rejects valid NamedTuple, dataclass, and
+         callable signatures. Qodana's stable engine retains this CI check. -->
+    <inspection_tool class="PyArgumentListInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+    <!-- PyCharm 2026.3 misclassifies valid Protocol declarations as subclasses
+         of a final typing special form. -->
+    <inspection_tool class="PyFinalInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyDataclassInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyTypeCheckerInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+      <scope name="Opake_ExamplesAndTutorials" level="WARNING" enabled="false" />
+      <scope name="Opake_DynamicFrameworkSources" level="WARNING" enabled="false" />
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+      <scope name="Opake_GitHubScripts" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <!-- Dataclass and extension constructors are intentionally generated. -->
+    <inspection_tool class="PyClassHasNoInitInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyAsyncCallInspection" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyCompatibilityInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ourVersions">
+        <value>
+          <list size="3">
+            <item index="0" class="java.lang.String" itemvalue="3.11" />
+            <item index="1" class="java.lang.String" itemvalue="3.12" />
+            <item index="2" class="java.lang.String" itemvalue="3.13" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyDictDuplicateKeysInspection" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyInvalidCastInspection" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyMockPatchArgumentCountInspection" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyTestParametrizedInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyTestUnpassedFixtureInspection" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyUnhashableInspection" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyUnusedImportsInspection" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyUnusedLocalVariableInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyNoneFunctionAssignmentInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+      <scope name="Opake_ExamplesAndTutorials" level="WARNING" enabled="false" />
+      <scope name="Opake_DynamicFrameworkSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyUnboundLocalVariableInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+      <scope name="Opake_ExamplesAndTutorials" level="WARNING" enabled="false" />
+      <scope name="Opake_DynamicFrameworkSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyCallingNonCallableInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+      <scope name="Opake_ExamplesAndTutorials" level="WARNING" enabled="false" />
+      <scope name="Opake_DynamicFrameworkSources" level="WARNING" enabled="false" />
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyMethodOverridingInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyUnreachableCodeInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+      <scope name="Opake_ExamplesAndTutorials" level="WARNING" enabled="false" />
+      <scope name="Opake_DynamicFrameworkSources" level="WARNING" enabled="false" />
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyTypedDictInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyDeprecationInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyPropertyAccessInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyPropertyDefinitionInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyPatternInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyDecoratorInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_DynamicFrameworkSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyInconsistentReturnsInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WEAK WARNING" enabled="false" />
+      <scope name="Opake_ExamplesAndTutorials" level="WEAK WARNING" enabled="false" />
+      <scope name="Opake_DynamicFrameworkSources" level="WEAK WARNING" enabled="false" />
+      <scope name="Opake_FunctionalRuntimeSources" level="WEAK WARNING" enabled="false" />
+      <scope name="Opake_GitHubScripts" level="WEAK WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyRedeclarationInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="Opake_PythonTests" level="WARNING" enabled="false" />
+      <scope name="Opake_ExamplesAndTutorials" level="WARNING" enabled="false" />
+      <scope name="Opake_DynamicFrameworkSources" level="WARNING" enabled="false" />
+      <scope name="Opake_FunctionalRuntimeSources" level="WARNING" enabled="false" />
+      <scope name="Opake_DynamicModuleFacades" level="WARNING" enabled="false" />
+    </inspection_tool>
+
+    <!-- Keep useful cross-language checks while excluding known parser gaps. -->
+    <inspection_tool class="Annotator" enabled="true" level="ERROR" enabled_by_default="true">
+      <scope name="Opake_Markdown_exclusions" level="ERROR" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="MarkdownUnresolvedFileReference" enabled="true" level="ERROR" enabled_by_default="true">
+      <scope name="Opake_DevelopmentDocs_exclusions" level="ERROR" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="MarkdownUnresolvedHeaderReference" enabled="true" level="ERROR" enabled_by_default="true">
+      <scope name="Opake_DocsHeaderReference_exclusions" level="ERROR" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="MarkdownUnresolvedLinkLabel" enabled="true" level="ERROR" enabled_by_default="true">
+      <scope name="Opake_DevelopmentDocs_exclusions" level="ERROR" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="TomlDuplicatedKey" enabled="true" level="ERROR" enabled_by_default="true">
+      <scope name="Opake_UvLock_exclusions" level="ERROR" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="UndefinedParamsPresent" enabled="true" level="ERROR" enabled_by_default="true">
+      <scope name="Opake_GitHubExpressions_exclusions" level="ERROR" enabled="false" />
+    </inspection_tool>
+
+    <!-- Advisory editor hints are not trusted project findings. -->
+    <inspection_tool class="DuplicatedCode" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="GrazieInspection" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="GrazieStyle" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="MarkdownIncorrectlyNumberedListItem" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="MarkdownIncorrectTableFormatting" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="MarkdownTablePipeInCodeSpan" enabled="false" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="RsUnnecessaryParentheses" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="RsUnnecessaryQualifications" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="SpecificationAmbiguity" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="SpellCheckingInspection" enabled="false" level="TYPO" enabled_by_default="true" />
+    <inspection_tool class="TodoComment" enabled="false" level="WARNING" enabled_by_default="true" />
+  </profile>
+</component>

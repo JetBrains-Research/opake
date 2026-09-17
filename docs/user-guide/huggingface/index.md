@@ -1,7 +1,7 @@
 # Hugging Face Integration
 
-Opaque ships a Hugging Face–style trainer (`opaque.transformers.DPTrainer`)
-plus a per-model patch surface (`opaque.patches`) so existing
+Opake ships a Hugging Face–style trainer (`opake.transformers.DPTrainer`)
+plus a per-model patch surface (`opake.patches`) so existing
 `transformers` models can be trained under DP-SGD with the familiar
 `Trainer.train()` / `evaluate()` / `predict()` interface.
 
@@ -25,7 +25,7 @@ you're trying to do.
   the public state objects.
 
 LoRA and other PEFT setups use the standard `peft` library workflow;
-the only Opaque-specific piece is
+the only Opake-specific piece is
 `make_functional(model, partition_trainable=True)` — documented under
 [Utilities reference](../../reference/utilities.md#trainable-frozen-partition-for-peft-and-lora).
 
@@ -49,7 +49,7 @@ few DP-specific fields on `TrainingArguments`:
 
 ```python
 from transformers import AutoModelForCausalLM
-from opaque.transformers import DPTrainer, TrainingArguments
+from opake.transformers import DPTrainer, TrainingArguments
 
 model = AutoModelForCausalLM.from_pretrained("gpt2")
 args = TrainingArguments(

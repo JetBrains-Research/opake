@@ -8,7 +8,7 @@ combined with the correct optimizer.
 KEY DIFFERENCES FROM DP-SGD (train_dpsgd.py):
 
   1. Optimizer: SGD with Polyak momentum (default), or one of the
-     Opaque-built v-using optimizers (``adamw``, ``ademamix``).  For
+     Opake-built v-using optimizers (``adamw``, ``ademamix``).  For
     adaptive optimizers, pair with ``--second-moment`` to activate a
     private squared-gradient stream.  The optimizer consumes the
     privately-estimated ``g²`` stream alongside standard noised gradients.
@@ -119,22 +119,22 @@ from transformers import (
     DataCollatorForLanguageModeling,
 )
 
-from opaque.device import sdpa_autocast_under_vmap_broken
-from opaque.patches import apply_model_patches, apply_runtime_patches
+from opake.device import sdpa_autocast_under_vmap_broken
+from opake.patches import apply_model_patches, apply_runtime_patches
 
 apply_runtime_patches()
 
 import torchopt
 
-import opaque.accounting as acc
-import opaque.auditing as auditing
-import opaque.dpftrl.accounting as dpftrl_acc
-from opaque.accounting import Accountant
-from opaque.accounting import calibration as cal
-from opaque.distributed import local_shard, sync
-from opaque.distributed.gradients import sum_gradients_
-from opaque.dpftrl.clipping import auto_clipped_grad, clipped_grad, per_group
-from opaque.dpftrl.noise import (
+import opake.accounting as acc
+import opake.auditing as auditing
+import opake.dpftrl.accounting as dpftrl_acc
+from opake.accounting import Accountant
+from opake.accounting import calibration as cal
+from opake.distributed import local_shard, sync
+from opake.distributed.gradients import sum_gradients_
+from opake.dpftrl.clipping import auto_clipped_grad, clipped_grad, per_group
+from opake.dpftrl.noise import (
     band_mf_strategy,
     bisr_strategy,
     blt_strategy,
@@ -143,27 +143,27 @@ from opaque.dpftrl.noise import (
     lambda_cgd_strategy,
     mf_gaussian_noise,
 )
-from opaque.dpftrl.sampling import (
+from opake.dpftrl.sampling import (
     BallsInBinsSampler,
     BMinSepSampler,
     CyclicPoissonSampler,
     SequentialBatchSampler,
 )
-from opaque.functional import empty_collate, make_functional
-from opaque.profiling import (
+from opake.functional import empty_collate, make_functional
+from opake.profiling import (
     perf_tracker,
     print_memory,
     reset_peak_memory,
 )
-from opaque.random import fold_in, key
-from opaque.scheduling import (
+from opake.random import fold_in, key
+from opake.scheduling import (
     cosine_schedule,
     inverse_sqrt_schedule,
     linear_schedule,
     with_warmup,
 )
-from opaque.scheduling.types import Schedule
-from opaque.types import (
+from opake.scheduling.types import Schedule
+from opake.types import (
     PerGroup,
     SecondMomentClippingOutput,
     SecondMomentNoiseOutput,
@@ -319,12 +319,12 @@ def make_lr_schedule(
     min_ratio: float = 0.0,
     warmup_steps: int = 0,
 ) -> Schedule:
-    """Build an :data:`opaque.scheduling.types.Schedule` callable.
+    """Build an :data:`opake.scheduling.types.Schedule` callable.
 
     The same callable is handed both to the torchopt optimizer (via
     ``scale_by_schedule`` machinery) and to the MF noise strategy's
     ``lr_schedule`` argument (for BandMF / BLT — see
-    :func:`opaque.dpftrl.noise._band_mf._momentum_workload_coef`).  Both
+    :func:`opake.dpftrl.noise._band_mf._momentum_workload_coef`).  Both
     consumers query identical per-step LRs.
 
     Args:
@@ -483,7 +483,7 @@ def parse_args():
         help=(
             "Activate private second-moment noise: ``mf_gaussian_noise`` produces a "
             "privately-estimated ``g²`` stream alongside noised gradients, "
-            "and Opaque optimizers consume it automatically.  Joint noise "
+            "and Opake optimizers consume it automatically.  Joint noise "
             "uses sensitivity-proportional Mahalanobis allocation: privacy "
             "accounting is the underlying MF mechanism at the same noise "
             "multiplier — no extra cost.  Requires an Adam-family optimizer "
@@ -642,13 +642,13 @@ def parse_args():
     dp_g.add_argument(
         "--kernel-patches",
         action=argparse.BooleanOptionalAction,
-        default=os.environ.get("OPAQUE_NO_KERNEL_PATCH", "0") != "1",
-        help="Apply the opaque Triton speed kernels (rope/rms_norm/activation/"
+        default=os.environ.get("OPAKE_NO_KERNEL_PATCH", "0") != "1",
+        help="Apply the opake Triton speed kernels (rope/rms_norm/activation/"
         "fused-CE) to the model. On by default (auto-falls back to eager on "
         "non-CUDA hosts). --no-kernel-patches forces the eager baseline; the "
         "compat vmap-safety wrappers — including the load-bearing MoE experts "
         "patch — plus kv_cache and PEFT kernels stay on. Default also follows "
-        "OPAQUE_NO_KERNEL_PATCH=1.",
+        "OPAKE_NO_KERNEL_PATCH=1.",
     )
     dp_g.add_argument(
         "--torch-compile",
@@ -788,7 +788,7 @@ def parse_args():
     track_g = parser.add_argument_group("tracking")
     track_g.add_argument("--no-wandb", action="store_true")
     track_g.add_argument(
-        "--wandb-project", type=str, default=os.environ.get("WANDB_PROJECT", "opaque")
+        "--wandb-project", type=str, default=os.environ.get("WANDB_PROJECT", "opake")
     )
     track_g.add_argument(
         "--wandb-run-name",
@@ -1714,7 +1714,7 @@ def main():
 
     # Participation context for the noise side: pull straight off the
     # wrapping amplifier so the streaming matrix tracks the calibrated PLD
-    # (the :class:`opaque.dpftrl.accounting.amplification.types.MfAmplification`
+    # (the :class:`opake.dpftrl.accounting.amplification.types.MfAmplification`
     # Protocol guarantees every amplifier exposes ``n_steps`` / ``min_sep``
     # / ``max_participations``, including the degenerate-limit values for
     # bare-Poisson Identity).
@@ -1771,7 +1771,7 @@ def main():
     # — which varies by t for any non-Identity strategy.  Force the BC-aware
     # constructors to disable BC; the math becomes a no-op for the BC path.
     if args.optimizer == "sgd":
-        from opaque.optimizers import sgd
+        from opake.optimizers import sgd
 
         optimizer = sgd(
             lr=lr_callable,
@@ -1779,7 +1779,7 @@ def main():
             weight_decay=args.weight_decay,
         )
     elif args.optimizer == "adam":
-        from opaque.optimizers import adam
+        from opake.optimizers import adam
 
         optimizer = adam(
             lr=lr_callable,
@@ -1789,7 +1789,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "adamw":
-        from opaque.optimizers import adamw
+        from opake.optimizers import adamw
 
         # ``--second-moment`` drives the noise side; the same optimizer
         # consumes ``SecondMomentNoiseOutput`` when the noise output carries it.
@@ -1801,7 +1801,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "ademamix":
-        from opaque.optimizers import ademamix
+        from opake.optimizers import ademamix
 
         # β₃ and α default to the paper values (0.9999, 5.0).  Expose
         # CLI knobs for them once a real user case appears.
@@ -1814,7 +1814,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "lion":
-        from opaque.optimizers import lion
+        from opake.optimizers import lion
 
         optimizer = lion(
             lr=lr_callable,
@@ -1822,7 +1822,7 @@ def main():
             weight_decay=args.weight_decay,
         )
     elif args.optimizer == "adafactor":
-        from opaque.optimizers import adafactor
+        from opake.optimizers import adafactor
 
         optimizer = adafactor(
             lr=lr_callable,
@@ -1830,7 +1830,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "rmsprop":
-        from opaque.optimizers import rmsprop
+        from opake.optimizers import rmsprop
 
         optimizer = rmsprop(
             lr=lr_callable,
@@ -1838,7 +1838,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "adagrad":
-        from opaque.optimizers import adagrad
+        from opake.optimizers import adagrad
 
         optimizer = adagrad(
             lr=lr_callable,
@@ -2064,7 +2064,7 @@ def main():
             # ``noisy_grads`` already agree.  ``sync(noise_state)``
             # is a cheap cross-rank consistency check on the
             # internal step counter and latched sensitivity bound —
-            # see :mod:`opaque.dpftrl.noise._distributed`.
+            # see :mod:`opake.dpftrl.noise._distributed`.
             if is_ddp and not isinstance(noisy_grads, SecondMomentNoiseOutput):
                 noise_state = sync(noise_state)
             if isinstance(noisy_grads, SecondMomentNoiseOutput):

@@ -6,15 +6,15 @@ import torch.nn as nn
 import torchopt
 from torch.utils.data import DataLoader, TensorDataset
 
-import opaque.accounting as acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.accounting import Accountant
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.dpsgd.sampling import PoissonSampler
-from opaque.functional import make_functional
-from opaque.optimizers import sgd
-from opaque.random import key
+import opake.accounting as acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.accounting import Accountant
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.dpsgd.sampling import PoissonSampler
+from opake.functional import make_functional
+from opake.optimizers import sgd
+from opake.random import key
 
 # Synthetic data
 torch.manual_seed(42)

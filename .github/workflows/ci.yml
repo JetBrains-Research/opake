@@ -168,7 +168,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Dev wheel builds. Version derived from `setuptools-scm` + the preflight
-  # script that writes the opaque dep pins + Cargo workspace version.
+  # script that writes the opake dep pins + Cargo workspace version.
   # Release builds live in release.yml (triggered on `v*` tag push).
   # ---------------------------------------------------------------------------
   build-distributions:

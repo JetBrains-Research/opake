@@ -7,7 +7,7 @@ import jetbrains.buildServer.configs.kotlin.triggers.vcs
 
 version = "2026.1"
 
-private val pipelineId = "Opaque_LinuxAmd64Tests"
+private val pipelineId = "Opake_LinuxAmd64Tests"
 
 private data class TestShard(
     val id: String,
@@ -18,27 +18,27 @@ private data class TestShard(
 private fun jobId(shard: TestShard) = "LinuxAmd64_${shard.id}"
 
 private val linuxAmd64TestShards = listOf(
-    TestShard("Accounting", "opaque-accounting", "packages/opaque-accounting"),
-    TestShard("Alignment", "opaque-alignment", "packages/opaque-alignment"),
-    TestShard("Auditing", "opaque-auditing", "packages/opaque-auditing"),
-    TestShard("Base", "opaque-base", "packages/opaque-base"),
-    TestShard("Dpftrl", "opaque-dpftrl", "packages/opaque-dpftrl"),
-    TestShard("Dpsgd", "opaque-dpsgd", "packages/opaque-dpsgd"),
-    TestShard("Engine", "opaque-engine", "packages/opaque-engine"),
-    TestShard("Optimizers", "opaque-optimizers", "packages/opaque-optimizers"),
-    TestShard("Patches", "opaque-patches", "packages/opaque-patches"),
-    TestShard("Transformers", "opaque-transformers", "packages/opaque-transformers"),
+    TestShard("Accounting", "opake-accounting", "packages/opake-accounting"),
+    TestShard("Alignment", "opake-alignment", "packages/opake-alignment"),
+    TestShard("Auditing", "opake-auditing", "packages/opake-auditing"),
+    TestShard("Base", "opake-base", "packages/opake-base"),
+    TestShard("Dpftrl", "opake-dpftrl", "packages/opake-dpftrl"),
+    TestShard("Dpsgd", "opake-dpsgd", "packages/opake-dpsgd"),
+    TestShard("Engine", "opake-engine", "packages/opake-engine"),
+    TestShard("Optimizers", "opake-optimizers", "packages/opake-optimizers"),
+    TestShard("Patches", "opake-patches", "packages/opake-patches"),
+    TestShard("Transformers", "opake-transformers", "packages/opake-transformers"),
     TestShard("Integration", "integration", "tests"),
 )
 
 private val setupScript = """
     set -euo pipefail
 
-    "${'$'}OPAQUE_PYTHON" --version
+    "${'$'}OPAKE_PYTHON" --version
     rustc --version
     uv --version
 
-    uv venv --python "${'$'}OPAQUE_PYTHON"
+    uv venv --python "${'$'}OPAKE_PYTHON"
     uv sync --locked --group dev --all-packages --extra all
 """
 
@@ -53,7 +53,7 @@ private fun testScript(shard: TestShard) = """
         uv run --no-sync pytest ${shard.path} \
         -m "not cuda and not mps and not slow" \
         -n auto --dist loadscope \
-        --cov=opaque \
+        --cov=opake \
         --cov-report=xml:"${'$'}coverage_report" \
         --junitxml="${'$'}junit_report" \
         --durations=0 --durations-min=5 \
@@ -67,7 +67,7 @@ private fun testScript(shard: TestShard) = """
 project {
     pipeline {
         id(pipelineId)
-        name = "Opaque Linux amd64 tests"
+        name = "Opake Linux amd64 tests"
 
         repositories {
             repository(DslContext.settingsRoot)
@@ -85,7 +85,7 @@ project {
                 name = shard.label
 
                 params {
-                    param("env.OPAQUE_PYTHON", "python3.11")
+                    param("env.OPAKE_PYTHON", "python3.11")
                 }
 
                 requirements {

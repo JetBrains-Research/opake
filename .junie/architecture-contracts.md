@@ -1,6 +1,6 @@
 # Architecture contracts
 
-This document is the source of truth for Opaque's package and API architecture.
+This document is the source of truth for Opake's package and API architecture.
 The rules distinguish mechanically verifiable distribution properties from
 decisions that require semantic review. Do not introduce source-tree inventories
 of packages, modules, imports, or exports as proxies for these contracts.
@@ -63,9 +63,9 @@ infrastructure as a violation.
 
 ### ARC-001: Shared namespaces
 
-Every published wheel must coexist with the other Opaque wheels while
-contributing to the shared `opaque`, `opaque.api`, and
-`opaque.api.accounting` PEP 420 namespaces.
+Every published wheel must coexist with the other Opake wheels while
+contributing to the shared `opake`, `opake.api`, and
+`opake.api.accounting` PEP 420 namespaces.
 
 **Enforcement:** Artifact validation inspects every generated wheel for regular
 package initializers at those namespace roots, then installs the generated
@@ -74,8 +74,8 @@ validation belongs to the post-build pipeline, not the repository pytest suite.
 
 ### ARC-002: Public façade separation
 
-Public `opaque.*` façade code adapts or re-exports supported APIs. Algorithm
-implementation belongs under the owning `opaque.api.*` tree. Façades may
+Public `opake.*` façade code adapts or re-exports supported APIs. Algorithm
+implementation belongs under the owning `opake.api.*` tree. Façades may
 contain re-exports, public type aliases, version metadata, deprecation adapters,
 and justified lazy-loading infrastructure.
 
@@ -87,7 +87,7 @@ AST node allowlist enforces this rule.
 
 User-facing documentation and examples use supported public façades.
 Contributor documentation, implementation documentation, tests, and traceback
-discussion may reference `opaque.api.*` when the internal path is relevant.
+discussion may reference `opake.api.*` when the internal path is relevant.
 Stack walkthroughs use their corresponding public stack façade.
 
 **Enforcement:** Junie reviews changed documentation and examples in context.
@@ -134,7 +134,7 @@ and have acceptable CI cost.
 ### ARC-007: Deliberate public exports
 
 Stable public façade package initializers declare a deliberate `__all__`.
-Internal `opaque.api.*` packages and ordinary modules are not universally
+Internal `opake.api.*` packages and ordinary modules are not universally
 required to declare `__all__`.
 
 **Enforcement:** Junie reviews changed public façade `__init__.py` files. There
@@ -142,7 +142,7 @@ is no recursive import or runtime-name parity test.
 
 ### ARC-008: Accounting API ownership
 
-`opaque.accounting` exposes backend- and stack-independent accounting algebra
+`opake.accounting` exposes backend- and stack-independent accounting algebra
 and generic mechanisms. Stack- or mechanism-specific factories are exposed from
 their owning public accounting façade.
 
@@ -162,7 +162,7 @@ prose is not the primary data model.
 
 ### ARC-010: Import-time behavior
 
-Importing a public Opaque package must not automatically patch third-party
+Importing a public Opake package must not automatically patch third-party
 globals. Optional integrations must fail or no-op as their public API
 documents. Lazy loading is an implementation detail unless a separate,
 measurable startup or optional-dependency budget is adopted.
@@ -203,7 +203,7 @@ appropriate when a collection is itself the public API.
 ### ADV-002: Type placement
 
 Concern-specific public types generally live beside their concern. Genuinely
-cross-cutting public types belong in `opaque.types`.
+cross-cutting public types belong in `opake.types`.
 
 ### ADV-003: Factory-oriented APIs
 

@@ -1,16 +1,16 @@
 # Noise Injection
 
-Opaque's noise mechanisms live next to the training paradigm they support:
-`opaque.dpsgd.noise` for independent Gaussian-family noise, and
-`opaque.dpftrl.noise` for matrix-factorization (correlated) noise. The base
-`NoiseState` type that both build on lives in `opaque.types`.
+Opake's noise mechanisms live next to the training paradigm they support:
+`opake.dpsgd.noise` for independent Gaussian-family noise, and
+`opake.dpftrl.noise` for matrix-factorization (correlated) noise. The base
+`NoiseState` type that both build on lives in `opake.types`.
 
 ## Overview
 
 After clipping gradients, DP-SGD requires adding noise proportional to the clip norm and noise multiplier. The
 noise obscures individual contributions, providing the actual privacy guarantee.
 
-Opaque provides several noise mechanisms:
+Opake provides several noise mechanisms:
 
 ### Independent Noise (DP-SGD)
 
@@ -45,7 +45,7 @@ When private second moments are enabled, the noisy value is a
 
 ### Distributed Sync Helpers
 
-Use `sync()` from `opaque.distributed` to validate noise state consistency
+Use `sync()` from `opake.distributed` to validate noise state consistency
 across ranks. It auto-dispatches based on type:
 
 - **`sync(GaussianNoiseState)`** — Validate RNG key and step counter match across ranks.
@@ -99,65 +99,65 @@ parameter trees are supported. Trainer/examples keep flat
 
 ## Gaussian
 
-::: opaque.dpsgd.noise.gaussian_noise
+::: opake.dpsgd.noise.gaussian_noise
 
 ## Matrix Factorization Noise
 
 ### Dispatcher
 
-::: opaque.dpftrl.noise.mf_gaussian_noise
+::: opake.dpftrl.noise.mf_gaussian_noise
 
 ### Strategies
 
-::: opaque.dpftrl.noise.band_mf_strategy
+::: opake.dpftrl.noise.band_mf_strategy
     options:
       heading_level: 4
 
-::: opaque.dpftrl.noise.blt_strategy
+::: opake.dpftrl.noise.blt_strategy
     options:
       heading_level: 4
 
-::: opaque.dpftrl.noise.lambda_cgd_strategy
+::: opake.dpftrl.noise.lambda_cgd_strategy
     options:
       heading_level: 4
 
-::: opaque.dpftrl.noise.bisr_strategy
+::: opake.dpftrl.noise.bisr_strategy
     options:
       heading_level: 4
 
-::: opaque.dpftrl.noise.identity_strategy
+::: opake.dpftrl.noise.identity_strategy
     options:
       heading_level: 4
 
 ## State Classes
 
-::: opaque.types.NoiseState
+::: opake.types.NoiseState
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.types.SecondMomentNoiseOutput
+::: opake.types.SecondMomentNoiseOutput
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.dpsgd.noise.types.GaussianNoiseState
+::: opake.dpsgd.noise.types.GaussianNoiseState
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.dpftrl.noise.types.MFNoiseState
+::: opake.dpftrl.noise.types.MFNoiseState
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.dpftrl.noise.types.SecondMomentMFNoiseState
+::: opake.dpftrl.noise.types.SecondMomentMFNoiseState
     options:
       show_source: true
       heading_level: 3
 
 ## Distributed Synchronization
 
-Use `opaque.distributed.sync(state)` — it auto-dispatches on the state's
+Use `opake.distributed.sync(state)` — it auto-dispatches on the state's
 type to the right sync function. `GaussianNoiseState` and `MFNoiseState`
 both register handlers at import time, so no named sync call is required.

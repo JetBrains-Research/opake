@@ -1,22 +1,22 @@
-"""Tests for DpProcess nested state_dict serialization (opaque.serialization)."""
+"""Tests for DpProcess nested state_dict serialization (opake.serialization)."""
 
 import math
 from typing import cast
 
-import opaque.accounting as acc
-import opaque.dpftrl.accounting as ftrl_acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.accounting import Accountant
-from opaque.api.accounting.dpftrl.amplification._b_min_sep import BMinSep
-from opaque.api.accounting.dpftrl.amplification._poisson import CyclicPoisson
-from opaque.dpftrl.accounting.types import MfGaussian
-from opaque.dpftrl.noise import band_mf_strategy
-from opaque.dpftrl.noise.types import BandMfStrategy
-from opaque.dpsgd.accounting.types import KOutOfT
-from opaque.serialization import from_state_dict, state_dict
+import opake.accounting as acc
+import opake.dpftrl.accounting as ftrl_acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.accounting import Accountant
+from opake.api.accounting.dpftrl.amplification._b_min_sep import BMinSep
+from opake.api.accounting.dpftrl.amplification._poisson import CyclicPoisson
+from opake.dpftrl.accounting.types import MfGaussian
+from opake.dpftrl.noise import band_mf_strategy
+from opake.dpftrl.noise.types import BandMfStrategy
+from opake.dpsgd.accounting.types import KOutOfT
+from opake.serialization import from_state_dict, state_dict
 
 # Template type selects the registered handler; PLD decode uses the root
-# dict's ``type`` field, so any concrete :class:`~opaque.accounting._base.DpProcess`
+# dict's ``type`` field, so any concrete :class:`~opake.accounting._base.DpProcess`
 # instance is sufficient (``identity()`` is a stable choice).
 _PROCESS_TEMPLATE = acc.identity()
 

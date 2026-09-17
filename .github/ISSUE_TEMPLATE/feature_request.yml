@@ -74,7 +74,7 @@ body:
       placeholder: |
         ```python
         # Example usage
-        from opaque import new_feature
+        from opake import new_feature
         result = new_feature(...)
         ```
       render: python

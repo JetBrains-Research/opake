@@ -1,7 +1,7 @@
 # Optimizers
 
-Opaque ships its own functional optimizer library at
-`opaque.optimizers`: Opaque-built factories with
+Opake ships its own functional optimizer library at
+`opake.optimizers`: Opake-built factories with
 DP-aware paths, plus a curated set of `torchopt` re-exports for the
 stateless primitives where vanilla behaviour is acceptable under DP
 noise. All factories return
@@ -17,7 +17,7 @@ Functional: no hidden mutable state, explicit
 
 ```python
 import torchopt
-from opaque.optimizers import adamw
+from opake.optimizers import adamw
 
 optimizer = adamw(lr=1e-3, weight_decay=0.01)
 opt_state = optimizer.init(params)
@@ -29,9 +29,9 @@ params = torchopt.apply_updates(params, updates)
 
 ---
 
-## What's in `opaque.optimizers`
+## What's in `opake.optimizers`
 
-### Opaque-built factories (DP-aware)
+### Opake-built factories (DP-aware)
 
 Noise-aware factories accept `noise_bias_correction=True` to subtract the
 known Gaussian variance carried by `NoisedPytree` updates (off by default;
@@ -111,11 +111,11 @@ Raw pytree updates use standard optimizer math.
 
 Substitutes a privately-estimated `g²` stream in place of squaring the
 (already noised) gradient. `mf_gaussian_noise(..., second_moment_strategy=...)` returns
-a paired output that Opaque optimizers route automatically:
+a paired output that Opake optimizers route automatically:
 
 ```python
-from opaque.dpftrl.noise import blt_strategy, mf_gaussian_noise
-from opaque.optimizers import adamw
+from opake.dpftrl.noise import blt_strategy, mf_gaussian_noise
+from opake.optimizers import adamw
 
 strategy = blt_strategy(max_buffers=10)
 second_strategy = blt_strategy(max_buffers=10)
@@ -149,10 +149,10 @@ at any single `update()` call; passing both routes raises `ValueError`.
 
 ```python
 import torchopt
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.optimizers import adamw
-from opaque.random import key
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.optimizers import adamw
+from opake.random import key
 
 # Gradient pipeline
 grad_fn, clip_state = clipped_grad(
@@ -176,14 +176,14 @@ for step in range(num_steps):
 
 ## Schedule-free wrapper
 
-`schedule_free` wraps any base `GradientTransformation` (Opaque-built
+`schedule_free` wraps any base `GradientTransformation` (Opake-built
 or TorchOpt) with Defazio's schedule-free averaging
 ([arXiv:2405.15682](https://arxiv.org/abs/2405.15682)). Three weight
 sequences internally: `z` (raw iterate), `x` (Polyak-Ruppert average,
 the published params), `y = (1-β)z + βx` (forward-pass weights).
 
 ```python
-from opaque.optimizers import adamw, schedule_free
+from opake.optimizers import adamw, schedule_free
 
 optimizer = schedule_free(adamw(lr=1e-3), beta=0.9, warmup_steps=100)
 opt_state = optimizer.init(params)
@@ -208,14 +208,14 @@ methods.
 
 ## Serialization
 
-`state_dict` / `from_state_dict` live in `opaque.serialization`. They walk
+`state_dict` / `from_state_dict` live in `opake.serialization`. They walk
 chain state, encoding every tensor leaf and Python primitive into a flat
 `{path: value}` dict ready for `torch.save`. Restore returns a **new**
 object and never mutates the template.
 
 ```python
-from opaque.optimizers import adamw
-from opaque.serialization import from_state_dict, state_dict
+from opake.optimizers import adamw
+from opake.serialization import from_state_dict, state_dict
 
 opt = adamw(lr=1e-3, weight_decay=0.01)
 state = opt.init(params)
@@ -237,7 +237,7 @@ releases load cleanly from older checkpoints.
 
 ## DDP compatibility
 
-When using `torch.nn.parallel.DistributedDataParallel`, Opaque's
+When using `torch.nn.parallel.DistributedDataParallel`, Opake's
 functional gradient pipeline runs *inside* each rank. DDP handles the
 all-reduce of noisy gradients across ranks; the optimizer state stays
 synchronised because `optimizer.update` is a pure function and all

@@ -1,7 +1,7 @@
 # Numerical Precision
 
-Opaque's recommended training dtypes are `bfloat16` and `float32`. Low-level
-primitives can process `float16` tensors, but Opaque does not provide dynamic
+Opake's recommended training dtypes are `bfloat16` and `float32`. Low-level
+primitives can process `float16` tensors, but Opake does not provide dynamic
 loss scaling and `DPTrainer` does not support fp16 training.
 
 Two independent knobs control numerical precision:
@@ -44,7 +44,7 @@ precision by default, while noise factories also default to
 Native PyTorch commonly compensates with `torch.amp.GradScaler`, whose scale
 schedule reacts to an un-noised finiteness check. In private training, that
 data-dependent state can alter later numerical gradient queries without being
-represented in the privacy accountant. Opaque therefore does not expose a loss
+represented in the privacy accountant. Opake therefore does not expose a loss
 scaler or an aggregate pre-clipping finiteness signal.
 
 Low-level clipping and noise primitives still accept fp16 tensors and promote
@@ -84,8 +84,8 @@ protection.
 
 ## Compatibility with `torch.amp`
 
-| `torch.amp` primitive | Opaque behavior |
+| `torch.amp` primitive | Opake behavior |
 |-----------------------|-----------------|
 | `torch.amp.autocast(device_type, dtype=...)` | Used directly around the loss closure. |
-| `torch.amp.GradScaler` | No Opaque counterpart. Data-dependent scale adaptation is outside Opaque's accounting model. |
+| `torch.amp.GradScaler` | No Opake counterpart. Data-dependent scale adaptation is outside Opake's accounting model. |
 | `torch.amp.custom_fwd` / `custom_bwd` | Not used by the functional DP path, which differentiates per-example losses with `vmap(grad(...))`. |

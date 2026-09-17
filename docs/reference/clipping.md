@@ -2,8 +2,8 @@
 
 Per-example clipping APIs for DP training: fixed norm, AUTO-S scaling, and
 (on the DP-SGD side) adaptive clipping. DP-FTRL users import fixed and
-AUTO-S helpers from `opaque.dpftrl.clipping`; DP-SGD users use
-`opaque.dpsgd.clipping` for all three.
+AUTO-S helpers from `opake.dpftrl.clipping`; DP-SGD users use
+`opake.dpsgd.clipping` for all three.
 
 ## Overview
 
@@ -61,7 +61,7 @@ example can have on the model, enabling differential privacy.
 
 ### Distributed sync helpers
 
-Use `sync()` from `opaque.distributed` to synchronize any clipping state or aux
+Use `sync()` from `opake.distributed` to synchronize any clipping state or aux
 object. It auto-dispatches to the right function based on type:
 
 - **`sync(FixedClipState | AutoClipState)`** → marker-state passthrough.
@@ -76,32 +76,32 @@ type raises `InputTypeError` rather than passing through unsynchronized.
 
 ## API Documentation
 
-::: opaque.dpsgd.clipping
+::: opake.dpsgd.clipping
     options:
       show_source: true
       heading_level: 2
 
-::: opaque.dpsgd.clipping.fun
+::: opake.dpsgd.clipping.fun
     options:
       show_source: true
       heading_level: 2
 
-::: opaque.dpsgd.clipping.types
+::: opake.dpsgd.clipping.types
     options:
       show_source: true
       heading_level: 2
 
-::: opaque.dpftrl.clipping
+::: opake.dpftrl.clipping
     options:
       show_source: true
       heading_level: 2
 
-::: opaque.dpftrl.clipping.fun
+::: opake.dpftrl.clipping.fun
     options:
       show_source: true
       heading_level: 2
 
-::: opaque.dpftrl.clipping.types
+::: opake.dpftrl.clipping.types
     options:
       show_source: true
       heading_level: 2

@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes are made for the latest released version of Opaque and the
+Security fixes are made for the latest released version of Opake and the
 current `main` branch. Reports affecting older releases are assessed case by
 case; please upgrade before reporting when possible.
 
@@ -27,7 +27,7 @@ security report.
 
 ## What Is Not a Security Report
 
-Opaque is a research software library. Report routine library defects,
+Opake is a research software library. Report routine library defects,
 including non-sensitive concerns about differential privacy guarantees, privacy
 accounting, mechanisms, clipping, noise, and sampling, through the [public
 issue tracker][issues]. Use the private channel when a defect may have a
@@ -43,9 +43,9 @@ before public disclosure. When a fix is released, maintainers will publish
 affected versions, remediation guidance, and credit where requested.
 
 This policy covers vulnerabilities in the repository and its released packages,
-including dependency vulnerabilities that materially affect Opaque. Report
+including dependency vulnerabilities that materially affect Opake. Report
 dependency vulnerabilities to their upstream project as well.
 
 [coordinated-disclosure]: https://www.jetbrains.com/legal/docs/terms/coordinated-disclosure/
-[issues]: https://github.com/JetBrains-Research/opaque/issues
+[issues]: https://github.com/JetBrains-Research/opake/issues
 [pgp-key]: https://www.jetbrains.com/privacy-security/

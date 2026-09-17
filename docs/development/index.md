@@ -1,23 +1,23 @@
 # Development
 
 This guide is for contributors working from a GitHub fork or a local clone of
-Opaque. It summarizes the maintained workflow in
-[CONTRIBUTING.md](https://github.com/JetBrains-Research/opaque/blob/main/CONTRIBUTING.md);
+Opake. It summarizes the maintained workflow in
+[CONTRIBUTING.md](https://github.com/JetBrains-Research/opake/blob/main/CONTRIBUTING.md);
 consult that file for the full testing, documentation, and pull-request conventions.
 
 ## Get the source
 
-Fork [JetBrains-Research/opaque](https://github.com/JetBrains-Research/opaque),
+Fork [JetBrains-Research/opake](https://github.com/JetBrains-Research/opake),
 then clone your fork and add the upstream repository if you use it to keep your
 branch current:
 
 ```bash
-git clone https://github.com/<your-account>/opaque.git
-cd opaque
-git remote add upstream https://github.com/JetBrains-Research/opaque.git
+git clone https://github.com/<your-account>/opake.git
+cd opake
+git remote add upstream https://github.com/JetBrains-Research/opake.git
 ```
 
-Opaque requires Python 3.11 through 3.13, Rust stable, and
+Opake requires Python 3.11 through 3.13, Rust stable, and
 [uv](https://docs.astral.sh/uv/). Create the complete contributor environment:
 
 ```bash
@@ -33,10 +33,10 @@ uv sync --group examples --all-packages --extra all
 
 ## Navigate the workspace
 
-Opaque is a `uv` workspace of independently installable packages that
-contribute to the shared `opaque` and `opaque.api` PEP 420 namespaces. Package
-implementations live under `packages/opaque-*/src/opaque/api/`; the matching
-`src/opaque/` directories are public façades that re-export the supported user
+Opake is a `uv` workspace of independently installable packages that
+contribute to the shared `opake` and `opake.api` PEP 420 namespaces. Package
+implementations live under `packages/opake-*/src/opake/api/`; the matching
+`src/opake/` directories are public façades that re-export the supported user
 API.
 
 The accounting package includes the Rust/PyO3 extension. Run its Cargo tests
@@ -58,7 +58,7 @@ cargo test --workspace
 
 CUDA, MPS, and slow tests have separate pytest markers; hardware-specific tests
 skip when their backend is unavailable. See the
-[test-marker reference](https://github.com/JetBrains-Research/opaque/blob/main/CONTRIBUTING.md#test-markers-and-filtering)
+[test-marker reference](https://github.com/JetBrains-Research/opake/blob/main/CONTRIBUTING.md#test-markers-and-filtering)
 for the available selections.
 
 ## Submit a pull request
@@ -68,5 +68,5 @@ changes, and ensure public API additions include type annotations and
 Google-style docstrings. The pull-request title follows Conventional Commits,
 for example `fix(accounting): handle empty compositions`; its body should
 briefly explain the problem and solution. See the
-[pull-request checklist](https://github.com/JetBrains-Research/opaque/blob/main/CONTRIBUTING.md#pull-request-process)
+[pull-request checklist](https://github.com/JetBrains-Research/opake/blob/main/CONTRIBUTING.md#pull-request-process)
 for the complete checklist.

@@ -5,8 +5,8 @@ without modification under DP-SGD: they scale the already-clipped,
 already-noised update direction. The privacy guarantee is
 unchanged.
 
-This page explains the schedules and warmup composition Opaque
-provides via [`opaque.scheduling`](../reference/schedules.md), and the
+This page explains the schedules and warmup composition Opake
+provides via [`opake.scheduling`](../reference/schedules.md), and the
 pattern for using them with TorchOpt functional optimizers.
 
 ## Why warmup matters under DP-SGD
@@ -30,14 +30,14 @@ needed.
 
 ```python
 import torchopt
-from opaque.scheduling import linear_schedule
+from opake.scheduling import linear_schedule
 
 # Linear decay from 1e-3 to 0 over 10,000 steps.
 schedule = linear_schedule(1e-3, 0.0, transition_steps=10_000)
 opt = torchopt.adamw(lr=schedule)
 ```
 
-`opaque.scheduling` ships the common decay curves directly:
+`opake.scheduling` ships the common decay curves directly:
 [`linear_schedule`](../reference/schedules.md#linear_schedule),
 [`polynomial_schedule`](../reference/schedules.md#polynomial_schedule),
 [`exponential_schedule`](../reference/schedules.md#exponential_schedule),
@@ -53,13 +53,13 @@ steps and leaves it untouched afterwards.
 
 For the standard "warmup, then decay" shape, configure the decay
 with `transition_begin = num_warmup_steps`.  Schedules in
-`opaque.scheduling` return their `init_value` while
+`opake.scheduling` return their `init_value` while
 `step < transition_begin`, so the multiplicative ramp turns that
 leading plateau into the warmup ramp.
 
 ```python
 import torchopt
-from opaque.scheduling import linear_schedule, with_warmup
+from opake.scheduling import linear_schedule, with_warmup
 
 base_lr, W, N = 1e-3, 500, 10_000
 
@@ -108,7 +108,7 @@ schedule = with_warmup(decay, transition_steps=W, init_value=0.1)
 ### Linear with warmup
 
 ```python
-from opaque.scheduling import linear_schedule, with_warmup
+from opake.scheduling import linear_schedule, with_warmup
 
 base_lr, W, N = 1e-3, 500, 10_000
 decay = linear_schedule(
@@ -120,7 +120,7 @@ schedule = with_warmup(decay, transition_steps=W)
 ### Cosine with warmup
 
 ```python
-from opaque.scheduling import with_warmup, cosine_schedule
+from opake.scheduling import with_warmup, cosine_schedule
 
 base_lr, W, N = 1e-3, 500, 10_000
 decay = cosine_schedule(
@@ -135,7 +135,7 @@ schedule = with_warmup(decay, transition_steps=W)
 schedule, so warm-up-then-plateau is a one-liner:
 
 ```python
-from opaque.scheduling import with_warmup
+from opake.scheduling import with_warmup
 
 schedule = with_warmup(1e-3, transition_steps=500)
 ```
@@ -147,7 +147,7 @@ schedule `num_cycles` times over a window. Combined with cosine you get
 [SGDR](https://arxiv.org/abs/1608.03983) (Loshchilov & Hutter, 2017):
 
 ```python
-from opaque.scheduling import cosine_schedule, with_restarts
+from opake.scheduling import cosine_schedule, with_restarts
 
 base_lr, N, k = 1e-3, 4000, 4
 cycle_length = N / k
@@ -175,7 +175,7 @@ schedule:
 
 ```python
 import torchopt
-from opaque.scheduling import warmup_stable_decay
+from opake.scheduling import warmup_stable_decay
 
 schedule = warmup_stable_decay(
     init_value=1e-3,                # peak LR
@@ -202,18 +202,18 @@ progress to the factor applied to `(init_value - end_value)`.
 ## Mapping from `transformers` schedule names
 
 `transformers` exposes a number of named cosine variants for
-historical reasons. Opaque's `cosine_schedule` and the composition
+historical reasons. Opake's `cosine_schedule` and the composition
 primitives subsume all of them; the table below shows the recipe for
 each. No engine-side alias is needed — pass the equivalent
 construction directly.
 
 The HF schedules all include a `0 → base_lr` warmup over the first
-`W` steps. Each Opaque recipe configures the inner cosine with
+`W` steps. Each Opake recipe configures the inner cosine with
 `transition_begin=W` (so the cosine returns `init_value` during the
 warmup window) and wraps it with `with_warmup(..., transition_steps=W)`
 so that leading plateau is rescaled into the ramp.
 
-| `transformers` name | Opaque recipe |
+| `transformers` name | Opake recipe |
 |---|---|
 | `cosine` | `with_warmup(cosine_schedule(base_lr, 0.0, transition_steps=N - W, transition_begin=W), transition_steps=W)` |
 | `cosine_with_min_lr` | Same as `cosine`, but pass `end_value=min_lr` (the second positional arg of `cosine_schedule`). |

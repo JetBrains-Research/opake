@@ -5,7 +5,7 @@ to the sum of clipped gradients. The noise obscures individual contributions,
 providing the differential privacy guarantee. The amount of noise is
 proportional to the sensitivity (from clipping) and the desired privacy level.
 
-All noise functions in Opaque follow the same pattern: they return a
+All noise functions in Opake follow the same pattern: they return a
 `(noise_fn, state)` tuple with immutable state.
 
 For mathematical details, privacy analysis, and parameter guidance for
@@ -20,8 +20,8 @@ private second moments, BSR scope), see [Correlated noise (DP-FTRL)](dp-ftrl.md)
 independent Gaussian noise to each gradient tensor.
 
 ```python
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key
 
 noise_fn, noise_state = gaussian_noise(
     noise_multiplier=noise_multiplier,
@@ -54,7 +54,7 @@ per-step bound at runtime:
     `auto_clipped_grad`
 
 ```python
-import opaque.accounting as acc
+import opake.accounting as acc
 
 result = acc.calibrate(
     acc.epsilon_budget(3.0, delta=1e-5),
@@ -114,7 +114,7 @@ uniform_stddev = grads.noise_stddev_for(
 ```
 
 For a bare `PerGroup` bound (for example restored via
-`opaque.serialization.from_state_dict` with a matching template), wrap it
+`opake.serialization.from_state_dict` with a matching template), wrap it
 in a `ClippedPytree` with placeholder tensors that share the same parameter
 keys, then call `noise_stddev_for` as above.
 
@@ -123,7 +123,7 @@ $\sigma_i \propto \sqrt{C_i}$.  `gaussian_noise` applies the optimal
 allocation automatically when `grads.max_norm` is a `PerGroup`.  Privacy
 accounting is identical under either allocation — just `gaussian(nm)`.
 
-The [training script](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpsgd.py) uses this by default
+The [training script](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpsgd.py) uses this by default
 when per-group clipping is active.
 
 Alternatively, isotropic noise (same σ everywhere) also works:
@@ -142,7 +142,7 @@ scale used for that step.
 a `SecondMomentNoiseOutput` with both streams noised under the joint
 sensitivity-proportional Mahalanobis allocation (scalar case:
 ``σ¹ = nm·sqrt(Δ¹·S)``, ``σ² = nm·sqrt(Δ²·S)``, ``S = Δ¹+Δ²``; with
-:class:`~opaque.types.PerGroup` bounds, ``S`` sums ``Δ¹_g+Δ²_g`` over
+:class:`~opake.types.PerGroup` bounds, ``S`` sums ``Δ¹_g+Δ²_g`` over
 groups).
 
 ## Matrix-factorization noise (DP-FTRL)
@@ -188,9 +188,9 @@ this — their per-record bound is set at construction and does not depend
 on data — so either can be wired into the loop interchangeably:
 
 ```python
-from opaque.dpsgd.clipping import auto_clipped_grad
-from opaque.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
-from opaque.random import key
+from opake.dpsgd.clipping import auto_clipped_grad
+from opake.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
+from opake.random import key
 
 grad_fn, clip_state = auto_clipped_grad(
     loss_fn,
@@ -218,7 +218,7 @@ varying `max_norm`, and the standard MF privacy proof would not apply.
 
 ### Variants
 
-Opaque provides five MF strategies, all used through the unified `mf_gaussian_noise()` dispatcher:
+Opake provides five MF strategies, all used through the unified `mf_gaussian_noise()` dispatcher:
 
 | Strategy factory | Memory | Best for |
 |----------|--------|----------|
@@ -231,8 +231,8 @@ Opaque provides five MF strategies, all used through the unified `mf_gaussian_no
 All strategies are created by factory functions and passed to `mf_gaussian_noise()`:
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
+from opake.random import key
 
 strategy = band_mf_strategy(bands=10)
 noise_fn, noise_state = mf_gaussian_noise(
@@ -256,7 +256,7 @@ the gradients (e.g., the model parameters).
 ### Per-group clipping
 
 `mf_gaussian_noise` accepts `ClippedPytree` metadata where `max_norm` is a
-`PerGroup` (from `opaque.dpsgd.clipping.per_group`), not only a scalar. The
+`PerGroup` (from `opake.dpsgd.clipping.per_group`), not only a scalar. The
 per-leaf IID noise scale follows the same MSE-optimal Mahalanobis allocation
 as `gaussian_noise` on DP-SGD: no extra privacy
 cost versus scalar clipping at the same `noise_multiplier`, and the MF
@@ -277,8 +277,8 @@ MF noise can release both noisy gradients and a private squared-gradient stream
 for adaptive optimizers:
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
+from opake.random import key
 
 strategy = band_mf_strategy(bands=10, momentum=0.9)
 second_strategy = band_mf_strategy(bands=10, momentum=0.999)
@@ -303,7 +303,7 @@ updates, opt_state = optimizer.update(
 ```
 
 `second_moment_strategy` is explicit by design: the squared-gradient workload
-can differ from the first-moment workload. Opaque optimizers route
+can differ from the first-moment workload. Opake optimizers route
 `SecondMomentNoiseOutput` automatically when they support private squared
 gradients.
 
@@ -317,8 +317,8 @@ Banded Toeplitz strategy. Optimizes banded Toeplitz coefficients for the
 workload. Uses ``dpftrl_acc.poisson`` for privacy accounting.
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
+from opake.random import key
 
 strategy = band_mf_strategy(bands=10, momentum=0.95)
 noise_fn, noise_state = mf_gaussian_noise(
@@ -337,8 +337,8 @@ long training runs, using a parametric representation via exponential decay
 buffers. Supports multi-epoch training via `min_sep` and `max_participations`.
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, blt_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, blt_strategy
+from opake.random import key
 
 strategy = blt_strategy(max_buffers=10)
 noise_fn, noise_state = mf_gaussian_noise(
@@ -358,8 +358,8 @@ DP-λCGD strategy — uses PRNG seed replay instead of storing previous noise
 vectors. Zero extra memory overhead compared to DP-SGD.
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, lambda_cgd_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, lambda_cgd_strategy
+from opake.random import key
 
 strategy = lambda_cgd_strategy(lambda_=0.9)
 noise_fn, noise_state = mf_gaussian_noise(
@@ -379,8 +379,8 @@ BISR (Banded Inverse Square Root) strategy — generalises λCGD to arbitrary
 bandwidth p ≥ 2. Asymptotically optimal.
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, bisr_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, bisr_strategy
+from opake.random import key
 
 strategy = bisr_strategy(
     bandwidth=4,
@@ -403,8 +403,8 @@ Identity strategy — equivalent to standard DP-SGD (independent noise at each
 step) but using the MF API. Useful for testing or as a baseline.
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, identity_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, identity_strategy
+from opake.random import key
 
 strategy = identity_strategy()
 noise_fn, noise_state = mf_gaussian_noise(
@@ -426,9 +426,9 @@ receives these values rather than recomputing them. This ensures that
 noise generation and privacy accounting always agree on the mechanism.
 
 ```python
-import opaque.accounting as acc  # cross-cutting calibration / composition
-import opaque.dpftrl.accounting as dpftrl_acc  # DP-FTRL factories
-from opaque.dpftrl.noise import band_mf_strategy, lambda_cgd_strategy
+import opake.accounting as acc  # cross-cutting calibration / composition
+import opake.dpftrl.accounting as dpftrl_acc  # DP-FTRL factories
+from opake.dpftrl.noise import band_mf_strategy, lambda_cgd_strategy
 
 # BandMF — strategy provides sensitivity and coefficients
 strategy = band_mf_strategy(bands=10)
@@ -469,8 +469,8 @@ Strategies that support multi-epoch patterns (`blt_strategy`, `lambda_cgd_strate
 sensitivity bounds:
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, blt_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, blt_strategy
+from opake.random import key
 
 strategy = blt_strategy(max_buffers=10)
 noise_fn, state = mf_gaussian_noise(
@@ -520,8 +520,8 @@ to `band_mf_strategy`. That keeps the data schedule aligned with
 `mf_gaussian_noise` and `dpftrl_acc.poisson`:
 
 ```python
-from opaque.dpftrl.sampling import CyclicPoissonSampler
-from opaque.random import key
+from opake.dpftrl.sampling import CyclicPoissonSampler
+from opake.random import key
 
 sampler = CyclicPoissonSampler(
     dataset,
@@ -546,7 +546,7 @@ For independent per-rank noise (not typical for centralized DP-SGD), derive
 a per-rank key via `fold_in`:
 
 ```python
-from opaque.random import key, fold_in
+from opake.random import key, fold_in
 import torch.distributed as dist
 
 rank = dist.get_rank()

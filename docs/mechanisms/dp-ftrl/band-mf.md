@@ -94,13 +94,13 @@ double-count.
 
 ## Supported amplifications
 
-### Poisson subsampling (`opaque.dpftrl.accounting.poisson`)
+### Poisson subsampling (`opake.dpftrl.accounting.poisson`)
 
 The primary amplification method for BandMF. The training run is decomposed
 into $k = \lceil n / b \rceil$ independent **groups** of $b$ consecutive
 steps. Within each group, **cyclic Poisson** participation means each example
 in the active group is included independently with probability $q$ (this is
-what `opaque.dpftrl.accounting.poisson` composes over; there is no
+what `opake.dpftrl.accounting.poisson` composes over; there is no
 separate `cyclic_poisson` factory).
 
 **What this means**: instead of analyzing the full $n$-step run as one
@@ -124,8 +124,8 @@ proved under zero-out adjacency with the $(k, b)$-participation schedule
 held fixed across neighboring datasets.
 
 ```python
-import opaque.dpftrl.accounting as dpftrl_acc
-from opaque.dpftrl.noise import band_mf_strategy
+import opake.dpftrl.accounting as dpftrl_acc
+from opake.dpftrl.noise import band_mf_strategy
 
 strategy = band_mf_strategy(bands=10)
 proc = dpftrl_acc.poisson(
@@ -140,9 +140,9 @@ print(f"Epsilon (δ=1e-5): {eps:.2f}")
 
 | Amplification | Supported | Notes |
 |---------------|:---------:|-------|
-| `opaque.dpsgd.accounting.poisson` | No | DP-SGD per-step factory; different object |
-| `opaque.dpsgd.accounting.poisson` (truncated) | No | DP-SGD only |
-| `opaque.dpftrl.accounting.poisson` | Yes | Whole-process MF Poisson; $\lceil n/b \rceil$ groups for `BandMf` |
+| `opake.dpsgd.accounting.poisson` | No | DP-SGD per-step factory; different object |
+| `opake.dpsgd.accounting.poisson` (truncated) | No | DP-SGD only |
+| `opake.dpftrl.accounting.poisson` | Yes | Whole-process MF Poisson; $\lceil n/b \rceil$ groups for `BandMf` |
 
 ### b-min-sep subsampling (`b_min_sep`)
 
@@ -153,9 +153,9 @@ the same target expected batch size per iteration as cyclic Poisson (per-example
 rate $p_0 = \mathbb{E}[|B|]/|D|$), the paper’s per-iteration inclusion probability
 is $p = p_0 / (1 - p_0(b-1))$ when $b>1$.
 
-Opaque pairs this with **Monte Carlo PLD** accounting (same family as BnB MC
+Opake pairs this with **Monte Carlo PLD** accounting (same family as BnB MC
 for matrix mechanisms): pass the BandMF strategy’s first-column coefficients,
-`n_steps`, and `p0` to `opaque.dpftrl.accounting.b_min_sep(...)`.
+`n_steps`, and `p0` to `opake.dpftrl.accounting.b_min_sep(...)`.
 Training scripts can select it with `--band-mf-sampling b_min_sep` (see
 `examples/train_dpftrl.py`).
 
@@ -170,14 +170,14 @@ Training scripts can select it with `--band-mf-sampling b_min_sep` (see
 
 The transcript corpus needs `24 * n_steps * samples_per_direction` bytes.
 Noise calibration reuses it when it fits the
-`OPAQUE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES` cap (default 4 GiB).
+`OPAKE_B_MIN_SEP_TRANSCRIPT_CACHE_MAX_BYTES` cap (default 4 GiB).
 Oversized corpora emit a `RuntimeWarning` and use one-shot Monte Carlo;
 setting the cap to `0` disables reuse without a warning. The sample count
 and privacy bound are identical with either path.
 
 !!! note "Without amplification"
     You can also use BandMF without subsampling by omitting the
-    `opaque.dpftrl.accounting.poisson` wrapper. Pass the participation schema
+    `opake.dpftrl.accounting.poisson` wrapper. Pass the participation schema
     you actually run under — `mf_gaussian(sigma, strategy, n_steps=n,
     min_sep=b, max_participations=k)` — because the bare PLD is calibrated to
     the schema sensitivity $S$, and the default `min_sep=1` means "an example
@@ -187,15 +187,15 @@ and privacy bound are identical with either path.
 
 - **DP correctness** is for the **implemented** banded Toeplitz matrix \(C\) and the sampler you pair with accounting. Monte Carlo guarantees hold with the confidence reported on the returned PLD.
 - **`lr_schedule` (optional)**: optimization applies the schedule on the training-step axis, matching \(W_{t,s}=\eta_t\beta^{t-s}\). The strategy remains Toeplitz, while its objective weights each step's squared error by \(\eta_t^2\). Use the identical schedule in the optimizer; the strategy cannot validate an external optimizer's updates. Custom callables must be deterministic, side-effect-free, and immutable for the strategy's lifetime.
-- **Momentum \(\beta=0\)**: Opaque warns because the workload becomes essentially identity (little benefit over independent noise).
+- **Momentum \(\beta=0\)**: Opake warns because the workload becomes essentially identity (little benefit over independent noise).
 
 ## Code examples
 
 ### Noise injection
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
+from opake.random import key
 
 strategy = band_mf_strategy(bands=10)
 noise_fn, noise_state = mf_gaussian_noise(
@@ -219,8 +219,8 @@ the same `band_mf_strategy` used for noise generation. This keeps both
 components in sync:
 
 ```python
-import opaque.dpftrl.accounting as dpftrl_acc
-from opaque.dpftrl.noise import band_mf_strategy
+import opake.dpftrl.accounting as dpftrl_acc
+from opake.dpftrl.noise import band_mf_strategy
 
 strategy = band_mf_strategy(bands=10)
 
@@ -241,14 +241,14 @@ assert eps > 0 and eps < float("inf"), f"epsilon out of range: {eps}"
 
 ### End-to-end BandMF example
 
-BandMF uses `opaque.dpftrl.sampling.CyclicPoissonSampler` with `bands` matching the
+BandMF uses `opake.dpftrl.sampling.CyclicPoissonSampler` with `bands` matching the
 strategy so participation lines up with the noise. The same class with
 `bands=1` gives plain Poisson on the full dataset each step for an identity MF
 baseline (`identity_mf` / `identity_strategy`):
 
 ```python
-from opaque.dpftrl.sampling import CyclicPoissonSampler
-from opaque.random import key
+from opake.dpftrl.sampling import CyclicPoissonSampler
+from opake.random import key
 
 sampler = CyclicPoissonSampler(
     dataset,
@@ -263,10 +263,10 @@ BandMF training (`bands` matches `band_mf_strategy`):
 
 ```python
 import torch
-from opaque.dpftrl.clipping import clipped_grad
-from opaque.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
-from opaque.dpftrl.sampling import CyclicPoissonSampler
-from opaque.random import key, split
+from opake.dpftrl.clipping import clipped_grad
+from opake.dpftrl.noise import mf_gaussian_noise, band_mf_strategy
+from opake.dpftrl.sampling import CyclicPoissonSampler
+from opake.random import key, split
 
 n_steps, bands = 1000, 10
 sample_rate = 0.01
@@ -320,7 +320,7 @@ for batch in loader:
   length is uncertain, use standard Gaussian noise with early stopping.
 - Pair with `CyclicPoissonSampler` for consistent sampling and accounting —
   both take the per-active-group conditional rate (`q` above), not a
-  whole-dataset rate. `opaque.transformers.TrainingArguments` auto-resolves
+  whole-dataset rate. `opake.transformers.TrainingArguments` auto-resolves
   `privacy_noise_mechanism="mf_band"` to `sampling_mode="cyclic_poisson"` and
   converts its global `expected_batch_size / len(train_dataset)` rate to that
   conditional rate for you, dividing by the exact per-group population

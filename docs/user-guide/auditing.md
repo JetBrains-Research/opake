@@ -7,7 +7,7 @@ there is likely a bug in the implementation.
 
 ## How it works
 
-Opaque implements one-run auditing
+Opake implements one-run auditing
 ([Steinke, Nasr, Jagielski 2023](https://arxiv.org/abs/2305.08846))
 with the tight order-statistics tests from
 [Xiang et al. (2025)](https://arxiv.org/abs/2509.08704):
@@ -30,8 +30,8 @@ Only one training run is needed, unlike shadow-model approaches.
 ## Quick start
 
 ```python
-import opaque.auditing as auditing
-from opaque.random import key
+import opake.auditing as auditing
+from opake.random import key
 
 # 1. Partition: designate canaries and flip coins
 cf = auditing.coin_flip(dataset, num_canaries=1000, key=key(42))
@@ -168,8 +168,8 @@ estimate = auditing.one_run(scores, coin_flip=cf)
 print(f"ε (audit): {estimate.epsilon_at(delta=1e-5):.4f}")
 ```
 
-See [examples/train_dpsgd.py](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpsgd.py)
-and [examples/train_dpftrl.py](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpftrl.py)
+See [examples/train_dpsgd.py](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpsgd.py)
+and [examples/train_dpftrl.py](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpftrl.py)
 for complete working examples with the `--audit` flag.
 
 ### Parameter reference
@@ -269,13 +269,13 @@ train_data = audited.select(cf.train_indices(len(audited)))
 ```
 
 The pool must be one-dimensional, unique, integer-valued, and within
-`range(len(audited))`. Opaque samples `num_canaries` indices from it without
+`range(len(audited))`. Opake samples `num_canaries` indices from it without
 replacement; passing a pool of exactly that size designates every supplied
 index. If the pool is larger, its unselected records remain ordinary always-in
 training data. Pool order does not affect a seeded partition.
 
 Fix the pool before target training, independently of that run's membership
-coins and outputs. Opaque still generates independent fair membership coins;
+coins and outputs. Opake still generates independent fair membership coins;
 do not construct `CoinFlip` directly to choose a favourable in/out mask. Use
 the same `audited` dataset for `coin_flip`, subset construction, and scoring so
 the stable canary indices continue to identify the same records.

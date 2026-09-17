@@ -2,17 +2,17 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque.iml" filepath="$PROJECT_DIR$/.idea/opaque.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-accounting.iml" filepath="$PROJECT_DIR$/.idea/opaque-accounting.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-alignment.iml" filepath="$PROJECT_DIR$/.idea/opaque-alignment.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-auditing.iml" filepath="$PROJECT_DIR$/.idea/opaque-auditing.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-base.iml" filepath="$PROJECT_DIR$/.idea/opaque-base.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-dpftrl.iml" filepath="$PROJECT_DIR$/.idea/opaque-dpftrl.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-dpsgd.iml" filepath="$PROJECT_DIR$/.idea/opaque-dpsgd.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-engine.iml" filepath="$PROJECT_DIR$/.idea/opaque-engine.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-optimizers.iml" filepath="$PROJECT_DIR$/.idea/opaque-optimizers.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-patches.iml" filepath="$PROJECT_DIR$/.idea/opaque-patches.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-transformers.iml" filepath="$PROJECT_DIR$/.idea/opaque-transformers.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake.iml" filepath="$PROJECT_DIR$/.idea/opake.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-accounting.iml" filepath="$PROJECT_DIR$/.idea/opake-accounting.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-alignment.iml" filepath="$PROJECT_DIR$/.idea/opake-alignment.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-auditing.iml" filepath="$PROJECT_DIR$/.idea/opake-auditing.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-base.iml" filepath="$PROJECT_DIR$/.idea/opake-base.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-dpftrl.iml" filepath="$PROJECT_DIR$/.idea/opake-dpftrl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-dpsgd.iml" filepath="$PROJECT_DIR$/.idea/opake-dpsgd.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-engine.iml" filepath="$PROJECT_DIR$/.idea/opake-engine.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-optimizers.iml" filepath="$PROJECT_DIR$/.idea/opake-optimizers.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-patches.iml" filepath="$PROJECT_DIR$/.idea/opake-patches.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opake-transformers.iml" filepath="$PROJECT_DIR$/.idea/opake-transformers.iml" />
     </modules>
   </component>
 </project>
