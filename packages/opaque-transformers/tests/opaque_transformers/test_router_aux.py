@@ -5,7 +5,7 @@
 A tiny random-init Mellum 2.0 model (E = 8, k = 2, L = 2) runs a few DP-SGD
 steps with ``router_aux_loss_coef`` set: the clipper is the MoE one, the
 accountant wraps ``moe_aux``, the model config is synced the TRL way, the
-monitor is logged, and a checkpoint resume continues the release state.
+raw ``aux_loss`` is logged, and a checkpoint resume continues the release state.
 """
 
 from __future__ import annotations
@@ -146,8 +146,42 @@ def _args(output_dir, **overrides):
     return TrainingArguments(**kwargs)
 
 
-def _rows(trainer, key="router_aux_imbalance"):
+def _rows(trainer, key="loss"):
+    """The per-step training rows (empty draws included)."""
     return [row for row in trainer.state.log_history if key in row]
+
+
+def _clip_state(ckpt_dir):
+    """The MoE clip state saved in a checkpoint's DP runtime bundle."""
+    import pathlib
+
+    from opaque.api.transformers.trainer._checkpoint import (
+        DP_STATE_NAME,
+        load_dp_runtime_state,
+    )
+    from opaque.dpsgd.clipping import moe_clipped_grad
+    from opaque.random import key
+    from opaque.serialization import from_state_dict
+
+    def loss_fn(params, x):
+        return x.sum(), [x] * L, None
+
+    _, template = moe_clipped_grad(
+        loss_fn,
+        clipping_norm=1.0,
+        normalize_by=1.0,
+        batch_argnums=(1,),
+        noise_multiplier=1.0,
+        ratio=0.5,
+        key=key(0),
+        top_k=K,
+        num_experts=E,
+        num_layers=L,
+        max_tokens=SEQ,
+        alpha=COEF,
+    )
+    path = next(pathlib.Path(ckpt_dir).rglob(DP_STATE_NAME))
+    return from_state_dict(template, load_dp_runtime_state(str(path)).clip_state)
 
 
 def _text_config(model):
@@ -231,7 +265,9 @@ class TestDPTrainer:
         assert "privacy_epsilon" in out.metrics
         logged = _rows(trainer)
         assert len(logged) == 3
-        assert all(row["router_aux_noise_std"] > 0 for row in logged)
+        # TRL's raw metric is the only release metric in the logs.
+        assert all(row["aux_loss"] > 0 for row in logged if row["batch_size"] > 0)
+        assert not any("router_aux_imbalance" in row for row in logged)
         # The accountant prices the joint release, not the plain Gaussian.
         assert MoeAux.__name__ in repr(trainer._accountant.process)
 
@@ -268,7 +304,7 @@ class TestDPTrainer:
         assert _text_config(model).output_router_logits is False
         assert _text_config(model).router_aux_loss_coef == 0.0
         assert trainer.train().global_step == 1
-        assert not _rows(trainer)
+        assert not _rows(trainer, "aux_loss")
         assert MoeAux.__name__ not in repr(trainer._accountant.process)
 
     def test_dense_model_ignores_the_coefficient(self, tmp_path):
@@ -280,7 +316,7 @@ class TestDPTrainer:
         )
         assert trainer._router_aux_enabled is False
         assert trainer.train().global_step == 1
-        assert not _rows(trainer)
+        assert not _rows(trainer, "aux_loss")
 
     def test_custom_loss_func_trains(self, tmp_path):
         """A custom loss keeps the logits; the aux-free marker carries the request."""
@@ -387,16 +423,20 @@ class TestDPTrainer:
         # and 2) and appends the two resumed steps.
         assert len(ref_rows) == 4
         assert len(res_rows) == 4
-        for row, ref in zip(res_rows[2:], ref_rows[2:], strict=True):
-            assert row["router_aux_noise_std"] == pytest.approx(
-                ref["router_aux_noise_std"]
-            )
-            assert row["router_aux_imbalance"] == pytest.approx(
-                ref["router_aux_imbalance"], rel=1e-4
-            )
+        # The release state is what the resume continues: at step 4 both runs
+        # hold the same estimate, filter noise and release count.
+        ref_state = _clip_state(tmp_path / "reference" / "checkpoint-4")
+        res_state = _clip_state(tmp_path / "run" / "checkpoint-4")
+        assert ref_state.step == res_state.step == 4
+        torch.testing.assert_close(
+            res_state.f_tilde, ref_state.f_tilde, rtol=1e-4, atol=1e-6
+        )
+        assert res_state.filtered_noise_std == pytest.approx(
+            ref_state.filtered_noise_std
+        )
         # Known noise keeps falling: the resumed releases continue the filter
         # rather than starting a fresh one.
-        assert res_rows[2]["router_aux_noise_std"] < ref_rows[0]["router_aux_noise_std"]
+        assert res_state.filtered_noise_std < _clip_state(ckpt).filtered_noise_std
 
     def test_resume_with_a_changed_ratio_warns_and_uses_the_current_one(
         self, tmp_path, caplog
@@ -412,7 +452,7 @@ class TestDPTrainer:
             model=_tiny_mellum(),
             args=_args(
                 tmp_path / "run",
-                max_steps=3,
+                max_steps=4,
                 router_aux_kwargs={"max_tokens": SEQ, "ratio": 0.125},
                 **common,
             ),
@@ -422,14 +462,16 @@ class TestDPTrainer:
         with caplog.at_level(logging.WARNING):
             resumed.train(resume_from_checkpoint=str(tmp_path / "run" / "checkpoint-2"))
         assert any("router_aux_ratio" in r.getMessage() for r in caplog.records)
-        rows = _rows(resumed, "router_aux_noise_std")
-        # The third release ran at the current ratio (0.125 vs 0.5: twice the
-        # load noise), which is what the accountant priced, and the telemetry
-        # tracks the mixed history exactly.  The first row is one release's
-        # own std, so it seeds the recursion.
-        first = rows[0]["router_aux_noise_std"]
-        assert rows[2]["router_aux_noise_std"] == pytest.approx(
-            _filtered_std_after_drift(first, [1.0, 1.0, 2.0]), rel=1e-6
+        # Steps 3 and 4 released at the current ratio (0.125 vs 0.5: twice the
+        # load noise), which is what the accountant priced, and the state's
+        # noise telemetry tracks the mixed history exactly.  One release's own
+        # std at the original ratio seeds the recursion.
+        before = _clip_state(tmp_path / "run" / "checkpoint-2")
+        after = _clip_state(tmp_path / "run" / "checkpoint-4")
+        assert after.step == 4
+        assert after.filtered_noise_std == pytest.approx(
+            _filtered_std_after_drift(before.release_noise_std, [1.0, 1.0, 2.0, 2.0]),
+            rel=1e-6,
         )
 
 
@@ -545,7 +587,6 @@ class TestSFTTrainer:
         assert torch.isfinite(torch.tensor(out.training_loss))
         rows = _rows(trainer)
         assert len(rows) == 2
-        assert all(row["router_aux_noise_std"] > 0 for row in rows)
         # TRL's raw metric rides along with the same name.
         assert all(row["aux_loss"] > 0 for row in rows)
         assert MoeAux.__name__ in repr(trainer._accountant.process)
@@ -631,7 +672,6 @@ class TestDPOTrainer:
         assert torch.isfinite(torch.tensor(out.training_loss))
         rows = _rows(trainer)
         assert len(rows) == 2
-        assert all(row["router_aux_noise_std"] > 0 for row in rows)
         # TRL's raw metric rides along with the same name.
         assert all(row["aux_loss"] > 0 for row in rows)
         # The reward telemetry rides next to the release on every path.

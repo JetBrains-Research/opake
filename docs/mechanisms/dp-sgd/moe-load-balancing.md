@@ -308,10 +308,12 @@ batch-coupled auxiliary loss, whose in-place scatter cannot run under
 the model's auxiliary loss off, as in TRL, and a dense model ignores the
 field.
 
-The geometry is read off the model, every logged step carries
-`router_aux_imbalance` and `router_aux_noise_std` and, under TRL's name,
+The geometry is read off the model, every logged step carries TRL's
 `aux_loss`, the raw batch value of HF's load-balancing loss, logged as
-telemetry exactly as TRL logs it and never fed back; the release state rides
+telemetry exactly as TRL logs it and never fed back (the estimate's own
+monitors, `MoeClipState.imbalance` and `filtered_noise_std`, stay on the
+state and off the logs, which carry TRL's metrics only); the release state
+rides
 in the DP runtime checkpoint with the other clip states, a resume may not
 switch the release on or off, and DDP ranks synchronize the state
 through the trainer's existing state sync. The router logits reach the

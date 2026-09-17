@@ -125,20 +125,18 @@ log = logging.getLogger(__name__)
 
 #: Default share of the whitened sensitivity given to the MoE load release.
 _ROUTER_AUX_DEFAULT_RATIO = 0.02
-#: Per-step metrics of the MoE release: the public estimate's imbalance and
-#: noise level, and ``aux_loss``, TRL's name for the raw batch value of HF's
-#: load-balancing loss, logged as telemetry exactly as TRL logs it.
-_ROUTER_AUX_METRICS = ("router_aux_imbalance", "router_aux_noise_std", "aux_loss")
+#: Per-step metric of the MoE release: ``aux_loss``, TRL's name for the raw
+#: batch value of HF's load-balancing loss, logged as telemetry exactly as
+#: TRL logs it.  The private estimate's own monitors stay on
+#: ``MoeClipState`` (``imbalance``, ``filtered_noise_std``) and off the logs,
+#: which carry TRL's metrics only.
+_ROUTER_AUX_METRICS = ("aux_loss",)
 
 
 def _router_aux_metrics(state: MoeClipState) -> dict[str, float]:
-    metrics = {
-        "router_aux_imbalance": state.imbalance,
-        "router_aux_noise_std": state.filtered_noise_std,
-    }
     if math.isfinite(state.aux_loss):
-        metrics["aux_loss"] = state.aux_loss
-    return metrics
+        return {"aux_loss": state.aux_loss}
+    return {}
 
 
 _ARG_DRIFT_ABSOLUTE_TOLERANCE = 1e-12
@@ -2464,11 +2462,9 @@ class DPTrainer:
         # the cluster-wide loss when other ranks contributed examples.
         batch_size = int(getattr(aux, "batch_size", 0) or 0)
         if batch_size == 0:
-            empty: dict[str, Any] = {"loss": 0.0, "batch_size": 0}
-            if isinstance(ctx.clip_state, MoeClipState):
-                # An empty draw still releases pure noise and advances the estimate.
-                empty.update(_router_aux_metrics(ctx.clip_state))
-            return empty
+            # An empty draw still releases pure noise and advances the MoE
+            # estimate, but has no batch ``aux_loss`` to log.
+            return {"loss": 0.0, "batch_size": 0}
 
         # Noise σ travels on the ``NoisedPytree`` wrapper; ``_effective``
         # handles both scalar and ``PerGroup`` shapes.  ``grads.max_norm``
