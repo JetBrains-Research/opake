@@ -781,7 +781,14 @@ def _worker_moe_sync_one_rank_empty_gloo(
             dist.all_reduce(total, op=dist.ReduceOp.SUM)
             reduced[name] = total
         if rank == 0:
-            torch.save({"grads": reduced, "f_tilde": synced_state.f_tilde}, out_path)
+            torch.save(
+                {
+                    "grads": reduced,
+                    "f_tilde": synced_state.f_tilde,
+                    "aux_loss": synced_state.aux_loss,
+                },
+                out_path,
+            )
     finally:
         _cleanup_ddp()
 
@@ -816,6 +823,13 @@ def _worker_moe_sync_gloo(rank: int, world_size: int, port: int, out_path: str) 
             dist.all_reduce(total, op=dist.ReduceOp.SUM)
             reduced[name] = total
         if rank == 0:
-            torch.save({"grads": reduced, "f_tilde": synced.f_tilde}, out_path)
+            torch.save(
+                {
+                    "grads": reduced,
+                    "f_tilde": synced.f_tilde,
+                    "aux_loss": synced.aux_loss,
+                },
+                out_path,
+            )
     finally:
         _cleanup_ddp()

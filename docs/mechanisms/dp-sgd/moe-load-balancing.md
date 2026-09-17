@@ -309,7 +309,9 @@ the model's auxiliary loss off, as in TRL, and a dense model ignores the
 field.
 
 The geometry is read off the model, every logged step carries
-`router_aux_imbalance` and `router_aux_noise_std`, the release state rides
+`router_aux_imbalance` and `router_aux_noise_std` and, under TRL's name,
+`aux_loss`, the raw batch value of HF's load-balancing loss, logged as
+telemetry exactly as TRL logs it and never fed back; the release state rides
 in the DP runtime checkpoint with the other clip states, a resume may not
 switch the release on or off, and DDP ranks synchronize the state
 through the trainer's existing state sync. The router logits reach the

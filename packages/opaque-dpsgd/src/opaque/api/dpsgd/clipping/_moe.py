@@ -59,6 +59,8 @@ log = logging.getLogger(__name__)
 
 #: Key of the private per-example load inside the clipper's aux payload.
 _LOAD_AUX_KEY = "__router_load__"
+#: Reserved key of the raw per-example batch sums behind ``aux_loss``.
+_RAW_AUX_KEY = "__router_raw__"
 
 #: Fold-in tag of the load-release noise stream.
 MOE_LOAD_STREAM_FOLD = "opaque.clipping.moe_load"
@@ -83,6 +85,12 @@ class MoeClipState(ClipState):
     _rng_key: RngKey
     _local_load: torch.Tensor
     _pending: bool
+    #: Raw batch sums behind :attr:`aux_loss` for the pending batch,
+    #: ``Σ_x T_x h̄(x) ‖ Σ_x T_x P(x) ‖ Σ_x T_x`` as one ``(2E + 1,)`` vector,
+    #: and the value of the last released batch.  Telemetry only: neither
+    #: enters the release, the estimate or the gradient.
+    _local_raw: torch.Tensor
+    _aux_loss: float
     #: Noise variance of the filter accumulator ``_m`` and the product of the
     #: betas applied so far, tracked recursively so the telemetry stays exact
     #: when the noise scale or ``filter_beta`` changes between steps.
@@ -143,9 +151,38 @@ class MoeClipState(ClipState):
         share = self._top_k / self._num_experts
         return float((self.f_tilde - share).abs().max() / share)
 
+    @property
+    def aux_loss(self) -> float:
+        """Raw Switch load-balancing loss of the last released batch.
 
-def _release(state: MoeClipState, load_mean: torch.Tensor) -> MoeClipState:
-    """Noise one ``(L, E)`` load mean, filter it and advance the state."""
+        HF's pooled value ``E · Σ_e f_e P_e`` (Fedus, Zoph, Shazeer, 2022,
+        eq. 4) over every valid token of the batch with layers pooled: the
+        number TRL logs as ``aux_loss``.  Telemetry with TRL's meaning, raw
+        like the logged loss: it is not privatised and never enters the
+        gradient, the release or the estimate.  ``nan`` before the first
+        release and for a batch without tokens.
+        """
+        return self._aux_loss
+
+
+def _switch_aux_loss(raw: torch.Tensor, num_experts: int) -> float:
+    """HF's pooled ``E · Σ_e f_e P_e`` of one batch from its raw sums."""
+    counts = raw[:num_experts]
+    probs = raw[num_experts : 2 * num_experts]
+    rows = raw[2 * num_experts]
+    if float(rows) <= 0.0:
+        return float("nan")
+    return float(num_experts * torch.dot(counts / rows, probs / rows))
+
+
+def _release(
+    state: MoeClipState, load_mean: torch.Tensor, raw_sums: torch.Tensor
+) -> MoeClipState:
+    """Noise one ``(L, E)`` load mean, filter it and advance the state.
+
+    ``raw_sums`` are the batch's raw sums behind :attr:`MoeClipState.aux_loss`;
+    they are recorded as telemetry and take no part in the release.
+    """
     step = state._step
     load_mean = load_mean.detach().to(dtype=torch.float32, device="cpu")
     sigma = state.load_noise_std
@@ -173,6 +210,8 @@ def _release(state: MoeClipState, load_mean: torch.Tensor) -> MoeClipState:
         _m=m,
         _step=step + 1,
         _local_load=torch.zeros_like(state._local_load),
+        _local_raw=torch.zeros_like(state._local_raw),
+        _aux_loss=_switch_aux_loss(raw_sums, state._num_experts),
         _pending=False,
         _noise_var=noise_var,
         _decay=decay,
@@ -345,7 +384,22 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
         )
         augmented = loss + alpha * (surrogate - surrogate.detach())
         load = weight * centred_load(h_layers, top_k=top_k, valid_tokens=n_tokens)
-        return augmented, {_LOAD_AUX_KEY: load.detach(), **dict(user_aux)}
+        # Raw telemetry behind ``aux_loss``: the token-weighted layer-mean
+        # load, token-weighted mean probabilities and token count, whose batch
+        # sums give HF's pooled Switch loss exactly.
+        tokens = n_tokens.detach().to(torch.float32)
+        raw = torch.cat(
+            [
+                (h_layers.mean(dim=0) * tokens).detach(),
+                (probs * tokens).detach(),
+                tokens.reshape(1),
+            ]
+        )
+        return augmented, {
+            _LOAD_AUX_KEY: load.detach(),
+            _RAW_AUX_KEY: raw,
+            **dict(user_aux),
+        }
 
     inner_fn, _ = clipped_grad(
         wrapped,
@@ -369,6 +423,8 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
         _step=0,
         _rng_key=key,
         _local_load=torch.zeros(num_layers, num_experts, dtype=torch.float32),
+        _local_raw=torch.zeros(2 * num_experts + 1, dtype=torch.float32),
+        _aux_loss=float("nan"),
         _pending=False,
         _noise_var=0.0,
         _decay=1.0,
@@ -406,6 +462,13 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
         total = (flat * scale[:, None]).sum(0) / normalize_by
         return total.reshape(num_layers, num_experts).cpu()
 
+    def _raw_sums(per_example: torch.Tensor | None) -> torch.Tensor:
+        if per_example is None or per_example.numel() == 0:
+            return torch.zeros(2 * num_experts + 1, dtype=torch.float32)
+        return (
+            per_example.detach().reshape(per_example.shape[0], -1).float().sum(0).cpu()
+        )
+
     def grad_fn(params, *rest, state: MoeClipState, **kwargs):
         if state._pending:
             raise OperationError(
@@ -424,13 +487,15 @@ def moe_clipped_grad(  # noqa: PLR0913 - the fixed factory contract
             # rank must not answer ``{}`` next to a keyed one.
             payload = None
             local = _local_load_mean(None)
+            raw = _raw_sums(None)
         else:
             payload = dict(aux.loss_aux)
             local = _local_load_mean(payload.pop(_LOAD_AUX_KEY, None))
+            raw = _raw_sums(payload.pop(_RAW_AUX_KEY, None))
         if is_distributed():
-            new_state = replace(state, _local_load=local, _pending=True)
+            new_state = replace(state, _local_load=local, _local_raw=raw, _pending=True)
         else:
-            new_state = _release(state, local)
+            new_state = _release(state, local, raw)
         if return_aux:
             return (
                 grads,
@@ -508,7 +573,9 @@ def sync_moe_clip_state(state: MoeClipState) -> MoeClipState:
     device = _reduce_device()
     total = state._local_load.detach().to(device=device, dtype=torch.float32).clone()
     dist.all_reduce(total, op=dist.ReduceOp.SUM)
-    return _release(state, total.cpu())
+    raw = state._local_raw.detach().to(device=device, dtype=torch.float32).clone()
+    dist.all_reduce(raw, op=dist.ReduceOp.SUM)
+    return _release(state, total.cpu(), raw.cpu())
 
 
 register_sync_type(MoeClipState, sync_moe_clip_state)

@@ -546,6 +546,8 @@ class TestSFTTrainer:
         rows = _rows(trainer)
         assert len(rows) == 2
         assert all(row["router_aux_noise_std"] > 0 for row in rows)
+        # TRL's raw metric rides along with the same name.
+        assert all(row["aux_loss"] > 0 for row in rows)
         assert MoeAux.__name__ in repr(trainer._accountant.process)
         # The completion telemetry rides next to the release when logits exist.
         eager = log_completion_metrics and loss_type != "chunked_nll"
@@ -630,6 +632,8 @@ class TestDPOTrainer:
         rows = _rows(trainer)
         assert len(rows) == 2
         assert all(row["router_aux_noise_std"] > 0 for row in rows)
+        # TRL's raw metric rides along with the same name.
+        assert all(row["aux_loss"] > 0 for row in rows)
         # The reward telemetry rides next to the release on every path.
         assert all(any(key.startswith("rewards/") for key in row) for row in rows)
         assert MoeAux.__name__ in repr(trainer._accountant.process)

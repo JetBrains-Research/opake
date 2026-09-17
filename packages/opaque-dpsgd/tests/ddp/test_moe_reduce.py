@@ -47,6 +47,8 @@ def test_synced_release_matches_single_process_full_batch() -> None:
     torch.testing.assert_close(
         distributed["f_tilde"], ref_state.f_tilde, atol=1e-6, rtol=1e-5
     )
+    # The raw telemetry pools the ranks like the release does.
+    assert distributed["aux_loss"] == pytest.approx(ref_state.aux_loss, rel=1e-5)
     for name, value in reference.pytree.items():
         torch.testing.assert_close(
             distributed["grads"][name], value, atol=1e-6, rtol=1e-5
@@ -84,6 +86,8 @@ def test_one_empty_rank_syncs_state_and_keyed_telemetry() -> None:
     torch.testing.assert_close(
         distributed["f_tilde"], ref_state.f_tilde, atol=1e-6, rtol=1e-5
     )
+    # The raw telemetry pools the ranks like the release does.
+    assert distributed["aux_loss"] == pytest.approx(ref_state.aux_loss, rel=1e-5)
     for name, value in reference.pytree.items():
         torch.testing.assert_close(
             distributed["grads"][name], value, atol=1e-6, rtol=1e-5

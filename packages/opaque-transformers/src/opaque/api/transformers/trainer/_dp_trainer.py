@@ -125,6 +125,22 @@ log = logging.getLogger(__name__)
 
 #: Default share of the whitened sensitivity given to the MoE load release.
 _ROUTER_AUX_DEFAULT_RATIO = 0.02
+#: Per-step metrics of the MoE release: the public estimate's imbalance and
+#: noise level, and ``aux_loss``, TRL's name for the raw batch value of HF's
+#: load-balancing loss, logged as telemetry exactly as TRL logs it.
+_ROUTER_AUX_METRICS = ("router_aux_imbalance", "router_aux_noise_std", "aux_loss")
+
+
+def _router_aux_metrics(state: MoeClipState) -> dict[str, float]:
+    metrics = {
+        "router_aux_imbalance": state.imbalance,
+        "router_aux_noise_std": state.filtered_noise_std,
+    }
+    if math.isfinite(state.aux_loss):
+        metrics["aux_loss"] = state.aux_loss
+    return metrics
+
+
 _ARG_DRIFT_ABSOLUTE_TOLERANCE = 1e-12
 _ARG_DRIFT_RELATIVE_TOLERANCE = 1e-6
 _IGNORE_INDEX = -100
@@ -2451,8 +2467,7 @@ class DPTrainer:
             empty: dict[str, Any] = {"loss": 0.0, "batch_size": 0}
             if isinstance(ctx.clip_state, MoeClipState):
                 # An empty draw still releases pure noise and advances the estimate.
-                empty["router_aux_imbalance"] = ctx.clip_state.imbalance
-                empty["router_aux_noise_std"] = ctx.clip_state.filtered_noise_std
+                empty.update(_router_aux_metrics(ctx.clip_state))
             return empty
 
         # Noise σ travels on the ``NoisedPytree`` wrapper; ``_effective``
@@ -2477,8 +2492,7 @@ class DPTrainer:
         if aux.clipped_grad_norms is not None and aux.clipped_grad_norms.numel() > 0:
             metrics["clipped_grad_norm"] = aux.clipped_grad_norms.mean().item()
         if isinstance(ctx.clip_state, MoeClipState):
-            metrics["router_aux_imbalance"] = ctx.clip_state.imbalance
-            metrics["router_aux_noise_std"] = ctx.clip_state.filtered_noise_std
+            metrics.update(_router_aux_metrics(ctx.clip_state))
 
         if aux.group_norms is not None and hasattr(clipping_norm, "values"):
             group_noise_std = noise_std if hasattr(noise_std, "values") else None
@@ -4523,7 +4537,7 @@ class DPTrainer:
                 logs["privacy_clipped_grad_norm_mean"] = step_result[
                     "clipped_grad_norm"
                 ]
-            for name in ("router_aux_imbalance", "router_aux_noise_std"):
+            for name in _ROUTER_AUX_METRICS:
                 if name in step_result:
                     logs[name] = step_result[name]
             for group_name, group_values in step_result.get(

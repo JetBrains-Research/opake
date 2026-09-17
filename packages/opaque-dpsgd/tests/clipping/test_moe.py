@@ -376,6 +376,34 @@ class TestRelease:
         )
         assert torch.equal(clean_new.f_tilde, clean.f_tilde)
 
+    def test_aux_loss_is_hf_pooled_switch_loss_of_the_batch(self):
+        """``aux_loss`` is HF's ``load_balancing_loss_func`` value, raw."""
+        params = _params()
+        x, mask, y = _batch([T, 9, T, 5])
+        grad_fn, state = _factory()
+        assert math.isnan(state.aux_loss)
+        _, new = grad_fn(params, x, mask, y, state=state)
+        # HF pools every layer and every valid token of the batch with one
+        # denominator before applying eq. 4 of Fedus et al.
+        counts = torch.zeros(E)
+        prob_sum = torch.zeros(E)
+        rows = 0.0
+        for i in range(4):
+            _, logits, m = _loss_fn(params, x[i], mask[i], y[i])
+            flat = m.float()
+            for z in logits:
+                probs = torch.softmax(z.float(), dim=-1)
+                top = torch.topk(probs, K, dim=-1).indices
+                one_hot = torch.nn.functional.one_hot(top, E).sum(dim=-2).float()
+                counts += (one_hot * flat[:, None]).sum(0)
+                prob_sum += (probs * flat[:, None]).sum(0)
+                rows += float(flat.sum())
+        expected = E * float(torch.dot(counts / rows, prob_sum / rows))
+        assert new.aux_loss == pytest.approx(expected, rel=1e-5)
+        # An empty draw has no value, as in HF; the previous one is not kept.
+        _, after_empty = grad_fn(params, x[:0], mask[:0], y[:0], state=new)
+        assert math.isnan(after_empty.aux_loss)
+
     def test_microbatching_is_equivalent(self):
         params = _params()
         x, mask, y = _batch([T, 9, T, 5, 7])
