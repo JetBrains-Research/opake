@@ -289,17 +289,18 @@ def vmap_create_causal_mask(
     # so we check for actual cached data rather than just None.
     attn_impl = getattr(config, "_attn_implementation", None)
     all_valid_attention = attention_mask is None
-    if (
-        not all_valid_attention
-        and attention_mask.ndim <= 2  # noqa: PLR2004 - padding masks are 1D/2D
-        and not torch.compiler.is_compiling()
-    ):
+    is_padding_mask = (
+        not all_valid_attention and attention_mask.ndim <= 2  # noqa: PLR2004 - padding masks are 1D/2D
+    )
+    if is_padding_mask and not torch.compiler.is_compiling():
         try:
             functorch = torch._C._functorch
-            physical_mask = attention_mask
-            while functorch.is_functorch_wrapped_tensor(physical_mask):
-                physical_mask = functorch.get_unwrapped(physical_mask)
-            all_valid_attention = bool(physical_mask.all())
+            # Reducing an unwrapped physical mask would make a vmapped row's
+            # attention path depend on whether its microbatch mates are padded.
+            # Retain the fast path for ordinary forwards, but materialize a
+            # supplied mask while evaluating vmapped per-example gradients.
+            if not functorch.is_functorch_wrapped_tensor(attention_mask):
+                all_valid_attention = bool(attention_mask.all())
         except (AttributeError, RuntimeError):
             all_valid_attention = False
 

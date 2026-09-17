@@ -111,11 +111,23 @@ def test_masking_runtime_patch_idempotent_for_ignore_causal_mask_sdpa():
     assert original_fn_2 is original_fn
 
 
-def test_vmap_causal_mask_preserves_all_valid_sdpa_fast_path():
+def test_vmap_causal_mask_materializes_supplied_attention_masks():
     class DummyConfig:
         _attn_implementation = "sdpa"
 
     input_embeds = torch.randn(1, 8, 16)
+    all_valid = torch.ones(3, 8, dtype=torch.bool)
+    assert (
+        vmap_create_causal_mask(
+            config=DummyConfig(),
+            input_embeds=input_embeds,
+            attention_mask=all_valid[:1],
+            cache_position=torch.arange(8),
+            past_key_values=None,
+        )
+        is None
+    )
+
     created_masks = []
     parameter = torch.ones(1, requires_grad=True)
 
@@ -131,13 +143,12 @@ def test_vmap_causal_mask_preserves_all_valid_sdpa_fast_path():
         )
         return param.square().sum() + attention_mask.sum() * 0
 
-    torch.vmap(torch.func.grad(create_mask), in_dims=(None, 0))(
-        parameter, torch.ones(3, 8, dtype=torch.bool)
-    )
-    assert created_masks == [None]
+    torch.vmap(torch.func.grad(create_mask), in_dims=(None, 0))(parameter, all_valid)
+    assert len(created_masks) == 1
+    assert created_masks[0] is not None
 
     created_masks.clear()
-    padded = torch.ones(3, 8, dtype=torch.bool)
+    padded = all_valid.clone()
     padded[1, -1] = False
     torch.vmap(torch.func.grad(create_mask), in_dims=(None, 0))(parameter, padded)
     assert len(created_masks) == 1

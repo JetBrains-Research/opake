@@ -230,6 +230,14 @@ large-expert MoE (`E >= 16`) with `torch._grouped_mm` available uses the MPS/CPU
 `Opaque_GroupedMoE` variant. Smaller MoEs (e.g. Mixtral-8) and fp32 / no-Triton
 hosts stay on the dense path.
 
+**Attention masks under vmap.** When evaluating per-example gradients, Opaque
+materialises every supplied padding mask instead of selecting the SDPA
+`is_causal` fast path from the physical microbatch's contents. This ensures a
+row's attention computation is independent of which other rows are padded.
+All-valid batches that omit `attention_mask` continue to use the fast path.
+Opaque does not support packing multiple source examples into one row or
+padding-free batches.
+
 The original dense **Mellum** (`Mellum-4b`, `model_type="llama"`) needs no MoE
 support — it is a Llama checkpoint served by the `llama` family.
 
