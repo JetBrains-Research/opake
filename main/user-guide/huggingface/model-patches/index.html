@@ -4105,6 +4105,13 @@ hosts with Triton use the fused Triton kernel (<code>Opaque_FusedMoE</code>); ot
 large-expert MoE (<code>E &gt;= 16</code>) with <code>torch._grouped_mm</code> available uses the MPS/CPU
 <code>Opaque_GroupedMoE</code> variant. Smaller MoEs (e.g. Mixtral-8) and fp32 / no-Triton
 hosts stay on the dense path.</p>
+<p><strong>Attention masks under vmap.</strong> When evaluating per-example gradients, Opaque
+materialises every supplied padding mask instead of selecting the SDPA
+<code>is_causal</code> fast path from the physical microbatch's contents. This ensures a
+row's attention computation is independent of which other rows are padded.
+All-valid batches that omit <code>attention_mask</code> continue to use the fast path.
+Opaque does not support packing multiple source examples into one row or
+padding-free batches.</p>
 <p>The original dense <strong>Mellum</strong> (<code>Mellum-4b</code>, <code>model_type="llama"</code>) needs no MoE
 support — it is a Llama checkpoint served by the <code>llama</code> family.</p>
 <p><strong>Deferred families:</strong> Nemotron —
