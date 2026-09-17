@@ -11,7 +11,7 @@ noise → optimizer:
   values.
 - **Abstract state bases**: ``ClipState`` and ``NoiseState`` —
   markers shared across DP-SGD and DP-FTRL implementations.
-- **Aliases**: ``MaxNorm``, ``NoiseStddev`` — opake-typed unions
+- **Aliases**: ``MaxNorm``, ``NoiseStddev`` — opaque-typed unions
   used in wrapper metadata fields.
 - **Factories**: ``clipped()`` and ``noised()`` — manual wrapper
   constructors for callers that already produced privatised values.
