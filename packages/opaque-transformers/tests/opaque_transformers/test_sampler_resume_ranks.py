@@ -14,6 +14,7 @@ the current arguments would rebuild a different key.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -21,7 +22,10 @@ import pytest
 from torch.utils.data import Subset
 
 from opaque.api.transformers._rng import IGNORE_DATA_SKIP_STREAM_FOLD
-from opaque.api.transformers.trainer._dp_trainer import _rank_local_sampler_state
+from opaque.api.transformers.trainer._dp_trainer import (
+    DPTrainer,
+    _rank_local_sampler_state,
+)
 from opaque.distributed import local_shard
 from opaque.dpftrl.sampling import (
     BallsInBinsSampler,
@@ -231,6 +235,16 @@ def test_template_without_stream_key_raises():
     snapshot = state_dict(rank0)
     with pytest.raises(CheckpointError):
         _rank_local_sampler_state(snapshot, object(), WORLD)
+
+
+def test_ddp_restore_rejects_checkpoint_without_stream_lineage():
+    trainer = object.__new__(DPTrainer)
+    trainer._ddp = SimpleNamespace(rank=1, world_size=WORLD)
+
+    with pytest.raises(CheckpointError, match="does not record sampler stream lineage"):
+        trainer._restore_sampler(
+            SimpleNamespace(), state_dict(_poisson(0)), saved_stream_key=None
+        )
 
 
 @pytest.mark.parametrize("name", sorted(FACTORIES))

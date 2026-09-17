@@ -1821,24 +1821,25 @@ class DPTrainer:
         key (an ``ignore_data_skip`` restart fold and the seed it was trained
         with included), not from the current arguments, so under DDP rank
         ``r`` continues ``fold_in(key, r)`` exactly where the checkpoint left
-        it.  A checkpoint without that key (an older trainer) can only rebuild
-        the key from the arguments, which matches the checkpoint for a direct
-        resume with the same seed.
+        it.  DDP checkpoints must carry that key: without it, the rank-local
+        stream cannot be recovered safely.
         """
         from opaque.serialization import from_state_dict
 
-        if saved_stream_key is not None:
+        if saved_stream_key is None:
+            if self._ddp.world_size > 1:
+                raise CheckpointError(
+                    *(
+                        "Cannot resume this checkpoint under DDP: it does not "
+                        "record sampler stream lineage. Start a new DDP run to "
+                        "create a resumable checkpoint.",
+                    )
+                )
+        else:
             ctx.sampler_stream_key = RngKey(
                 seed=int(saved_stream_key["seed"]), impl=str(saved_stream_key["impl"])
             )
             ctx.current_sampler = None  # rebuild the template on that lineage
-        elif self._ddp.world_size > 1:
-            log.warning(
-                "Checkpoint records no sampler stream lineage; rank %d resumes on "
-                "a key rebuilt from the current arguments, which matches the "
-                "checkpoint only for a direct resume with the same seed.",
-                self._ddp.rank,
-            )
         if ctx.current_sampler is None:
             self._train_dataloader = None
             self.get_train_dataloader()  # populates ctx.current_sampler
