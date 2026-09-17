@@ -7,6 +7,7 @@ Mechanisms (in :mod:`opaque.dpsgd.accounting.mechanisms`):
 
 - :func:`gaussian` — base Gaussian mechanism.
 - :func:`adaclip` — adaptive-clipping transformation.
+- :func:`moe_aux` — MoE router-load release transformation.
 
 Amplification (in :mod:`opaque.dpsgd.accounting.amplification`):
 
@@ -39,6 +40,7 @@ from opaque.api.accounting.dpsgd import (
     adaclip,
     gaussian,
     k_out_of_t,
+    moe_aux,
     parallel_poisson,
     poisson,
 )
@@ -47,6 +49,7 @@ __all__ = [
     "adaclip",
     "gaussian",
     "k_out_of_t",
+    "moe_aux",
     "parallel_poisson",
     "poisson",
 ]

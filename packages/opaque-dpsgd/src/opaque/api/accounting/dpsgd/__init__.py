@@ -1,6 +1,6 @@
 """DP-SGD accounting factories impl.
 
-Mechanisms (``gaussian``, ``adaclip``) and amplification primitives
+Mechanisms (``gaussian``, ``adaclip``, ``moe_aux``) and amplification primitives
 (``poisson``, ``parallel_poisson``).
 """
 
@@ -9,12 +9,13 @@ from opaque.api.accounting.dpsgd.amplification import (
     parallel_poisson,
     poisson,
 )
-from opaque.api.accounting.dpsgd.mechanisms import adaclip, gaussian
+from opaque.api.accounting.dpsgd.mechanisms import adaclip, gaussian, moe_aux
 
 __all__ = [
     "adaclip",
     "gaussian",
     "k_out_of_t",
+    "moe_aux",
     "parallel_poisson",
     "poisson",
 ]

@@ -17,8 +17,9 @@ example can have on the model, enabling differential privacy.
 3. **[`auto_clipped_grad()`](../user-guide/clipping.md)** — AUTO-S (Bu et al. NeurIPS 2023) automatic per-example gradient scaling. Constant per-record sensitivity ⇒ composes with both DP-SGD's Gaussian mechanism and DP-FTRL's matrix-factorization mechanisms.
 4. **[`auto_clipped_fun()`](../user-guide/clipping.md)** — AUTO-S for arbitrary function outputs.
 5. **[`adaptive_clipped_grad()`](../user-guide/clipping.md)** — Adaptive clipping (Andrew et al. 2021) with automatic threshold tuning; DP-SGD-only.
-6. **[`clip_pytree()`](../user-guide/clipping.md)** — Low-level: clip an existing PyTree of gradients.
-7. **[`auto_scale_pytree()`](../user-guide/clipping.md)** — Low-level: AUTO-S scale an existing PyTree.
+6. **[`moe_clipped_grad()`](../mechanisms/dp-sgd/moe-load-balancing.md)** — MoE clipping with the batch router load released inside the clipper; accounted by `moe_aux`.
+7. **[`clip_pytree()`](../user-guide/clipping.md)** — Low-level: clip an existing PyTree of gradients.
+8. **[`auto_scale_pytree()`](../user-guide/clipping.md)** — Low-level: AUTO-S scale an existing PyTree.
 
 ### State types
 
@@ -26,6 +27,7 @@ example can have on the model, enabling differential privacy.
 - **`FixedClipState`** — Marker state for fixed `clipped_grad` / `clipped_fun`.
 - **`AdaptiveClipState`** — Internal execution state for `adaptive_clipped_grad`.
 - **`AutoClipState`** — Marker state for `auto_clipped_grad` / `auto_clipped_fun`.
+- **`MoeClipState`** — State of `moe_clipped_grad`: the load estimate `f_tilde` plus the `step`, `load_noise_std`, `filtered_noise_std` and `imbalance` properties.
 
 ### Auxiliary output types
 

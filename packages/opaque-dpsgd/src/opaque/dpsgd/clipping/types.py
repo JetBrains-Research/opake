@@ -7,6 +7,7 @@ for type annotations from the impl trees.
 from opaque.api.dpsgd.clipping.types import (
     AdaptiveClippedGradAux,
     AdaptiveClipState,
+    MoeClipState,
 )
 from opaque.api.engine.clipping.types import (
     AutoClippedFunAux,
@@ -28,4 +29,5 @@ __all__ = [
     "ClippedGradFn",
     "ClippedGradResult",
     "FixedClipState",
+    "MoeClipState",
 ]

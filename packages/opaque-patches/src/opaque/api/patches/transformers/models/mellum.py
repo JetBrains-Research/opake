@@ -7,6 +7,9 @@ upstream Transformers vmap-safe RMSNorm because Triton reduction-order
 differences in BF16 can change expert selection. ``fused_add_rms_kind=None``
 keeps the MoE decoder forward (router logits / aux loss) intact. The original
 dense Mellum (``model_type="llama"``) is served by the ``llama`` family.
+
+``router_fp32=True`` (opt-in) binds an fp32-logit forward on every
+``MellumTopKRouter`` (see :mod:`opaque.api.patches.transformers.components.router`).
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ apply_mellum_patches = make_apply_model_patches(
     classes={
         "mlp": "MellumMLP",
         "experts": "MellumExperts",
+        "router": "MellumTopKRouter",
         "rms_norm": "MellumRMSNorm",
         "decoder_layer": "MellumDecoderLayer",
         "causal_lm": "MellumForCausalLM",

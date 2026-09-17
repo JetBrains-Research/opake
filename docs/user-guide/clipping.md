@@ -269,6 +269,39 @@ sizes, then updates the same next threshold on every rank. This is
 required with uneven local batches; the current bound remains
 `grads.max_norm`.
 
+## MoE load balancing
+
+`moe_clipped_grad` is the clipper for mixture-of-experts models trained
+with the Switch load-balancing loss. It releases the batch router load
+privately inside its state, the way adaptive clipping releases its clipped
+fraction, and feeds the filtered estimate into the next step's per-example
+surrogate. The loss function returns `(loss, router_logits, attention_mask)`
+for one example and the accountant is
+`dpsgd_acc.moe_aux(dpsgd_acc.gaussian(nm), ratio=ratio)` with the same
+`ratio`:
+
+```python
+from opaque.dpsgd.clipping import moe_clipped_grad
+from opaque.random import key
+
+grad_fn, clip_state = moe_clipped_grad(
+    loss_fn,
+    clipping_norm=1.0,
+    normalize_by=batch_size,
+    batch_argnums=(1, 2, 3),
+    noise_multiplier=noise_multiplier,  # the value gaussian_noise uses
+    ratio=0.02,
+    key=key(7),
+    top_k=8, num_experts=64, num_layers=28,
+    max_tokens=2048,
+    alpha=model.config.router_aux_loss_coef,
+)
+```
+
+Under DDP synchronize the state after every step with
+`opaque.distributed.sync`, as for adaptive clipping. See
+[MoE load balancing](../mechanisms/dp-sgd/moe-load-balancing.md).
+
 ## Loss function requirements
 
 The loss function passed to `clipped_grad` must:

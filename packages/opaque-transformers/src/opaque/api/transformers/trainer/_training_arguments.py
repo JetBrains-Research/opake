@@ -138,6 +138,7 @@ _DICT_FIELDS: tuple[str, ...] = (
     "sampling_kwargs",
     "noise_calibration_kwargs",
     "privacy_noise_mechanism_kwargs",
+    "router_aux_kwargs",
     "optim_args",
 )
 
@@ -568,6 +569,19 @@ class TrainingArguments:
     #: Mode-specific clipping factory kwargs. Adaptive clipping accepts
     #: ``target_quantile`` / ``clipping_norm_max``; AUTO-S accepts ``gamma``.
     clipping_kwargs: dict[str, Any] | str = field(default_factory=dict)
+
+    # ---- MoE router auxiliary loss (TRL ``router_aux_loss_coef``) ---------
+    #: Coefficient of the Switch load-balancing term on a mixture-of-experts
+    #: model. Non-zero trains with the DP release of the batch router load
+    #: (``moe_clipped_grad`` / ``moe_aux``) and this coefficient on its
+    #: surrogate; zero, the default, turns the model's own auxiliary loss off
+    #: for the run, as TRL does. Ignored by models without a router.
+    router_aux_loss_coef: float = 0.0
+    #: ``moe_clipped_grad`` kwargs: ``max_tokens`` (the public bound on the
+    #: valid tokens of one collated row; required unless ``SFTConfig`` derives
+    #: it from ``max_length``), ``ratio`` (default 0.02), ``mean_tokens`` and
+    #: ``filter_beta``.
+    router_aux_kwargs: dict[str, Any] | str = field(default_factory=dict)
 
     # ---- Noise mechanism / fixed multiplier -------------------------------
     privacy_noise_mechanism: str = "gaussian"
@@ -1015,6 +1029,83 @@ class TrainingArguments:
         # Idempotency sentinel.
         self._dp_post_init_done = True
 
+    def _validate_router_aux_fields(self) -> None:
+        """Validate the MoE router auxiliary-loss fields."""
+        coef = self.router_aux_loss_coef
+        if (
+            isinstance(coef, bool)
+            or not isinstance(coef, (int, float))
+            or not math.isfinite(coef)
+        ):
+            raise ConfigurationError(
+                *(f"router_aux_loss_coef must be a finite number, got {coef!r}.",)
+            )
+        self.router_aux_loss_coef = float(coef)
+        kwargs = self.router_aux_kwargs
+        unknown = set(kwargs) - {"max_tokens", "ratio", "mean_tokens", "filter_beta"}
+        if unknown:
+            raise ConfigurationError(
+                *(
+                    "router_aux_kwargs accepts 'max_tokens', 'ratio', 'mean_tokens' "
+                    f"and 'filter_beta'; got {sorted(unknown)}.",
+                )
+            )
+        if "max_tokens" in kwargs:
+            max_tokens = kwargs["max_tokens"]
+            if (
+                isinstance(max_tokens, bool)
+                or not isinstance(max_tokens, (int, float))
+                or max_tokens != int(max_tokens)
+                or max_tokens < 1
+            ):
+                raise ConfigurationError(
+                    *(
+                        "router_aux_kwargs['max_tokens'] must be a positive integer, "
+                        f"got {max_tokens!r}.",
+                    )
+                )
+            kwargs["max_tokens"] = int(max_tokens)
+        if "ratio" in kwargs:
+            ratio = kwargs["ratio"]
+            if (
+                isinstance(ratio, bool)
+                or not isinstance(ratio, (int, float))
+                or not math.isfinite(ratio)
+                or ratio <= 0
+            ):
+                raise ConfigurationError(
+                    *(
+                        "router_aux_kwargs['ratio'] must be a positive finite number, "
+                        f"got {ratio!r}.",
+                    )
+                )
+            kwargs["ratio"] = float(ratio)
+        if not self.router_aux_loss_coef:
+            return
+        if "max_tokens" not in kwargs:
+            raise ConfigurationError(
+                *(
+                    "router_aux_loss_coef != 0 requires router_aux_kwargs['max_tokens'], "
+                    "the public bound on the valid tokens of one collated row (the "
+                    "collator's row length; SFTConfig derives it from max_length).",
+                )
+            )
+        if self.clipping_mode != "fixed":
+            raise ConfigurationError(
+                *(
+                    "router_aux_loss_coef != 0 requires clipping_mode='fixed', got "
+                    f"{self.clipping_mode!r}.",
+                )
+            )
+        if self.privacy_noise_mechanism != "gaussian":
+            raise ConfigurationError(
+                *(
+                    "router_aux_loss_coef != 0 requires "
+                    "privacy_noise_mechanism='gaussian'; got "
+                    f"{self.privacy_noise_mechanism!r}.",
+                )
+            )
+
     def _normalize_and_validate_common_fields(self) -> None:
         """Normalize shared HF-shaped fields and validate their domains."""
         if self.output_dir is None:
@@ -1049,6 +1140,7 @@ class TrainingArguments:
             "sampling_kwargs",
             "noise_calibration_kwargs",
             "privacy_noise_mechanism_kwargs",
+            "router_aux_kwargs",
         ):
             if getattr(self, name) is None:
                 setattr(self, name, {})
@@ -1250,6 +1342,7 @@ class TrainingArguments:
                     "does not provide a matching privacy accountant.",
                 )
             )
+        self._validate_router_aux_fields()
         if self.privacy_noise_mechanism == "gaussian":
             _normalize_gaussian_compute_dtype(self.privacy_noise_mechanism_kwargs)
 

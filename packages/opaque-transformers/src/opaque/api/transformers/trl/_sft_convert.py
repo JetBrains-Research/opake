@@ -14,7 +14,6 @@ from opaque.exceptions import InputTypeError
 
 from ._convert import (
     _convert_trl_config,
-    _drop_router_aux_loss,
     _import_trl,
     _reject_if_truthy,
     _reject_pad_token,
@@ -28,6 +27,7 @@ if TYPE_CHECKING:
 TRL_SFT_DIRECT_FIELDS: frozenset[str] = frozenset(
     {
         "model_init_kwargs",
+        "router_aux_loss_coef",
         "trust_remote_code",
         "chat_template_path",
         "dataset_text_field",
@@ -87,7 +87,6 @@ TRL_SFT_DROP_FIELDS: dict[str, str | Callable[[Any], str | None]] = {
         "Only meaningful with ``packing=True``, which opaque does not "
         "support; silently dropped."
     ),
-    "router_aux_loss_coef": _drop_router_aux_loss,
 }
 
 

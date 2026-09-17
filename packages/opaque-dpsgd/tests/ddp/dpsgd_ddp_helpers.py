@@ -643,3 +643,179 @@ def _worker_per_group_adaptive_one_rank_empty_gloo(
         assert abs(token.item() - sum(range(1, world_size + 1))) < 1e-5
     finally:
         _cleanup_ddp()
+
+
+# ---------------------------------------------------------------------------
+# MoE router-load release: rank-local means reduced, noised once (gloo/CPU)
+# ---------------------------------------------------------------------------
+
+_MOE_E, _MOE_K, _MOE_L, _MOE_D, _MOE_T = 8, 2, 2, 6, 12
+
+
+def _moe_fixture() -> tuple[dict, torch.Tensor, torch.Tensor, torch.Tensor]:
+    g = torch.Generator().manual_seed(11)
+    params = {
+        "router": torch.randn(_MOE_L, _MOE_D, _MOE_E, generator=g),
+        "head": torch.randn(_MOE_D, generator=g),
+    }
+    x = torch.randn(4, _MOE_T, _MOE_D, generator=g)
+    lengths = torch.tensor([_MOE_T, 9, _MOE_T, 5])
+    mask = (torch.arange(_MOE_T)[None, :] < lengths[:, None]).long()
+    y = torch.randn(4, generator=g)
+    return params, x, mask, y
+
+
+def _moe_loss(params: dict, x: torch.Tensor, mask: torch.Tensor, y: torch.Tensor):
+    logits = [x @ params["router"][layer] for layer in range(_MOE_L)]
+    m = mask.float()
+    pred = x @ params["head"]
+    loss = ((pred - y) ** 2 * m).sum() / m.sum().clamp(min=1.0)
+    return loss, logits, mask
+
+
+def _moe_loss_with_aux(
+    params: dict, x: torch.Tensor, mask: torch.Tensor, y: torch.Tensor
+):
+    loss, logits, m = _moe_loss(params, x, mask, y)
+    return loss, logits, m, {"tokens": m.float().sum()}
+
+
+def _moe_factory(loss_fn=_moe_loss, **overrides):
+    from opaque.dpsgd.clipping import moe_clipped_grad
+    from opaque.random import key
+
+    kwargs = {
+        "clipping_norm": 0.7,
+        "normalize_by": 4.0,
+        "batch_argnums": (1, 2, 3),
+        "noise_multiplier": 1.0,
+        "ratio": 0.5,
+        "key": key(7),
+        "top_k": _MOE_K,
+        "num_experts": _MOE_E,
+        "num_layers": _MOE_L,
+        "max_tokens": _MOE_T,
+        "alpha": 0.2,
+    }
+    kwargs.update(overrides)
+    return moe_clipped_grad(loss_fn, **kwargs)
+
+
+def _expect_release_state_mismatch(state) -> None:
+    from opaque.distributed import sync
+    from opaque.exceptions import OperationError
+
+    message = None
+    try:
+        sync(state)
+    except OperationError as exc:
+        message = str(exc)
+    assert message is not None, "a mismatched release state was not rejected"
+    assert "release state" in message
+    # Every rank raised after the same collective; meet once more before the
+    # process group is torn down so no rank exits mid-collective.
+    torch.distributed.barrier()
+
+
+def _worker_moe_sync_ratio_mismatch_gloo(rank: int, world_size: int, port: int) -> None:
+    """Ranks built with different ratios must fail on every rank, not reduce."""
+    _setup_gloo(rank, world_size, port)
+    try:
+        params, x, mask, y = _moe_fixture()
+        shard = slice(2 * rank, 2 * rank + 2)
+        grad_fn, state = _moe_factory(ratio=0.5 if rank == 0 else 0.25)
+        _, state = grad_fn(params, x[shard], mask[shard], y[shard], state=state)
+        _expect_release_state_mismatch(state)
+    finally:
+        _cleanup_ddp()
+
+
+def _worker_moe_sync_pending_disagreement_gloo(
+    rank: int, world_size: int, port: int
+) -> None:
+    """A rank that has not drawn its step must not leave the others blocked."""
+    _setup_gloo(rank, world_size, port)
+    try:
+        params, x, mask, y = _moe_fixture()
+        grad_fn, state = _moe_factory()
+        if rank == 0:
+            _, state = grad_fn(params, x[:2], mask[:2], y[:2], state=state)
+        _expect_release_state_mismatch(state)
+    finally:
+        _cleanup_ddp()
+
+
+def _worker_moe_sync_one_rank_empty_gloo(
+    rank: int, world_size: int, port: int, out_path: str
+) -> None:
+    """An empty rank next to a keyed-``has_aux`` rank syncs state and aux."""
+    from opaque.distributed import sync
+
+    _setup_gloo(rank, world_size, port)
+    try:
+        params, x, mask, y = _moe_fixture()
+        grad_fn, state = _moe_factory(
+            loss_fn=_moe_loss_with_aux, has_aux=True, return_aux=True
+        )
+        rows = slice(0, 0) if rank == 0 else slice(0, 2)
+        (grads, aux), state = grad_fn(params, x[rows], mask[rows], y[rows], state=state)
+        if rank == 0:
+            assert aux.loss_aux is None
+            assert aux.batch_size == 0
+        else:
+            assert set(aux.loss_aux) == {"tokens"}
+        synced_state, synced_aux = sync(state, aux)
+        assert not synced_state._pending
+        assert synced_state.step == 1
+        assert synced_aux.batch_size == 2
+        assert set(synced_aux.loss_aux) == {"tokens"}
+        torch.testing.assert_close(
+            synced_aux.loss_aux["tokens"], mask[:2].sum(1).float()
+        )
+        gathered = [None] * world_size
+        dist.all_gather_object(gathered, synced_state.f_tilde)
+        assert all(torch.equal(gathered[0], other) for other in gathered[1:])
+        reduced = {}
+        for name, value in grads.pytree.items():
+            total = value.clone()
+            dist.all_reduce(total, op=dist.ReduceOp.SUM)
+            reduced[name] = total
+        if rank == 0:
+            torch.save({"grads": reduced, "f_tilde": synced_state.f_tilde}, out_path)
+    finally:
+        _cleanup_ddp()
+
+
+def _worker_moe_sync_gloo(rank: int, world_size: int, port: int, out_path: str) -> None:
+    from opaque.distributed import sync
+    from opaque.exceptions import OperationError
+
+    _setup_gloo(rank, world_size, port)
+    try:
+        params, x, mask, y = _moe_fixture()
+        shard = slice(2 * rank, 2 * rank + 2)
+        grad_fn, state = _moe_factory()
+        grads, state = grad_fn(params, x[shard], mask[shard], y[shard], state=state)
+        assert state._pending
+        assert state.step == 0
+        # A second step before the sync must fail loudly rather than drop
+        # the pending release.
+        try:
+            grad_fn(params, x[shard], mask[shard], y[shard], state=state)
+        except OperationError:
+            pass
+        else:
+            raise AssertionError("pending release was silently overwritten")
+        synced = sync(state)
+        assert not synced._pending
+        assert synced.step == 1
+        assert sync(synced) is synced
+        reduced = {}
+        for name, value in grads.pytree.items():
+            total = value.clone()
+            dist.all_reduce(total, op=dist.ReduceOp.SUM)
+            reduced[name] = total
+        if rank == 0:
+            torch.save({"grads": reduced, "f_tilde": synced.f_tilde}, out_path)
+    finally:
+        _cleanup_ddp()

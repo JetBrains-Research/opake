@@ -7,10 +7,12 @@ from dataclasses import dataclass
 from opaque.api.accounting.core import _native
 from opaque.api.accounting.core._base import DpProcess, Pld
 from opaque.api.accounting.core._pld_cache import pld_cache
-from opaque.api.accounting.core.mechanisms._nonprivate import NonPrivate
 from opaque.api.accounting.dpsgd.amplification._poisson import Poisson, poisson
-from opaque.api.accounting.dpsgd.mechanisms._adaclip import AdaClip
-from opaque.api.accounting.dpsgd.mechanisms._gaussian import Gaussian
+from opaque.api.accounting.dpsgd.mechanisms._effective import (
+    GAUSSIAN_FAMILY,
+    GaussianFamily,
+    effective_gaussian_noise_multiplier,
+)
 from opaque.exceptions import ConfigurationError, InputTypeError
 
 
@@ -64,28 +66,19 @@ class ParallelPoisson(DpProcess):
         native_cfg = config.to_native()
 
         match self.inner:
-            case Poisson(inner=NonPrivate() | Gaussian(noise_multiplier=0)):
-                return _native.non_private_pld(native_cfg)
-            case Poisson(
-                inner=Gaussian(noise_multiplier=nm),
-                sample_rate=rate,
-            ):
+            case Poisson(inner=inner, sample_rate=rate):
+                nm = effective_gaussian_noise_multiplier(inner)
+                if nm is None:
+                    raise InputTypeError(
+                        *(
+                            "ParallelPoisson requires a Gaussian-family inner "
+                            f"mechanism, got {type(inner).__name__}.",
+                        )
+                    )
+                if nm == 0:
+                    return _native.non_private_pld(native_cfg)
                 return _native.parallel_poisson_gaussian_pld(
                     nm,
-                    rate,
-                    self.num_workers,
-                    native_cfg,
-                )
-            case Poisson(
-                inner=AdaClip(inner=NonPrivate() | Gaussian(noise_multiplier=0)),
-            ):
-                return _native.non_private_pld(native_cfg)
-            case Poisson(
-                inner=AdaClip(inner=Gaussian()) as ac,
-                sample_rate=rate,
-            ):
-                return _native.parallel_poisson_gaussian_pld(
-                    ac.effective_noise_multiplier,
                     rate,
                     self.num_workers,
                     native_cfg,
@@ -100,14 +93,15 @@ class ParallelPoisson(DpProcess):
 
 
 def parallel_poisson(
-    inner: Gaussian | AdaClip | NonPrivate,
+    inner: GaussianFamily,
     sample_rate: float,
     num_workers: int,
 ) -> ParallelPoisson:
     """Poisson sampling under parallel worker execution.
 
     Args:
-        inner: A :class:`Gaussian`, :class:`AdaClip`, or :class:`NonPrivate` mechanism.
+        inner: A :class:`Gaussian`, :class:`AdaClip`, :class:`MoeAux`, or
+            :class:`NonPrivate` mechanism.
         sample_rate: Probability of including each example, in (0, 1).
         num_workers: Number of parallel workers running Poisson sampling
             independently. Truncated Poisson accounting is not supported.
@@ -129,15 +123,12 @@ def parallel_poisson(
                 "q=1 (full participation on every worker) is not supported here.",
             )
         )
-    match inner:
-        case Gaussian() | AdaClip() | NonPrivate():
-            pass
-        case _:
-            raise InputTypeError(
-                *(
-                    "parallel_poisson() requires a Gaussian, AdaClip, or NonPrivate "
-                    f"inner mechanism, got {type(inner).__name__}.",
-                )
+    if not isinstance(inner, GAUSSIAN_FAMILY):
+        raise InputTypeError(
+            *(
+                "parallel_poisson() requires a Gaussian, AdaClip, MoeAux, or "
+                f"NonPrivate inner mechanism, got {type(inner).__name__}.",
             )
+        )
     poisson_inner = poisson(inner=inner, sample_rate=sample_rate)
     return ParallelPoisson(inner=poisson_inner, num_workers=num_workers)

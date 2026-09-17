@@ -119,6 +119,7 @@ nav:
     - DP-SGD:
       - Overview: mechanisms/dp-sgd/index.md
       - Gaussian: mechanisms/dp-sgd/gaussian.md
+      - MoE load balancing: mechanisms/dp-sgd/moe-load-balancing.md
     - DP-FTRL:
       - Overview: mechanisms/dp-ftrl/index.md
       - BandMF: mechanisms/dp-ftrl/band-mf.md

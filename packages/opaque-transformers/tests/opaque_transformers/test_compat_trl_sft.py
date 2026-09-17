@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 
 # TRL is the optional ``opaque[trl]`` extra. Skip the entire module when
@@ -120,64 +118,34 @@ def test_reject_packing(tmp_path):
     "router_aux_loss_coef" not in _SFT_FIELDS,
     reason="TRL does not expose router_aux_loss_coef",
 )
-def test_router_aux_loss_is_dropped_with_a_warning(tmp_path):
-    """A deliberately set MoE aux-loss coefficient converts, loudly, to no-op.
+def test_router_aux_loss_coef_is_copied(tmp_path):
+    """TRL's MoE coefficient carries over: it is the opt-in for the DP release.
 
-    Opaque cannot compute the router load-balancing term — it is coupled
-    across the batch, so it has no per-example gradient to clip — but a
-    coefficient it silently ignores would train differently than the user
-    asked, so say so.
+    On a mixture-of-experts model the coefficient enables the router-load
+    release with the token bound derived from ``max_length``; a dense model
+    ignores it, as in TRL.
     """
-    with pytest.warns(RuntimeWarning, match="router_aux_loss_coef"):
-        cfg = SFTConfig.from_trl(
-            _trl_args(tmp_path, router_aux_loss_coef=0.5),
-            privacy_noise_multiplier=0.8,
-            clipping_norm=1.0,
-        )
-    assert cfg is not None
+    cfg = SFTConfig.from_trl(
+        _trl_args(tmp_path, router_aux_loss_coef=0.5, max_length=64),
+        privacy_noise_multiplier=0.8,
+        clipping_norm=1.0,
+    )
+    assert cfg.router_aux_loss_coef == pytest.approx(0.5)
+    assert cfg.router_aux_kwargs == {"max_tokens": 64}
 
 
 @pytest.mark.skipif(
     "router_aux_loss_coef" not in _SFT_FIELDS,
     reason="TRL does not expose router_aux_loss_coef",
 )
-def test_trl_default_router_aux_loss_is_dropped_silently(tmp_path):
-    """TRL's own non-zero default is not a user request, so it warns about nothing.
-
-    TRL ships ``router_aux_loss_coef=0.001``; warning on that would fire on
-    every unmodified TRL config.
-    """
-    default_coef = trl.SFTConfig.__dataclass_fields__["router_aux_loss_coef"].default
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        cfg = SFTConfig.from_trl(
-            _trl_args(tmp_path, router_aux_loss_coef=default_coef),
-            privacy_noise_multiplier=0.8,
-            clipping_norm=1.0,
-        )
-    assert cfg is not None
-    assert not [w for w in caught if "router_aux_loss_coef" in str(w.message)]
-
-
-@pytest.mark.skipif(
-    "router_aux_loss_coef" not in _SFT_FIELDS,
-    reason="TRL does not expose router_aux_loss_coef",
-)
-def test_router_aux_loss_switched_off_is_dropped_silently(tmp_path):
-    """Asking for no aux loss gets no aux loss, so there is nothing to warn about.
-
-    TRL's default is 0.001, so an explicit 0.0 is a non-default value — but it
-    requests exactly what opaque does anyway.
-    """
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        cfg = SFTConfig.from_trl(
-            _trl_args(tmp_path, router_aux_loss_coef=0.0),
-            privacy_noise_multiplier=0.8,
-            clipping_norm=1.0,
-        )
-    assert cfg is not None
-    assert not [w for w in caught if "router_aux_loss_coef" in str(w.message)]
+def test_router_aux_loss_switched_off_stays_off(tmp_path):
+    cfg = SFTConfig.from_trl(
+        _trl_args(tmp_path, router_aux_loss_coef=0.0),
+        privacy_noise_multiplier=0.8,
+        clipping_norm=1.0,
+    )
+    assert cfg.router_aux_loss_coef == 0.0
+    assert cfg.router_aux_kwargs == {}
 
 
 @pytest.mark.skipif(

@@ -31,6 +31,7 @@ from opaque.api.patches.transformers._router import (
 )
 from opaque.api.patches.transformers.components.batchify import apply_batchify_patch
 from opaque.api.patches.transformers.components.cross_entropy import (
+    FUSED_LINEAR_CE_ATTR,
     _fused_linear_ce_supports_class,
     _make_fused_ce_causal_lm_forward,
     apply_causal_lm_loss_function_patch,
@@ -55,6 +56,10 @@ from opaque.api.patches.transformers.components.rms_norm import (
     _rmsnorm_fac_glm4,
     _rmsnorm_fac_llama,
     _rmsnorm_fac_olmo2,
+)
+from opaque.api.patches.transformers.components.router import (
+    install_fp32_router,
+    remove_fp32_router,
 )
 from opaque.api.patches.transformers.components.swiglu import (
     _make_phi3_mlp_forward,
@@ -212,8 +217,10 @@ def make_apply_model_patches(
         module_path: Dotted path to the modeling module.
         classes: Mapping of role → HF class name.  Recognized roles:
             ``"mlp"``, ``"rms_norm"``, ``"decoder_layer"``,
-            ``"causal_lm"``.  Roles absent from the mapping are skipped
-            (e.g. Cohere has no RMSNorm; omit the ``"rms_norm"`` entry).
+            ``"causal_lm"``, ``"experts"``, ``"router"``.  Roles absent
+            from the mapping are skipped (e.g. Cohere has no RMSNorm; omit the
+            ``"rms_norm"`` entry). ``"router"`` names the top-k router module
+            that ``router_fp32=True`` rebinds to fp32 logits.
         activation_kind: Which gated-activation forward factory to use.
             Either a registered string name (``"swiglu"``,
             ``"geglu_exact"``, …), a callable used directly, or ``None``
@@ -249,8 +256,12 @@ def make_apply_model_patches(
         ``grouped_moe`` only chooses its grouped-GEMM fast path (kernel-fused
         Triton on CUDA / ``torch._grouped_mm`` on MPS-CPU) vs the dense compat
         path, so a dense run keeps a correct, vmap-safe MoE.
-        ``fused_linear_cross_entropy`` inherits from ``performance`` and installs
-        a wrapper whose optimized branch requires a per-call loss-only marker.
+        ``loss_only_forward`` → ``compat`` (or the fused routes being on)
+        installs the loss-only causal-LM forward; ``fused_linear_cross_entropy``
+        inherits from ``performance`` and decides whether it takes the fused /
+        chunked routes or the eager ``lm_head`` branch. ``router_fp32``
+        (default ``False``) binds an fp32-logit forward on the family's
+        router instances; ``False`` removes an earlier install.
     """
     activation_factory = _resolve(activation_kind, _ACTIVATION_FACTORIES)
     rms_norm_factory = _resolve(rms_norm_kind, _RMSNORM_FACTORIES)
@@ -322,6 +333,16 @@ def make_apply_model_patches(
                     model,
                 )
 
+        # fp32-logit router (opt-in, instance-level, removable).
+        router_fp32 = kwargs.get("router_fp32")
+        if router_fp32 is not None and model is not None:
+            router_class = classes.get("router")
+            router_cls = getattr(mod, router_class, None) if router_class else None
+            if router_fp32:
+                install_fp32_router(model, router_cls=router_cls)
+            else:
+                remove_fp32_router(model)
+
         # RMSNorm (unified standalone + fused-add). Triton kernel — ``triton_ok``
         # gates the default; explicit ``rms_norm=True`` honored.
         rms_norm_on = kwargs.get("rms_norm", kernels and triton_ok)
@@ -371,21 +392,33 @@ def make_apply_model_patches(
             chunked_linear_ce = _normalize_chunked_linear_cross_entropy(
                 chunked_linear_ce
             )
+        # Loss-only causal-LM forward (compat); which CE route it takes is the
+        # performance decision, recorded per instance.
         enable_fused_linear_ce = kwargs.get("fused_linear_cross_entropy")
         if enable_fused_linear_ce is None:
             enable_fused_linear_ce = performance
+        fused_routes = bool(
+            (fused_linear_cross_entropy or chunked_linear_ce) and enable_fused_linear_ce
+        )
         if (
-            (fused_linear_cross_entropy or chunked_linear_ce)
-            and enable_fused_linear_ce
+            kwargs.get("loss_only_forward", compat or fused_routes)
             and causal_lm_obj is not None
             and _fused_linear_ce_supports_class(causal_lm_obj)
         ):
-            linear_ce_factory = _make_fused_ce_causal_lm_forward
-            if chunked_linear_ce:
+            linear_ce_factory = functools.partial(
+                _make_fused_ce_causal_lm_forward, fused=fused_routes
+            )
+            if chunked_linear_ce and fused_routes:
                 linear_ce_factory = functools.partial(
                     _make_fused_ce_causal_lm_forward,
                     force_chunked=chunked_linear_ce,
+                    fused=True,
                 )
+            modules = getattr(model, "modules", None)
+            if callable(modules):
+                for module in modules():
+                    if isinstance(module, causal_lm_obj):
+                        setattr(module, FUSED_LINEAR_CE_ATTR, fused_routes)
 
             _patch_forward(
                 causal_lm_obj,

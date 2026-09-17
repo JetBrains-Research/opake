@@ -9,6 +9,9 @@ the accountant.
 
 - **[Gaussian](gaussian.md)** — independent Gaussian noise on the
   clipped gradient; the canonical DP-SGD release.
+- **[MoE load balancing](moe-load-balancing.md)** — the batch router
+  load of a mixture-of-experts model released inside the clipper, priced
+  jointly with the gradient.
 
 ## Pairing with sampling
 

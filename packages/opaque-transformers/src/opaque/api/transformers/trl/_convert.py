@@ -70,9 +70,9 @@ def _drop_router_aux_loss(value: Any) -> str | None:
     if not value:
         return None  # already 0 — nothing is being withheld.
     return (
-        "the MoE router load-balancing loss is a batch-level statistic with no "
-        "per-example gradient to clip, so it cannot enter opaque's DP "
-        "objective; training proceeds as if the coefficient were 0.0"
+        "the MoE router load-balancing term is available through SFTTrainer "
+        "only (DPOTrainer's preference loss does not hand the router logits to "
+        "the clipper); training proceeds as if the coefficient were 0.0"
     )
 
 

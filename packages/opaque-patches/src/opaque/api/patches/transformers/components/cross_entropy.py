@@ -172,17 +172,37 @@ def _fused_linear_ce_loss_is_supported(
     return not torch.is_tensor(ii)
 
 
-def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = False):
-    """ForCausalLM forward with fused linear + cross-entropy loss.
+#: Instance attribute recording whether the fused / chunked CE routes are
+#: enabled for a causal-LM module (the class-level wrapper is shared).
+FUSED_LINEAR_CE_ATTR = "_opaque_fused_linear_ce"
 
-    When a loss-only caller sets ``loss_only=True`` and labels are
-    provided, skips ``lm_head`` and computes loss from
-    ``hidden_states @ lm_head.weight.T`` (CCE), unless ``loss_function`` would
-    need unsupported options — then defers to the original forward (e.g.
-    non-zero ``logits_to_keep``, ``shift_labels``, class ``weight``).
+
+def _make_fused_ce_causal_lm_forward(
+    original, *, force_chunked: bool | int = False, fused: bool = True
+):
+    """Loss-only ``ForCausalLM`` forward for per-example objectives.
+
+    Inert unless a call passes ``loss_only=True`` with ``labels``.  Such a
+    call computes the loss on the Triton fused kernel (CUDA, half precision),
+    the portable chunked kernel (elsewhere, or ``force_chunked``), or the
+    eager ``lm_head`` branch when the fused routes are off (``fused=False``
+    or :data:`FUSED_LINEAR_CE_ATTR`) or the loss options are unsupported.
+    The fused routes return ``logits=None``.
+
+    ``router_aux_loss=False`` is the second Opaque-only marker: it takes this
+    forward on any call, loss-only or not, with or without labels, and a call
+    that is not loss-only keeps the eager ``lm_head`` logits. Under either
+    marker the router logits requested with ``output_router_logits``
+    (explicitly or from the config) come back in a
+    ``MoeCausalLMOutputWithPast`` with ``aux_loss=None``: HF's batch-coupled
+    load-balancing loss has no per-example gradient and is never computed
+    here (its in-place scatter is not vmap-safe either). A call without a
+    marker is model-native, an explicit ``output_router_logits=True``
+    included: HF computes and adds its auxiliary loss exactly as the
+    unpatched forward does.
     """
 
-    def forward(
+    def forward(  # noqa: PLR0913, PLR0917 - the HF causal-LM signature
         self,
         input_ids=None,
         attention_mask=None,
@@ -197,11 +217,14 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
         cache_position=None,
         logits_to_keep: int | torch.Tensor = 0,
         loss_only: bool = False,
+        router_aux_loss: bool = True,
         **kwargs,
     ):
-        # The wrapper is inert unless this call explicitly permits a loss-only
-        # result. Inference and logits-consuming labeled calls stay model-native.
-        if labels is None or not loss_only:
+        # The wrapper is inert unless this call carries an Opaque marker: a
+        # loss-only result, or router logits without HF's auxiliary loss.
+        # Inference and other model-native calls, an explicit
+        # ``output_router_logits=True`` included, keep the original forward.
+        if not (loss_only and labels is not None) and router_aux_loss:
             return original(
                 self,
                 input_ids=input_ids,
@@ -219,29 +242,18 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
                 **kwargs,
             )
 
-        output_router_logits = kwargs.get("output_router_logits")
-        if output_router_logits is None:
-            output_router_logits = getattr(self.config, "output_router_logits", False)
-        if output_router_logits:
-            # MoE router auxiliary loss is batch-coupled, not a separable
-            # per-example objective. Preserve the upstream model's loss/output
-            # contract instead of silently dropping it in the fused CE path.
-            return original(
-                self,
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                past_key_values=past_key_values,
-                inputs_embeds=inputs_embeds,
-                labels=labels,
-                use_cache=use_cache,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-                cache_position=cache_position,
-                logits_to_keep=logits_to_keep,
-                **kwargs,
+        # Popped so it never reaches ``loss_function``; the batch-coupled aux
+        # loss is not computed on this per-example path.
+        explicit_router_logits = kwargs.pop("output_router_logits", None)
+        if explicit_router_logits is None:
+            output_router_logits = bool(
+                getattr(self.config, "output_router_logits", False)
             )
+        else:
+            output_router_logits = bool(explicit_router_logits)
+        backbone_kwargs = kwargs
+        if explicit_router_logits is not None or output_router_logits:
+            backbone_kwargs = {**kwargs, "output_router_logits": output_router_logits}
 
         # Resolve config defaults
         output_attentions = (
@@ -270,17 +282,18 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cache_position=cache_position,
-            **kwargs,
+            **backbone_kwargs,
         )
         hidden_states = outputs[0]
 
         # CUDA + half precision routes to the Triton kernel; any other host
         # (MPS/CPU) routes to the pure-PyTorch chunked kernel, which streams the
-        # log-sum-exp over bounded token/vocabulary tiles. The wrapper is
-        # installed with the performance patch bucket, but only
-        # an explicit loss-only call may return ``logits=None``.
+        # log-sum-exp over bounded token/vocabulary tiles.
+        fused_enabled = bool(getattr(self, FUSED_LINEAR_CE_ATTR, fused))
         use_fused_ce = (
             loss_only
+            and labels is not None
+            and fused_enabled
             and _fused_linear_ce_loss_is_supported(logits_to_keep, kwargs)
             and (
                 (
@@ -361,7 +374,11 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
                 else logits_to_keep
             )
             logits = self.lm_head(hidden_states[:, slice_indices, :])
-            loss = self.loss_function(logits, labels, self.vocab_size, **kwargs)
+            loss = (
+                self.loss_function(logits, labels, self.vocab_size, **kwargs)
+                if labels is not None
+                else None
+            )
 
         if not return_dict:
             output = (logits, *outputs[1:])
@@ -372,7 +389,7 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
 
             return MoeCausalLMOutputWithPast(
                 loss=loss,
-                aux_loss=getattr(outputs, "aux_loss", None),
+                aux_loss=None,
                 logits=logits,
                 past_key_values=outputs.past_key_values,
                 hidden_states=outputs.hidden_states,
