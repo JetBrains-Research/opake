@@ -413,3 +413,24 @@ def test_chunked_linear_ce_bf16_streams_fp32_cpu():
 @pytest.mark.mps
 def test_chunked_linear_ce_bf16_streams_fp32_mps():
     _check_bf16_streams_fp32("mps")
+
+
+def test_chunked_linear_ce_matches_eager_under_bare_grad():
+    """A bare ``torch.func.grad`` takes a path ``vmap(grad(...))`` never hits."""
+    torch.manual_seed(0)
+    n_tokens, hidden, vocab = 5, 8, 16
+    h = torch.randn(1, n_tokens + 1, hidden, dtype=torch.float64)
+    weight = torch.randn(vocab, hidden, dtype=torch.float64)
+    labels = torch.randint(0, vocab, (1, n_tokens + 1))
+
+    got = grad(lambda w: linear_cross_entropy_chunked(h, w, labels))(weight)
+    want = grad(lambda w: _eager_mean(h, w, labels))(weight)
+    assert torch.allclose(got, want, atol=1e-12, rtol=0)
+
+    # The loss value itself, on the same path.
+    assert torch.allclose(
+        linear_cross_entropy_chunked(h, weight, labels),
+        _eager_mean(h, weight, labels),
+        atol=1e-12,
+        rtol=0,
+    )
