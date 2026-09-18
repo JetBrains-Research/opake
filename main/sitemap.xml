@@ -1,247 +1,247 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/limitations/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/limitations/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/alignment/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/alignment/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/alignment/dpo/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/alignment/dpo/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/alignment/sft/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/alignment/sft/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/alignment/trainers/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/alignment/trainers/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/development/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/development/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/getting-started/installation/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/getting-started/installation/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/getting-started/quickstart/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/getting-started/quickstart/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/dp-ftrl/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/dp-ftrl/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/dp-ftrl/band-mf/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/dp-ftrl/band-mf/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/dp-ftrl/bisr/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/dp-ftrl/bisr/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/dp-ftrl/blt/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/dp-ftrl/blt/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/dp-ftrl/bsr/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/dp-ftrl/bsr/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/dp-ftrl/lambda-cgd/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/dp-ftrl/lambda-cgd/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/dp-sgd/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/dp-sgd/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/mechanisms/dp-sgd/gaussian/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/mechanisms/dp-sgd/gaussian/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/accounting/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/accounting/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/alignment/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/alignment/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/auditing/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/auditing/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/clipping/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/clipping/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/distributed/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/distributed/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/exceptions/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/exceptions/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/noise/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/noise/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/optimizers/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/optimizers/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/rng/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/rng/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/sampling/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/sampling/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/schedules/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/schedules/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/serialization/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/serialization/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/transformers/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/transformers/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/reference/utilities/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/reference/utilities/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/tutorials/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/tutorials/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/tutorials/accounting_and_calibration/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/tutorials/accounting_and_calibration/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/tutorials/distributed_training/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/tutorials/distributed_training/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/tutorials/dp_ftrl_training/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/tutorials/dp_ftrl_training/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/tutorials/dp_sgd_training/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/tutorials/dp_sgd_training/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/tutorials/llm_finetuning/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/tutorials/llm_finetuning/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/tutorials/privacy_auditing/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/tutorials/privacy_auditing/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/tutorials/sampling_and_microbatching/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/tutorials/sampling_and_microbatching/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/accounting/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/accounting/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/auditing/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/auditing/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/clipping/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/clipping/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/distributed-trainer/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/distributed-trainer/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/distributed/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/distributed/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/dp-concepts/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/dp-concepts/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/dp-ftrl/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/dp-ftrl/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/dp-sgd/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/dp-sgd/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/lr-scheduling/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/lr-scheduling/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/memory-optimizations/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/memory-optimizations/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/noise/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/noise/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/optimizers/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/optimizers/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/precision/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/precision/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/rng-key/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/rng-key/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/sampling/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/sampling/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/huggingface/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/huggingface/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/huggingface/dptrainer/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/huggingface/dptrainer/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/huggingface/model-patches/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/huggingface/model-patches/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
     <url>
-         <loc>https://jetbrains-research.github.io/opaque/main/user-guide/huggingface/training-arguments/</loc>
+         <loc>https://jetbrains-research.github.io/opake/main/user-guide/huggingface/training-arguments/</loc>
          <lastmod>2026-09-18</lastmod>
     </url>
 </urlset>
