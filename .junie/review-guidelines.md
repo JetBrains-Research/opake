@@ -1,6 +1,6 @@
-# Opaque code review guidelines
+# Opake code review guidelines
 
-Act as an independent reviewer for Opaque, a comprehensive functional
+Act as an independent reviewer for Opake, a comprehensive functional
 differential privacy library. Review the merge-base diff and post only
 actionable, high-confidence findings on changed lines.
 

@@ -1,12 +1,12 @@
-# Opaque
+# Opake
 
 **Functional DP-SGD and DP-FTRL for PyTorch.**
 
-Opaque provides composable primitives for differentially private
+Opake provides composable primitives for differentially private
 model training in PyTorch. Built on `torch.func`, every component
 uses explicit state — no hooks, no subclassing, no hidden mutation.
 
-Opaque ships two complementary training pipelines:
+Opake ships two complementary training pipelines:
 
 - **[DP-SGD](user-guide/dp-sgd.md)** — independent Gaussian noise at
   every step, per-step privacy composition. The standard DP training
@@ -27,10 +27,10 @@ clips each to a maximum L2 norm, and sums the result.
 
 ```python
 # DP-SGD context:
-from opaque.dpsgd.clipping import clipped_grad
+from opake.dpsgd.clipping import clipped_grad
 
 # DP-FTRL context:
-# from opaque.dpftrl.clipping import clipped_grad
+# from opake.dpftrl.clipping import clipped_grad
 
 grad_fn, clip_state = clipped_grad(
     loss_fn, clipping_norm=1.0, argnums=0, batch_argnums=1,
@@ -44,8 +44,8 @@ grads, clip_state = grad_fn(params, batch, state=clip_state)
 DP-SGD adds independent Gaussian noise scaled to `grads.max_norm`:
 
 ```python
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key
 
 noise_fn, noise_state = gaussian_noise(
     noise_multiplier=noise_multiplier, key=key(42),
@@ -56,8 +56,8 @@ noisy_grads, noise_state = noise_fn(grads, noise_state)
 DP-FTRL adds correlated noise via a matrix-factorization strategy:
 
 ```python
-from opaque.dpftrl.noise import band_mf_strategy, mf_gaussian_noise
-from opaque.random import key
+from opake.dpftrl.noise import band_mf_strategy, mf_gaussian_noise
+from opake.random import key
 
 strategy = band_mf_strategy(bands=10)
 noise_fn, noise_state = mf_gaussian_noise(
@@ -74,10 +74,10 @@ Composable `DpProcess` objects built on a Rust PLD engine. Mechanisms
 compose with `*` (repeat) and `|` (heterogeneous composition).
 
 ```python
-import opaque.accounting as acc                # cross-cutting
-import opaque.dpsgd.accounting as dpsgd_acc    # DP-SGD per-step factories
-import opaque.dpftrl.accounting as dpftrl_acc  # DP-FTRL whole-process factories
-from opaque.dpftrl.noise import band_mf_strategy
+import opake.accounting as acc                # cross-cutting
+import opake.dpsgd.accounting as dpsgd_acc    # DP-SGD per-step factories
+import opake.dpftrl.accounting as dpftrl_acc  # DP-FTRL whole-process factories
+from opake.dpftrl.noise import band_mf_strategy
 
 # DP-SGD: per-step Gaussian + Poisson, composed across N steps.
 dpsgd_proc = dpsgd_acc.poisson(dpsgd_acc.gaussian(1.0), sample_rate=0.01) * 1000
@@ -99,7 +99,7 @@ DDP-aware: pass the same key on all ranks for synchronized noise,
 use `sum_gradients` for cross-rank reduction.
 
 ```python
-from opaque.distributed import sum_gradients
+from opake.distributed import sum_gradients
 
 grads, clip_state = grad_fn(params, local_batch, state=clip_state)
 grads = sum_gradients(grads)
@@ -112,8 +112,8 @@ Empirical privacy validation via one-run membership inference
 ([Steinke et al. 2023](https://arxiv.org/abs/2305.08846)).
 
 ```python
-import opaque.auditing as auditing
-from opaque.random import key
+import opake.auditing as auditing
+from opake.random import key
 
 cf = auditing.coin_flip(dataset, num_canaries=1000, key=key(42))
 train_data = dataset.select(cf.train_indices(len(dataset)))

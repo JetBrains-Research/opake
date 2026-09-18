@@ -1,6 +1,6 @@
 # Auditing API
 
-::: opaque.auditing
+::: opake.auditing
 
 ## Module functions
 
@@ -166,7 +166,7 @@ scores = auditing.gradient_scores(
 The scorer is also available from the attacks namespace:
 
 ```python
-from opaque.auditing.attacks import gradient_scores
+from opake.auditing.attacks import gradient_scores
 ```
 
 ---

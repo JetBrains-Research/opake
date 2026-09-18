@@ -5,23 +5,23 @@ from typing import ClassVar
 import pytest
 import torch
 
-import opaque.dpftrl.accounting as ftrl_acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.dpftrl.noise import (
+import opake.dpftrl.accounting as ftrl_acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.dpftrl.noise import (
     band_mf_strategy,
     bisr_strategy,
     blt_strategy,
     lambda_cgd_strategy,
     mf_gaussian_noise,
 )
-from opaque.dpftrl.noise.types import (
+from opake.dpftrl.noise.types import (
     BandMfStrategy,
     BisrStrategy,
     BltStrategy,
     LambdaCgdStrategy,
 )
-from opaque.random import key
-from opaque.types import NoisedPytree, clipped
+from opake.random import key
+from opake.types import NoisedPytree, clipped
 
 _PART = {"n_steps": 100, "min_sep": 25, "max_participations": 4}
 _BAND_PART = {"n_steps": 100, "min_sep": 1, "max_participations": 100}
@@ -288,7 +288,7 @@ class TestMfNoise:
         assert noised.max_norm == pytest.approx(1.0)
         # ``noise_stddev`` is the per-step *realized* σ (= base σ ·
         # ‖row_t(C^-1)‖) — see the bug-fix tests in
-        # ``packages/opaque-dpftrl/tests/noise/test_realized_stddev.py``.
+        # ``packages/opake-dpftrl/tests/noise/test_realized_stddev.py``.
         # For BandMF the row_l2 differs from 1; recover base σ and check.
         streaming = s.streaming_matrix(
             n_steps=n_steps, min_sep=1, max_participations=n_steps

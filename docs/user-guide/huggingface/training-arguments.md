@@ -1,6 +1,6 @@
 # TrainingArguments
 
-`opaque.transformers.TrainingArguments` mirrors the subset of
+`opake.transformers.TrainingArguments` mirrors the subset of
 Hugging Face `TrainingArguments` DPTrainer honors, plus DPTrainer's
 own privacy / clipping / sampling / patching fields. Unsupported HF
 knobs are intentionally omitted from the surface.
@@ -63,11 +63,23 @@ must be set.** Neither has a silent default — construction raises if
 both are `None`. The usual configurations are:
 
 - `privacy_target_epsilon=ε` (NM left as `None`) — calibrate the noise
-  multiplier from the budget at `train()` start.
-- `privacy_noise_multiplier=σ` (target_eps left as `None`) — fix the
-  noise multiplier; accounted ε is reported but not constrained.
+  multiplier from the budget at `train()` start and enable privacy accounting.
+- `privacy_noise_multiplier=σ` (target_eps left as `None`) — fixed-noise
+  training. Independently composed DP-SGD runs skip privacy accounting by
+  default; set `privacy_accounting=True` to report the resulting ε without
+  constraining it. Complete-horizon configurations (matrix-factorization
+  mechanisms, k-out-of-t sampling) keep accounting on.
 - For independent DP-SGD only, set both to use a fixed multiplier and
   stop after the accumulated epsilon reaches the target.
+
+Privacy accounting is on by default whenever `privacy_target_epsilon` is set
+or the noise mechanism accounts over the complete horizon; only
+independently composed fixed-noise DP-SGD runs default to off, where
+`privacy_accounting=False` is also an explicit opt-out. Disabled runs do not
+report ε / δ or write `accountant.json` checkpoints. Setting
+`privacy_accounting=False` with a complete-horizon mechanism raises: the
+horizon snapshot is what lets a resumed run detect a changed noise strategy
+or multiplier, so it is always recorded.
 
 Setting `privacy_noise_multiplier=0.0` together with a
 `privacy_target_epsilon` raises: the non-private path can't honour a
@@ -212,7 +224,7 @@ Mechanism constraints (validated at construction):
 |---|---|---|
 | `bf16` | `False` | bf16 autocast on the per-example loss closure. |
 | `bf16_full_eval` | `False` | Cast the model to bf16 for the eval scope only. |
-| `gradient_checkpointing` | `False` | Opaque automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with `torch_compile`. |
+| `gradient_checkpointing` | `False` | Opake automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with `torch_compile`. |
 | `torch_compile` | `False` | Compiles the tensor-only per-microbatch `vmap(grad)+clip+reduce` kernel with `fullgraph=True`. |
 
 ## Patches and kernels
@@ -285,10 +297,10 @@ rank-gated checkpointing, see
 ## Converting from HF / TRL configs
 
 Rather than hand-port an upstream config, convert it with the classmethod on
-the matching opaque config:
+the matching opake config:
 
 ```python
-from opaque.transformers import TrainingArguments
+from opake.transformers import TrainingArguments
 
 args = TrainingArguments.from_hf(hf_args, privacy_target_epsilon=8.0)
 ```
@@ -297,7 +309,7 @@ args = TrainingArguments.from_hf(hf_args, privacy_target_epsilon=8.0)
 - `SFTConfig.from_trl(trl_cfg, …)` — from `trl.SFTConfig`
 - `DPOConfig.from_trl(trl_cfg, …)` — from `trl.DPOConfig`
 
-(`SFTConfig` / `DPOConfig` live in `opaque.transformers.trl`.)
+(`SFTConfig` / `DPOConfig` live in `opake.transformers.trl`.)
 
 What the converter does:
 
@@ -333,7 +345,7 @@ these for you). For reference, the notable ones:
 | --- | --- | --- |
 | `group_by_length`, `length_column_name` | Length-bucketed batching breaks the equal per-example inclusion probability Poisson amplification relies on | Leave examples unsorted; Poisson sampling handles variable lengths |
 | `dataloader_drop_last` | The Poisson / random samplers produce variable-size batches, so dropping a "last batch" is meaningless; the sequential batch sampler already enforces drop-last internally where it matters for correctness | n/a (handled by the sampler) |
-| `deepspeed`, `fsdp`, `fsdp_config`, `accelerator_config`, `parallelism_config` | Parameter/gradient sharding is incompatible with vmap per-example gradients | Use Opaque's built-in DDP (`torchrun` + sharded data) |
+| `deepspeed`, `fsdp`, `fsdp_config`, `accelerator_config`, `parallelism_config` | Parameter/gradient sharding is incompatible with vmap per-example gradients | Use Opake's built-in DDP (`torchrun` + sharded data) |
 | `tpu_num_cores`, `mp_parameters` | TPU/XLA and SageMaker MP are not supported execution backends | CUDA / CPU only |
 | `fp16`, `fp16_full_eval`, `fp16_opt_level`, `half_precision_backend`, `fp16_backend` | fp16 dynamic loss scaling adds a per-example unscale-before-clip step for no benefit on bf16-capable hardware | `bf16=True` (native bf16 autocast; no loss scaler) |
 | `optim="adamw_8bit"` / paged / Apex-fused | No functional torchopt equivalent | A supported `optim` name (see the optimizer table) |

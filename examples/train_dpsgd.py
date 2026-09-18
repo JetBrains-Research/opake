@@ -58,8 +58,8 @@ import torchopt
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, get_peft_model
 
-from opaque.patches import apply_model_patches, apply_runtime_patches
-from opaque.device import sdpa_autocast_under_vmap_broken
+from opake.patches import apply_model_patches, apply_runtime_patches
+from opake.device import sdpa_autocast_under_vmap_broken
 
 apply_runtime_patches()
 
@@ -71,38 +71,38 @@ from transformers import (
     DataCollatorForLanguageModeling,
 )
 
-import opaque.accounting as acc
-import opaque.auditing as auditing
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.accounting import calibration as cal, Accountant
-from opaque.dpsgd.clipping import auto_clipped_grad, clipped_grad
-from opaque.dpsgd.clipping import adaptive_clipped_grad
-from opaque.distributed import sync
-from opaque.distributed.gradients import sum_gradients_
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.profiling import (
+import opake.accounting as acc
+import opake.auditing as auditing
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.accounting import calibration as cal, Accountant
+from opake.dpsgd.clipping import auto_clipped_grad, clipped_grad
+from opake.dpsgd.clipping import adaptive_clipped_grad
+from opake.distributed import sync
+from opake.distributed.gradients import sum_gradients_
+from opake.dpsgd.noise import gaussian_noise
+from opake.profiling import (
     perf_tracker,
     print_memory,
     reset_peak_memory,
 )
-from opaque.random import fold_in, key, split
-from opaque.dpsgd.sampling import KOutOfTSampler, PoissonSampler
-from opaque.distributed import local_shard
-from opaque.functional import make_functional, empty_collate
-from opaque.scheduling import (
+from opake.random import fold_in, key, split
+from opake.dpsgd.sampling import KOutOfTSampler, PoissonSampler
+from opake.distributed import local_shard
+from opake.functional import make_functional, empty_collate
+from opake.scheduling import (
     cosine_schedule,
     inverse_sqrt_schedule,
     linear_schedule,
     with_warmup,
 )
-from opaque.scheduling.types import Schedule
-from opaque.types import (
+from opake.scheduling.types import Schedule
+from opake.types import (
     ClippedPytree,
     PerGroup,
     SecondMomentClippingOutput,
     SecondMomentNoiseOutput,
 )
-from opaque.dpsgd.clipping import per_group
+from opake.dpsgd.clipping import per_group
 import wandb
 
 
@@ -259,11 +259,11 @@ def _resolve_model_dtype(
 
 def _kernel_mode_summary(device: torch.device, dtype_name: str) -> tuple[str, str]:
     """Return concise status of kernel optimization mode for this run."""
-    if os.environ.get("OPAQUE_NO_PATCH", "0") == "1":
-        return "disabled", "OPAQUE_NO_PATCH=1"
+    if os.environ.get("OPAKE_NO_PATCH", "0") == "1":
+        return "disabled", "OPAKE_NO_PATCH=1"
 
-    if os.environ.get("OPAQUE_NO_KERNEL_PATCH", "0") == "1":
-        return "disabled", "OPAQUE_NO_KERNEL_PATCH=1"
+    if os.environ.get("OPAKE_NO_KERNEL_PATCH", "0") == "1":
+        return "disabled", "OPAKE_NO_KERNEL_PATCH=1"
 
     if device.type != "cuda":
         return "disabled", f"device={device.type} (Triton kernels are CUDA-only)"
@@ -494,8 +494,8 @@ def parse_args():
         ],
         help=(
             "Optimizer.  ``sgd`` and ``adam`` are torchopt's vanilla "
-            "primitives (no DP-aware paths); the others are Opaque-built "
-            "(see opaque.optimizers).  Pair with "
+            "primitives (no DP-aware paths); the others are Opake-built "
+            "(see opake.optimizers).  Pair with "
             "``--noise-bias-correction`` to enable DP-aware bias "
             "correction where applicable."
         ),
@@ -616,13 +616,13 @@ def parse_args():
     dp_group.add_argument(
         "--kernel-patches",
         action=argparse.BooleanOptionalAction,
-        default=os.environ.get("OPAQUE_NO_KERNEL_PATCH", "0") != "1",
-        help="Apply the opaque Triton speed kernels (rope/rms_norm/activation/"
+        default=os.environ.get("OPAKE_NO_KERNEL_PATCH", "0") != "1",
+        help="Apply the opake Triton speed kernels (rope/rms_norm/activation/"
         "fused-CE) to the model. On by default (auto-falls back to eager on "
         "non-CUDA hosts). --no-kernel-patches forces the eager baseline; the "
         "compat vmap-safety wrappers — including the load-bearing MoE experts "
         "patch — plus kv_cache and PEFT kernels stay on. Default also follows "
-        "OPAQUE_NO_KERNEL_PATCH=1.",
+        "OPAKE_NO_KERNEL_PATCH=1.",
     )
     dp_group.add_argument(
         "--torch-compile",
@@ -796,8 +796,8 @@ def parse_args():
     tracking_group.add_argument(
         "--wandb-project",
         type=str,
-        default=os.environ.get("WANDB_PROJECT", "opaque"),
-        help="W&B project name (default: WANDB_PROJECT env var or 'opaque')",
+        default=os.environ.get("WANDB_PROJECT", "opake"),
+        help="W&B project name (default: WANDB_PROJECT env var or 'opake')",
     )
     tracking_group.add_argument(
         "--wandb-run-name",
@@ -1650,7 +1650,7 @@ def main():
             f"(iterations={calibration.iterations}, converged={calibration.converged})"
         )
 
-    # Build LR schedule using opaque.scheduling primitives.  Each curve
+    # Build LR schedule using opake.scheduling primitives.  Each curve
     # returns a ``Callable[[int], float]`` and ``with_warmup`` composes a
     # 0→1 linear ramp during the warmup window; torchopt's
     # ``scale_by_neg_lr`` accepts either a callable or a scalar.  We
@@ -1712,7 +1712,7 @@ def main():
     # DP-aware path consumes that metadata.  For optimizers without a BC
     # path (sgd/lion) the flag is silently ignored.
     if args.optimizer == "adam":
-        from opaque.optimizers import adam
+        from opake.optimizers import adam
 
         base_opt = adam(
             lr=lr_for_opt,
@@ -1720,11 +1720,11 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "sgd":
-        from opaque.optimizers import sgd
+        from opake.optimizers import sgd
 
         base_opt = sgd(lr=lr_for_opt, weight_decay=args.weight_decay)
     elif args.optimizer == "adamw":
-        from opaque.optimizers import adamw
+        from opake.optimizers import adamw
 
         base_opt = adamw(
             lr=lr_for_opt,
@@ -1732,7 +1732,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "ademamix":
-        from opaque.optimizers import ademamix
+        from opake.optimizers import ademamix
 
         base_opt = ademamix(
             lr=lr_for_opt,
@@ -1740,14 +1740,14 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "lion":
-        from opaque.optimizers import lion
+        from opake.optimizers import lion
 
         base_opt = lion(
             lr=lr_for_opt,
             weight_decay=args.weight_decay,
         )
     elif args.optimizer == "adafactor":
-        from opaque.optimizers import adafactor
+        from opake.optimizers import adafactor
 
         base_opt = adafactor(
             lr=lr_for_opt,
@@ -1755,7 +1755,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "rmsprop":
-        from opaque.optimizers import rmsprop
+        from opake.optimizers import rmsprop
 
         base_opt = rmsprop(
             lr=lr_for_opt,
@@ -1763,7 +1763,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "adagrad":
-        from opaque.optimizers import adagrad
+        from opake.optimizers import adagrad
 
         base_opt = adagrad(
             lr=lr_for_opt,

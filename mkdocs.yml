@@ -1,10 +1,10 @@
-site_name: Opaque
+site_name: Opake
 site_description: Functional DP-SGD and DP-FTRL for PyTorch
-site_author: Opaque Contributors
-site_url: https://jetbrains-research.github.io/opaque/
+site_author: Opake Contributors
+site_url: https://jetbrains-research.github.io/opake/
 
-repo_name: JetBrains-Research/opaque
-repo_url: https://github.com/JetBrains-Research/opaque
+repo_name: JetBrains-Research/opake
+repo_url: https://github.com/JetBrains-Research/opake
 edit_uri: edit/main/docs/
 
 theme:
@@ -40,16 +40,16 @@ plugins:
       handlers:
         python:
           paths:
-            - packages/opaque-base/src
-            - packages/opaque-engine/src
-            - packages/opaque-optimizers/src
-            - packages/opaque-dpsgd/src
-            - packages/opaque-dpftrl/src
-            - packages/opaque-auditing/src
-            - packages/opaque-accounting/src
-            - packages/opaque-patches/src
-            - packages/opaque-transformers/src
-            - packages/opaque-alignment/src
+            - packages/opake-base/src
+            - packages/opake-engine/src
+            - packages/opake-optimizers/src
+            - packages/opake-dpsgd/src
+            - packages/opake-dpftrl/src
+            - packages/opake-auditing/src
+            - packages/opake-accounting/src
+            - packages/opake-patches/src
+            - packages/opake-transformers/src
+            - packages/opake-alignment/src
           options:
             docstring_style: google
             show_source: true
@@ -164,6 +164,6 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/JetBrains-Research/opaque
+      link: https://github.com/JetBrains-Research/opake
   version:
     provider: mike

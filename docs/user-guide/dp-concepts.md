@@ -1,7 +1,7 @@
 # Differential Privacy Concepts
 
 This page covers the theory behind differential privacy (DP) and DP-SGD at the
-level needed to use Opaque effectively. For the API itself, see the topic-specific
+level needed to use Opake effectively. For the API itself, see the topic-specific
 guides linked throughout.
 
 ## What differential privacy guarantees
@@ -72,7 +72,7 @@ Each training example produces its own gradient vector. This is more expensive
 than standard batch-gradient computation but necessary for bounding per-example
 influence.
 
-Opaque computes per-example gradients efficiently using `torch.func.vmap` and
+Opake computes per-example gradients efficiently using `torch.func.vmap` and
 `torch.func.grad`. See [Gradient Clipping](clipping.md) for details.
 
 ### Step 2: Clipping
@@ -137,7 +137,7 @@ $$\varepsilon = \sqrt{2T \ln(1/\delta)} \cdot \varepsilon_0 + T \cdot \varepsilo
 For small $\varepsilon_0$, the total grows as $\sqrt{T}$ rather than $T$ — a
 significant improvement. But it still uses worst-case per-step bounds.
 
-**PLD composition**: Opaque uses *Privacy Loss Distributions* (PLD), which
+**PLD composition**: Opake uses *Privacy Loss Distributions* (PLD), which
 track the full probability distribution of the privacy loss random variable
 
 $$\ell(o) = \ln \frac{P[\mathcal{M}(D) = o]}{P[\mathcal{M}(D') = o]}$$
@@ -149,7 +149,7 @@ advanced composition. In practice, PLD composition gives 2-5x tighter
 $\varepsilon$ than advanced composition for typical DP-SGD training runs.
 
 The `*` and `|` operators on `DpProcess` objects compute PLD composition
-in Opaque's Rust PLD engine. See [Privacy Accounting](accounting.md).
+in Opake's Rust PLD engine. See [Privacy Accounting](accounting.md).
 
 ### Subsampling amplification
 
@@ -161,25 +161,25 @@ With Poisson sampling at rate $q$ (each example included independently with
 probability $q$), the effective noise multiplier is amplified by approximately
 $1/q$. For $q=0.01$ (1% sample rate), this is a 100x amplification.
 
-Opaque supports several subsampling schemes:
+Opake supports several subsampling schemes:
 
 | Scheme | Description | Use case |
 |--------|-------------|----------|
 | **Poisson** | Each example included independently with probability $q$ | Standard DP-SGD. Variable batch size. |
 | **Truncated Poisson** | Poisson draw capped at a maximum batch size | DP-SGD when you want stable batch sizes; privacy is weaker than plain Poisson at the same $q$. |
-| **Cyclic Poisson (DP-FTRL)** | ``opaque.dpftrl.sampling.CyclicPoissonSampler``: ``bands`` disjoint groups, step ``i`` uses group ``i % bands``, inclusion prob. ``q`` per eligible example. ``bands=1`` is identity (full data each step); larger ``bands`` match BandMF-style rotation. | ``mf_gaussian_noise`` + ``dpftrl_acc.poisson`` (whole-process accountant). |
+| **Cyclic Poisson (DP-FTRL)** | ``opake.dpftrl.sampling.CyclicPoissonSampler``: ``bands`` disjoint groups, step ``i`` uses group ``i % bands``, inclusion prob. ``q`` per eligible example. ``bands=1`` is identity (full data each step); larger ``bands`` match BandMF-style rotation. | ``mf_gaussian_noise`` + ``dpftrl_acc.poisson`` (whole-process accountant). |
 
 The key distinction is between *Poisson* and *fixed-size* sampling. Poisson
 sampling produces variable-size batches but has a clean privacy analysis.
 Fixed-size sampling (drawing exactly $B$ examples) has a slightly different
-privacy profile. Opaque uses Poisson-style sampling throughout.
+privacy profile. Opake uses Poisson-style sampling throughout.
 
 Truncated Poisson keeps Poisson-style randomness but caps realized batch size,
 which stabilizes memory and batch norms at the cost of **weaker** privacy than
 unconditional Poisson at the same inclusion probability $q$ (use the
 truncated-Poisson accountant).
 
-Opaque's `PoissonSampler` implements Poisson subsampling. The accounting module
+Opake's `PoissonSampler` implements Poisson subsampling. The accounting module
 accounts for this amplification via `dpsgd_acc.poisson(mechanism, sample_rate)`.
 See [Sampling & Microbatching](sampling.md) and the
 [Mechanisms](../mechanisms/index.md) reference for per-mechanism amplification
@@ -187,7 +187,7 @@ details.
 
 ## Privacy metrics
 
-Opaque supports four families of privacy metrics, all derived from the same
+Opake supports four families of privacy metrics, all derived from the same
 underlying PLD. Different metrics suit different audiences and use cases.
 
 ### ($\varepsilon$, $\delta$)-DP
@@ -259,7 +259,7 @@ This metric is natural for decision-theoretic reasoning about privacy.
 
 ### Choosing a metric
 
-| Metric | Best for | Opaque method |
+| Metric | Best for | Opake method |
 |--------|----------|---------------|
 | $(\varepsilon, \delta)$-DP | Compliance, published comparisons | `.epsilon_at(delta)` |
 | Advantage | Quick scalar privacy summary | `.advantage()` |
@@ -301,7 +301,7 @@ batches (smaller $q$) means more steps and higher privacy cost.
 
 ### Privacy vs compute
 
-Per-example gradients are more expensive than batch gradients. Opaque uses
+Per-example gradients are more expensive than batch gradients. Opake uses
 `torch.func.vmap` for efficient vectorized computation. Microbatching trades
 compute time for memory by processing the batch in smaller chunks.
 
@@ -312,7 +312,7 @@ The clip norm C controls the sensitivity-noise trade-off:
 - Lower C: more clipping distortion, but less noise needed
 
 A common heuristic is to set C to the median gradient norm observed during
-non-private training. Opaque's `adaptive_clipped_grad` automates this by
+non-private training. Opake's `adaptive_clipped_grad` automates this by
 adjusting C to maintain a target fraction of clipped gradients (typically the
 median, i.e., 50%).
 
@@ -348,7 +348,7 @@ Three MF strategies are available:
 | **BandMF** | $O(b)$ | Streaming, long training runs |
 | **BLT** | $O(b)$ | Multi-epoch training |
 
-MF mechanisms use ``opaque.dpftrl.sampling.CyclicPoissonSampler`` (and other FTRL
+MF mechanisms use ``opake.dpftrl.sampling.CyclicPoissonSampler`` (and other FTRL
 samplers) with amplification that depends on the mechanism; identity runs use
 ``bands=1``. See the
 [Mechanisms](../mechanisms/index.md) reference for details.
@@ -362,7 +362,7 @@ The privacy guarantee depends on what "differ in one record" means:
 | Add or remove | $D' = D \pm$ one record | $C$ |
 | Replace one | $D' = D$ with one record swapped | $2C$ |
 
-Opaque uses the **add-or-remove** convention: clipped outputs carry
+Opake uses the **add-or-remove** convention: clipped outputs carry
 `grads.max_norm = C / normalize_by`. When `normalize_by` is set to the expected
 batch size $B$, the bound is $C/B$. If your analysis uses replace-one
 semantics, double the bound when calibrating noise.

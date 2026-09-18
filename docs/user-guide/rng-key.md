@@ -1,6 +1,6 @@
 # Random Number Generation
 
-Opaque uses explicit RNG keys instead of global random state. Every
+Opake uses explicit RNG keys instead of global random state. Every
 function that involves randomness — noise injection, sampling, adaptive
 clipping, and auditing — takes a `key` parameter. This follows the JAX PRNG
 model: no hidden state, fully deterministic, and safe in distributed
@@ -37,13 +37,13 @@ advance an immutable key.
 ### `key(seed)`
 
 Create a key from an integer seed. This is the entry point for all
-randomness in Opaque.
+randomness in Opake.
 
 ```python
-from opaque.random import key
+from opake.random import key
 
 k = key(42)
-# RngKey(seed=42, impl='opaque_threefry_like')
+# RngKey(seed=42, impl='opake_threefry_like')
 ```
 
 The returned `RngKey` is a frozen (immutable) dataclass with a `seed`
@@ -55,7 +55,7 @@ Derive `num` child keys from a parent key. Use this when you need multiple
 separate sources of randomness.
 
 ```python
-from opaque.random import key, split
+from opake.random import key, split
 
 k = key(42)
 k_noise, k_sample = split(k)
@@ -63,10 +63,10 @@ k1, k2, k3 = split(k, num=3)
 ```
 
 Each child is deterministically derived via `fold_in(k, i)` for index `i`.
-Under Opaque's PRNG model, each child identifies a separate stream, and
+Under Opake's PRNG model, each child identifies a separate stream, and
 consuming one child does not advance another.
 
-Opaque separates registered component families internally. Split explicitly
+Opake separates registered component families internally. Split explicitly
 when constructing multiple instances that must use distinct streams.
 
 ```python
@@ -85,7 +85,7 @@ sampler_b = PoissonSampler(dataset, sample_rate=0.01, key=k_b)
 Mix additional data into a key. Variadic — accepts multiple values:
 
 ```python
-from opaque.random import key, fold_in
+from opake.random import key, fold_in
 
 k = key(42)
 step_key = fold_in(k, step)              # single int
@@ -100,7 +100,7 @@ Integers and strings occupy disjoint hash paths: each fold is prefixed with a
 type tag before hashing. That split is load-bearing. Integers are the caller's
 space (`split`, steps, ranks).
 Strings root a mechanism: fold one unique tag once, then derive steps
-beneath it. Opaque's shipped tags are listed in the
+beneath it. Opake's shipped tags are listed in the
 [RNG reference](../reference/rng.md).
 
 `fold_in` prefixes each typed input and hashes it with BLAKE2b to derive a
@@ -117,15 +117,15 @@ Convert an `RngKey` to a `torch.Generator` for use with PyTorch operations
 that require one.
 
 ```python
-from opaque.random import key, generator_from_key
+from opake.random import key, generator_from_key
 
 gen = generator_from_key(key(42))
 tensor = torch.randn(10, generator=gen)
 ```
 
-This bridges Opaque's immutable keys with PyTorch's generator API. Use it
+This bridges Opake's immutable keys with PyTorch's generator API. Use it
 for non-DP operations (dropout, weight initialization) where you want
-determinism but don't need Opaque's key management.
+determinism but don't need Opake's key management.
 
 ### `random_key()`
 
@@ -133,7 +133,7 @@ Create a non-deterministic key using system entropy. Each call returns a
 different key.
 
 ```python
-from opaque.random import random_key
+from opake.random import random_key
 
 k = random_key()  # different every time
 ```
@@ -141,13 +141,13 @@ k = random_key()  # different every time
 Use for prototyping and exploration when reproducibility is not needed.
 For production training, always use `key(seed)` with a fixed seed.
 
-## Using keys with Opaque components
+## Using keys with Opake components
 
 ### Noise
 
 ```python
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key
 
 noise_fn, state = gaussian_noise(noise_multiplier=1.1, key=key(42))
 noisy_grads, state = noise_fn(grads, state)
@@ -162,8 +162,8 @@ remain reproducibly identical.
 ### Sampling
 
 ```python
-from opaque.dpsgd.sampling import PoissonSampler
-from opaque.random import key
+from opake.dpsgd.sampling import PoissonSampler
+from opake.random import key
 
 sampler = PoissonSampler(dataset, sample_rate=0.01, key=key(42))
 ```
@@ -178,8 +178,8 @@ key when sampler instances require distinct streams.
 ### Adaptive clipping
 
 ```python
-from opaque.dpsgd.clipping import adaptive_clipped_grad
-from opaque.random import key
+from opake.dpsgd.clipping import adaptive_clipped_grad
+from opake.random import key
 
 grad_fn, clip_state = adaptive_clipped_grad(
     loss_fn, initial_clipping_norm=1.0, key=key(7),
@@ -193,8 +193,8 @@ coins. Training mechanisms use their own RNG domains, so their streams remain
 separated from auditing under a shared reproducible root seed.
 
 ```python
-import opaque.auditing as auditing
-from opaque.random import key
+import opake.auditing as auditing
+from opake.random import key
 
 cf = auditing.coin_flip(dataset, num_canaries=1000, key=key(42))
 ```
@@ -207,9 +207,9 @@ In the common case, you create keys once at the start and thread state
 through the loop:
 
 ```python
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key, split
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key, split
 
 k_noise, k_sample = split(key(42))
 
@@ -229,7 +229,7 @@ explicit control over the derivation chain:
 `key(seed) → fold_in(step) → fold_in(rank) → fold_in(worker)`.
 
 ```python
-from opaque.random import key, fold_in
+from opake.random import key, fold_in
 
 base = key(42)
 for step in range(num_steps):
@@ -251,7 +251,7 @@ noise_fn, noise_state = gaussian_noise(noise_multiplier=1.1, key=key(42))
 For per-rank key control, use `fold_in()`:
 
 ```python
-from opaque.random import key, fold_in
+from opake.random import key, fold_in
 import torch.distributed as dist
 
 rank = dist.get_rank()
@@ -272,8 +272,8 @@ Within a compatible software, build, and execution environment, the same key
 and call sequence reproduce the same output:
 
 ```python
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key
 import torch
 
 grads = {"w": torch.randn(100)}
@@ -287,13 +287,13 @@ noisy2, _ = noise_fn(grads, s2)
 assert torch.equal(noisy1["w"], noisy2["w"])
 ```
 
-Opaque controls only its own randomness. PyTorch operations like
+Opake controls only its own randomness. PyTorch operations like
 `torch.randn` or `torch.nn.Dropout` use PyTorch's global state and may
 vary across platforms. Use `set_reproducible_pytorch_seed` to configure
 framework-level determinism:
 
 ```python
-from opaque.random import set_reproducible_pytorch_seed, key
+from opake.random import set_reproducible_pytorch_seed, key
 
 set_reproducible_pytorch_seed(key(42))
 # Sets torch.manual_seed, torch.cuda.manual_seed_all

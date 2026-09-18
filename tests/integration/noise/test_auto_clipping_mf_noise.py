@@ -44,8 +44,8 @@ import math
 import pytest
 import torch
 
-from opaque.dpftrl.clipping import auto_clipped_grad, clipped_grad
-from opaque.dpftrl.noise import (
+from opake.dpftrl.clipping import auto_clipped_grad, clipped_grad
+from opake.dpftrl.noise import (
     band_mf_strategy,
     bisr_strategy,
     blt_strategy,
@@ -54,9 +54,9 @@ from opaque.dpftrl.noise import (
     lambda_cgd_strategy,
     mf_gaussian_noise,
 )
-from opaque.dpsgd.clipping import adaptive_clipped_grad
-from opaque.random import key
-from opaque.types import (
+from opake.dpsgd.clipping import adaptive_clipped_grad
+from opake.random import key
+from opake.types import (
     ClippedPytree,
     NoisedPytree,
     PerGroup,
@@ -111,12 +111,12 @@ def _row_l2_at_zero(strategy, *, n_steps, min_sep=1, max_participations=None) ->
     PRNG-replay path (no ``streaming_matrix``); we synthesize the
     expected factor from the strategy's closed-form column norm.
     """
-    from opaque.dpftrl.noise.types import IdentityStrategy, LambdaCgdStrategy
+    from opake.dpftrl.noise.types import IdentityStrategy, LambdaCgdStrategy
 
     if isinstance(strategy, IdentityStrategy):
         return 1.0
     if isinstance(strategy, LambdaCgdStrategy):
-        from opaque.api.dpftrl.noise._lambda_cgd import _column_norm
+        from opake.api.dpftrl.noise._lambda_cgd import _column_norm
 
         col = _column_norm(strategy.lambda_, n_steps, 0) if strategy.normalized else 1.0
         return col  # step-0 short-circuit: no z_{t-1} term so no sqrt(1+λ²) factor
@@ -169,7 +169,7 @@ class TestScalarAutoSxMf:
         point of MF — and why Adam BC needs it).  This test only pins
         the latch contract: ``max_norm`` stays constant across calls so
         the dispatcher never raises.  Per-step σ variation is exercised
-        by ``packages/opaque-dpftrl/tests/noise/test_realized_stddev.py``.
+        by ``packages/opake-dpftrl/tests/noise/test_realized_stddev.py``.
         """
         torch.manual_seed(0)
         params = torch.randn(N_FEATURES)
@@ -587,7 +587,7 @@ class TestAutoSPerExampleCapMath:
     """
 
     def test_per_example_bound_is_R_in_supremum(self):
-        from opaque.dpftrl.clipping.fun import auto_scale_pytree
+        from opake.dpftrl.clipping.fun import auto_scale_pytree
 
         gamma = 0.01
         for scale in (1e-3, 1.0, 1e3, 1e6):
@@ -604,7 +604,7 @@ class TestAutoSPerExampleCapMath:
 
     def test_squared_per_example_bound_is_R_squared(self):
         """The second-moment stream is bounded by ``R²``."""
-        from opaque.dpftrl.clipping.fun import auto_scale_pytree
+        from opake.dpftrl.clipping.fun import auto_scale_pytree
 
         big = torch.tensor([1e9, 0.0])
         scaled, _ = auto_scale_pytree({"w": big}, R=R, gamma=0.01)

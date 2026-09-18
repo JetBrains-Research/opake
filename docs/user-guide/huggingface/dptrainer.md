@@ -16,7 +16,7 @@ see [API reference — transformers](../../reference/transformers.md).
 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from opaque.transformers import DPTrainer, TrainingArguments
+from opake.transformers import DPTrainer, TrainingArguments
 
 tok = AutoTokenizer.from_pretrained("gpt2")
 tok.pad_token = tok.eos_token
@@ -161,7 +161,7 @@ noise turned off — `privacy_noise_multiplier=0.0` — keeping everything else
 ```python
 import math
 
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opake.transformers.trainer import DPTrainer, TrainingArguments
 
 trainer = DPTrainer(
     model=model,

@@ -1,10 +1,10 @@
 # Quick Start
 
-Train a linear regression model with differential privacy using Opaque.
+Train a linear regression model with differential privacy using Opake.
 
 ## Prerequisites
 
-Install Opaque following the [Installation Guide](installation.md).
+Install Opake following the [Installation Guide](installation.md).
 
 ## Complete example
 

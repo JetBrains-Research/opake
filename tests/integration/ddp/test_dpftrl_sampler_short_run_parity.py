@@ -4,7 +4,7 @@ Unlike :mod:`tests.integration.transformers.test_dpftrl_short_run_parity`
 (which slices the *same* fixed batch on every rank and shares one noise
 key, exercising the bit-exact algebraic identity
 ``sum_gradients(per_record_clip(shard)) == per_record_clip(full)``), this
-test runs a real :class:`opaque.dpftrl.sampling.CyclicPoissonSampler`
+test runs a real :class:`opake.dpftrl.sampling.CyclicPoissonSampler`
 (``bands=1``, the identity-MF regime) on each rank with
 ``fold_in(key(seed), rank)``.  The set of training examples seen at each
 step diverges between 1-GPU and 2-GPU, so the trajectories intentionally
@@ -25,14 +25,14 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
-from opaque_test_support import cleanup_process_group, setup_nccl, spawn
+from opake_test_support import cleanup_process_group, setup_nccl, spawn
 
-from opaque.api.engine.clipping import clipped_grad
-from opaque.distributed import local_shard, sum_gradients
-from opaque.dpftrl.noise import identity_strategy, mf_gaussian_noise
-from opaque.dpftrl.sampling import CyclicPoissonSampler
-from opaque.functional import make_functional
-from opaque.random import fold_in, key
+from opake.api.engine.clipping import clipped_grad
+from opake.distributed import local_shard, sum_gradients
+from opake.dpftrl.noise import identity_strategy, mf_gaussian_noise
+from opake.dpftrl.sampling import CyclicPoissonSampler
+from opake.functional import make_functional
+from opake.random import fold_in, key
 
 pytestmark = [pytest.mark.slow, pytest.mark.cuda]
 

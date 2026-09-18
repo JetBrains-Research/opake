@@ -1,4 +1,4 @@
-# Opaque project context
+# Opake project context
 
 @AGENTS.md
 @.junie/architecture-contracts.md

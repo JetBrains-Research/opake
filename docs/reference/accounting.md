@@ -1,4 +1,4 @@
-# opaque.accounting
+# opake.accounting
 
 Differential privacy accounting using Privacy Loss Distributions (PLD).
 
@@ -8,8 +8,8 @@ and `|` (heterogeneous compose). Privacy metrics are queried directly on the
 resulting process.
 
 ```python
-import opaque.accounting as acc
-import opaque.dpsgd.accounting as dpsgd_acc
+import opake.accounting as acc
+import opake.dpsgd.accounting as dpsgd_acc
 
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.8), sample_rate=0.01)
 training = step * 1000
@@ -17,9 +17,9 @@ epsilon = training.epsilon_at(1e-5)
 ```
 
 The underlying implementation uses Google's PLD accounting via the
-`opaque-accounting` Rust crate (PyO3 bindings).
+`opake-accounting` Rust crate (PyO3 bindings).
 
-Published `opaque-accounting` artifacts are an sdist, `manylinux_2_28`
+Published `opake-accounting` artifacts are an sdist, `manylinux_2_28`
 Linux wheels for `x86_64` and `aarch64`, and a macOS 11+ `arm64` wheel.
 Windows, macOS `x86_64`, and `musllinux` wheels are intentionally not
 published at the moment.
@@ -34,23 +34,23 @@ The accounting API is split into three namespaces:
 
 | Namespace | Contents | Import |
 |-----------|----------|--------|
-| `opaque.accounting` | Cross-cutting: calibration, composition, `Accountant`, `repeat`, `compose` | `import opaque.accounting as acc` |
-| `opaque.dpsgd.accounting` | DP-SGD mechanisms: `gaussian`, `adaclip`, `poisson` (plain or truncated via `truncated_batch_size` / `dataset_size`), `parallel_poisson`, `k_out_of_t` | `from opaque.dpsgd import accounting as dpsgd_acc` |
-| `opaque.dpftrl.accounting` | DP-FTRL mechanisms: `mf_gaussian`, `poisson` (whole-process, parameterized by `n_steps`), `b_min_sep`, `balls_in_bins` | `from opaque.dpftrl import accounting as dpftrl_acc` |
+| `opake.accounting` | Cross-cutting: calibration, composition, `Accountant`, `repeat`, `compose` | `import opake.accounting as acc` |
+| `opake.dpsgd.accounting` | DP-SGD mechanisms: `gaussian`, `adaclip`, `poisson` (plain or truncated via `truncated_batch_size` / `dataset_size`), `parallel_poisson`, `k_out_of_t` | `from opake.dpsgd import accounting as dpsgd_acc` |
+| `opake.dpftrl.accounting` | DP-FTRL mechanisms: `mf_gaussian`, `poisson` (whole-process, parameterized by `n_steps`), `b_min_sep`, `balls_in_bins` | `from opake.dpftrl import accounting as dpftrl_acc` |
 
 The mechanism factories (`gaussian`, `poisson`, `mf_gaussian`, …) live **only** on
 the algorithm-scoped namespaces — use the namespace that matches your training
 run. Cross-cutting primitives (`Accountant`, `calibrate`, `epsilon_budget`,
-composition operators) live on `opaque.accounting`.
+composition operators) live on `opake.accounting`.
 
 ```python
 # DP-SGD
-from opaque.dpsgd import accounting as dpsgd_acc
+from opake.dpsgd import accounting as dpsgd_acc
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.8), sample_rate=0.01)
 
 # DP-FTRL
-from opaque.dpftrl import accounting as dpftrl_acc
-from opaque.dpftrl.noise import band_mf_strategy
+from opake.dpftrl import accounting as dpftrl_acc
+from opake.dpftrl.noise import band_mf_strategy
 strategy = band_mf_strategy(bands=10)
 proc = dpftrl_acc.poisson(
     dpftrl_acc.mf_gaussian(1.0, strategy),
@@ -58,13 +58,13 @@ proc = dpftrl_acc.poisson(
     n_steps=1000,
 )
 
-# Cross-cutting composition and calibration always go via opaque.accounting
-import opaque.accounting as acc
+# Cross-cutting composition and calibration always go via opake.accounting
+import opake.accounting as acc
 total = step * 1000
 eps = total.epsilon_at(1e-5)
 ```
 
-`opaque.dpsgd.accounting` and `opaque.dpftrl.accounting` are lazily imported:
+`opake.dpsgd.accounting` and `opake.dpftrl.accounting` are lazily imported:
 the Rust PLD extension is not loaded until you access these submodules.
 
 ---
@@ -79,7 +79,7 @@ factories are registered automatically. If an application supplies its own
 checkpointing:
 
 ```python
-import opaque.accounting as acc
+import opake.accounting as acc
 
 acc.register_budget_serializer(
     MyBudget,
@@ -97,7 +97,7 @@ restoring an unknown budget checkpoint type raises `CheckpointError`.
 Abstract base class for all privacy processes. Subclasses implement `pld()` to
 compute the Privacy Loss Distribution on demand. Results are automatically
 cached via `@lru_cache` (maxsize=8). Use `cached()` for larger cache
-size (16) or as an opaque merge barrier.
+size (16) or as an opake merge barrier.
 
 **Privacy metrics:**
 
@@ -229,7 +229,7 @@ sensitivity-1 queries. Base mechanism for DP-SGD.
 ### `poisson(inner, sample_rate) -> DpProcess`
 
 Poisson-subsampled mechanism (standard DP-SGD step). `sample_rate` is
-`batch_size / dataset_size`. Plain Poisson accepts any Opaque `DpProcess` as
+`batch_size / dataset_size`. Plain Poisson accepts any Opake `DpProcess` as
 its base mechanism.
 
 - `inner` (DpProcess): Base mechanism
@@ -295,7 +295,7 @@ With `allocation="block"`, every record participates in exactly one batch in
 each of `k` contiguous, nearly equal blocks. Block sizes differ by at most one.
 
 This mode pairs with
-`opaque.dpsgd.sampling.KOutOfTSampler(..., allocation="block")` and
+`opake.dpsgd.sampling.KOutOfTSampler(..., allocation="block")` and
 is computed for the declared horizon by the exact PLD transform of Feldman &
 Shenfeld (2026), with no Monte Carlo sampling.
 
@@ -347,7 +347,7 @@ noise multiplier, so **privacy accounting is exactly the underlying
 first-moment mechanism**:
 
 ```python
-import opaque.accounting as acc
+import opake.accounting as acc
 
 # DP-SGD: same chain as first-moment-only
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.8), sample_rate=batch_size / dataset_size)
@@ -416,7 +416,7 @@ protected unit's contributions. If omitted, `max_participations` defaults to
 compose it again by the number of rounds.
 
 ```python
-from opaque.dpftrl.noise import band_mf_strategy
+from opake.dpftrl.noise import band_mf_strategy
 
 # One contribution per protected unit across 1000 rounds.
 strategy = band_mf_strategy(bands=10)
@@ -438,7 +438,7 @@ For bare BLT accounting, supply the same horizon and participation bounds as
 protected unit, at least 1000 rounds apart:
 
 ```python
-from opaque.dpftrl.noise import blt_strategy
+from opake.dpftrl.noise import blt_strategy
 strategy = blt_strategy(max_buffers=10)
 
 # Unamplified accounting for the full 5000-round context.
@@ -457,7 +457,7 @@ The same amplified construction works for `lambda_cgd_strategy`,
 `bisr_strategy`, and `bsr_strategy`:
 
 ```python
-from opaque.dpftrl.noise import lambda_cgd_strategy
+from opake.dpftrl.noise import lambda_cgd_strategy
 strategy = lambda_cgd_strategy(lambda_=0.9)
 proc = dpftrl_acc.balls_in_bins(
     dpftrl_acc.mf_gaussian(1.0, strategy),
@@ -554,7 +554,7 @@ Heterogeneous two-process composition. Equivalent to `left | right`.
 
 ### `cached(process) -> DpProcess`
 
-Increases the LRU cache size from 8 to 16 entries and acts as an opaque merge
+Increases the LRU cache size from 8 to 16 entries and acts as an opake merge
 barrier: the composition optimizer will not look through a cached node.
 
 **Note**: All `pld()` methods are automatically cached with `maxsize=8` via
@@ -578,15 +578,15 @@ eps = training.epsilon_at(1e-5)   # Cached with maxsize=16
 ## Serialization
 
 Processes checkpoint as a **flat** `dict[str, Any]` (string keys with dotted
-prefixes for nested composition). Use `opaque.serialization.state_dict`
-and `opaque.serialization.from_state_dict` — pass any concrete `DpProcess`
+prefixes for nested composition). Use `opake.serialization.state_dict`
+and `opake.serialization.from_state_dict` — pass any concrete `DpProcess`
 instance as the template (for example, `identity()`); the registered handler
 rebuilds from the dict's root `type` field.
 
 ```python
-import opaque.accounting as acc
-from opaque.serialization import from_state_dict, state_dict
-import opaque.dpsgd.accounting as dpsgd_acc
+import opake.accounting as acc
+from opake.serialization import from_state_dict, state_dict
+import opake.dpsgd.accounting as dpsgd_acc
 
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.5), 0.01)
 flat = state_dict(step)
@@ -605,7 +605,7 @@ Merge optimization is automatic. Composing the same `step` repeatedly in a loop
 produces a single `Repeated` node internally.
 
 ```python
-from opaque.accounting import Accountant
+from opake.accounting import Accountant
 
 acct = Accountant()
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.5), 0.01)
@@ -623,8 +623,8 @@ for i in range(num_steps):
 Pass an optional `Budget` from the calibration module to enable budget checking:
 
 ```python
-from opaque.accounting import calibration as cal
-from opaque.accounting import Accountant
+from opake.accounting import calibration as cal
+from opake.accounting import Accountant
 
 budget = cal.epsilon_budget(3.0, delta=1e-5)
 acct = Accountant(budget=budget)
@@ -652,8 +652,8 @@ epsilons.
 ```python
 import json
 
-from opaque.accounting import Accountant
-from opaque.serialization import from_state_dict
+from opake.accounting import Accountant
+from opake.serialization import from_state_dict
 
 with open("sft_checkpoint/accountant.json") as f:
     sft = from_state_dict(Accountant(), json.load(f))
@@ -669,8 +669,8 @@ guarantee is the pointwise max of the two stages' ε(δ) curves.
 ### Serialization
 
 ```python
-from opaque.accounting import Accountant
-from opaque.serialization import from_state_dict, state_dict
+from opake.accounting import Accountant
+from opake.serialization import from_state_dict, state_dict
 
 flat = state_dict(acct)
 acct2 = from_state_dict(Accountant(), flat)
@@ -683,10 +683,10 @@ the accountant was constructed with a budget.
 
 ## Calibration
 
-Submodule: `opaque.accounting.calibration`
+Submodule: `opake.accounting.calibration`
 
 ```python
-from opaque.accounting import calibration as cal
+from opake.accounting import calibration as cal
 ```
 
 Binary search for finding parameter values that achieve a target privacy budget.
@@ -715,8 +715,8 @@ supported. Exactly one endpoint must be privacy-safe; which one is detected,
 not positional.
 
 ```python
-import opaque.accounting as acc
-from opaque.accounting import calibration as cal
+import opake.accounting as acc
+from opake.accounting import calibration as cal
 
 budget = cal.epsilon_budget(3.0, delta=1e-5)
 result = cal.calibrate(
@@ -743,7 +743,7 @@ failure probability across the two endpoint probes and at most
 adaptive search as a whole rather than only its selected final parameter.
 Balls-in-Bins calibration also reuses its seeded, sigma-independent projected
 draws across probes when they fit the bounded native cache. Set
-`OPAQUE_BNB_TRANSCRIPT_CACHE_MAX_BYTES` to control its memory cap (4 GiB by
+`OPAKE_BNB_TRANSCRIPT_CACHE_MAX_BYTES` to control its memory cap (4 GiB by
 default), or to `0` to use the lower-memory one-shot path for every probe.
 
 Calibrating a second stage against the remaining budget (see

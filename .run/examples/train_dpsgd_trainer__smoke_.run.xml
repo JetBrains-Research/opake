@@ -1,13 +1,13 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="train_dpsgd_trainer (smoke)" type="PythonConfigurationType" factoryName="Python" folderName="Examples">
-    <module name="opaque" />
+    <module name="opake" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
       <env name="PYTHONUNBUFFERED" value="1" />
       <env name="WANDB_MODE" value="offline" />
-      <env name="WANDB_PROJECT" value="opaque" />
+      <env name="WANDB_PROJECT" value="opake" />
       <env name="WANDB_ENTITY" value="federated-compute" />
       <env name="WANDB_NAME" value="debug" />
     </envs>

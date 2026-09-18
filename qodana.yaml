@@ -38,26 +38,26 @@ profile:
       # framework dispatch or functional state threading. Aggregate and fresh
       # coverage gates below continue to apply to every source file.
       ignore:
-        - "scope#$Opaque_DynamicFrameworkSources"
-        - "scope#$Opaque_FunctionalRuntimeSources"
-        - "scope#$Opaque_LazyModuleFacades"
+        - "scope#$Opake_DynamicFrameworkSources"
+        - "scope#$Opake_FunctionalRuntimeSources"
+        - "scope#$Opake_LazyModuleFacades"
     - inspection: PyArgumentListInspection
       enabled: true
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_FunctionalApiSignatures"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_FunctionalApiSignatures"
     - inspection: PyDataclassInspection
       enabled: true
       ignore:
-        - "scope#$Opaque_PythonTests"
+        - "scope#$Opake_PythonTests"
     - inspection: PyTypeCheckerInspection
       enabled: true
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_ExamplesAndTutorials"
-        - "scope#$Opaque_DynamicFrameworkSources"
-        - "scope#$Opaque_FunctionalRuntimeSources"
-        - "scope#$Opaque_GitHubScripts"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_ExamplesAndTutorials"
+        - "scope#$Opake_DynamicFrameworkSources"
+        - "scope#$Opake_FunctionalRuntimeSources"
+        - "scope#$Opake_GitHubScripts"
     - inspection: PyClassHasNoInitInspection
       # Qodana does not recognize generated dataclass constructors or extension
       # stubs. PyDataclassInspection remains enabled for real dataclass errors.
@@ -73,66 +73,66 @@ profile:
     - inspection: PyTestParametrizedInspection
       enabled: true
       ignore:
-        - "scope#$Opaque_PythonTests"
+        - "scope#$Opake_PythonTests"
     - inspection: PyTestUnpassedFixtureInspection
       enabled: true
     - inspection: PyUnhashableInspection
       enabled: true
     - inspection: PyNoneFunctionAssignmentInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_ExamplesAndTutorials"
-        - "scope#$Opaque_DynamicFrameworkSources"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_ExamplesAndTutorials"
+        - "scope#$Opake_DynamicFrameworkSources"
     - inspection: PyUnboundLocalVariableInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_ExamplesAndTutorials"
-        - "scope#$Opaque_DynamicFrameworkSources"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_ExamplesAndTutorials"
+        - "scope#$Opake_DynamicFrameworkSources"
     - inspection: PyCallingNonCallableInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_ExamplesAndTutorials"
-        - "scope#$Opaque_DynamicFrameworkSources"
-        - "scope#$Opaque_FunctionalRuntimeSources"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_ExamplesAndTutorials"
+        - "scope#$Opake_DynamicFrameworkSources"
+        - "scope#$Opake_FunctionalRuntimeSources"
     - inspection: PyMethodOverridingInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_FunctionalRuntimeSources"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_FunctionalRuntimeSources"
     - inspection: PyUnreachableCodeInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_ExamplesAndTutorials"
-        - "scope#$Opaque_DynamicFrameworkSources"
-        - "scope#$Opaque_FunctionalRuntimeSources"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_ExamplesAndTutorials"
+        - "scope#$Opake_DynamicFrameworkSources"
+        - "scope#$Opake_FunctionalRuntimeSources"
     - inspection: PyTypedDictInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
+        - "scope#$Opake_PythonTests"
     - inspection: PyDeprecationInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
+        - "scope#$Opake_PythonTests"
     - inspection: PyPropertyAccessInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_FunctionalRuntimeSources"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_FunctionalRuntimeSources"
     - inspection: PyPropertyDefinitionInspection
       ignore:
-        - "scope#$Opaque_FunctionalRuntimeSources"
+        - "scope#$Opake_FunctionalRuntimeSources"
     - inspection: PyPatternInspection
       ignore:
-        - "scope#$Opaque_FunctionalRuntimeSources"
+        - "scope#$Opake_FunctionalRuntimeSources"
     - inspection: PyDecoratorInspection
       ignore:
-        - "scope#$Opaque_DynamicFrameworkSources"
+        - "scope#$Opake_DynamicFrameworkSources"
     - inspection: PyInconsistentReturnsInspection
       ignore:
-        - "scope#$Opaque_PythonTests"
-        - "scope#$Opaque_ExamplesAndTutorials"
-        - "scope#$Opaque_DynamicFrameworkSources"
-        - "scope#$Opaque_FunctionalRuntimeSources"
-        - "scope#$Opaque_GitHubScripts"
+        - "scope#$Opake_PythonTests"
+        - "scope#$Opake_ExamplesAndTutorials"
+        - "scope#$Opake_DynamicFrameworkSources"
+        - "scope#$Opake_FunctionalRuntimeSources"
+        - "scope#$Opake_GitHubScripts"
     - inspection: PyRedeclarationInspection
       ignore:
-        - "scope#$Opaque_FunctionalRuntimeSources"
+        - "scope#$Opake_FunctionalRuntimeSources"
 # Qodana uses a starter-based bridge because its headless engine interprets
 # several project-profile inspections differently from PyCharm. The shared
 # category scopes describe stable analyzer limitations, not individual files.
@@ -147,24 +147,24 @@ exclude:
     paths:
       - docs/tutorials
       - examples
-      - packages/opaque-accounting/tests
-      - packages/opaque-alignment/tests
-      - packages/opaque-auditing/tests
-      - packages/opaque-base/tests
-      - packages/opaque-dpftrl/tests
-      - packages/opaque-dpsgd/tests
-      - packages/opaque-engine/tests
-      - packages/opaque-jax/tests
-      - packages/opaque-mlx/tests
-      - packages/opaque-optimizers/tests
-      - packages/opaque-patches/tests
-      - packages/opaque-torch/tests
-      - packages/opaque-transformers/tests
+      - packages/opake-accounting/tests
+      - packages/opake-alignment/tests
+      - packages/opake-auditing/tests
+      - packages/opake-base/tests
+      - packages/opake-dpftrl/tests
+      - packages/opake-dpsgd/tests
+      - packages/opake-engine/tests
+      - packages/opake-jax/tests
+      - packages/opake-mlx/tests
+      - packages/opake-optimizers/tests
+      - packages/opake-patches/tests
+      - packages/opake-torch/tests
+      - packages/opake-transformers/tests
       - tests
-      - packages/opaque-engine/src/opaque/api/engine/clipping
-      - packages/opaque-engine/src/opaque/api/engine/functional
-      - packages/opaque-engine/src/opaque/api/engine/random
-      - packages/opaque-patches/src/opaque/api/patches
+      - packages/opake-engine/src/opake/api/engine/clipping
+      - packages/opake-engine/src/opake/api/engine/functional
+      - packages/opake-engine/src/opake/api/engine/random
+      - packages/opake-patches/src/opake/api/patches
 
 # Resolve every workspace package so inspections, vulnerability checks, license
 # audit, and SBOM generation see the same dependency graph as CI.

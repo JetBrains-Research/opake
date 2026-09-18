@@ -1,9 +1,9 @@
 # Sampling
 
-Sampling primitives live in `opaque.dpsgd.sampling` (Poisson, k-out-of-t allocation)
-and `opaque.dpftrl.sampling` (cyclic Poisson with optional `bands`, b-min-sep,
+Sampling primitives live in `opake.dpsgd.sampling` (Poisson, k-out-of-t allocation)
+and `opake.dpftrl.sampling` (cyclic Poisson with optional `bands`, b-min-sep,
 balls-in-bins, sequential).
-Distributed shard helpers live in `opaque.distributed`. They provide
+Distributed shard helpers live in `opake.distributed`. They provide
 privacy-amplifying sampling mechanisms for DP-SGD and DP-FTRL.
 
 ## Overview
@@ -12,21 +12,21 @@ Privacy amplification through sampling is a key technique in DP-SGD: training
 on randomly selected subsets provides stronger privacy than training on the
 full dataset.
 
-Opaque provides these sampling strategies:
+Opake provides these sampling strategies:
 
-1. **Poisson Sampling — DP-SGD** (`opaque.dpsgd.sampling.PoissonSampler`):
+1. **Poisson Sampling — DP-SGD** (`opake.dpsgd.sampling.PoissonSampler`):
    each example is sampled independently with probability `sample_rate`.
    Optional `truncated_batch_size` caps per-step batch size for more stable
    batches and memory; accounting must use the truncated-Poisson PLD (weaker
    than plain Poisson at the same `sample_rate`).
 
-2. **K-Out-of-T Allocation — DP-SGD** (`opaque.dpsgd.sampling.KOutOfTSampler`):
+2. **K-Out-of-T Allocation — DP-SGD** (`opake.dpsgd.sampling.KOutOfTSampler`):
    with `allocation="block"`, each record is assigned to one batch in each of
    `k` contiguous, nearly equal blocks. With
    `allocation="total"`, each record instead chooses `k` positions uniformly
    from the complete horizon.
 
-3. **Cyclic Poisson (DP-FTRL)** (`opaque.dpftrl.sampling.CyclicPoissonSampler`):
+3. **Cyclic Poisson (DP-FTRL)** (`opake.dpftrl.sampling.CyclicPoissonSampler`):
    `bands` disjoint groups; step `i` samples only group `i % bands`, with
    independent inclusion at `sample_rate`. Use `bands=1` for identity MF
    (full dataset each step); for BandMF, match `bands` to the MF strategy.
@@ -50,8 +50,8 @@ Opaque provides these sampling strategies:
 ## PoissonSampler (DP-SGD)
 
 ```python
-from opaque.dpsgd.sampling import PoissonSampler
-from opaque.random import key
+from opake.dpsgd.sampling import PoissonSampler
+from opake.random import key
 
 sampler = PoissonSampler(
     data_source,
@@ -84,8 +84,8 @@ for a full participation step (`sample_rate=1.0`) account directly with
 ## KOutOfTSampler (DP-SGD)
 
 ```python
-from opaque.dpsgd.sampling import KOutOfTSampler
-from opaque.random import key
+from opake.dpsgd.sampling import KOutOfTSampler
+from opake.random import key
 
 sampler = KOutOfTSampler(
     data_source,
@@ -119,7 +119,7 @@ block bound.
 
 !!! warning "Not the same scheme as `BallsInBinsSampler`"
 
-    `opaque.dpftrl.sampling.BallsInBinsSampler` draws the bin assignment
+    `opake.dpftrl.sampling.BallsInBinsSampler` draws the bin assignment
     once and reuses it for every epoch, because the matrix-mechanism
     dominating pair needs a known separation between an example's
     participations. `KOutOfTSampler(..., allocation="block")` draws each block independently, which is
@@ -129,8 +129,8 @@ block bound.
 ## BallsInBinsSampler
 
 ```python
-from opaque.dpftrl.sampling import BallsInBinsSampler
-from opaque.random import key
+from opake.dpftrl.sampling import BallsInBinsSampler
+from opake.random import key
 
 sampler = BallsInBinsSampler(
     data_source,
@@ -166,8 +166,8 @@ from group `i % bands`, with each eligible example included independently at
 pair with `dpftrl_acc.poisson`.
 
 ```python
-from opaque.dpftrl.sampling import CyclicPoissonSampler
-from opaque.random import key
+from opake.dpftrl.sampling import CyclicPoissonSampler
+from opake.random import key
 
 sampler = CyclicPoissonSampler(
     data_source,
@@ -203,7 +203,7 @@ Partition a dataset for DDP training. Returns a `Subset` containing the
 contiguous shard for the given rank.
 
 ```python
-from opaque.distributed import local_shard
+from opake.distributed import local_shard
 import torch.distributed as dist
 
 shard = local_shard(
@@ -223,34 +223,34 @@ loader = DataLoader(shard, batch_sampler=sampler)
 
 **Returns:** `torch.utils.data.Subset` containing the local shard.
 
-::: opaque.distributed.local_shard
+::: opake.distributed.local_shard
     options:
       show_source: true
       heading_level: 3
 
 ## API Documentation
 
-::: opaque.dpsgd.sampling.PoissonSampler
+::: opake.dpsgd.sampling.PoissonSampler
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.dpsgd.sampling.KOutOfTSampler
+::: opake.dpsgd.sampling.KOutOfTSampler
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.dpftrl.sampling.CyclicPoissonSampler
+::: opake.dpftrl.sampling.CyclicPoissonSampler
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.dpftrl.sampling.BMinSepSampler
+::: opake.dpftrl.sampling.BMinSepSampler
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.dpftrl.sampling.BallsInBinsSampler
+::: opake.dpftrl.sampling.BallsInBinsSampler
     options:
       show_source: true
       heading_level: 3
@@ -258,7 +258,7 @@ loader = DataLoader(shard, batch_sampler=sampler)
 ## SequentialBatchSampler
 
 ```python
-from opaque.dpftrl.sampling import SequentialBatchSampler
+from opake.dpftrl.sampling import SequentialBatchSampler
 
 sampler = SequentialBatchSampler(
     data_source,
@@ -280,7 +280,7 @@ sampler.
 Used with the BLT mechanism, which requires deterministic batch order
 with fixed separation between participations.
 
-::: opaque.dpftrl.sampling.SequentialBatchSampler
+::: opake.dpftrl.sampling.SequentialBatchSampler
     options:
       show_source: true
       heading_level: 3

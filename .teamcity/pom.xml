@@ -11,7 +11,7 @@
   </parent>
 
   <groupId>JetBrainsResearch</groupId>
-  <artifactId>opaque-teamcity-dsl</artifactId>
+  <artifactId>opake-teamcity-dsl</artifactId>
   <version>1.0-SNAPSHOT</version>
 
   <properties>

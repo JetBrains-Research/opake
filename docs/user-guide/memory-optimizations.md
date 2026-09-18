@@ -55,8 +55,8 @@ trade-off on your workload.
 Use a short manual sweep with `step_perf`:
 
 ```python
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.profiling import reset_peak_memory, step_perf
+from opake.dpsgd.clipping import clipped_grad
+from opake.profiling import reset_peak_memory, step_perf
 
 def try_microbatch(candidate_mb: int) -> float:
     grad_fn, clip_state = clipped_grad(
@@ -82,12 +82,12 @@ def try_microbatch(candidate_mb: int) -> float:
 
 PyTorch's `torch.utils.checkpoint.checkpoint` is supported under
 `vmap(grad(...))`. Enable the runtime patch once with
-`opaque.patches.apply_runtime_patches()`.
+`opake.patches.apply_runtime_patches()`.
 
 **With PyTorch directly** (non-reentrant checkpoint only):
 
 ```python
-from opaque.patches import apply_runtime_patches
+from opake.patches import apply_runtime_patches
 from torch.utils.checkpoint import checkpoint
 
 apply_runtime_patches()
@@ -109,7 +109,7 @@ model.gradient_checkpointing_enable()
 # Then proceed with make_functional, clipped_grad, etc.
 ```
 
-Opaque automatically forces `use_reentrant=False` (the only path compatible
+Opake automatically forces `use_reentrant=False` (the only path compatible
 with functorch). No special kwargs needed.
 
 **Memory comparison:**
@@ -149,7 +149,7 @@ with torch.autograd.graph.save_on_cpu(pin_memory=True):
 
 ## Fused Triton kernels
 
-Opaque includes fused Triton kernels that replace standard PyTorch operations
+Opake includes fused Triton kernels that replace standard PyTorch operations
 in supported models, reducing memory and improving throughput without changing
 training semantics. These are enabled by `apply_model_patches(model)` after
 runtime patching has been set up.
@@ -202,7 +202,7 @@ Use `step_perf` to measure individual training steps and `PerfState` to
 accumulate throughput statistics across a run.
 
 ```python
-from opaque.profiling import step_perf, PerfState, print_memory
+from opake.profiling import step_perf, PerfState, print_memory
 
 print_memory(device, "start")
 perf_state = PerfState(device=device)
@@ -274,4 +274,4 @@ vocabulary — so reduce batch size if logits are required.
 
 ## API reference
 
-See the `opaque.profiling` module for complete function signatures.
+See the `opake.profiling` module for complete function signatures.

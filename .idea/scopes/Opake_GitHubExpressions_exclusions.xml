@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Opake_GitHubExpressions_exclusions" pattern="file[opake]:.github/workflows//*||file[opake]:.github/actions//*" />
+</component>

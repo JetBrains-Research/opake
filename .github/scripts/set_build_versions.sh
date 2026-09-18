@@ -3,15 +3,15 @@
 # set_build_versions.sh — write the current git-derived version into every
 # build artifact that can't be handled by setuptools-scm natively:
 #
-#   1. `packages/opaque-accounting/pyproject.toml` — maturin reads the wheel
+#   1. `packages/opake-accounting/pyproject.toml` — maturin reads the wheel
 #      version from `[project] version`; maturin doesn't know about
 #      setuptools-scm.
-#   2. `packages/opaque-accounting/Cargo.toml` — the Rust crate version must
+#   2. `packages/opake-accounting/Cargo.toml` — the Rust crate version must
 #      match the Python wheel version for the PyO3 extension.
 #   3. Every Python package `pyproject.toml` that depends on another
-#      `opaque-*` wheel — these internal runtime dependencies must be pinned to
+#      `opake-*` wheel — these internal runtime dependencies must be pinned to
 #      the synchronized build version in published metadata, both for the root
-#      `opaque` umbrella wheel and for cross-package dependencies between leaf
+#      `opake` umbrella wheel and for cross-package dependencies between leaf
 #      wheels.
 #
 # For Python sub-packages the script also exports
@@ -108,9 +108,9 @@ if [[ -z "$VERSION" ]]; then
   fi
 fi
 
-echo "opaque build version → $VERSION"
+echo "opake build version → $VERSION"
 
-# --- opaque-accounting (maturin) --------------------------------------------
+# --- opake-accounting (maturin) --------------------------------------------
 # Python wheel version lives in the package's pyproject.toml and accepts the
 # full PEP 440 string. Cargo.toml demands SemVer, which rejects PEP 440 form
 # (`.dev42`, `.rc1`, `.post1`). Transform PEP 440 → SemVer for the Rust side:
@@ -132,14 +132,14 @@ CARGO_VERSION=$(echo "$VERSION" | sed -E \
 
 # Python wheel metadata
 sed -i.bak -E "s%^version = \"[^\"]+\"%version = \"$VERSION\"%" \
-  packages/opaque-accounting/pyproject.toml
-rm -f packages/opaque-accounting/pyproject.toml.bak
+  packages/opake-accounting/pyproject.toml
+rm -f packages/opake-accounting/pyproject.toml.bak
 
-# Rust crate version (workspace-wide, inherited by opaque-accounting/Cargo.toml)
+# Rust crate version (workspace-wide, inherited by opake-accounting/Cargo.toml)
 sed -i.bak -E "s%^version = \"[^\"]+\"%version = \"$CARGO_VERSION\"%" Cargo.toml
 rm -f Cargo.toml.bak
 
-# --- opaque: pin internal wheel dependencies to the same version ------------
+# --- opake: pin internal wheel dependencies to the same version ------------
 python3 - <<'PY' "$VERSION"
 from __future__ import annotations
 
@@ -184,7 +184,7 @@ def internal_dependency_targets(
 
     if "dependencies" in project:
         for requirement in project_list(data, ("project", "dependencies")):
-            if requirement.startswith("opaque-"):
+            if requirement.startswith("opake-"):
                 targets.append((("project", "dependencies"), requirement))
 
     optional = project.get("optional-dependencies", {})
@@ -196,7 +196,7 @@ def internal_dependency_targets(
         for extra_name in optional:
             path = ("project", "optional-dependencies", extra_name)
             for requirement in project_list(data, path):
-                if requirement.startswith("opaque-"):
+                if requirement.startswith("opake-"):
                     targets.append((path, requirement))
 
     return targets
@@ -249,11 +249,11 @@ for pyproject_path in PYPROJECTS:
 PY
 
 echo "Updated version pins:"
-grep -E "^version = \"|opaque-[a-z-]+" Cargo.toml pyproject.toml packages/*/pyproject.toml | sed 's|^|  |'
+grep -E "^version = \"|opake-[a-z-]+" Cargo.toml pyproject.toml packages/*/pyproject.toml | sed 's|^|  |'
 
 # --- export for downstream build steps --------------------------------------
 # setuptools-scm would otherwise re-derive the version from the now-dirty
-# tree and drift from what we've written into opaque-accounting/pyproject.toml.
+# tree and drift from what we've written into opake-accounting/pyproject.toml.
 if [[ -n "${GITHUB_ENV:-}" ]]; then
   echo "SETUPTOOLS_SCM_PRETEND_VERSION=$VERSION" >> "$GITHUB_ENV"
 fi

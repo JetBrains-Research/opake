@@ -13,8 +13,8 @@ the accountant.
 ## Pairing with sampling
 
 DP-SGD typically pairs the Gaussian mechanism with Poisson subsampling
-(`opaque.dpsgd.sampling.PoissonSampler`). The accounting form is
-`opaque.dpsgd.accounting.poisson(opaque.dpsgd.accounting.gaussian(nm),
+(`opake.dpsgd.sampling.PoissonSampler`). The accounting form is
+`opake.dpsgd.accounting.poisson(opake.dpsgd.accounting.gaussian(nm),
 sample_rate=q)`; multiply by `* num_steps` for full-training privacy.
 
 ## See also
@@ -22,4 +22,4 @@ sample_rate=q)`; multiply by `* num_steps` for full-training privacy.
 - [DP-SGD end-to-end guide](../../user-guide/dp-sgd.md) — full
   training pipeline.
 - [DP-FTRL mechanisms](../dp-ftrl/index.md) — the other family of
-  noise mechanisms in Opaque (correlated, whole-process).
+  noise mechanisms in Opake (correlated, whole-process).

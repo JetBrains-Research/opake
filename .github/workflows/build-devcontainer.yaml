@@ -53,7 +53,7 @@ jobs:
             --image-name devcontainer:build \
             --platform linux/amd64 \
             --workspace-folder . \
-            --cache-from ghcr.io/jetbrains-research/opaque-devcontainer:latest
+            --cache-from ghcr.io/jetbrains-research/opake-devcontainer:latest
 
       - name: Test devcontainer
         run: |
@@ -72,9 +72,9 @@ jobs:
       packages: write
       id-token: write
     env:
-      CONTAINER_NAME: opaque-devcontainer
-      GHCR_IMAGE: ghcr.io/jetbrains-research/opaque-devcontainer
-      GAR_IMAGE: europe-west4-docker.pkg.dev/gke-dev-dws-jbr/ml/opaque-devcontainer
+      CONTAINER_NAME: opake-devcontainer
+      GHCR_IMAGE: ghcr.io/jetbrains-research/opake-devcontainer
+      GAR_IMAGE: europe-west4-docker.pkg.dev/gke-dev-dws-jbr/ml/opake-devcontainer
 
     steps:
       - name: Checkout

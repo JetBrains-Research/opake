@@ -17,9 +17,9 @@ import math
 
 import pytest
 
-import opaque.dpftrl.accounting as ftrl_acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.dpftrl.noise import identity_strategy
+import opake.dpftrl.accounting as ftrl_acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.dpftrl.noise import identity_strategy
 
 _DELTA = 1e-5
 

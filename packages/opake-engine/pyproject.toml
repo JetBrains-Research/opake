@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opake-engine"
+dynamic = ["version"]
+description = "Opake torch substrate: pytree wrappers, clipping primitives, DDP plumbing, schedules, profiler, and noise-allocation math"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Opake Contributors" }]
+requires-python = ">=3.11,<3.14"
+keywords = ["differential-privacy", "pytorch", "privacy", "machine-learning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+]
+dependencies = [
+    "opake-base>=0.0.0.dev0",
+    "numpy>=1.22",
+    "torch>=2.9.0",
+    "optree>=0.17.0",
+]
+
+[tool.setuptools]
+# Single-file façades at the namespace root — listed because
+# ``find_packages`` only discovers sub-packages (directories with
+# ``__init__``).
+py-modules = [
+    "opake.types",
+    "opake.pytree",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = [
+    "opake.api.engine*",
+    "opake.random*",
+    "opake.distributed*",
+    "opake.functional*",
+    "opake.scheduling*",
+    "opake.profiling*",
+    "opake.device*",
+]
+namespaces = true
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.setuptools_scm]
+root = "../.."
+fallback_version = "0.0.0"
+git_describe_command = "git describe --dirty --tags --long --match v*"
+
+[tool.uv]
+package = true

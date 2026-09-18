@@ -23,7 +23,7 @@ body:
       label: Steps to Reproduce
       description: Steps to reproduce the behavior
       placeholder: |
-        1. Import opaque
+        1. Import opake
         2. Run code...
         3. See error
       value: |
@@ -61,7 +61,7 @@ body:
       value: |
         - OS: [e.g., Ubuntu 22.04, macOS 14.0]
         - Python version: [e.g., 3.11.5]
-        - Opaque version: [e.g., 0.2.0]
+        - Opake version: [e.g., 0.2.0]
         - PyTorch version: [e.g., 2.1.0]
         - CUDA version (if applicable): [e.g., 11.8]
       render: markdown

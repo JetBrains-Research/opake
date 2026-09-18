@@ -1,6 +1,6 @@
-# Contributing to Opaque
+# Contributing to Opake
 
-Thank you for your interest in contributing to Opaque!
+Thank you for your interest in contributing to Opake!
 
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating. It
 explains the standards that keep the community welcoming and how to confidentially
@@ -12,8 +12,8 @@ report concerns.
 
 ```bash
 # Clone repository
-git clone https://github.com/JetBrains-Research/opaque.git
-cd opaque
+git clone https://github.com/JetBrains-Research/opake.git
+cd opake
 
 # Install the complete contributor environment
 uv sync --group dev --all-packages --extra all
@@ -41,50 +41,50 @@ No contribution is too small!
 
 ## Repository Structure
 
-The monorepo ships multiple distributions sharing the `opaque.*`
+The monorepo ships multiple distributions sharing the `opake.*`
 PEP 420 namespace. User-facing installation should go through the root
-`opaque` package; implementation packages live under `packages/`:
+`opake` package; implementation packages live under `packages/`:
 
 ```
-pyproject.toml           # opaque — pins the curated sub-package bundle
+pyproject.toml           # opake — pins the curated sub-package bundle
 README.md                # top-level description
 
 packages/
-├── opaque-base/         # Pure-Python serialization registry
-├── opaque-engine/       # Torch substrate: pytree, clipping, scheduling, distributed support
-├── opaque-optimizers/   # Functional optimizer chain
-├── opaque-accounting/   # Rust/PyO3 PLD privacy accounting
-├── opaque-dpsgd/        # DP-SGD noise, adaptive clipping, and sampling
-├── opaque-dpftrl/       # Correlated-noise DP-FTRL mechanisms and sampling
-├── opaque-auditing/     # Empirical privacy auditing
-├── opaque-patches/      # PyTorch, Transformers, and Triton patches
-├── opaque-transformers/ # Hugging Face trainer integration
-└── opaque-alignment/    # DP-safe SFT and DPO primitives
+├── opake-base/         # Pure-Python serialization registry
+├── opake-engine/       # Torch substrate: pytree, clipping, scheduling, distributed support
+├── opake-optimizers/   # Functional optimizer chain
+├── opake-accounting/   # Rust/PyO3 PLD privacy accounting
+├── opake-dpsgd/        # DP-SGD noise, adaptive clipping, and sampling
+├── opake-dpftrl/       # Correlated-noise DP-FTRL mechanisms and sampling
+├── opake-auditing/     # Empirical privacy auditing
+├── opake-patches/      # PyTorch, Transformers, and Triton patches
+├── opake-transformers/ # Hugging Face trainer integration
+└── opake-alignment/    # DP-safe SFT and DPO primitives
 
 docs/                    # User documentation (getting-started, guides, tutorials, API)
 examples/                # Example scripts and notebooks
 ```
 
 **For Python changes**: edit the relevant implementation under
-`packages/opaque-<name>/src/opaque/api/` and add tests under the matching
-`packages/opaque-<name>/tests/`. Public façades under `src/opaque/` contain
+`packages/opake-<name>/src/opake/api/` and add tests under the matching
+`packages/opake-<name>/tests/`. Public façades under `src/opake/` contain
 only re-exports; user-facing examples should import through those façades. See
 the [architecture contracts](.junie/architecture-contracts.md) for
 the normative package/API rules and how each one is enforced.
 
 **For accounting changes**: Python façade and wrapper code lives under
-`packages/opaque-accounting/src/opaque/`; the Rust crate is in
-`packages/opaque-accounting/src/` with its manifest at
-`packages/opaque-accounting/Cargo.toml`.
+`packages/opake-accounting/src/opake/`; the Rust crate is in
+`packages/opake-accounting/src/` with its manifest at
+`packages/opake-accounting/Cargo.toml`.
 
 ---
 
 ## Finding Issues to Work On
 
 **Good starting points**:
-- [Issues labeled `good-first-issue`](https://github.com/JetBrains-Research/opaque/labels/good-first-issue)
-- [Issues labeled `help-wanted`](https://github.com/JetBrains-Research/opaque/labels/help-wanted)
-- [Open Discussions](https://github.com/JetBrains-Research/opaque/discussions)
+- [Issues labeled `good-first-issue`](https://github.com/JetBrains-Research/opake/labels/good-first-issue)
+- [Issues labeled `help-wanted`](https://github.com/JetBrains-Research/opake/labels/help-wanted)
+- [Open Discussions](https://github.com/JetBrains-Research/opake/discussions)
 
 **Before starting**:
 1. Comment on the issue to say you're working on it (avoid duplicated effort)
@@ -104,7 +104,7 @@ the normative package/API rules and how each one is enforced.
 
 ## TDD Workflow
 
-Opaque follows a Test-Driven Development workflow:
+Opake follows a Test-Driven Development workflow:
 
 1. **Test First**: Write failing test defining the API
 2. **Implement**: Make the test pass (minimal code to pass)
@@ -118,7 +118,7 @@ Opaque follows a Test-Driven Development workflow:
 
 ### Dependency Groups and Extras
 
-Opaque keeps three root `uv` dependency groups; everything else lives in
+Opake keeps three root `uv` dependency groups; everything else lives in
 per-package `[project.optional-dependencies]`:
 
 ```bash
@@ -127,10 +127,10 @@ uv sync --group examples --all-packages --extra all  # Training examples: datase
 uv sync --group docs --all-packages                  # MkDocs stack and documented package sources
 
 # Package extras (compose with --extra):
-#   opaque[transformers]             — Hugging Face + patching stack
-#   opaque[dpftrl]                   — DP-FTRL mechanisms
-#   opaque[auditing]                 — empirical privacy auditing
-#   opaque-accounting[cross-validation] — dp-accounting, riskcal
+#   opake[transformers]             — Hugging Face + patching stack
+#   opake[dpftrl]                   — DP-FTRL mechanisms
+#   opake[auditing]                 — empirical privacy auditing
+#   opake-accounting[cross-validation] — dp-accounting, riskcal
 uv sync --group dev --all-packages --extra transformers
 ```
 
@@ -141,10 +141,10 @@ uv sync --group dev --all-packages --extra transformers
 uv run pytest
 
 # With coverage
-uv run pytest --cov=opaque --cov-report=html
+uv run pytest --cov=opake --cov-report=html
 
 # Specific test file
-uv run pytest packages/opaque-engine/tests/clipping/test_clipped_fun.py -v
+uv run pytest packages/opake-engine/tests/clipping/test_clipped_fun.py -v
 ```
 
 ### Test Markers and Filtering
@@ -183,13 +183,13 @@ default Cargo test set; main and release additionally run
 `cargo test --lib -- --ignored`.
 
 Gated Hugging Face models use the `@requires_hf_auth` skip-if helper from the
-shared `tests/_support/opaque_test_support.py` module. Set
+shared `tests/_support/opake_test_support.py` module. Set
 `HF_TOKEN` / `HUGGINGFACEHUB_API_TOKEN` / `HUGGINGFACE_TOKEN` to run
 those tests; otherwise they skip automatically.
 
 Other tests use `pytest.importorskip()` when optional dependencies are absent:
-install `opaque[transformers]` for Hugging Face tests or
-`opaque-accounting[cross-validation]` for cross-validation. No manual marker
+install `opake[transformers]` for Hugging Face tests or
+`opake-accounting[cross-validation]` for cross-validation. No manual marker
 exclusion is needed.
 
 ### CUDA and Distributed Tests
@@ -265,7 +265,7 @@ the above shape — no merge if the title doesn't parse.
 ```
 feat(dpsgd): add clipped-grad example
 
-- Add clipped_grad to opaque.dpsgd.clipping
+- Add clipped_grad to opake.dpsgd.clipping
 - Support single parameter and batch data
 - Include tests comparing against JAX-Privacy
 
@@ -309,13 +309,13 @@ This keeps release docs stable while allowing continuous docs updates on `main`.
 
 ## Creating a Release
 
-Opaque uses **lockstep versioning**: the root distribution and all workspace
+Opake uses **lockstep versioning**: the root distribution and all workspace
 sub-packages release
 at the same version. Python sub-package versions come from
 [`setuptools-scm`](https://setuptools-scm.readthedocs.io/) — no
 `version = "..."` literal to bump in `pyproject.toml` files.
 
-Release notes live on the [GitHub Releases](https://github.com/JetBrains-Research/opaque/releases)
+Release notes live on the [GitHub Releases](https://github.com/JetBrains-Research/opake/releases)
 page. There is no `CHANGELOG.md` to maintain.
 
 ### Pipeline states
@@ -404,31 +404,31 @@ uv sync --group dev --all-packages --extra all
 
 # Dry-run the preflight script at a specific version
 bash .github/scripts/set_build_versions.sh 0.2.0
-grep -E '^version|opaque-(base|engine|optimizers|dpsgd|dpftrl|auditing|patches|transformers|alignment|accounting)' pyproject.toml \
-                               packages/opaque-accounting/pyproject.toml \
+grep -E '^version|opake-(base|engine|optimizers|dpsgd|dpftrl|auditing|patches|transformers|alignment|accounting)' pyproject.toml \
+                               packages/opake-accounting/pyproject.toml \
                                Cargo.toml
 
-# Build the opaque wheel (workspace root)
+# Build the opake wheel (workspace root)
 rm -rf dist
 uv build --wheel --out-dir dist
 
 # Build every sub-package wheel
-for pkg in opaque-base opaque-engine opaque-optimizers opaque-dpsgd opaque-dpftrl \
-                opaque-auditing opaque-patches opaque-transformers opaque-alignment; do
+for pkg in opake-base opake-engine opake-optimizers opake-dpsgd opake-dpftrl \
+                opake-auditing opake-patches opake-transformers opake-alignment; do
   (cd "packages/$pkg" && uv build --wheel --out-dir ../../dist)
 done
 
 # Build the accounting native wheel
-(cd packages/opaque-accounting && uv build --wheel --out-dir ../../dist)
+(cd packages/opake-accounting && uv build --wheel --out-dir ../../dist)
 
 ls dist/   # expect 11 wheels, all at 0.2.0
 
 # Inspect a wheel's metadata
-unzip -p dist/opaque_engine-*.whl '*/METADATA' | grep '^Version:'
+unzip -p dist/opake_engine-*.whl '*/METADATA' | grep '^Version:'
 
 # Revert the preflight's in-tree edits
 git checkout -- pyproject.toml \
-               packages/opaque-accounting/pyproject.toml Cargo.toml
+               packages/opake-accounting/pyproject.toml Cargo.toml
 ```
 
 ### Yanking a bad release
@@ -442,8 +442,8 @@ fix, and prepare the next patch from `release/X.Y`.
 
 ## Getting Help
 
-- **Questions**: Open a [Discussion](https://github.com/JetBrains-Research/opaque/discussions)
-- **Bugs**: Open an [Issue](https://github.com/JetBrains-Research/opaque/issues)
+- **Questions**: Open a [Discussion](https://github.com/JetBrains-Research/opake/discussions)
+- **Bugs**: Open an [Issue](https://github.com/JetBrains-Research/opake/issues)
 
 ---
 
@@ -459,4 +459,4 @@ Thank you for contributing to differential privacy research and making private m
 
 **Key Resources**:
 - [JAX-Privacy](https://github.com/google-deepmind/jax_privacy) - Reference implementation
-- [Full Opaque Documentation](docs/index.md)
+- [Full Opake Documentation](docs/index.md)

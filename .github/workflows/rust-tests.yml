@@ -16,7 +16,7 @@ on:
 
 jobs:
   test:
-    name: opaque-accounting
+    name: opake-accounting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -28,10 +28,10 @@ jobs:
 
       # No `--lib`: also run doc-tests so documented API examples cannot rot.
       - name: Run Rust tests
-        run: cargo test --manifest-path packages/opaque-accounting/Cargo.toml
+        run: cargo test --manifest-path packages/opake-accounting/Cargo.toml
 
       - name: Run slow Rust tests
         if: inputs.include-slow
         run: >-
-          cargo test --manifest-path packages/opaque-accounting/Cargo.toml
+          cargo test --manifest-path packages/opake-accounting/Cargo.toml
           --lib -- --ignored

@@ -1,12 +1,12 @@
 # User Guide
 
-This guide explains each component of Opaque's DP training pipeline:
+This guide explains each component of Opake's DP training pipeline:
 what it does, how the API works, and the practical decisions you
 need to make. For hands-on practice, see the
 [Tutorials](../tutorials/README.md). For complete function
 signatures, see the [API Reference](../reference/index.md).
 
-Install with `pip install opaque` (plus `opaque[...]` extras).
+Install with `pip install opake` (plus `opake[...]` extras).
 
 ## End-to-end pipelines
 
@@ -14,10 +14,10 @@ Pick the track that matches your problem:
 
 - **[DP-SGD end-to-end](dp-sgd.md)** — independent Gaussian noise at
   every step, with per-step privacy composition. This is the standard DP
-  training recipe. Imports from `opaque.dpsgd.*`.
+  training recipe. Imports from `opake.dpsgd.*`.
 - **[DP-FTRL end-to-end](dp-ftrl.md)** — correlated noise across the
   whole training run via matrix factorization. Imports from
-  `opaque.dpftrl.*`.
+  `opake.dpftrl.*`.
 
 Both pipelines share the same primitives (clipping, noise, sampling,
 optimizer, accounting). The topic pages below are stack-agnostic
@@ -53,7 +53,7 @@ combines them.
   for DP-FTRL.
 - **[Serialization (API reference)](../reference/serialization.md)** —
   Checkpoint explicit state with
-  `opaque.serialization.state_dict` / `from_state_dict`.
+  `opake.serialization.state_dict` / `from_state_dict`.
 - **[LR Scheduling](lr-scheduling.md)** — Warmup, cosine,
   inverse-sqrt schedules; composing `with_warmup` with any decay
   curve.

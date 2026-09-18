@@ -1,4 +1,4 @@
-"""End-to-end DP LoRA training with Opaque's HuggingFace DPTrainer.
+"""End-to-end DP LoRA training with Opake's HuggingFace DPTrainer.
 
 Covers both DP-SGD (Gaussian) and DP-FTRL (matrix-factorization) via the
 ``--noise-mechanism`` flag — the DPTrainer accepts both surfaces through
@@ -52,8 +52,8 @@ from transformers import (
     DataCollatorForLanguageModeling,
 )
 
-from opaque.device import device_capabilities
-from opaque.transformers.trainer import DPTrainer, TrainingArguments
+from opake.device import device_capabilities
+from opake.transformers.trainer import DPTrainer, TrainingArguments
 
 log = logging.getLogger(__name__)
 
@@ -111,10 +111,10 @@ def _resolve_trainer_dtype(
 
 def _kernel_mode_summary(device: torch.device, dtype_name: str) -> tuple[str, str]:
     """Return concise status of kernel optimization mode for this run."""
-    if os.environ.get("OPAQUE_NO_PATCH", "0") == "1":
-        return "disabled", "OPAQUE_NO_PATCH=1"
-    if os.environ.get("OPAQUE_NO_KERNEL_PATCH", "0") == "1":
-        return "disabled", "OPAQUE_NO_KERNEL_PATCH=1"
+    if os.environ.get("OPAKE_NO_PATCH", "0") == "1":
+        return "disabled", "OPAKE_NO_PATCH=1"
+    if os.environ.get("OPAKE_NO_KERNEL_PATCH", "0") == "1":
+        return "disabled", "OPAKE_NO_KERNEL_PATCH=1"
     if device.type != "cuda":
         return "disabled", f"device={device.type} (Triton kernels are CUDA-only)"
     if importlib.util.find_spec("triton") is None:
@@ -466,7 +466,7 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=False,
         help=(
-            "Enable opaque's CUDA + Triton kernel patches "
+            "Enable opake's CUDA + Triton kernel patches "
             "(rope / rms_norm / activation / cross_entropy). Requires "
             "CUDA + Triton at runtime."
         ),
@@ -657,7 +657,7 @@ def parse_args() -> argparse.Namespace:
     tracking_group.add_argument(
         "--wandb-project",
         type=str,
-        default=os.environ.get("WANDB_PROJECT", "opaque"),
+        default=os.environ.get("WANDB_PROJECT", "opake"),
     )
     tracking_group.add_argument(
         "--wandb-run-name",
@@ -1123,7 +1123,7 @@ def main() -> int:
         hub_revision=args.hub_revision,
     )
 
-    # Opaque's ``TrainingArguments`` is a standalone dataclass and does
+    # Opake's ``TrainingArguments`` is a standalone dataclass and does
     # NOT declare ``max_grad_norm`` — HF's per-step clip_grad_norm_ is
     # replaced by the per-example DP clipping path.  We still let users
     # pass ``--max-grad-norm`` to validate that the field is inert: we

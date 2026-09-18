@@ -1,5 +1,5 @@
 {
-  "name": "Opaque (DevContainer)",
+  "name": "Opake (DevContainer)",
   "build": {
     "dockerfile": "Dockerfile"
   },

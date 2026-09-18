@@ -1,10 +1,10 @@
 # SFT & DPO trainers end-to-end
 
 The [SFT](sft.md) and [DPO](dpo.md) guides build a DP run manually from
-`opaque.alignment` primitives. This guide covers the **class-based trainers** that
-wrap that pipeline: `opaque.transformers.trl.SFTTrainer` and `DPOTrainer`.
+`opake.alignment` primitives. This guide covers the **class-based trainers** that
+wrap that pipeline: `opake.transformers.trl.SFTTrainer` and `DPOTrainer`.
 They mirror `trl.SFTTrainer` / `trl.DPOTrainer` in structure and method names,
-but route the gradient through Opaque's per-example DP
+but route the gradient through Opake's per-example DP
 [`DPTrainer`](../user-guide/huggingface/dptrainer.md) — one Poisson round is
 one clip-noise-step. The alignment collators, losses, and reference helpers are
 the same primitives the by-hand guides use; the trainer is the orchestration
@@ -20,8 +20,8 @@ The supported `loss_type` values map onto the corresponding alignment papers:
 and [Dynamic Fine-Tuning](https://arxiv.org/abs/2508.05629).
 
 ```python
-from opaque.transformers.trl import SFTConfig, SFTTrainer
-from opaque.transformers.trl import DPOConfig, DPOTrainer
+from opake.transformers.trl import SFTConfig, SFTTrainer
+from opake.transformers.trl import DPOConfig, DPOTrainer
 ```
 
 Both configs **extend** the base
@@ -50,7 +50,7 @@ dataset, and a tokenizer.
 ```python
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from opaque.transformers.trl import SFTConfig, SFTTrainer
+from opake.transformers.trl import SFTConfig, SFTTrainer
 
 model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B")
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
@@ -152,7 +152,7 @@ call adds a `ref_model` (or relies on auto-load / PEFT null-ref / a
 reference-free `loss_type`):
 
 ```python
-from opaque.transformers.trl import DPOConfig, DPOTrainer
+from opake.transformers.trl import DPOConfig, DPOTrainer
 
 args = DPOConfig(
     output_dir="trainer_output/dpo",
@@ -205,7 +205,7 @@ dropout in the policy and reference before training.
 ### The `loss_type` menu
 
 `loss_type` is one name or a **list** of names (a list ⇒ MPO; see below). The
-trainer dispatches each name to an `opaque.alignment.dpo` head; an unknown name
+trainer dispatches each name to an `opake.alignment.dpo` head; an unknown name
 fails with a `KeyError` at the dispatch table. The supported names:
 
 | `loss_type` | Method | Reference? |
@@ -313,21 +313,21 @@ channel without leaking gradient; the eval loop aggregates the same dict under
 
 Pipelines that already construct an HF `TrainingArguments` or a
 `trl.SFTConfig` / `trl.DPOConfig` can pass the existing config to the
-Opaque equivalents through three class methods:
+Opake equivalents through three class methods:
 
 - `TrainingArguments.from_hf(hf_args, ...)` — base HF translation.
 - `SFTConfig.from_trl(trl_sft_cfg, ...)` — TRL SFT translation.
-  Requires the optional `trl` extra: `pip install opaque[trl]`.
+  Requires the optional `trl` extra: `pip install opake[trl]`.
 - `DPOConfig.from_trl(trl_dpo_cfg, ...)` — TRL DPO translation. Same
   extra.
 
-Each class method accepts the same DP-knob kwargs as a regular Opaque
+Each class method accepts the same DP-knob kwargs as a regular Opake
 config — at least one of `privacy_noise_multiplier` or
 `privacy_target_epsilon` is required, the rest have sensible defaults.
 
 ```python
 from trl import SFTConfig as TrlSFTConfig
-from opaque.transformers.trl import SFTConfig
+from opake.transformers.trl import SFTConfig
 
 trl_cfg = TrlSFTConfig(
     output_dir="trainer_output/sft",
@@ -340,13 +340,13 @@ trl_cfg = TrlSFTConfig(
     loss_type="nll",
 )
 
-opaque_cfg = SFTConfig.from_trl(
+opake_cfg = SFTConfig.from_trl(
     trl_cfg,
     privacy_noise_multiplier=0.8,
     clipping_norm=1.0,
 )
-# opaque_cfg.per_device_train_batch_size == 8   (2 × 4: privacy-relevant batch)
-# opaque_cfg.microbatch_size             == 2   (HF microbatch → vmap chunk)
+# opake_cfg.per_device_train_batch_size == 8   (2 × 4: privacy-relevant batch)
+# opake_cfg.microbatch_size             == 2   (HF microbatch → vmap chunk)
 ```
 
 ### Batch semantics
@@ -354,10 +354,10 @@ opaque_cfg = SFTConfig.from_trl(
 DP-SGD's sample-rate denominator (and therefore $\epsilon$) is the
 **logical batch** — the unit over which one gradient + noise step
 applies. In HF terms that's `per_device_train_batch_size ×
-gradient_accumulation_steps`; in opaque terms it's
+gradient_accumulation_steps`; in opake terms it's
 `per_device_train_batch_size` alone. The converter collapses HF's
-two-field expression into opaque's one-field expression by multiplying,
-and folds the HF microbatch into opaque's `microbatch_size` (the vmap
+two-field expression into opake's one-field expression by multiplying,
+and folds the HF microbatch into opake's `microbatch_size` (the vmap
 chunk inside the per-example clipped-gradient pass). Dropping
 `gradient_accumulation_steps` on the floor would under-account the
 sampling amplification and emit a too-optimistic $\epsilon$.
@@ -374,18 +374,18 @@ sets any of these:
 | `deepspeed` | DeepSpeed is not on the per-example DP path. |
 | `accelerator_config` | Accelerate-driven config is not used. |
 | `neftune_noise_alpha` | NEFTune would interact with the privacy accountant. |
-| `max_grad_norm` (non-default) | Pre-step global norm clipping has no opaque analogue; use `clipping_norm` for per-example DP clipping instead. |
-| `optim="paged_adamw_*"`, `*_8bit`, `*_apex_fused` | Quantized / Apex-fused optimizers are not in opaque-engine's torchopt path. |
+| `max_grad_norm` (non-default) | Pre-step global norm clipping has no opake analogue; use `clipping_norm` for per-example DP clipping instead. |
+| `optim="paged_adamw_*"`, `*_8bit`, `*_apex_fused` | Quantized / Apex-fused optimizers are not in opake-engine's torchopt path. |
 | `use_liger_kernel`, `liger_kernel_config` | Liger fused kernels are not on the DP-SGD path. |
 | TRL `packing=True`, `padding_free=True`, `eval_packing=True` | Sequence packing / unpadded forwards break the fixed per-example batch shape DP-SGD's vmap requires. |
-| TRL `shuffle_dataset=True` | Opaque's Poisson sampler controls ordering. |
-| TRL `truncation_mode="keep_end"` | Opaque only supports `keep_start`. |
+| TRL `shuffle_dataset=True` | Opake's Poisson sampler controls ordering. |
+| TRL `truncation_mode="keep_end"` | Opake only supports `keep_start`. |
 | TRL `pad_token=...` | Set `tokenizer.pad_token` directly. |
-| DPO `loss_type=["aot", ...]` | TRL 1.x added Adversarial Optimal Transport heads opaque doesn't implement. |
+| DPO `loss_type=["aot", ...]` | TRL 1.x added Adversarial Optimal Transport heads opake doesn't implement. |
 
 ### Dropped fields (silent + `RuntimeWarning` when non-default)
 
-HF fields that have no opaque effect get silently dropped — the
+HF fields that have no opake effect get silently dropped — the
 converter emits a `RuntimeWarning` if the user set them to a
 non-baseline value. Examples: `do_train`, `do_eval`, `tpu_*`,
 `ray_scope`, `optim_target_modules`, `batch_eval_metrics`,
@@ -395,17 +395,17 @@ Pass `strict=False` to suppress the warnings entirely.
 
 ### Round-trip is one-way
 
-The class methods only translate HF/TRL → Opaque. Opaque-only fields
+The class methods only translate HF/TRL → Opake. Opake-only fields
 (every DP knob, `microbatch_size > per_device_eval_batch_size`,
-opaque-specific clipping / sampling / noise-mechanism families) cannot
+opake-specific clipping / sampling / noise-mechanism families) cannot
 be expressed in HF or TRL terms, so the reverse conversion is not
 supported and not implemented.
 
 ## Runnable references
 
-- [`examples/train_sft_trainer.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_sft_trainer.py)
+- [`examples/train_sft_trainer.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_sft_trainer.py)
   — DP SFT via the class-based `SFTTrainer` (LoRA policy, `nll`/`dft`).
-- [`examples/train_dpo_trainer.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpo_trainer.py)
+- [`examples/train_dpo_trainer.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpo_trainer.py)
   — DP DPO via the class-based `DPOTrainer` (reference precompute, LoRA
   null-ref).
 
@@ -414,7 +414,7 @@ supported and not implemented.
 - [SFT end-to-end](sft.md) — the by-hand DP-SGD SFT pipeline the trainer wraps.
 - [DPO end-to-end](dpo.md) — the by-hand reference-precompute / head-selection
   pipeline.
-- [Transformers reference](../reference/transformers.md#opaquetransformerstrl-sftdpo-trainers)
+- [Transformers reference](../reference/transformers.md#opaketransformerstrl-sftdpo-trainers)
   — the `SFTConfig` / `DPOConfig` / `SFTTrainer` / `DPOTrainer` field-by-field
   reference.
 - [TrainingArguments](../user-guide/huggingface/training-arguments.md) — the

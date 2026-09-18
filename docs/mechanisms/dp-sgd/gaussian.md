@@ -74,7 +74,7 @@ eps = training.epsilon_at(delta=1e-5)
 Production variant that caps batch size. Capping stabilizes batches and
 memory but **weakens** privacy versus plain Poisson at the same
 `sample_rate` unless noise is recalibrated—use `truncated_batch_size` and
-`dataset_size` together with `opaque.dpsgd.accounting.poisson`.
+`dataset_size` together with `opake.dpsgd.accounting.poisson`.
 
 ```python
 n = 50_000
@@ -105,8 +105,8 @@ step = dpsgd_acc.parallel_poisson(
 ### Noise injection
 
 ```python
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key
 
 noise_fn, noise_state = gaussian_noise(
     noise_multiplier=noise_multiplier,
@@ -122,8 +122,8 @@ for batch in dataloader:
 ### Privacy accounting
 
 ```python
-import opaque.accounting as acc
-import opaque.dpsgd.accounting as dpsgd_acc
+import opake.accounting as acc
+import opake.dpsgd.accounting as dpsgd_acc
 
 # Single step
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(1.0), sample_rate=0.01)

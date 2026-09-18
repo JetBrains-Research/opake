@@ -1,30 +1,30 @@
 # Transformers Integration
 
-API reference for `opaque.transformers` — `DPTrainer`,
+API reference for `opake.transformers` — `DPTrainer`,
 `TrainingArguments`, and the public state objects. For task-shaped
 usage guides, see [Hugging Face Integration](../user-guide/huggingface/index.md).
 
 ## Overview
 
-The `opaque.transformers` namespace re-exports the trainer surface:
+The `opake.transformers` namespace re-exports the trainer surface:
 
 ```python
-from opaque.transformers import DPTrainer, TrainingArguments
-from opaque.transformers.trainer.types import EvaluationResult, TrainOutput
-from opaque.transformers.trl import SFTConfig, SFTTrainer, DPOConfig, DPOTrainer
+from opake.transformers import DPTrainer, TrainingArguments
+from opake.transformers.trainer.types import EvaluationResult, TrainOutput
+from opake.transformers.trl import SFTConfig, SFTTrainer, DPOConfig, DPOTrainer
 
 # Global HF runtime shims (only needed when using HF primitives without DPTrainer):
-from opaque.patches import apply_runtime_patches
+from opake.patches import apply_runtime_patches
 ```
 
 | Symbol | Purpose |
 |---|---|
 | `DPTrainer` | DP-SGD trainer mirroring the Hugging Face `Trainer` interface. |
 | `TrainingArguments` | Standalone dataclass — full HF parity for the subset DPTrainer honors, plus DP-specific fields. |
-| `opaque.transformers.trainer.types.EvaluationResult` | Return type for `evaluation_loop` / `evaluate` / `predict`. |
-| `opaque.transformers.trainer.types.TrainOutput` | NamedTuple returned by `train()` — `(global_step, training_loss, metrics)`. |
-| `opaque.transformers.trl` | TRL-style configs/trainers: `SFTConfig`, `SFTTrainer`, `DPOConfig`, `DPOTrainer`. |
-| `opaque.patches.apply_runtime_patches` | Install the global HF runtime shims (only needed when using HF primitives without `DPTrainer`). |
+| `opake.transformers.trainer.types.EvaluationResult` | Return type for `evaluation_loop` / `evaluate` / `predict`. |
+| `opake.transformers.trainer.types.TrainOutput` | NamedTuple returned by `train()` — `(global_step, training_loss, metrics)`. |
+| `opake.transformers.trl` | TRL-style configs/trainers: `SFTConfig`, `SFTTrainer`, `DPOConfig`, `DPOTrainer`. |
+| `opake.patches.apply_runtime_patches` | Install the global HF runtime shims (only needed when using HF primitives without `DPTrainer`). |
 
 ## `DPTrainer`
 
@@ -178,7 +178,7 @@ clip-noise-step.
 ## `TrainingArguments`
 
 Dataclass surface.  Every field listed here exists on
-`opaque.transformers.TrainingArguments`.
+`opake.transformers.TrainingArguments`.
 
 ### Privacy and DP-SGD
 
@@ -213,7 +213,7 @@ Dataclass surface.  Every field listed here exists on
 | `bf16` | `bool` | `False` | bf16 autocast on the loss closure. |
 | `bf16_full_eval` | `bool` | `False` | Cast model to bf16 for eval scope only. |
 | `tf32` | `bool \| None` | `None` | Toggle TF32 on Ampere+. |
-| `gradient_checkpointing` | `bool` | `False` | Off by default: vmap recomputes activations per microbatch, so GC adds overhead without memory benefit on models that fit. Opaque automatically uses the vmap-safe non-reentrant path. Incompatible with `torch_compile`. |
+| `gradient_checkpointing` | `bool` | `False` | Off by default: vmap recomputes activations per microbatch, so GC adds overhead without memory benefit on models that fit. Opake automatically uses the vmap-safe non-reentrant path. Incompatible with `torch_compile`. |
 | `gradient_checkpointing_kwargs` | `dict \| str \| None` | `None` | Forwarded to `model.gradient_checkpointing_enable(...)`. |
 | `torch_compile` | `bool` | `False` | Compile each tensor-only microbatch gradient/clipping kernel with `fullgraph=True`. |
 | `torch_compile_backend` | `str \| None` | `None` | Defaults to `"inductor"` when compile is on. |
@@ -246,7 +246,7 @@ Dataclass surface.  Every field listed here exists on
 `optim` supports `{"adam", "adamw", "sgd", "rmsprop", "adagrad",
 "adafactor", "ademamix", "lion", "radam", "adadelta",
 "schedule_free"}`.  HF aliases (`adamw_torch`, `adamw_torch_fused`,
-`lion_32bit`, …) are mapped to the matching opaque factory.  HF
+`lion_32bit`, …) are mapped to the matching opake factory.  HF
 names without a DP-aware mapping (8-bit, paged, GaLore, fused-CUDA,
 NPU, XLA) are rejected with a redirect message.
 
@@ -293,7 +293,7 @@ state and reconstruct the training iterate when loaded.
 | `output_dir` | `str \| None` | `None` | Defaults to `"trainer_output"`. |
 | `overwrite_output_dir` | `bool` | `False` | If `False`, warn when `output_dir` already contains checkpoints. |
 | `resume_from_checkpoint` | `str \| None` | `None` | Path to a checkpoint directory.  `True` passed to `train()` auto-finds latest. |
-| `enable_jit_checkpoint` | `bool` | `False` | Enable HF's SIGTERM-triggered just-in-time checkpoint callback; the saved checkpoint includes Opaque's DP runtime state. |
+| `enable_jit_checkpoint` | `bool` | `False` | Enable HF's SIGTERM-triggered just-in-time checkpoint callback; the saved checkpoint includes Opake's DP runtime state. |
 
 ### Hub publishing
 
@@ -408,7 +408,7 @@ class EvaluationResult:
 
 `predictions` and `label_ids` are `None` when
 `prediction_loss_only=True`.  Otherwise they're numpy arrays after
-the opaque-distributed gather + truncation to the dataset's true
+the opake-distributed gather + truncation to the dataset's true
 sample count.
 
 ## `TrainOutput`
@@ -422,12 +422,12 @@ class TrainOutput(NamedTuple):
 
 Returned by `train()`.  Mirrors HF's `TrainOutput`.
 
-## `opaque.transformers.trl` — SFT/DPO trainers
+## `opake.transformers.trl` — SFT/DPO trainers
 
 TRL-style class trainers built on `DPTrainer`.  Import the stable façade:
 
 ```python
-from opaque.transformers.trl import (
+from opake.transformers.trl import (
     SFTConfig,
     SFTTrainer,
     DPOConfig,
@@ -508,7 +508,7 @@ SFT-specific fields on top of `TrainingArguments`.
 | `log_completion_metrics` | `bool` | `True` | Log per-step `entropy` / `mean_token_accuracy`; `False` skips them.  Also enables fused logits-free loss paths when `False`. |
 | `logging_steps` | `float` | `10` | TRL default (overrides base `500`). |
 | `gradient_checkpointing` | `bool` | `False` | Off by default: vmap recomputes activations per microbatch, so GC adds overhead without memory benefit on models that fit. |
-| `use_performance_kernels` | `bool` | `True` | Opaque-specific: enable model-level Triton kernels (`rope`, `rms_norm`, `activation`, `cross_entropy`) by default.  CUDA + Triton only; no-op on CPU/MPS.  Overrides base `False`. |
+| `use_performance_kernels` | `bool` | `True` | Opake-specific: enable model-level Triton kernels (`rope`, `rms_norm`, `activation`, `cross_entropy`) by default.  CUDA + Triton only; no-op on CPU/MPS.  Overrides base `False`. |
 
 `__post_init__` pins `remove_unused_columns=False` (the collator consumes
 raw columns) and auto-enables `bf16` when the hardware supports it and no
@@ -577,7 +577,7 @@ DPO-specific fields on top of `TrainingArguments`.
 | `log_completion_metrics` | `bool` | `True` | Log per-step `logits/*` / `entropy` / `mean_token_accuracy`; rewards + `logps/*` are always logged. |
 | `logging_steps` | `float` | `10` | TRL default. |
 | `gradient_checkpointing` | `bool` | `False` | Off by default: vmap recomputes activations per microbatch, so GC adds overhead without memory benefit on models that fit. |
-| `use_performance_kernels` | `bool` | `True` | Opaque-specific: enable model-level Triton kernels (`rope`, `rms_norm`, `activation`, `cross_entropy`) by default.  CUDA + Triton only; no-op on CPU/MPS.  Overrides base `False`. |
+| `use_performance_kernels` | `bool` | `True` | Opake-specific: enable model-level Triton kernels (`rope`, `rms_norm`, `activation`, `cross_entropy`) by default.  CUDA + Triton only; no-op on CPU/MPS.  Overrides base `False`. |
 
 The reference-free heads are `{"chosen_nll", "simpo", "cpo", "orpo"}` (TRL's
 `sft` is `chosen_nll` here); a run is reference-free iff *every* configured
@@ -590,7 +590,7 @@ weight lengths / duplicate heads / TR-DPO reference-need, and auto-enables
 ## Runtime patches
 
 ```python
-from opaque.patches import apply_runtime_patches
+from opake.patches import apply_runtime_patches
 
 apply_runtime_patches(compat=True)  # install the global HF shims once
 ```
@@ -603,17 +603,17 @@ For per-model patches and the kernel surface, see
 
 ## API documentation
 
-::: opaque.transformers
+::: opake.transformers
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.transformers.trainer
+::: opake.transformers.trainer
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.transformers.trl
+::: opake.transformers.trl
     options:
       show_source: true
       heading_level: 3
