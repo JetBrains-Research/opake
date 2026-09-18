@@ -6,6 +6,7 @@ discretised base pair, and order-statistics p-value.
 
 from __future__ import annotations
 
+import importlib
 import math
 
 import numpy as np
@@ -15,6 +16,7 @@ import scipy.stats
 from opaque.api.auditing.one_run._eps_delta import _p_value as _eps_delta_p_value
 from opaque.api.auditing.one_run._gdp import (
     GdpMethod,
+    _chernoff_lower_tail,
     _compute_v_k,
     _gdp_base_pair_grid,
     _gdp_to_eps_delta,
@@ -22,6 +24,8 @@ from opaque.api.auditing.one_run._gdp import (
 )
 from opaque.auditing import one_run
 from opaque.auditing.types import CanaryScores, CoinFlip
+
+gdp_module = importlib.import_module("opaque.api.auditing.one_run._gdp")
 
 
 class _StubEstimate:
@@ -206,23 +210,56 @@ class TestPValue:
     def test_non_finite_mu_returns_one(self, mu):
         assert _p_value(100, 100, 0, mu, 64) == 1.0
 
+    def test_no_guesses_returns_one(self):
+        assert _p_value(100, 0, 0, 1.0, 64) == 1.0
+
+    def test_truncated_rank_bound_is_conservative(self, monkeypatch):
+        """The boundary substitution must upper-bound the exact-rank p-value."""
+        kwargs = {"n": 500, "r": 500, "u": 100, "mu": 1.0, "grid_size": 256}
+        monkeypatch.setattr(gdp_module, "_MAX_EXACT_RANKS", 50)
+        truncated = _p_value(**kwargs)
+        monkeypatch.setattr(gdp_module, "_MAX_EXACT_RANKS", 500)
+        exact = _p_value(**kwargs)
+        assert truncated >= exact
+
+    def test_truncated_rank_bound_respects_rank_monotonicity(self):
+        all_v = _compute_v_k(100, 100, _gdp_base_pair_grid(1.0, 1_000))
+        boundary_v = all_v[-20]
+        assert np.all(all_v[:-20] >= boundary_v)
+
+    def test_truncated_p_value_is_monotone_in_mu(self, monkeypatch):
+        monkeypatch.setattr(gdp_module, "_MAX_EXACT_RANKS", 50)
+        p_values = [_p_value(500, 500, 100, mu, 256) for mu in (0.5, 1.0, 2.0, 4.0)]
+        assert np.all(np.diff(p_values) >= -1e-10)
+
+    def test_truncation_boundary_decays_with_mu(self):
+        bounds = [
+            _compute_v_k(500, 50, _gdp_base_pair_grid(mu, 1_000))[0]
+            for mu in (0.5, 1.0, 2.0, 4.0)
+        ]
+        assert np.all(np.diff(bounds) < 0.0)
+
+    def test_chernoff_requires_truncated_rank_bound(self):
+        with pytest.raises(ValueError, match="trunc_v is required"):
+            _chernoff_lower_tail(np.array([0.1]), n_trunc=1, u=0)
+
 
 # ---- GdpMethod._mu_at bracket / bisection caps -----------------------------
 
 
 class TestMuAtTermination:
-    """Regression: a strong attack past rank truncation must raise, not hang.
+    """Regression: strong attacks past rank truncation remain invertible.
 
     These build ``GdpMethod`` directly with deliberately tiny grids to keep
-    the bracket/bisection cap reachable in test time; the public factory
-    enforces ``_MIN_GRID_SIZE`` separately.
+    the test fast; the public factory enforces ``_MIN_GRID_SIZE`` separately.
     """
 
     @pytest.mark.parametrize(("n_half", "u"), [(1500, 0), (2500, 1400)])
-    def test_strong_attack_past_truncation_raises(self, n_half, u):
+    def test_strong_attack_past_truncation_inverts(self, n_half, u):
         method = GdpMethod(_estimate=_StubEstimate(n_half, n_half, u), grid_size=64)
-        with pytest.raises(RuntimeError, match="cannot invert μ-GDP p-value"):
-            method._mu_at(0.05, None)
+        mu = method._mu_at(0.05, None)
+        assert math.isfinite(mu)
+        assert mu > 0.0
 
     def test_below_truncation_still_inverts(self):
         method = GdpMethod(_estimate=_StubEstimate(500, 500, u=0), grid_size=256)
