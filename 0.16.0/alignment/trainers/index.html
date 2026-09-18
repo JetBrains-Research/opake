@@ -1,0 +1,4135 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Functional DP-SGD and DP-FTRL for PyTorch">
+      
+      
+        <meta name="author" content="Opake Contributors">
+      
+      
+        <link rel="canonical" href="https://jetbrains-research.github.io/opake/0.16.0/alignment/trainers/">
+      
+      
+        <link rel="prev" href="../dpo/">
+      
+      
+        <link rel="next" href="../../tutorials/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>SFT & DPO Trainers - Opake</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sft-dpo-trainers-end-to-end" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Opake" class="md-header__button md-logo" aria-label="Opake" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Opake
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              SFT & DPO Trainers
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/JetBrains-Research/opake" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JetBrains-Research/opake
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../user-guide/" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../mechanisms/" class="md-tabs__link">
+          
+  
+  
+  Mechanisms
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Alignment
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../development/" class="md-tabs__link">
+          
+  
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Opake" class="md-nav__button md-logo" aria-label="Opake" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Opake
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/JetBrains-Research/opake" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JetBrains-Research/opake
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/dp-concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Differential Privacy Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/rng-key/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Random Number Generation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    End-to-end pipelines
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    End-to-end pipelines
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/dp-sgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/dp-ftrl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clipping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-Example Gradient Clipping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Noise Addition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/precision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mixed Precision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/accounting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Accounting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling & Microbatching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/optimizers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimizers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/lr-scheduling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LR Scheduling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/distributed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_13" id="__nav_3_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HuggingFace Integration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    HuggingFace Integration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/huggingface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/huggingface/dptrainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DPTrainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/distributed-trainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed DPTrainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/huggingface/training-arguments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TrainingArguments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/huggingface/model-patches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Patches
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/memory-optimizations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Optimizations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mechanisms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Mechanisms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-SGD
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-sgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-sgd/gaussian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gaussian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-FTRL
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/band-mf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BandMF
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/blt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BLT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/bsr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BSR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/bisr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BISR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/lambda-cgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-λCGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alignment
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Alignment
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sft/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SFT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dpo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DPO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SFT & DPO Trainers
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SFT & DPO Trainers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#sfttrainer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SFTTrainer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SFTTrainer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model loading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-formats-and-the-loss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data formats and the loss
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#telemetry-and-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telemetry and memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dpotrainer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DPOTrainer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DPOTrainer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reference-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference loading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-loss_type-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The loss_type menu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bco-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BCO baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mpo-and-loss_weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MPO and loss_weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tr-dpo-reference-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TR-DPO (reference sync)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wpo-ld-dpo-and-f-divergence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WPO, LD-DPO, and f-divergence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#telemetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telemetry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#converting-from-hf-trl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Converting from HF / TRL
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Converting from HF / TRL">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rejected-fields-raise-valueerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rejected fields (raise ValueError)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dropped-fields-silent-runtimewarning-when-non-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dropped fields (silent + RuntimeWarning when non-default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#round-trip-is-one-way" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Round-trip is one-way
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runnable-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runnable references
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD track
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-SGD track
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/dp_sgd_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Train a Model with DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/accounting_and_calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Accounting and Calibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/sampling_and_microbatching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling Strategies and Microbatching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/llm_finetuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fine-tune an LLM with Differential Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL track
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-FTRL track
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/dp_ftrl_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Train a Model with DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_4" id="__nav_6_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-cutting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cross-cutting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/privacy_auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/distributed_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed DP-SGD Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/serialization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/clipping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clipping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/accounting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accounting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/rng/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Random
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/distributed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/utilities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/optimizers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimizers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/schedules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schedules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/transformers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transformers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/alignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alignment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#sfttrainer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SFTTrainer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SFTTrainer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model loading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-formats-and-the-loss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data formats and the loss
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#telemetry-and-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telemetry and memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dpotrainer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DPOTrainer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DPOTrainer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reference-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference loading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-loss_type-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The loss_type menu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bco-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BCO baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mpo-and-loss_weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MPO and loss_weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tr-dpo-reference-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TR-DPO (reference sync)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wpo-ld-dpo-and-f-divergence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WPO, LD-DPO, and f-divergence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#telemetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Telemetry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#converting-from-hf-trl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Converting from HF / TRL
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Converting from HF / TRL">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#batch-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rejected-fields-raise-valueerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rejected fields (raise ValueError)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dropped-fields-silent-runtimewarning-when-non-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dropped fields (silent + RuntimeWarning when non-default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#round-trip-is-one-way" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Round-trip is one-way
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runnable-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runnable references
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="sft-dpo-trainers-end-to-end">SFT &amp; DPO trainers end-to-end<a class="headerlink" href="#sft-dpo-trainers-end-to-end" title="Permanent link">&para;</a></h1>
+<p>The <a href="../sft/">SFT</a> and <a href="../dpo/">DPO</a> guides build a DP run manually from
+<code>opake.alignment</code> primitives. This guide covers the <strong>class-based trainers</strong> that
+wrap that pipeline: <code>opake.transformers.trl.SFTTrainer</code> and <code>DPOTrainer</code>.
+They mirror <code>trl.SFTTrainer</code> / <code>trl.DPOTrainer</code> in structure and method names,
+but route the gradient through Opake's per-example DP
+<a href="../../user-guide/huggingface/dptrainer/"><code>DPTrainer</code></a> — one Poisson round is
+one clip-noise-step. The alignment collators, losses, and reference helpers are
+the same primitives the by-hand guides use; the trainer is the orchestration
+layer.</p>
+<p>The supported <code>loss_type</code> values map onto the corresponding alignment papers:
+<a href="https://arxiv.org/abs/2305.18290">DPO</a>, <a href="https://arxiv.org/abs/2310.12036">IPO</a>,
+<a href="https://arxiv.org/abs/2406.08414">DiscoPOP</a>, <a href="https://arxiv.org/abs/2405.14734">SimPO</a>,
+<a href="https://arxiv.org/abs/2403.07691">ORPO</a>, <a href="https://arxiv.org/abs/2406.11827">WPO</a>,
+<a href="https://arxiv.org/abs/2409.06411">LD-DPO</a>, <a href="https://arxiv.org/abs/2408.06266">APO</a>,
+<a href="https://arxiv.org/abs/2402.05369">NCA</a>,
+<a href="https://arxiv.org/abs/2404.04656">BCO</a>, <a href="https://arxiv.org/abs/2405.00675">SPPO</a>,
+and <a href="https://arxiv.org/abs/2508.05629">Dynamic Fine-Tuning</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.transformers.trl</span><span class="w"> </span><span class="kn">import</span> <span class="n">SFTConfig</span><span class="p">,</span> <span class="n">SFTTrainer</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.transformers.trl</span><span class="w"> </span><span class="kn">import</span> <span class="n">DPOConfig</span><span class="p">,</span> <span class="n">DPOTrainer</span>
+</code></pre></div>
+<p>Both configs <strong>extend</strong> the base
+<a href="../../reference/transformers/#trainingarguments"><code>TrainingArguments</code></a>, so every
+DP knob — <code>privacy_target_epsilon</code>, <code>clipping_norm</code>, <code>clipping_mode</code>,
+<code>sampling_kwargs</code>, <code>privacy_noise_multiplier</code>, the optimizer / LR / schedule
+fields, and every eval / save field — is settable directly on <code>SFTConfig</code> /
+<code>DPOConfig</code>. This guide covers only the SFT/DPO-specific fields; for the
+inherited DP/clipping/sampling surface see
+<a href="../../user-guide/huggingface/training-arguments/">TrainingArguments</a> and the
+<a href="../../reference/transformers/#trainingarguments">transformers reference</a>.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>gradient_accumulation_steps</code> is not a usable knob</p>
+<p>Under Poisson per-example DP, one round <strong>is</strong> one optimizer step, so there
+is no gradient accumulation. <code>gradient_accumulation_steps</code> is a read-only
+property pinned to <code>1</code> (it has no field), so passing it to a config raises
+<code>TypeError</code>. Grow the effective batch with <code>per_device_train_batch_size</code>
+instead; the physical vmap chunk is decoupled (<code>microbatch_size</code> /
+<code>auto_find_microbatch_size</code>) and privacy-neutral.</p>
+</div>
+<h2 id="sfttrainer">SFTTrainer<a class="headerlink" href="#sfttrainer" title="Permanent link">&para;</a></h2>
+<p>The minimal call mirrors TRL: a model (or model name), an <code>SFTConfig</code>, a
+dataset, and a tokenizer.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.transformers.trl</span><span class="w"> </span><span class="kn">import</span> <span class="n">SFTConfig</span><span class="p">,</span> <span class="n">SFTTrainer</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">"Qwen/Qwen2.5-0.5B"</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">"Qwen/Qwen2.5-0.5B"</span><span class="p">)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">dataset</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="s2">"roneneldan/TinyStories"</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="s2">"train"</span><span class="p">)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">args</span> <span class="o">=</span> <span class="n">SFTConfig</span><span class="p">(</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"trainer_output/sft"</span><span class="p">,</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">dataset_text_field</span><span class="o">=</span><span class="s2">"text"</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">loss_type</span><span class="o">=</span><span class="s2">"nll"</span><span class="p">,</span>                 <span class="c1"># or "dft" / "chunked_nll"</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">max_length</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">per_device_train_batch_size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">max_steps</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="c1"># DP knobs (inherited from TrainingArguments)</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">clipping_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">privacy_noise_multiplier</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>    <span class="c1"># or privacy_target_epsilon=8.0 to calibrate</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="p">)</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="n">trainer</span> <span class="o">=</span> <span class="n">SFTTrainer</span><span class="p">(</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">,</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">train_dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">processing_class</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="p">)</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="n">trainer</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="model-loading">Model loading<a class="headerlink" href="#model-loading" title="Permanent link">&para;</a></h3>
+<p>Pass <code>model</code> as an already-instantiated module, or as a <strong>string</strong> name/path —
+then <code>SFTTrainer</code> calls <code>AutoModelForCausalLM.from_pretrained(model,
+**model_init_kwargs)</code>. Use <code>model_init_kwargs</code> (a dict on <code>SFTConfig</code>) to
+forward load-time kwargs such as <code>torch_dtype</code> or <code>attn_implementation</code>; it is
+ignored when <code>model</code> is already a module.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">args</span> <span class="o">=</span> <span class="n">SFTConfig</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"out"</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">model_init_kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">"torch_dtype"</span><span class="p">:</span> <span class="s2">"bfloat16"</span><span class="p">},</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">trainer</span> <span class="o">=</span> <span class="n">SFTTrainer</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"Qwen/Qwen2.5-0.5B"</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</code></pre></div>
+<p>The tokenizer (<code>processing_class</code>) is loaded from the model's <code>_name_or_path</code>
+when omitted; if it has no pad token, the EOS token is reused. Set
+<code>eos_token</code> on the config to override the EOS appended to plain-text examples.</p>
+<h3 id="data-formats-and-the-loss">Data formats and the loss<a class="headerlink" href="#data-formats-and-the-loss" title="Permanent link">&para;</a></h3>
+<p><code>SFTTrainer</code> tokenizes the dataset for you, dispatching on format: a plain-text
+column (<code>dataset_text_field</code>, default <code>"text"</code>), a <code>prompt</code>/<code>completion</code> pair,
+or a chat-message column (<code>messages</code> / <code>conversations</code> / <code>chat</code>). Pass a
+<code>formatting_func(example) -&gt; str</code> to render arbitrary rows into the text field
+first. Already-tokenized datasets (with an <code>input_ids</code> column) pass through
+untouched.</p>
+<p><code>loss_type</code> selects <code>"nll"</code> (standard cross-entropy), <code>"dft"</code> (Dynamic
+Fine-Tuning), or <code>"chunked_nll"</code> (fused logits-free cross-entropy). All use a
+DP-safe per-example token-count divisor — see
+<a href="../sft/#2-per-example-loss">SFT end-to-end</a>. A custom
+<code>compute_loss_func(outputs, labels) -&gt; scalar</code> is honoured <strong>only</strong> on the
+<code>"nll"</code> path (it runs inside vmap, so it must be a pure per-example op — no
+<code>num_items_in_batch</code>); <code>"dft"</code> and <code>"chunked_nll"</code> compute their own loss and
+reject a custom function.</p>
+<p>Set <code>completion_only_loss=True</code> to score only the completion tokens of
+prompt-completion data, or <code>assistant_only_loss=True</code> to score only assistant
+turns of chat data (the trainer installs the <code>{% generation %}</code>-marked training
+chat template and recovers the assistant-token mask). Left as the default
+<code>None</code>, <code>completion_only_loss</code> auto-detects: <code>True</code> for prompt-completion data
+and <code>False</code> for language-modeling data, including chat. Ordinary chat therefore
+scores the full rendered conversation; enable <code>assistant_only_loss</code> to mask its
+non-assistant tokens. Use <code>chat_template_path</code> to clone a chat template (and its
+special tokens) from another tokenizer/Jinja file onto the processing class
+before tokenizing — this resizes the model's embeddings, and under PEFT the new
+token rows are marked trainable.</p>
+<h3 id="telemetry-and-memory">Telemetry and memory<a class="headerlink" href="#telemetry-and-memory" title="Permanent link">&para;</a></h3>
+<p><code>log_completion_metrics</code> (default <code>True</code>) gates the per-step logits-derived
+diagnostics — <code>entropy</code> and <code>mean_token_accuracy</code> over the supervised
+(non-<code>-100</code>) tokens. Set it to <code>False</code> to skip materializing them when you
+don't need them.</p>
+<p><code>activation_offloading</code> (inherited from the base config, shared by SFT and DPO)
+offloads activations to CPU between the forward and backward to trade host
+bandwidth for GPU memory.</p>
+<div class="admonition note">
+<p class="admonition-title">TRL-parity defaults</p>
+<p><code>SFTConfig</code> overrides a few base defaults to match TRL: <code>learning_rate</code>
+<code>2e-5</code>, <code>logging_steps</code> <code>10</code>, <code>gradient_checkpointing</code> <code>True</code>, and bf16
+auto-enabled when the hardware supports it (and you didn't pick a
+precision). <code>remove_unused_columns</code> is pinned <code>False</code> (the collator
+consumes raw dataset columns).</p>
+</div>
+<h2 id="dpotrainer">DPOTrainer<a class="headerlink" href="#dpotrainer" title="Permanent link">&para;</a></h2>
+<p><code>DPOTrainer</code> adds a frozen reference policy and preference data. The minimal
+call adds a <code>ref_model</code> (or relies on auto-load / PEFT null-ref / a
+reference-free <code>loss_type</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.transformers.trl</span><span class="w"> </span><span class="kn">import</span> <span class="n">DPOConfig</span><span class="p">,</span> <span class="n">DPOTrainer</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">args</span> <span class="o">=</span> <span class="n">DPOConfig</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"trainer_output/dpo"</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">loss_type</span><span class="o">=</span><span class="s2">"sigmoid"</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">beta</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">max_length</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">per_device_train_batch_size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">max_steps</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">clipping_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">privacy_noise_multiplier</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="p">)</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">trainer</span> <span class="o">=</span> <span class="n">DPOTrainer</span><span class="p">(</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">"Qwen/Qwen2.5-0.5B-Instruct"</span><span class="p">,</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="n">ref_model</span><span class="o">=</span><span class="s2">"Qwen/Qwen2.5-0.5B-Instruct"</span><span class="p">,</span>   <span class="c1"># str, module, or None</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">,</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="n">train_dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="n">processing_class</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="p">)</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="n">trainer</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+</code></pre></div>
+<p>The trainer tokenizes preference rows (<code>prompt</code>/<code>chosen</code>/<code>rejected</code>, with the
+shared prompt auto-extracted when only <code>chosen</code>/<code>rejected</code> are given) and, for
+reference-using losses, runs a <strong>one-shot reference precompute</strong> before
+training that attaches per-example <code>ref_chosen_logps</code> / <code>ref_rejected_logps</code>
+columns. The per-example loss reads those as constants, so no second model runs
+inside vmap (see <a href="../dpo/#1-reference-log-probabilities">DPO end-to-end</a>). The
+reference is always precomputed <em>summed</em>; length-normalized heads divide by the
+completion length at loss time, so one precompute serves both summed and
+normalized variants.</p>
+<h3 id="reference-loading">Reference loading<a class="headerlink" href="#reference-loading" title="Permanent link">&para;</a></h3>
+<p>How the reference is resolved (no <code>reference_free</code> flag exists — reference-need
+is derived from <code>loss_type</code>, below):</p>
+<table>
+<thead>
+<tr>
+<th><code>ref_model</code></th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a module</td>
+<td>Used as-is; left in the device and mode in which it arrived.</td>
+</tr>
+<tr>
+<td>a <strong>string</strong></td>
+<td>Loaded via <code>AutoModelForCausalLM.from_pretrained(ref_model, **model_init_kwargs)</code> — <code>model_init_kwargs</code> is threaded into the reference load too.</td>
+</tr>
+<tr>
+<td><code>None</code>, PEFT policy</td>
+<td>The base model is the reference; the adapter is disabled around the reference forward (<code>null_ref_context</code>). No second model.</td>
+</tr>
+<tr>
+<td><code>None</code>, string/path policy</td>
+<td>A reference <strong>copy is auto-loaded</strong> from the policy path.</td>
+</tr>
+<tr>
+<td><code>None</code>, in-memory policy, not PEFT</td>
+<td>No reference resolvable → raises early (pass <code>ref_model=</code>, use PEFT, or a reference-free <code>loss_type</code>).</td>
+</tr>
+</tbody>
+</table>
+<p><code>precompute_ref_batch_size</code> sets the batch size for the precompute pass
+(defaults to the train batch size). <code>disable_dropout</code> (default <code>True</code>) zeros
+dropout in the policy and reference before training.</p>
+<h3 id="the-loss_type-menu">The <code>loss_type</code> menu<a class="headerlink" href="#the-loss_type-menu" title="Permanent link">&para;</a></h3>
+<p><code>loss_type</code> is one name or a <strong>list</strong> of names (a list ⇒ MPO; see below). The
+trainer dispatches each name to an <code>opake.alignment.dpo</code> head; an unknown name
+fails with a <code>KeyError</code> at the dispatch table. The supported names:</p>
+<table>
+<thead>
+<tr>
+<th><code>loss_type</code></th>
+<th>Method</th>
+<th>Reference?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sigmoid</code></td>
+<td>Standard DPO logistic loss (the default).</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>sigmoid_norm</code></td>
+<td>Length-normalized sigmoid.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>hinge</code></td>
+<td>DPO hinge loss.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ipo</code></td>
+<td>IPO (length-normalized).</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>robust</code></td>
+<td>Robust / label-smoothed (cDPO).</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>exo_pair</code></td>
+<td>EXO pairwise (needs <code>label_smoothing &gt; 0</code>).</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>nca_pair</code></td>
+<td>NCA pairwise.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>bco_pair</code></td>
+<td>BCO pairwise.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>sppo_hard</code></td>
+<td>SPPO hard-label.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>apo_zero</code> / <code>apo_down</code></td>
+<td>APO-zero / APO-down.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>discopop</code></td>
+<td>DiscoPOP (temperature <code>discopop_tau</code>).</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>simpo</code></td>
+<td>SimPO: length-normalized sigmoid with a target margin.</td>
+<td><strong>no</strong></td>
+</tr>
+<tr>
+<td><code>cpo</code></td>
+<td>CPO: reference-free sigmoid + <code>cpo_alpha</code>·chosen-NLL.</td>
+<td><strong>no</strong></td>
+</tr>
+<tr>
+<td><code>orpo</code></td>
+<td>ORPO: odds-ratio + <code>orpo_lambda</code>·chosen-NLL.</td>
+<td><strong>no</strong></td>
+</tr>
+<tr>
+<td><code>chosen_nll</code></td>
+<td>Chosen-completion NLL only (TRL calls this <code>sft</code>).</td>
+<td><strong>no</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reference-free heads.</strong> The four reference-free names —
+<code>simpo</code>, <code>cpo</code>, <code>orpo</code>, <code>chosen_nll</code> — score the policy's own (length-normalized)
+log-prob, so the reference precompute is <strong>skipped entirely</strong>. Reference-need
+is intrinsic to the configured heads: a run needs a reference iff <em>any</em>
+configured head is reference-using. Their flat parameters live on <code>DPOConfig</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Head</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>simpo_gamma</code></td>
+<td><code>0.5</code></td>
+<td><code>simpo</code></td>
+<td>Target reward margin γ subtracted inside the sigmoid.</td>
+</tr>
+<tr>
+<td><code>cpo_alpha</code></td>
+<td><code>1.0</code></td>
+<td><code>cpo</code></td>
+<td>Weight on the chosen-completion NLL term.</td>
+</tr>
+<tr>
+<td><code>orpo_lambda</code></td>
+<td><code>1.0</code></td>
+<td><code>orpo</code></td>
+<td>Weight on the odds-ratio term.</td>
+</tr>
+</tbody>
+</table>
+<p><code>cpo</code> and <code>orpo</code> are reference-free <strong>composites</strong> assembled by the trainer (a
+preference / odds-ratio term plus a per-token-mean chosen NLL); they are not
+single exported heads. SimPO and ORPO use the length-normalized per-token
+reward; CPO's sigmoid uses the summed policy log-probs.</p>
+<h3 id="bco-baseline">BCO baseline<a class="headerlink" href="#bco-baseline" title="Permanent link">&para;</a></h3>
+<p><code>DPOTrainer</code> uses BCO's zero baseline (<code>delta=0.0</code>); it does not implement
+TRL's cross-batch running reward mean. A manual nonzero <code>delta</code> must be
+public, separately DP, or derived from prior DP outputs; detaching a raw
+current- or cross-batch statistic is not sufficient.</p>
+<h3 id="mpo-and-loss_weights">MPO and <code>loss_weights</code><a class="headerlink" href="#mpo-and-loss_weights" title="Permanent link">&para;</a></h3>
+<p>Passing <code>loss_type</code> as a list combines the heads into one per-example loss
+(MPO — Mix of Preference Objectives — via <code>mpo_combine</code>). <code>loss_weights</code> (a
+list of floats, defaulting to all ones) weights each term and <strong>must match the
+length of <code>loss_type</code></strong>; duplicate loss names are rejected. A list may freely
+mix length-normalized and summed variants — the reference is always precomputed
+summed and normalized per head at loss time.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># MPO: weighted DPO sigmoid + a chosen-NLL (RPO-style) regularizer.</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">args</span> <span class="o">=</span> <span class="n">DPOConfig</span><span class="p">(</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"out"</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">loss_type</span><span class="o">=</span><span class="p">[</span><span class="s2">"sigmoid"</span><span class="p">,</span> <span class="s2">"chosen_nll"</span><span class="p">],</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">loss_weights</span><span class="o">=</span><span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">],</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">beta</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="tr-dpo-reference-sync">TR-DPO (reference sync)<a class="headerlink" href="#tr-dpo-reference-sync" title="Permanent link">&para;</a></h3>
+<p><code>sync_ref_model=True</code> periodically moves the reference toward the policy by an
+EMA step — <code>ref ← (1 - α)·ref + α·policy</code> — recomputed per step <strong>outside</strong>
+vmap. <code>ref_model_mixup_alpha</code> (default <code>0.6</code>) is α; <code>ref_model_sync_steps</code>
+(default <code>512</code>) is the cadence. TR-DPO requires a reference-using <code>loss_type</code>
+(nothing to sync toward otherwise) and full fine-tuning (not PEFT). Under
+TR-DPO the per-step reference logps are recomputed from the evolving reference,
+overwriting the seeded columns, and eval scores against the same reference.</p>
+<h3 id="wpo-ld-dpo-and-f-divergence">WPO, LD-DPO, and f-divergence<a class="headerlink" href="#wpo-ld-dpo-and-f-divergence" title="Permanent link">&para;</a></h3>
+<p>These are flat fields on <code>DPOConfig</code>, composing on top of the head(s):</p>
+<ul>
+<li><strong>WPO</strong> — <code>use_weighting=True</code> reweights each example by the policy's
+  detached average completion probability on both sides (arXiv:2406.11827).
+  The weight is detached and per-example, so per-example DP is preserved.</li>
+<li><strong>LD-DPO</strong> — <code>ld_alpha</code> (a float in <code>[0, 1]</code>, <code>None</code> ⇒ standard DPO)
+  length-desensitizes the sequence log-prob by damping the verbose tail of each
+  completion beyond the paper's public length (the shorter completion length;
+  arXiv:2409.06411).</li>
+<li><strong>f-divergence</strong> — <code>f_divergence_type</code> selects the regularizer:
+  <code>"reverse_kl"</code> (default, standard DPO), <code>"forward_kl"</code>, <code>"js_divergence"</code>, or
+  <code>"alpha_divergence"</code>. For the α-divergence, <code>f_alpha_divergence_coef</code>
+  (default <code>0.5</code>) is the α coefficient. A non-reverse-KL type remaps the
+  log-ratios before the reference-using heads.</li>
+</ul>
+<h3 id="telemetry">Telemetry<a class="headerlink" href="#telemetry" title="Permanent link">&para;</a></h3>
+<p><code>log_completion_metrics</code> (default <code>True</code>) gates the logits-consuming
+per-example diagnostics: <code>logits/chosen</code>, <code>logits/rejected</code>, <code>entropy</code>, and
+<code>mean_token_accuracy</code>. The reward telemetry — <code>rewards/chosen</code>,
+<code>rewards/rejected</code>, <code>rewards/accuracies</code>, <code>rewards/margins</code> — and
+<code>logps/chosen</code> / <code>logps/rejected</code> are always logged (they are free byproducts
+of the loss). Every telemetry tensor is detached, riding the clipped-grad aux
+channel without leaking gradient; the eval loop aggregates the same dict under
+<code>eval_*</code>.</p>
+<p><code>activation_offloading</code> (inherited base field) applies to DPO too.</p>
+<h2 id="converting-from-hf-trl">Converting from HF / TRL<a class="headerlink" href="#converting-from-hf-trl" title="Permanent link">&para;</a></h2>
+<p>Pipelines that already construct an HF <code>TrainingArguments</code> or a
+<code>trl.SFTConfig</code> / <code>trl.DPOConfig</code> can pass the existing config to the
+Opake equivalents through three class methods:</p>
+<ul>
+<li><code>TrainingArguments.from_hf(hf_args, ...)</code> — base HF translation.</li>
+<li><code>SFTConfig.from_trl(trl_sft_cfg, ...)</code> — TRL SFT translation.
+  Requires the optional <code>trl</code> extra: <code>pip install opake[trl]</code>.</li>
+<li><code>DPOConfig.from_trl(trl_dpo_cfg, ...)</code> — TRL DPO translation. Same
+  extra.</li>
+</ul>
+<p>Each class method accepts the same DP-knob kwargs as a regular Opake
+config — at least one of <code>privacy_noise_multiplier</code> or
+<code>privacy_target_epsilon</code> is required, the rest have sensible defaults.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">trl</span><span class="w"> </span><span class="kn">import</span> <span class="n">SFTConfig</span> <span class="k">as</span> <span class="n">TrlSFTConfig</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.transformers.trl</span><span class="w"> </span><span class="kn">import</span> <span class="n">SFTConfig</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">trl_cfg</span> <span class="o">=</span> <span class="n">TrlSFTConfig</span><span class="p">(</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="s2">"trainer_output/sft"</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">per_device_train_batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">gradient_accumulation_steps</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">max_steps</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">bf16</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">dataset_text_field</span><span class="o">=</span><span class="s2">"text"</span><span class="p">,</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">loss_type</span><span class="o">=</span><span class="s2">"nll"</span><span class="p">,</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">)</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">opake_cfg</span> <span class="o">=</span> <span class="n">SFTConfig</span><span class="o">.</span><span class="n">from_trl</span><span class="p">(</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="n">trl_cfg</span><span class="p">,</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="n">privacy_noise_multiplier</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>    <span class="n">clipping_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="p">)</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="c1"># opake_cfg.per_device_train_batch_size == 8   (2 × 4: privacy-relevant batch)</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="c1"># opake_cfg.microbatch_size             == 2   (HF microbatch → vmap chunk)</span>
+</code></pre></div>
+<h3 id="batch-semantics">Batch semantics<a class="headerlink" href="#batch-semantics" title="Permanent link">&para;</a></h3>
+<p>DP-SGD's sample-rate denominator (and therefore <span class="arithmatex">\(\epsilon\)</span>) is the
+<strong>logical batch</strong> — the unit over which one gradient + noise step
+applies. In HF terms that's <code>per_device_train_batch_size ×
+gradient_accumulation_steps</code>; in opake terms it's
+<code>per_device_train_batch_size</code> alone. The converter collapses HF's
+two-field expression into opake's one-field expression by multiplying,
+and folds the HF microbatch into opake's <code>microbatch_size</code> (the vmap
+chunk inside the per-example clipped-gradient pass). Dropping
+<code>gradient_accumulation_steps</code> on the floor would under-account the
+sampling amplification and emit a too-optimistic <span class="arithmatex">\(\epsilon\)</span>.</p>
+<h3 id="rejected-fields-raise-valueerror">Rejected fields (raise <code>ValueError</code>)<a class="headerlink" href="#rejected-fields-raise-valueerror" title="Permanent link">&para;</a></h3>
+<p>The converter raises with a per-field rationale when the source config
+sets any of these:</p>
+<table>
+<thead>
+<tr>
+<th>HF / TRL field</th>
+<th>Why rejected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fp16=True</code>, <code>fp16_*</code></td>
+<td>DP-SGD is bf16-only; use <code>bf16=True</code>.</td>
+</tr>
+<tr>
+<td><code>fsdp</code>, <code>fsdp_config</code>, <code>fsdp_*</code></td>
+<td>FSDP is not on the per-example DP path.</td>
+</tr>
+<tr>
+<td><code>deepspeed</code></td>
+<td>DeepSpeed is not on the per-example DP path.</td>
+</tr>
+<tr>
+<td><code>accelerator_config</code></td>
+<td>Accelerate-driven config is not used.</td>
+</tr>
+<tr>
+<td><code>neftune_noise_alpha</code></td>
+<td>NEFTune would interact with the privacy accountant.</td>
+</tr>
+<tr>
+<td><code>max_grad_norm</code> (non-default)</td>
+<td>Pre-step global norm clipping has no opake analogue; use <code>clipping_norm</code> for per-example DP clipping instead.</td>
+</tr>
+<tr>
+<td><code>optim="paged_adamw_*"</code>, <code>*_8bit</code>, <code>*_apex_fused</code></td>
+<td>Quantized / Apex-fused optimizers are not in opake-engine's torchopt path.</td>
+</tr>
+<tr>
+<td><code>use_liger_kernel</code>, <code>liger_kernel_config</code></td>
+<td>Liger fused kernels are not on the DP-SGD path.</td>
+</tr>
+<tr>
+<td>TRL <code>packing=True</code>, <code>padding_free=True</code>, <code>eval_packing=True</code></td>
+<td>Sequence packing / unpadded forwards break the fixed per-example batch shape DP-SGD's vmap requires.</td>
+</tr>
+<tr>
+<td>TRL <code>shuffle_dataset=True</code></td>
+<td>Opake's Poisson sampler controls ordering.</td>
+</tr>
+<tr>
+<td>TRL <code>truncation_mode="keep_end"</code></td>
+<td>Opake only supports <code>keep_start</code>.</td>
+</tr>
+<tr>
+<td>TRL <code>pad_token=...</code></td>
+<td>Set <code>tokenizer.pad_token</code> directly.</td>
+</tr>
+<tr>
+<td>DPO <code>loss_type=["aot", ...]</code></td>
+<td>TRL 1.x added Adversarial Optimal Transport heads opake doesn't implement.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dropped-fields-silent-runtimewarning-when-non-default">Dropped fields (silent + <code>RuntimeWarning</code> when non-default)<a class="headerlink" href="#dropped-fields-silent-runtimewarning-when-non-default" title="Permanent link">&para;</a></h3>
+<p>HF fields that have no opake effect get silently dropped — the
+converter emits a <code>RuntimeWarning</code> if the user set them to a
+non-baseline value. Examples: <code>do_train</code>, <code>do_eval</code>, <code>tpu_*</code>,
+<code>ray_scope</code>, <code>optim_target_modules</code>, <code>batch_eval_metrics</code>,
+<code>eval_use_gather_object</code>, <code>hub_strategy</code>, <code>accelerator_config</code>.</p>
+<p>Pass <code>strict=False</code> to suppress the warnings entirely.</p>
+<h3 id="round-trip-is-one-way">Round-trip is one-way<a class="headerlink" href="#round-trip-is-one-way" title="Permanent link">&para;</a></h3>
+<p>The class methods only translate HF/TRL → Opake. Opake-only fields
+(every DP knob, <code>microbatch_size &gt; per_device_eval_batch_size</code>,
+opake-specific clipping / sampling / noise-mechanism families) cannot
+be expressed in HF or TRL terms, so the reverse conversion is not
+supported and not implemented.</p>
+<h2 id="runnable-references">Runnable references<a class="headerlink" href="#runnable-references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/JetBrains-Research/opake/blob/main/examples/train_sft_trainer.py"><code>examples/train_sft_trainer.py</code></a>
+  — DP SFT via the class-based <code>SFTTrainer</code> (LoRA policy, <code>nll</code>/<code>dft</code>).</li>
+<li><a href="https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpo_trainer.py"><code>examples/train_dpo_trainer.py</code></a>
+  — DP DPO via the class-based <code>DPOTrainer</code> (reference precompute, LoRA
+  null-ref).</li>
+</ul>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../sft/">SFT end-to-end</a> — the by-hand DP-SGD SFT pipeline the trainer wraps.</li>
+<li><a href="../dpo/">DPO end-to-end</a> — the by-hand reference-precompute / head-selection
+  pipeline.</li>
+<li><a href="../../reference/transformers/#opaketransformerstrl-sftdpo-trainers">Transformers reference</a>
+  — the <code>SFTConfig</code> / <code>DPOConfig</code> / <code>SFTTrainer</code> / <code>DPOTrainer</code> field-by-field
+  reference.</li>
+<li><a href="../../user-guide/huggingface/training-arguments/">TrainingArguments</a> — the
+  inherited DP / clipping / sampling / save / eval knobs.</li>
+<li><a href="../../user-guide/huggingface/dptrainer/">DPTrainer</a> — the per-example DP
+  trainer both classes subclass.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/JetBrains-Research/opake" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,4876 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Functional DP-SGD and DP-FTRL for PyTorch">
+      
+      
+        <meta name="author" content="Opake Contributors">
+      
+      
+        <link rel="canonical" href="https://jetbrains-research.github.io/opake/0.16.0/reference/accounting/">
+      
+      
+        <link rel="prev" href="../noise/">
+      
+      
+        <link rel="next" href="../sampling/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Accounting - Opake</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#opakeaccounting" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Opake" class="md-header__button md-logo" aria-label="Opake" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Opake
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Accounting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/JetBrains-Research/opake" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JetBrains-Research/opake
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../user-guide/" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../mechanisms/" class="md-tabs__link">
+          
+  
+  
+  Mechanisms
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../alignment/" class="md-tabs__link">
+          
+  
+  
+  Alignment
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../development/" class="md-tabs__link">
+          
+  
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Opake" class="md-nav__button md-logo" aria-label="Opake" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Opake
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/JetBrains-Research/opake" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JetBrains-Research/opake
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/dp-concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Differential Privacy Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/rng-key/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Random Number Generation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    End-to-end pipelines
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    End-to-end pipelines
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/dp-sgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/dp-ftrl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clipping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-Example Gradient Clipping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Noise Addition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/precision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mixed Precision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/accounting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Accounting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling & Microbatching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/optimizers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimizers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/lr-scheduling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LR Scheduling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/distributed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_13" id="__nav_3_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HuggingFace Integration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    HuggingFace Integration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/huggingface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/huggingface/dptrainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DPTrainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/distributed-trainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed DPTrainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/huggingface/training-arguments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TrainingArguments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/huggingface/model-patches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Patches
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/memory-optimizations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Optimizations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mechanisms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Mechanisms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-SGD
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-sgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-sgd/gaussian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gaussian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-FTRL
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/band-mf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BandMF
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/blt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BLT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/bsr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BSR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/bisr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BISR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mechanisms/dp-ftrl/lambda-cgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-λCGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alignment
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Alignment
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alignment/sft/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SFT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alignment/dpo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DPO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alignment/trainers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SFT & DPO Trainers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD track
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-SGD track
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/dp_sgd_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Train a Model with DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/accounting_and_calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Accounting and Calibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/sampling_and_microbatching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling Strategies and Microbatching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/llm_finetuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fine-tune an LLM with Differential Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL track
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-FTRL track
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/dp_ftrl_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Train a Model with DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_4" id="__nav_6_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-cutting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cross-cutting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/privacy_auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/distributed_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed DP-SGD Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serialization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../clipping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clipping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accounting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accounting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#namespace-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Namespace organization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-budget-checkpointing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom budget checkpointing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discretizationconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DiscretizationConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mechanism-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mechanism functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mechanism functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gaussiannoise_multiplier-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gaussian(noise_multiplier) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissoninner-sample_rate-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        poisson(inner, sample_rate) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissoninner-sample_rate-truncated_batch_sizenone-dataset_sizenone-dpprocess-truncated-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        poisson(inner, sample_rate, *, truncated_batch_size=None, dataset_size=None) -&gt; DpProcess (truncated form)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parallel_poissoninner-sample_rate-num_workers-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        parallel_poisson(inner, sample_rate, num_workers) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#k_out_of_tinner-k-t-allocation-dphorizonprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        k_out_of_t(inner, *, k, t, allocation) -&gt; DpHorizonProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adaclipinner-fraction_noise_std-expected_batch_size-num_groups1-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        adaclip(inner, *, fraction_noise_std, expected_batch_size, num_groups=1) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-second-moment-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private second-moment release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eps_deltaepsilon-delta00-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        eps_delta(epsilon, delta=0.0) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        identity() -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nonprivate-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nonprivate() -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matrix-factorization-mechanisms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matrix factorization mechanisms
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Matrix factorization mechanisms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mf_gaussiannoise_multiplier-strategy-n_stepsnone-min_sep1-max_participationsnone-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mf_gaussian(noise_multiplier, strategy, *, n_steps=None, min_sep=1, max_participations=None) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#correlated-mf-mechanisms-blt-cgd-bisr-bsr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlated MF mechanisms (BLT, λCGD, BISR, BSR)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissoninner-sample_rate-n_steps-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        poisson(inner, sample_rate, *, n_steps) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b_min_sepinner-n_steps-p0-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        b_min_sep(inner, *, n_steps, p0) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#balls_in_binsinner-num_bins-n_steps-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        balls_in_bins(inner, *, num_bins, n_steps) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#composition-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composition Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Composition Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repeatprocess-count-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        repeat(process, count) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#composeleft-right-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compose(left, right) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cachedprocess-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cached(process) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#serialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accountant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accountant
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accountant">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#budget-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budget tracking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seeding-with-a-prior-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seeding with a prior process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#serialization_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Calibration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calibratebudget-process-param_min-param_max-tolerance1e-6-max_iterations100-prefixnone-calibrateresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        calibrate(budget, process, param_min, param_max, tolerance=1e-6, max_iterations=100, prefix=None) -&gt; CalibrateResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#calibrateresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CalibrateResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#budget-factories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budget Factories
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rng/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Random
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../distributed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../utilities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimizers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimizers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schedules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transformers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transformers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../alignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alignment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#namespace-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Namespace organization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-budget-checkpointing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom budget checkpointing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discretizationconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DiscretizationConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mechanism-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mechanism functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mechanism functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gaussiannoise_multiplier-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gaussian(noise_multiplier) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissoninner-sample_rate-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        poisson(inner, sample_rate) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissoninner-sample_rate-truncated_batch_sizenone-dataset_sizenone-dpprocess-truncated-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        poisson(inner, sample_rate, *, truncated_batch_size=None, dataset_size=None) -&gt; DpProcess (truncated form)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parallel_poissoninner-sample_rate-num_workers-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        parallel_poisson(inner, sample_rate, num_workers) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#k_out_of_tinner-k-t-allocation-dphorizonprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        k_out_of_t(inner, *, k, t, allocation) -&gt; DpHorizonProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adaclipinner-fraction_noise_std-expected_batch_size-num_groups1-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        adaclip(inner, *, fraction_noise_std, expected_batch_size, num_groups=1) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-second-moment-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private second-moment release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eps_deltaepsilon-delta00-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        eps_delta(epsilon, delta=0.0) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        identity() -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nonprivate-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nonprivate() -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matrix-factorization-mechanisms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matrix factorization mechanisms
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Matrix factorization mechanisms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mf_gaussiannoise_multiplier-strategy-n_stepsnone-min_sep1-max_participationsnone-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mf_gaussian(noise_multiplier, strategy, *, n_steps=None, min_sep=1, max_participations=None) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#correlated-mf-mechanisms-blt-cgd-bisr-bsr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlated MF mechanisms (BLT, λCGD, BISR, BSR)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poissoninner-sample_rate-n_steps-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        poisson(inner, sample_rate, *, n_steps) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b_min_sepinner-n_steps-p0-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        b_min_sep(inner, *, n_steps, p0) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#balls_in_binsinner-num_bins-n_steps-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        balls_in_bins(inner, *, num_bins, n_steps) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#composition-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composition Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Composition Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repeatprocess-count-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        repeat(process, count) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#composeleft-right-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compose(left, right) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cachedprocess-dpprocess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cached(process) -&gt; DpProcess
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#serialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accountant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accountant
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accountant">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#budget-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budget tracking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seeding-with-a-prior-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seeding with a prior process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#serialization_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calibration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Calibration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calibratebudget-process-param_min-param_max-tolerance1e-6-max_iterations100-prefixnone-calibrateresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        calibrate(budget, process, param_min, param_max, tolerance=1e-6, max_iterations=100, prefix=None) -&gt; CalibrateResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#calibrateresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CalibrateResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#budget-factories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budget Factories
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="opakeaccounting">opake.accounting<a class="headerlink" href="#opakeaccounting" title="Permanent link">&para;</a></h1>
+<p>Differential privacy accounting using Privacy Loss Distributions (PLD).</p>
+<p>This module provides a compositional API for tracking privacy guarantees.
+Mechanism constructors return <code>DpProcess</code> objects that compose with <code>*</code> (repeat)
+and <code>|</code> (heterogeneous compose). Privacy metrics are queried directly on the
+resulting process.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">acc</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.dpsgd.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dpsgd_acc</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.8</span><span class="p">),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">training</span> <span class="o">=</span> <span class="n">step</span> <span class="o">*</span> <span class="mi">1000</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">epsilon</span> <span class="o">=</span> <span class="n">training</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>
+</code></pre></div>
+<p>The underlying implementation uses Google's PLD accounting via the
+<code>opake-accounting</code> Rust crate (PyO3 bindings).</p>
+<p>Published <code>opake-accounting</code> artifacts are an sdist, <code>manylinux_2_28</code>
+Linux wheels for <code>x86_64</code> and <code>aarch64</code>, and a macOS 11+ <code>arm64</code> wheel.
+Windows, macOS <code>x86_64</code>, and <code>musllinux</code> wheels are intentionally not
+published at the moment.</p>
+<p><strong>See also</strong>: <a href="../../user-guide/accounting/">Privacy Accounting User Guide</a></p>
+<hr />
+<h2 id="namespace-organization">Namespace organization<a class="headerlink" href="#namespace-organization" title="Permanent link">&para;</a></h2>
+<p>The accounting API is split into three namespaces:</p>
+<table>
+<thead>
+<tr>
+<th>Namespace</th>
+<th>Contents</th>
+<th>Import</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>opake.accounting</code></td>
+<td>Cross-cutting: calibration, composition, <code>Accountant</code>, <code>repeat</code>, <code>compose</code></td>
+<td><code>import opake.accounting as acc</code></td>
+</tr>
+<tr>
+<td><code>opake.dpsgd.accounting</code></td>
+<td>DP-SGD mechanisms: <code>gaussian</code>, <code>adaclip</code>, <code>poisson</code> (plain or truncated via <code>truncated_batch_size</code> / <code>dataset_size</code>), <code>parallel_poisson</code>, <code>k_out_of_t</code></td>
+<td><code>from opake.dpsgd import accounting as dpsgd_acc</code></td>
+</tr>
+<tr>
+<td><code>opake.dpftrl.accounting</code></td>
+<td>DP-FTRL mechanisms: <code>mf_gaussian</code>, <code>poisson</code> (whole-process, parameterized by <code>n_steps</code>), <code>b_min_sep</code>, <code>balls_in_bins</code></td>
+<td><code>from opake.dpftrl import accounting as dpftrl_acc</code></td>
+</tr>
+</tbody>
+</table>
+<p>The mechanism factories (<code>gaussian</code>, <code>poisson</code>, <code>mf_gaussian</code>, …) live <strong>only</strong> on
+the algorithm-scoped namespaces — use the namespace that matches your training
+run. Cross-cutting primitives (<code>Accountant</code>, <code>calibrate</code>, <code>epsilon_budget</code>,
+composition operators) live on <code>opake.accounting</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># DP-SGD</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpsgd</span><span class="w"> </span><span class="kn">import</span> <span class="n">accounting</span> <span class="k">as</span> <span class="n">dpsgd_acc</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.8</span><span class="p">),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># DP-FTRL</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpftrl</span><span class="w"> </span><span class="kn">import</span> <span class="n">accounting</span> <span class="k">as</span> <span class="n">dpftrl_acc</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpftrl.noise</span><span class="w"> </span><span class="kn">import</span> <span class="n">band_mf_strategy</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">band_mf_strategy</span><span class="p">(</span><span class="n">bands</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">strategy</span><span class="p">),</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">sample_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">n_steps</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Cross-cutting composition and calibration always go via opake.accounting</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">acc</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="n">total</span> <span class="o">=</span> <span class="n">step</span> <span class="o">*</span> <span class="mi">1000</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">total</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>
+</code></pre></div>
+<p><code>opake.dpsgd.accounting</code> and <code>opake.dpftrl.accounting</code> are lazily imported:
+the Rust PLD extension is not loaded until you access these submodules.</p>
+<hr />
+<h2 id="classes">Classes<a class="headerlink" href="#classes" title="Permanent link">&para;</a></h2>
+<h3 id="custom-budget-checkpointing">Custom budget checkpointing<a class="headerlink" href="#custom-budget-checkpointing" title="Permanent link">&para;</a></h3>
+<p><code>Accountant</code> checkpoints include an optional budget. The built-in budget
+factories are registered automatically. If an application supplies its own
+<code>Budget</code> protocol implementation, register a self-contained codec before
+checkpointing:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">acc</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">acc</span><span class="o">.</span><span class="n">register_budget_serializer</span><span class="p">(</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">MyBudget</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">lambda</span> <span class="n">budget</span><span class="p">:</span> <span class="p">{</span><span class="s2">"target"</span><span class="p">:</span> <span class="n">budget</span><span class="o">.</span><span class="n">target</span><span class="p">},</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">lambda</span> <span class="n">state</span><span class="p">:</span> <span class="n">MyBudget</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s2">"target"</span><span class="p">]),</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
+</code></pre></div>
+<p>The serializer must return JSON-compatible state and the deserializer must
+rebuild the budget from that state. Checkpointing an unregistered budget or
+restoring an unknown budget checkpoint type raises <code>CheckpointError</code>.</p>
+<h3 id="dpprocess"><code>DpProcess</code><a class="headerlink" href="#dpprocess" title="Permanent link">&para;</a></h3>
+<p>Abstract base class for all privacy processes. Subclasses implement <code>pld()</code> to
+compute the Privacy Loss Distribution on demand. Results are automatically
+cached via <code>@lru_cache</code> (maxsize=8). Use <code>cached()</code> for larger cache
+size (16) or as an opake merge barrier.</p>
+<p><strong>Privacy metrics:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>epsilon_at(delta)</code></td>
+<td>Smallest epsilon achieving (epsilon, delta)-DP</td>
+</tr>
+<tr>
+<td><code>delta_at(epsilon)</code></td>
+<td>Smallest delta achieving (epsilon, delta)-DP</td>
+</tr>
+<tr>
+<td><code>advantage()</code></td>
+<td>Total-variation advantage (f-DP)</td>
+</tr>
+<tr>
+<td><code>beta_at(alpha)</code></td>
+<td>Type-II error at given Type-I error alpha</td>
+</tr>
+<tr>
+<td><code>risk_at(prior)</code></td>
+<td>Bayes risk under optimal adversary</td>
+</tr>
+</tbody>
+</table>
+<p>Monte Carlo-backed <code>Pld</code> objects expose <code>mc_failure_probability</code>,
+<code>mc_confidence</code>, and <code>mc_resolution</code>; analytic PLDs report zero failure and
+zero MC resolution. The confidence construction bounds hockey-stick metrics
+(<code>epsilon_at</code>, <code>delta_at</code>, and <code>advantage</code>). <code>beta_at</code> and <code>risk_at</code> fail
+closed to zero for Monte Carlo PLDs because separate directional CDF bounds do
+not by themselves establish a hypothesis-testing trade-off curve.</p>
+<p><strong>Composition operators:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Operator</th>
+<th>Description</th>
+<th>Equivalent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>proc * k</code></td>
+<td>Homogeneous k-fold composition (repeat)</td>
+<td><code>acc.repeat(proc, k)</code></td>
+</tr>
+<tr>
+<td><code>k * proc</code></td>
+<td>Same (reflected multiply)</td>
+<td><code>acc.repeat(proc, k)</code></td>
+</tr>
+<tr>
+<td><code>a \| b</code></td>
+<td>Heterogeneous composition</td>
+<td><code>acc.compose(a, b)</code></td>
+</tr>
+</tbody>
+</table>
+<p>Composition is optimized at construction time: identical steps are collapsed
+via structural equality, nested repeats are flattened, and identity processes
+are elided. Composing the same step in a loop produces a single <code>Repeated</code> node
+with one <code>self_compose</code> call (2 FFTs), not <code>n</code> heterogeneous composes.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Homogeneous composition</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">training</span> <span class="o">=</span> <span class="n">step</span> <span class="o">*</span> <span class="mi">1000</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Heterogeneous composition (multi-phase)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">phase1</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">500</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">phase2</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.3</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">500</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">total</span> <span class="o">=</span> <span class="n">phase1</span> <span class="o">|</span> <span class="n">phase2</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">total</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="discretizationconfig"><code>DiscretizationConfig</code><a class="headerlink" href="#discretizationconfig" title="Permanent link">&para;</a></h3>
+<p>Controls PLD discretization precision. Configuration is applied at <strong>query time</strong>
+when computing privacy metrics via <code>pld()</code>, not stored in process structure.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>discretization</code></td>
+<td><code>1e-4</code></td>
+<td>Grid spacing for PLD PMF. Error scales as O(d^2)</td>
+</tr>
+<tr>
+<td><code>log_x_mass_truncation_bound</code></td>
+<td><code>-50</code></td>
+<td>Tails below exp(bound) are truncated</td>
+</tr>
+<tr>
+<td><code>max_grid_size</code></td>
+<td><code>10_000_000</code></td>
+<td>Coarsen grid if it exceeds this many bins</td>
+</tr>
+<tr>
+<td><code>tail_mass_truncation</code></td>
+<td><code>1e-15</code></td>
+<td>Tail-mass budget during composition</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td><code>42</code></td>
+<td>RNG seed for Monte Carlo PLD builders</td>
+</tr>
+<tr>
+<td><code>max_conv_grid</code></td>
+<td><code>32_768</code></td>
+<td>Convolution grid cap for random-allocation PLD</td>
+</tr>
+<tr>
+<td><code>mc_resolution</code></td>
+<td><code>1e-5</code></td>
+<td>Maximum unresolved MC mass, in delta units</td>
+</tr>
+<tr>
+<td><code>mc_failure_probability</code></td>
+<td><code>1e-6</code></td>
+<td>Failure probability of the simultaneous MC bound</td>
+</tr>
+</tbody>
+</table>
+<p>The Monte Carlo count is derived from binary-KL Chernoff order-statistic bounds
+with a Bonferroni allocation over all ranks and both adjacency directions. At
+the default <code>mc_resolution=1e-5</code> and <code>mc_failure_probability=1e-6</code>, this
+requires 2,940,252 samples per direction. Counts above 50 million emit an
+advisory runtime warning but are not capped. The construction follows
+<a href="https://doi.org/10.1080/00401706.1963.10490085">Hoeffding (1963)</a>; the rank
+and adjacency allocation makes the entire returned PLD simultaneous.
+<code>epsilon_at(delta)</code> tightens the effective resolution to
+<code>min(mc_resolution, delta / 2)</code>, reserving at least half of the requested delta
+for finite privacy-loss mass.</p>
+<p>Discretization is unconditionally conservative: exact atoms, PMF coarsening,
+and histogram buckets are rounded upward. The API has no optimistic or
+lower-bound mode.</p>
+<p><strong>Query-time configuration (recommended):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Create processes without config</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.8</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Apply config at query time</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">eps_coarse</span> <span class="o">=</span> <span class="n">proc</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="n">discretization</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">)</span>  <span class="c1"># faster, less accurate</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">eps_fine</span> <span class="o">=</span> <span class="n">proc</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">,</span> <span class="n">discretization</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">)</span>    <span class="c1"># slower, more accurate</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Monte Carlo accountants derive enough samples for the requested resolution.</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">pld</span> <span class="o">=</span> <span class="n">proc</span><span class="o">.</span><span class="n">pld</span><span class="p">(</span><span class="n">mc_resolution</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span> <span class="n">mc_failure_probability</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">123</span><span class="p">)</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">eps_mc</span> <span class="o">=</span> <span class="n">pld</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">2e-5</span><span class="p">)</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="nb">print</span><span class="p">(</span><span class="n">pld</span><span class="o">.</span><span class="n">mc_confidence</span><span class="p">,</span> <span class="n">pld</span><span class="o">.</span><span class="n">mc_resolution</span><span class="p">)</span>
+</code></pre></div>
+<p>All <code>pld()</code>-family methods (<code>epsilon_at</code>, <code>delta_at</code>, <code>advantage</code>, <code>beta_at</code>,
+<code>risk_at</code>) accept every parameter in the table above except
+<code>tail_mass_truncation</code> (composition-internal, module-level only). Overrides
+are broadcast to every node of a composed process, so one <code>seed</code> is shared
+by all Monte Carlo nodes — the same semantics as <code>set_discretization</code>.</p>
+<p><strong>Module-level discretization defaults:</strong></p>
+<p>Set default config for all queries when not overridden:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">acc</span><span class="o">.</span><span class="n">set_discretization</span><span class="p">(</span><span class="n">discretization</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">)</span>  <span class="c1"># Apply to all queries</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.8</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">proc</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>  <span class="c1"># Uses 1e-4 default</span>
+</code></pre></div>
+<ul>
+<li><code>acc.set_discretization(discretization=1e-4, ...)</code> — Update the global
+  default for only the named parameters; every omitted parameter keeps its
+  current value. A bare call is a no-op.</li>
+<li><code>acc.get_discretization()</code> — Return the current <code>DiscretizationConfig</code></li>
+</ul>
+<hr />
+<h2 id="mechanism-functions">Mechanism functions<a class="headerlink" href="#mechanism-functions" title="Permanent link">&para;</a></h2>
+<p>All mechanism constructors return a <code>DpProcess</code>. Discretization is configured
+at query time via <code>epsilon_at(..., discretization=...)</code> or module-level via
+<code>set_discretization()</code>.</p>
+<h3 id="gaussiannoise_multiplier-dpprocess"><code>gaussian(noise_multiplier) -&gt; DpProcess</code><a class="headerlink" href="#gaussiannoise_multiplier-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Gaussian mechanism with noise multiplier sigma. Adds noise N(0, sigma^2) to
+sensitivity-1 queries. Base mechanism for DP-SGD.</p>
+<ul>
+<li><code>noise_multiplier</code> (float): Ratio of noise std to sensitivity. Larger = more private.</li>
+</ul>
+<h3 id="poissoninner-sample_rate-dpprocess"><code>poisson(inner, sample_rate) -&gt; DpProcess</code><a class="headerlink" href="#poissoninner-sample_rate-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Poisson-subsampled mechanism (standard DP-SGD step). <code>sample_rate</code> is
+<code>batch_size / dataset_size</code>. Plain Poisson accepts any Opake <code>DpProcess</code> as
+its base mechanism.</p>
+<ul>
+<li><code>inner</code> (DpProcess): Base mechanism</li>
+<li><code>sample_rate</code> (float): Probability of including each example, in (0, 1)</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="mi">256</span> <span class="o">/</span> <span class="mi">50_000</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="poissoninner-sample_rate-truncated_batch_sizenone-dataset_sizenone-dpprocess-truncated-form"><code>poisson(inner, sample_rate, *, truncated_batch_size=None, dataset_size=None) -&gt; DpProcess</code> (truncated form)<a class="headerlink" href="#poissoninner-sample_rate-truncated_batch_sizenone-dataset_sizenone-dpprocess-truncated-form" title="Permanent link">&para;</a></h3>
+<p><code>poisson()</code> switches to a truncated Poisson PLD when both
+<code>truncated_batch_size</code> and <code>dataset_size</code> are set together (must be both
+or neither). This is the truncated-Poisson PLD for capped batches; it does
+<strong>not</strong> improve privacy versus plain Poisson at the same rate—use it when
+training actually truncates draws. The capped form accepts a Gaussian,
+AdaClip(Gaussian), or <code>nonprivate()</code> base.</p>
+<p>The guarantee is <a href="https://arxiv.org/abs/2508.15089">Ganesh (2025), Theorem
+3.1</a>. It assumes each over-cap provisional
+sample is replaced by a uniformly random subset of exactly the cap size.
+Its directed add/remove adjacency is indexed by the public size <span class="arithmatex">\(n\)</span> of the
+larger neighboring dataset. Therefore <code>dataset_size</code> must equal the sampler's
+pre-sampling size, and composition must preserve the same <span class="arithmatex">\(n\)</span>-indexed
+adjacency interpretation.</p>
+<ul>
+<li><code>inner</code> (Gaussian | AdaClip | NonPrivate): Base mechanism</li>
+<li><code>sample_rate</code> (float): Expected sampling rate, in (0, 1)</li>
+<li><code>truncated_batch_size</code> (int | None): Optional max batch-size cap</li>
+<li><code>dataset_size</code> (int | None): Public larger-neighbor size <span class="arithmatex">\(n\)</span>, required when
+  <code>truncated_batch_size</code> is set</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">n</span> <span class="o">=</span> <span class="mi">50_000</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">batch</span> <span class="o">=</span> <span class="mi">256</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.8</span><span class="p">),</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">sample_rate</span><span class="o">=</span><span class="n">batch</span> <span class="o">/</span> <span class="n">n</span><span class="p">,</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">truncated_batch_size</span><span class="o">=</span><span class="n">batch</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">dataset_size</span><span class="o">=</span><span class="n">n</span><span class="p">,</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="parallel_poissoninner-sample_rate-num_workers-dpprocess"><code>parallel_poisson(inner, sample_rate, num_workers) -&gt; DpProcess</code><a class="headerlink" href="#parallel_poissoninner-sample_rate-num_workers-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Parallel Poisson subsampling. Models independent Poisson sampling on
+multiple workers, where the same example can appear on multiple devices.
+Like <code>poisson()</code> (plain or truncated), this is a full wrapper.</p>
+<ul>
+<li><code>inner</code> (Gaussian | AdaClip): Base mechanism (from <code>gaussian()</code> or <code>adaclip()</code>)</li>
+<li><code>sample_rate</code> (float): Probability of including each example, in (0, 1]</li>
+<li><code>num_workers</code> (int): Number of parallel workers sampling independently</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">parallel_poisson</span><span class="p">(</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">num_workers</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="k_out_of_tinner-k-t-allocation-dphorizonprocess"><code>k_out_of_t(inner, *, k, t, allocation) -&gt; DpHorizonProcess</code><a class="headerlink" href="#k_out_of_tinner-k-t-allocation-dphorizonprocess" title="Permanent link">&para;</a></h3>
+<p>With <code>allocation="block"</code>, every record participates in exactly one batch in
+each of <code>k</code> contiguous, nearly equal blocks. Block sizes differ by at most one.</p>
+<p>This mode pairs with
+<code>opake.dpsgd.sampling.KOutOfTSampler(..., allocation="block")</code> and
+is computed for the declared horizon by the exact PLD transform of Feldman &amp;
+Shenfeld (2026), with no Monte Carlo sampling.</p>
+<ul>
+<li><code>inner</code> (Gaussian | AdaClip | NonPrivate): Base mechanism</li>
+<li><code>k</code> (int): Number of blocks / participations per record</li>
+<li><code>t</code> (int): Total optimizer-step horizon</li>
+<li><code>allocation</code> (<code>"block"</code> or <code>"total"</code>): Required allocation mode</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">process</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">k_out_of_t</span><span class="p">(</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">k</span><span class="o">=</span><span class="n">num_epochs</span><span class="p">,</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">t</span><span class="o">=</span><span class="n">num_epochs</span> <span class="o">*</span> <span class="n">steps_per_epoch</span><span class="p">,</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">allocation</span><span class="o">=</span><span class="s2">"block"</span><span class="p">,</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">)</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">process</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>
+</code></pre></div>
+<p>With <code>allocation="total"</code>, every record chooses a uniform <code>k</code>-subset of the
+complete horizon. The accountant currently uses the block reduction as a
+conservative upper bound.</p>
+<h3 id="adaclipinner-fraction_noise_std-expected_batch_size-num_groups1-dpprocess"><code>adaclip(inner, *, fraction_noise_std, expected_batch_size, num_groups=1) -&gt; DpProcess</code><a class="headerlink" href="#adaclipinner-fraction_noise_std-expected_batch_size-num_groups1-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Accounts for the extra privacy cost of adaptive clipping's noisy
+fraction query. Returns an <code>AdaClip</code> process composable with <code>poisson()</code>
+(plain or truncated).</p>
+<ul>
+<li><code>inner</code> (Gaussian): Base mechanism (from <code>gaussian()</code>)</li>
+<li><code>fraction_noise_std</code> (float): Noise std on the clipping fraction. Default: 0.05.</li>
+<li><code>expected_batch_size</code> (float): Expected batch size (<code>sample_rate × dataset_size</code>), used to compute the absolute noise std for the quantile query.</li>
+<li><code>num_groups</code> (int): Number of independently adaptive clipping groups, and
+  therefore independent noisy quantile queries. Default: 1. Set this to the
+  number of groups when using per-group adaptive clipping.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">adaclip</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="n">fraction_noise_std</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">expected_batch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="private-second-moment-release">Private second-moment release<a class="headerlink" href="#private-second-moment-release" title="Permanent link">&para;</a></h3>
+<p>When the noise mechanism produces both gradients <strong>and</strong> squared gradients
+(via <code>clipped_grad(..., second_moment=True)</code>), the joint paired release uses
+sensitivity-proportional Mahalanobis allocation in the runtime σ split (see
+the <a href="../noise/#paired-second-moment-release">paired second-moment release</a>
+section). The Mahalanobis
+budget collapses to a single sensitivity-1 Gaussian release at the same
+noise multiplier, so <strong>privacy accounting is exactly the underlying
+first-moment mechanism</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">acc</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># DP-SGD: same chain as first-moment-only</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.8</span><span class="p">),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="n">batch_size</span> <span class="o">/</span> <span class="n">dataset_size</span><span class="p">)</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">training</span> <span class="o">=</span> <span class="n">step</span> <span class="o">*</span> <span class="n">num_steps</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># DP-FTRL with BandMF: same chain as first-moment-only</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">strategy</span><span class="p">),</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="n">sample_rate</span><span class="o">=</span><span class="n">batch_size</span> <span class="o">/</span> <span class="n">dataset_size</span><span class="p">,</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>    <span class="n">n_steps</span><span class="o">=</span><span class="n">num_steps</span><span class="p">,</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="p">)</span>
+</code></pre></div>
+<p>There is no separate <code>second_moment</code> transformation to wrap and no <code>ρ</code> knob:
+the runtime σ on each stream already absorbs the joint cost. Use the
+underlying mechanism factories (<code>dpsgd_acc.gaussian</code>, <code>dpftrl_acc.mf_gaussian</code>,
+…) directly.</p>
+<h3 id="eps_deltaepsilon-delta00-dpprocess"><code>eps_delta(epsilon, delta=0.0) -&gt; DpProcess</code><a class="headerlink" href="#eps_deltaepsilon-delta00-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Fixed (epsilon, delta)-DP guarantee. Useful for composing an external mechanism
+with known privacy parameters into tracked processes.</p>
+<ul>
+<li><code>epsilon</code> (float): Privacy parameter (&gt;= 0)</li>
+<li><code>delta</code> (float): Failure probability (default 0.0)</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">external</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">eps_delta</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">1e-5</span><span class="p">)</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">total</span> <span class="o">=</span> <span class="n">external</span> <span class="o">|</span> <span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="identity-dpprocess"><code>identity() -&gt; DpProcess</code><a class="headerlink" href="#identity-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Identity mechanism (zero privacy loss). Acts as the identity element in
+composition: <code>identity() | a</code> returns <code>a</code>.</p>
+<h3 id="nonprivate-dpprocess"><code>nonprivate() -&gt; DpProcess</code><a class="headerlink" href="#nonprivate-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Non-private mechanism (ε=∞, δ=0). Useful as a baseline or for training without
+a privacy guarantee. All Poisson-family amplifications handle <code>nonprivate()</code>
+inner transparently (zero privacy cost).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">nonprivate</span><span class="p">(),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">training</span> <span class="o">=</span> <span class="n">step</span> <span class="o">*</span> <span class="mi">1000</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># training.epsilon_at(1e-5) == inf</span>
+</code></pre></div>
+<hr />
+<h2 id="matrix-factorization-mechanisms">Matrix factorization mechanisms<a class="headerlink" href="#matrix-factorization-mechanisms" title="Permanent link">&para;</a></h2>
+<p>MF mechanisms resolve sensitivity and Gram matrices from a noise strategy and
+its participation context. Use the same recipe and context for accounting and
+noise generation.</p>
+<h3 id="mf_gaussiannoise_multiplier-strategy-n_stepsnone-min_sep1-max_participationsnone-dpprocess"><code>mf_gaussian(noise_multiplier, strategy, *, n_steps=None, min_sep=1, max_participations=None) -&gt; DpProcess</code><a class="headerlink" href="#mf_gaussiannoise_multiplier-strategy-n_stepsnone-min_sep1-max_participationsnone-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Omitting <code>n_steps</code> creates a recipe for an amplifier. Calling <code>pld()</code> or
+<code>epsilon_at()</code> on that recipe directly raises <code>ConfigurationError</code>.</p>
+<p>For bare accounting, <code>n_steps</code> is the full release horizon, <code>min_sep</code> is the
+minimum separation between contributions, and <code>max_participations</code> bounds each
+protected unit's contributions. If omitted, <code>max_participations</code> defaults to
+<code>n_steps</code>. The resulting Gaussian PLD accounts for the declared context; do not
+compose it again by the number of rounds.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpftrl.noise</span><span class="w"> </span><span class="kn">import</span> <span class="n">band_mf_strategy</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># One contribution per protected unit across 1000 rounds.</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">band_mf_strategy</span><span class="p">(</span><span class="n">bands</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="mf">1.0</span><span class="p">,</span> <span class="n">strategy</span><span class="p">,</span> <span class="n">n_steps</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">min_sep</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_participations</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="p">)</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">proc</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>
+</code></pre></div>
+<p>Bare BandMF and Identity sensitivity currently accounts for one participation.
+Do not use bare calls with these strategies to budget repeated participation.
+For amplified accounting, leave the inner horizon unspecified and supply the
+full horizon to the sampler-matching amplifier, which resolves its own context.</p>
+<h3 id="correlated-mf-mechanisms-blt-cgd-bisr-bsr">Correlated MF mechanisms (BLT, λCGD, BISR, BSR)<a class="headerlink" href="#correlated-mf-mechanisms-blt-cgd-bisr-bsr" title="Permanent link">&para;</a></h3>
+<p>For bare BLT accounting, supply the same horizon and participation bounds as
+<code>mf_gaussian_noise</code>. This example assumes at most five contributions per
+protected unit, at least 1000 rounds apart:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpftrl.noise</span><span class="w"> </span><span class="kn">import</span> <span class="n">blt_strategy</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">blt_strategy</span><span class="p">(</span><span class="n">max_buffers</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Unamplified accounting for the full 5000-round context.</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="mf">1.0</span><span class="p">,</span> <span class="n">strategy</span><span class="p">,</span> <span class="n">n_steps</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">min_sep</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">max_participations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="p">)</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1"># With a fixed partition into 1000 bins, repeated for five epochs.</span>
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">balls_in_bins</span><span class="p">(</span>
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>    <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">strategy</span><span class="p">),</span>
+<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>    <span class="n">num_bins</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">n_steps</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span>
+<a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="p">)</span>
+</code></pre></div>
+<p>The same amplified construction works for <code>lambda_cgd_strategy</code>,
+<code>bisr_strategy</code>, and <code>bsr_strategy</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpftrl.noise</span><span class="w"> </span><span class="kn">import</span> <span class="n">lambda_cgd_strategy</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">lambda_cgd_strategy</span><span class="p">(</span><span class="n">lambda_</span><span class="o">=</span><span class="mf">0.9</span><span class="p">)</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">balls_in_bins</span><span class="p">(</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">strategy</span><span class="p">),</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="n">num_bins</span><span class="o">=</span><span class="n">steps_per_epoch</span><span class="p">,</span> <span class="n">n_steps</span><span class="o">=</span><span class="n">steps_per_epoch</span> <span class="o">*</span> <span class="n">num_epochs</span><span class="p">,</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="poissoninner-sample_rate-n_steps-dpprocess"><code>poisson(inner, sample_rate, *, n_steps) -&gt; DpProcess</code><a class="headerlink" href="#poissoninner-sample_rate-n_steps-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Poisson amplification for DP-FTRL. Whole-process accountant covering all
+<code>n_steps</code> training rounds (do <strong>not</strong> compose with <code>* num_steps</code>
+externally). Cyclic when the inner is <code>BandMf</code> with <code>bands &gt; 1</code> (decomposes
+into <code>ceil(n_steps / bands)</code> independent groups); plain Poisson per round
+when the inner is <code>IdentityMf</code> or <code>BandMf</code> with <code>bands == 1</code>.</p>
+<ul>
+<li><code>inner</code> (BandMf | IdentityMf): MF mechanism.</li>
+<li><code>sample_rate</code> (float): Poisson sampling probability per round.</li>
+<li><code>n_steps</code> (int, keyword-only): Total number of training rounds.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">band_mf_strategy</span><span class="p">(</span><span class="n">bands</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">strategy</span><span class="p">),</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">sample_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">n_steps</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="b_min_sepinner-n_steps-p0-dpprocess"><code>b_min_sep(inner, *, n_steps, p0) -&gt; DpProcess</code><a class="headerlink" href="#b_min_sepinner-n_steps-p0-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Warm-start <strong>b-min-sep</strong> amplification for BandMF (Dong &amp; Ganesh, arXiv:2602.09338).
+Uses Monte Carlo PLD accounting. <code>inner</code> must be
+<code>mf_gaussian(nm, BandMfStrategy(...))</code> — strategy coefficients and band width
+are read from <code>inner.strategy</code>. <code>p0</code> is the per-example participation rate per
+iteration <code>E[|B|]/|D|</code> (match the training sampler’s target batch size).
+Control the confidence construction per query with <code>mc_resolution</code>,
+<code>mc_failure_probability</code>, and <code>seed</code>, or module-wide via <code>set_discretization</code>.
+The sample count is derived automatically and exposed as
+<code>get_discretization().resolved_num_mc_samples</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Monte Carlo confidence</p>
+<p>b-min-sep, and Balls-in-Bins with a <strong>correlated</strong> strategy, build their
+PLDs from simultaneous one-sided order-statistic bounds over both adjacency
+directions. Unresolved probability is placed at <code>+∞</code>, so
+<code>epsilon_at(delta)</code> returns infinity when <code>delta</code> is at or below the
+reported <code>pld.infinity_mass</code>. <code>pld.mc_failure_probability</code> is statistical
+confidence metadata and is separate from mechanism delta.</p>
+</div>
+<h3 id="balls_in_binsinner-num_bins-n_steps-dpprocess"><code>balls_in_bins(inner, *, num_bins, n_steps) -&gt; DpProcess</code><a class="headerlink" href="#balls_in_binsinner-num_bins-n_steps-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Balls-in-Bins (random-partition) amplification. Returns the <strong>total</strong> privacy
+cost across all epochs — do NOT compose further with <code>* num_epochs</code>.</p>
+<p>With <code>identity_strategy()</code> (uncorrelated noise) the Gram is exactly
+<code>num_epochs · I</code>, so the dominating pair collapses onto 1-out-of-<code>num_bins</code>
+random allocation at <code>σ / √num_epochs</code> and the PLD is computed by the exact
+transform — deterministic, no sampling. For correlated-noise strategies
+(DP-λCGD, BISR, BSR, BLT) it uses Monte Carlo sampling of the dominating pair.</p>
+<ul>
+<li><code>inner</code> (MfGaussian): <code>dpftrl_acc.mf_gaussian(nm, strategy)</code>.</li>
+<li><code>num_bins</code> (int): Number of bins per epoch (typically <code>dataset_size / batch_size</code>).</li>
+<li><code>n_steps</code> (int): Total training rounds; must be a multiple of <code>num_bins</code>.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># With DP-λCGD</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">lambda_cgd_strategy</span><span class="p">(</span><span class="n">lambda_</span><span class="o">=</span><span class="mf">0.9</span><span class="p">)</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">balls_in_bins</span><span class="p">(</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>    <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">strategy</span><span class="p">),</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>    <span class="n">num_bins</span><span class="o">=</span><span class="n">steps_per_epoch</span><span class="p">,</span> <span class="n">n_steps</span><span class="o">=</span><span class="n">steps_per_epoch</span> <span class="o">*</span> <span class="n">num_epochs</span><span class="p">,</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="p">)</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="c1"># With uncorrelated MF noise (analytic identity-strategy path)</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="n">proc</span> <span class="o">=</span> <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">balls_in_bins</span><span class="p">(</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>    <span class="n">dpftrl_acc</span><span class="o">.</span><span class="n">mf_gaussian</span><span class="p">(</span><span class="mf">1.1</span><span class="p">,</span> <span class="n">identity_strategy</span><span class="p">()),</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>    <span class="n">num_bins</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>    <span class="n">n_steps</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="composition-functions">Composition Functions<a class="headerlink" href="#composition-functions" title="Permanent link">&para;</a></h2>
+<p>Functional equivalents of the <code>*</code> and <code>|</code> operators. Most users should prefer
+the operator syntax.</p>
+<h3 id="repeatprocess-count-dpprocess"><code>repeat(process, count) -&gt; DpProcess</code><a class="headerlink" href="#repeatprocess-count-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Homogeneous k-fold composition. Equivalent to <code>process * count</code>.</p>
+<h3 id="composeleft-right-dpprocess"><code>compose(left, right) -&gt; DpProcess</code><a class="headerlink" href="#composeleft-right-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Heterogeneous two-process composition. Equivalent to <code>left | right</code>.</p>
+<h3 id="cachedprocess-dpprocess"><code>cached(process) -&gt; DpProcess</code><a class="headerlink" href="#cachedprocess-dpprocess" title="Permanent link">&para;</a></h3>
+<p>Increases the LRU cache size from 8 to 16 entries and acts as an opake merge
+barrier: the composition optimizer will not look through a cached node.</p>
+<p><strong>Note</strong>: All <code>pld()</code> methods are automatically cached with <code>maxsize=8</code> via
+<code>@lru_cache</code>. Use <code>cached()</code> when you need:
+- A larger cache (16 entries instead of 8)
+- An explicit merge barrier to prevent composition optimizations</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># All queries automatically cached (maxsize=8)</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">step</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>   <span class="c1"># Cached automatically</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">adv</span> <span class="o">=</span> <span class="n">step</span><span class="o">.</span><span class="n">advantage</span><span class="p">()</span>         <span class="c1"># Cache hit</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1"># Use cached() for merge barrier or larger cache</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="n">training</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">cached</span><span class="p">(</span><span class="n">step</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">training</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>   <span class="c1"># Cached with maxsize=16</span>
+</code></pre></div>
+<hr />
+<h2 id="serialization">Serialization<a class="headerlink" href="#serialization" title="Permanent link">&para;</a></h2>
+<p>Processes checkpoint as a <strong>flat</strong> <code>dict[str, Any]</code> (string keys with dotted
+prefixes for nested composition). Use <code>opake.serialization.state_dict</code>
+and <code>opake.serialization.from_state_dict</code> — pass any concrete <code>DpProcess</code>
+instance as the template (for example, <code>identity()</code>); the registered handler
+rebuilds from the dict's root <code>type</code> field.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">acc</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.serialization</span><span class="w"> </span><span class="kn">import</span> <span class="n">from_state_dict</span><span class="p">,</span> <span class="n">state_dict</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.dpsgd.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dpsgd_acc</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="n">flat</span> <span class="o">=</span> <span class="n">state_dict</span><span class="p">(</span><span class="n">step</span><span class="p">)</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">step2</span> <span class="o">=</span> <span class="n">from_state_dict</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">identity</span><span class="p">(),</span> <span class="n">flat</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="accountant">Accountant<a class="headerlink" href="#accountant" title="Permanent link">&para;</a></h2>
+<p>The <code>Accountant</code> class tracks accumulated privacy loss across a training loop.
+It provides a functional API: composing a new process returns a fresh
+<code>Accountant</code> (the original is not modified).</p>
+<p>Merge optimization is automatic. Composing the same <code>step</code> repeatedly in a loop
+produces a single <code>Repeated</code> node internally.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="kn">import</span> <span class="n">Accountant</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">acct</span> <span class="o">=</span> <span class="n">Accountant</span><span class="p">()</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_steps</span><span class="p">):</span>
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>    <span class="n">acct</span> <span class="o">=</span> <span class="n">acct</span> <span class="o">|</span> <span class="n">step</span>
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>
+<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>    <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">100</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>        <span class="n">eps</span> <span class="o">=</span> <span class="n">acct</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="mf">1e-5</span><span class="p">)</span>
+<a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Step </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: eps=</span><span class="si">{</span><span class="n">eps</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="budget-tracking">Budget tracking<a class="headerlink" href="#budget-tracking" title="Permanent link">&para;</a></h3>
+<p>Pass an optional <code>Budget</code> from the calibration module to enable budget checking:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="kn">import</span> <span class="n">calibration</span> <span class="k">as</span> <span class="n">cal</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="kn">import</span> <span class="n">Accountant</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">budget</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">epsilon_budget</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">)</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">acct</span> <span class="o">=</span> <span class="n">Accountant</span><span class="p">(</span><span class="n">budget</span><span class="o">=</span><span class="n">budget</span><span class="p">)</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span>
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_steps</span><span class="p">):</span>
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>    <span class="n">acct</span> <span class="o">=</span> <span class="n">acct</span> <span class="o">|</span> <span class="n">step</span>
+<a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>    <span class="k">if</span> <span class="n">acct</span><span class="o">.</span><span class="n">budget_exceeded</span><span class="p">:</span>
+<a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">"Privacy budget exhausted."</span><span class="p">)</span>
+<a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>        <span class="k">break</span>
+</code></pre></div>
+<p><strong>Methods:</strong> <code>epsilon_at(delta)</code>, <code>delta_at(epsilon)</code>, <code>advantage()</code>,
+<code>beta_at(alpha)</code>, <code>risk_at(prior)</code>, <code>budget_exceeded</code> (property).</p>
+<h3 id="seeding-with-a-prior-process">Seeding with a prior process<a class="headerlink" href="#seeding-with-a-prior-process" title="Permanent link">&para;</a></h3>
+<p>Pass <code>prefix</code> to start from an already-executed process instead of the
+zero-cost identity. This is sequential composition across runs: use it when a
+second training stage (e.g. DPO after SFT) touches the same dataset, so the
+new run's budget checks and reported ε include the earlier run's cost. The
+prefix composes at the PLD level — much tighter than adding the two stages'
+epsilons.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="kn">import</span> <span class="n">Accountant</span>
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.serialization</span><span class="w"> </span><span class="kn">import</span> <span class="n">from_state_dict</span>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"sft_checkpoint/accountant.json"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>    <span class="n">sft</span> <span class="o">=</span> <span class="n">from_state_dict</span><span class="p">(</span><span class="n">Accountant</span><span class="p">(),</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="n">acct</span> <span class="o">=</span> <span class="n">Accountant</span><span class="p">(</span><span class="n">budget</span><span class="o">=</span><span class="n">budget</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="n">sft</span><span class="o">.</span><span class="n">process</span><span class="p">)</span>
+<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="n">acct</span> <span class="o">=</span> <span class="n">acct</span> <span class="o">|</span> <span class="n">dpo_step</span>  <span class="c1"># composes on top of the SFT prefix</span>
+</code></pre></div>
+<p>If the two stages train on disjoint records (and the privacy unit is the
+record), no prefix is needed — parallel composition applies and the overall
+guarantee is the pointwise max of the two stages' ε(δ) curves.</p>
+<h3 id="serialization_1">Serialization<a class="headerlink" href="#serialization_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="kn">import</span> <span class="n">Accountant</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.serialization</span><span class="w"> </span><span class="kn">import</span> <span class="n">from_state_dict</span><span class="p">,</span> <span class="n">state_dict</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="n">flat</span> <span class="o">=</span> <span class="n">state_dict</span><span class="p">(</span><span class="n">acct</span><span class="p">)</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="n">acct2</span> <span class="o">=</span> <span class="n">from_state_dict</span><span class="p">(</span><span class="n">Accountant</span><span class="p">(),</span> <span class="n">flat</span><span class="p">)</span>
+</code></pre></div>
+<p><code>process.*</code> keys hold the composed tree; <code>budget.*</code> keys are present when
+the accountant was constructed with a budget.</p>
+<hr />
+<h2 id="calibration">Calibration<a class="headerlink" href="#calibration" title="Permanent link">&para;</a></h2>
+<p>Submodule: <code>opake.accounting.calibration</code></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="kn">import</span> <span class="n">calibration</span> <span class="k">as</span> <span class="n">cal</span>
+</code></pre></div>
+<p>Binary search for finding parameter values that achieve a target privacy budget.</p>
+<h3 id="calibratebudget-process-param_min-param_max-tolerance1e-6-max_iterations100-prefixnone-calibrateresult"><code>calibrate(budget, process, param_min, param_max, tolerance=1e-6, max_iterations=100, prefix=None) -&gt; CalibrateResult</code><a class="headerlink" href="#calibratebudget-process-param_min-param_max-tolerance1e-6-max_iterations100-prefixnone-calibrateresult" title="Permanent link">&para;</a></h3>
+<p>Binary search for a parameter value such that <code>process(param)</code> produces a
+<code>DpProcess</code> achieving the given privacy budget from the privacy-safe side.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>budget</code></td>
+<td></td>
+<td>A <code>Budget</code> object from a budget factory (see below)</td>
+</tr>
+<tr>
+<td><code>process</code></td>
+<td></td>
+<td>Callable: <code>float -&gt; DpProcess</code></td>
+</tr>
+<tr>
+<td><code>param_min</code></td>
+<td></td>
+<td>Lower bound for search</td>
+</tr>
+<tr>
+<td><code>param_max</code></td>
+<td></td>
+<td>Upper bound for search</td>
+</tr>
+<tr>
+<td><code>tolerance</code></td>
+<td><code>1e-6</code></td>
+<td>Positive, finite relative convergence tolerance</td>
+</tr>
+<tr>
+<td><code>max_iterations</code></td>
+<td><code>100</code></td>
+<td>Positive maximum number of binary search iterations</td>
+</tr>
+<tr>
+<td><code>prefix</code></td>
+<td><code>None</code></td>
+<td>Already-executed <code>DpProcess</code> composed into every probe</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>process</code> callable takes a single float parameter and returns a <code>DpProcess</code>.
+Its metric must be monotone in the parameter over <code>[param_min, param_max]</code>;
+the search direction is derived automatically by probing both endpoints, so
+noise-multiplier-like parameters (increase improves privacy) and
+sample-rate/step-like parameters (increase spends privacy) are both
+supported. Exactly one endpoint must be privacy-safe; which one is detected,
+not positional.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">acc</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="kn">import</span> <span class="n">calibration</span> <span class="k">as</span> <span class="n">cal</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="n">budget</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">epsilon_budget</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">)</span>
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">calibrate</span><span class="p">(</span>
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>    <span class="n">budget</span><span class="p">,</span>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>    <span class="k">lambda</span> <span class="n">nm</span><span class="p">:</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span><span class="p">),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>    <span class="n">param_min</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>    <span class="n">param_max</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
+<a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="p">)</span>
+<a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"noise_multiplier = </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">param</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">, epsilon = </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">achieved</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre></div>
+<p>Every successful result is privacy-safe and relatively close to the target:
+decreasing privacy-loss budgets return <code>achieved &lt;= target</code>, while increasing
+privacy-gain budgets return <code>achieved &gt;= target</code>. In both cases,
+<code>math.isclose(achieved, target, rel_tol=tolerance, abs_tol=0.0)</code> is true.
+<code>tolerance</code> must be finite and positive, and <code>max_iterations</code> must be positive;
+invalid values raise <code>CalibrationError</code> before the process is evaluated. If no
+safe endpoint reaches the requested relative tolerance, <code>calibrate()</code> raises
+<code>CalibrationError</code> instead of returning an under-noised parameter.</p>
+<p>When the process uses a Monte Carlo PLD, calibration divides the configured
+failure probability across the two endpoint probes and at most
+<code>max_iterations</code> interior probes. <code>result.mc_confidence</code> therefore covers the
+adaptive search as a whole rather than only its selected final parameter.
+Balls-in-Bins calibration also reuses its seeded, sigma-independent projected
+draws across probes when they fit the bounded native cache. Set
+<code>OPAKE_BNB_TRANSCRIPT_CACHE_MAX_BYTES</code> to control its memory cap (4 GiB by
+default), or to <code>0</code> to use the lower-memory one-shot path for every probe.</p>
+<p>Calibrating a second stage against the remaining budget (see
+<a href="#seeding-with-a-prior-process">Seeding with a prior process</a>): pass the
+earlier run's executed process as <code>prefix</code>. Each probe evaluates
+<code>prefix | process(param)</code>, so the budget is the total across both stages.
+The prefix's PLD is computed once for the whole search.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="n">result</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">calibrate</span><span class="p">(</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>    <span class="n">cal</span><span class="o">.</span><span class="n">epsilon_budget</span><span class="p">(</span><span class="mf">8.0</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">),</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="k">lambda</span> <span class="n">nm</span><span class="p">:</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span><span class="p">),</span> <span class="mf">0.02</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2000</span><span class="p">,</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>    <span class="n">param_min</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="n">param_max</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>    <span class="n">prefix</span><span class="o">=</span><span class="n">sft</span><span class="o">.</span><span class="n">process</span><span class="p">,</span>  <span class="c1"># from the SFT run's accountant.json</span>
+<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="p">)</span>
+</code></pre></div>
+<p>Multi-phase training:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="n">result</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">calibrate</span><span class="p">(</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>    <span class="n">cal</span><span class="o">.</span><span class="n">epsilon_budget</span><span class="p">(</span><span class="mf">5.0</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">),</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>    <span class="k">lambda</span> <span class="n">nm</span><span class="p">:</span> <span class="p">(</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>        <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">500</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>        <span class="o">|</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span> <span class="o">*</span> <span class="mf">0.8</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">500</span>
+<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>        <span class="o">|</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">500</span>
+<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>    <span class="p">),</span>
+<a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>    <span class="n">param_min</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+<a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>    <span class="n">param_max</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>    <span class="n">tolerance</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+<a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a><span class="p">)</span>
+</code></pre></div>
+<h3 id="calibrateresult"><code>CalibrateResult</code><a class="headerlink" href="#calibrateresult" title="Permanent link">&para;</a></h3>
+<p>Returned by <code>calibrate()</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>param</code></td>
+<td><code>float</code></td>
+<td>Found parameter value</td>
+</tr>
+<tr>
+<td><code>achieved</code></td>
+<td><code>float</code></td>
+<td>Achieved metric value at <code>param</code></td>
+</tr>
+<tr>
+<td><code>target</code></td>
+<td><code>float</code></td>
+<td>Target metric value</td>
+</tr>
+<tr>
+<td><code>iterations</code></td>
+<td><code>int</code></td>
+<td>Number of binary search iterations</td>
+</tr>
+<tr>
+<td><code>converged</code></td>
+<td><code>bool</code></td>
+<td>Always <code>True</code> for a successfully returned result</td>
+</tr>
+<tr>
+<td><code>mc_failure_probability</code></td>
+<td><code>float</code></td>
+<td>Overall failure probability for adaptive MC probes</td>
+</tr>
+<tr>
+<td><code>mc_confidence</code></td>
+<td><code>float</code></td>
+<td>Confidence covering the complete calibration search</td>
+</tr>
+</tbody>
+</table>
+<h3 id="budget-factories">Budget Factories<a class="headerlink" href="#budget-factories" title="Permanent link">&para;</a></h3>
+<p>Budget factories create <code>Budget</code> objects that define what privacy metric to
+optimize and what value to achieve.</p>
+<table>
+<thead>
+<tr>
+<th>Factory</th>
+<th>Metric being calibrated</th>
+<th>Decreasing with noise</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cal.epsilon_budget(eps, delta)</code></td>
+<td>epsilon at given delta</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>cal.delta_budget(delta, epsilon)</code></td>
+<td>delta at given epsilon</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>cal.advantage_budget(advantage)</code></td>
+<td>f-DP total-variation advantage</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>cal.beta_budget(beta, alpha)</code></td>
+<td>Type-II error at given Type-I error</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>cal.risk_budget(risk, prior)</code></td>
+<td>Bayes risk under optimal adversary</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>"Decreasing with noise" indicates the metric kind: privacy-loss metrics
+(epsilon/delta/advantage) are safe at-or-below the target, privacy-gain
+metrics (beta/risk) at-or-above. The binary search derives the parameter
+direction automatically by probing both bracket endpoints.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># (epsilon, delta)-DP</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">result</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">calibrate</span><span class="p">(</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="n">cal</span><span class="o">.</span><span class="n">epsilon_budget</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">),</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="k">lambda</span> <span class="n">nm</span><span class="p">:</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="mf">0.1</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">,</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="p">)</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="c1"># f-DP advantage</span>
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="n">result</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">calibrate</span><span class="p">(</span>
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>    <span class="n">cal</span><span class="o">.</span><span class="n">advantage_budget</span><span class="p">(</span><span class="mf">0.1</span><span class="p">),</span>
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>    <span class="k">lambda</span> <span class="n">nm</span><span class="p">:</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>    <span class="mf">0.2</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span>
+<a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a><span class="p">)</span>
+<a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>
+<a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a><span class="c1"># (alpha, beta) error rates</span>
+<a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a><span class="n">result</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">calibrate</span><span class="p">(</span>
+<a id="__codelineno-29-17" name="__codelineno-29-17" href="#__codelineno-29-17"></a>    <span class="n">cal</span><span class="o">.</span><span class="n">beta_budget</span><span class="p">(</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.01</span><span class="p">),</span>
+<a id="__codelineno-29-18" name="__codelineno-29-18" href="#__codelineno-29-18"></a>    <span class="k">lambda</span> <span class="n">nm</span><span class="p">:</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-29-19" name="__codelineno-29-19" href="#__codelineno-29-19"></a>    <span class="mf">0.2</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span>
+<a id="__codelineno-29-20" name="__codelineno-29-20" href="#__codelineno-29-20"></a><span class="p">)</span>
+<a id="__codelineno-29-21" name="__codelineno-29-21" href="#__codelineno-29-21"></a>
+<a id="__codelineno-29-22" name="__codelineno-29-22" href="#__codelineno-29-22"></a><span class="c1"># Bayes risk</span>
+<a id="__codelineno-29-23" name="__codelineno-29-23" href="#__codelineno-29-23"></a><span class="n">result</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">calibrate</span><span class="p">(</span>
+<a id="__codelineno-29-24" name="__codelineno-29-24" href="#__codelineno-29-24"></a>    <span class="n">cal</span><span class="o">.</span><span class="n">risk_budget</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">prior</span><span class="o">=</span><span class="mf">0.5</span><span class="p">),</span>
+<a id="__codelineno-29-25" name="__codelineno-29-25" href="#__codelineno-29-25"></a>    <span class="k">lambda</span> <span class="n">nm</span><span class="p">:</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">nm</span><span class="p">),</span> <span class="mf">0.01</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-29-26" name="__codelineno-29-26" href="#__codelineno-29-26"></a>    <span class="mf">0.2</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span>
+<a id="__codelineno-29-27" name="__codelineno-29-27" href="#__codelineno-29-27"></a><span class="p">)</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/JetBrains-Research/opake" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,4010 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Functional DP-SGD and DP-FTRL for PyTorch">
+      
+      
+        <meta name="author" content="Opake Contributors">
+      
+      
+        <link rel="canonical" href="https://jetbrains-research.github.io/opake/0.16.0/user-guide/huggingface/training-arguments/">
+      
+      
+        <link rel="prev" href="../../distributed-trainer/">
+      
+      
+        <link rel="next" href="../model-patches/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>TrainingArguments - Opake</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#trainingarguments" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Opake" class="md-header__button md-logo" aria-label="Opake" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Opake
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              TrainingArguments
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/JetBrains-Research/opake" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JetBrains-Research/opake
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../mechanisms/" class="md-tabs__link">
+          
+  
+  
+  Mechanisms
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../alignment/" class="md-tabs__link">
+          
+  
+  
+  Alignment
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../development/" class="md-tabs__link">
+          
+  
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Opake" class="md-nav__button md-logo" aria-label="Opake" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Opake
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/JetBrains-Research/opake" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JetBrains-Research/opake
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dp-concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Differential Privacy Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rng-key/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Random Number Generation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    End-to-end pipelines
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    End-to-end pipelines
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dp-sgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dp-ftrl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../clipping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-Example Gradient Clipping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Noise Addition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../precision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mixed Precision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../accounting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Accounting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling & Microbatching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../optimizers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimizers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../lr-scheduling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LR Scheduling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../distributed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_13" id="__nav_3_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HuggingFace Integration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    HuggingFace Integration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dptrainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DPTrainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../distributed-trainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed DPTrainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TrainingArguments
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TrainingArguments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#batch-size-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch-size contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#privacy-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privacy targets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Privacy targets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stop-at-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop-at-ε
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-private-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-private baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-and-noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling and noise
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sampling and noise">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dp-ftrl-mechanisms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DP-FTRL mechanisms
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compute / precision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patches-and-kernels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patches and kernels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#saving-and-resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saving and resume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distributed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#converting-from-hf-trl-configs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Converting from HF / TRL configs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migrating-from-hf-unsupported-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrating from HF: unsupported arguments
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model-patches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Patches
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../memory-optimizations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Optimizations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mechanisms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Mechanisms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-SGD
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/dp-sgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/dp-sgd/gaussian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gaussian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-FTRL
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/dp-ftrl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/dp-ftrl/band-mf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BandMF
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/dp-ftrl/blt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BLT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/dp-ftrl/bsr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BSR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/dp-ftrl/bisr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BISR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mechanisms/dp-ftrl/lambda-cgd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-λCGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alignment
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Alignment
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../alignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../alignment/sft/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SFT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../alignment/dpo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DPO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../alignment/trainers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SFT & DPO Trainers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-SGD track
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-SGD track
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/dp_sgd_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Train a Model with DP-SGD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/accounting_and_calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Accounting and Calibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/sampling_and_microbatching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling Strategies and Microbatching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/llm_finetuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fine-tune an LLM with Differential Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DP-FTRL track
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DP-FTRL track
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/dp_ftrl_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Train a Model with DP-FTRL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_4" id="__nav_6_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross-cutting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cross-cutting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/privacy_auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/distributed_training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed DP-SGD Training
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/serialization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/clipping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clipping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/accounting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accounting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/rng/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Random
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/distributed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/auditing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auditing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/utilities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/optimizers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimizers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/schedules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schedules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/transformers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transformers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/alignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alignment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#batch-size-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch-size contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#privacy-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privacy targets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Privacy targets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stop-at-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop-at-ε
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-private-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-private baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sampling-and-noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sampling and noise
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sampling and noise">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dp-ftrl-mechanisms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DP-FTRL mechanisms
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compute / precision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patches-and-kernels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patches and kernels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#saving-and-resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saving and resume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distributed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#converting-from-hf-trl-configs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Converting from HF / TRL configs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migrating-from-hf-unsupported-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrating from HF: unsupported arguments
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="trainingarguments">TrainingArguments<a class="headerlink" href="#trainingarguments" title="Permanent link">&para;</a></h1>
+<p><code>opake.transformers.TrainingArguments</code> mirrors the subset of
+Hugging Face <code>TrainingArguments</code> DPTrainer honors, plus DPTrainer's
+own privacy / clipping / sampling / patching fields. Unsupported HF
+knobs are intentionally omitted from the surface.</p>
+<p>This page covers the fields you'll touch most often, with the
+non-obvious semantics called out. For the complete field inventory
+with every type / default / coercion rule, see
+<a href="../../../reference/transformers/#trainingarguments">API reference — transformers</a>.</p>
+<h2 id="batch-size-contract">Batch-size contract<a class="headerlink" href="#batch-size-contract" title="Permanent link">&para;</a></h2>
+<p>DPTrainer interprets batch-size args differently from stock HF. Read
+this once before tuning:</p>
+<ul>
+<li><code>per_device_train_batch_size</code> is the <strong>per-rank logical Poisson
+  batch</strong> — the expected sample size drawn on each rank for one DP-SGD
+  step. (This matches the HF interpretation when gradient accumulation
+  is one step — DPTrainer is permanently in that regime; see below.)</li>
+<li>Cluster-wide logical batch is <code>per_device_train_batch_size *
+  world_size</code> (exposed as the HF property <code>train_batch_size</code>).  The
+  sample rate <code>q = train_batch_size / N_total</code> drives privacy
+  accounting.</li>
+<li>Internal microbatch chunking is only activated by
+  <code>auto_find_microbatch_size=True</code> on OOM retry — it splits the
+  per-rank logical batch into smaller vmap calls without changing the
+  logical batch or the sample rate (privacy-neutral). The same flag also
+  halves <code>per_device_eval_batch_size</code> on an eval/predict CUDA-OOM
+  (eval has no grad-accumulation, so shrinking it is privacy-neutral).</li>
+<li>When <code>per_device_eval_batch_size</code> is omitted, it defaults to an explicit
+  <code>microbatch_size</code> so eval's single batched forward stays within the
+  configured physical memory bound. Without a configured microbatch, it
+  defaults to <code>per_device_train_batch_size</code>. Set an explicit eval batch size
+  to choose a different evaluation-throughput tradeoff.</li>
+</ul>
+<p>To grow the effective batch, raise <code>per_device_train_batch_size</code> (the
+expected Poisson round size); the physical vmap chunk (<code>microbatch_size</code>,
+auto-shrunk under <code>auto_find_microbatch_size</code>) is decoupled from it and
+privacy-neutral.</p>
+<h2 id="privacy-targets">Privacy targets<a class="headerlink" href="#privacy-targets" title="Permanent link">&para;</a></h2>
+<p>The user-facing DP budget knobs:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">args</span> <span class="o">=</span> <span class="n">TrainingArguments</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">privacy_target_epsilon</span><span class="o">=</span><span class="mf">8.0</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">privacy_target_delta</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span>          <span class="c1"># default: 1 / dataset_size**1.1</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">clipping_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>                  <span class="c1"># scalar global clip, or per-group dict</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">privacy_noise_multiplier</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>      <span class="c1"># None ⇒ calibrate from epsilon</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span>
+</code></pre></div>
+<p><code>privacy_target_epsilon</code> is the search target; calibration finds the
+smallest noise multiplier that achieves it under the configured
+sampler + composition.  Set <code>privacy_noise_multiplier</code> directly to
+skip calibration.</p>
+<p><strong>At least one of <code>privacy_noise_multiplier</code> / <code>privacy_target_epsilon</code>
+must be set.</strong> Neither has a silent default — construction raises if
+both are <code>None</code>. The usual configurations are:</p>
+<ul>
+<li><code>privacy_target_epsilon=ε</code> (NM left as <code>None</code>) — calibrate the noise
+  multiplier from the budget at <code>train()</code> start and enable privacy accounting.</li>
+<li><code>privacy_noise_multiplier=σ</code> (target_eps left as <code>None</code>) — fixed-noise
+  training. Independently composed DP-SGD runs skip privacy accounting by
+  default; set <code>privacy_accounting=True</code> to report the resulting ε without
+  constraining it. Complete-horizon configurations (matrix-factorization
+  mechanisms, k-out-of-t sampling) keep accounting on.</li>
+<li>For independent DP-SGD only, set both to use a fixed multiplier and
+  stop after the accumulated epsilon reaches the target.</li>
+</ul>
+<p>Privacy accounting is on by default whenever <code>privacy_target_epsilon</code> is set
+or the noise mechanism accounts over the complete horizon; only
+independently composed fixed-noise DP-SGD runs default to off, where
+<code>privacy_accounting=False</code> is also an explicit opt-out. Disabled runs do not
+report ε / δ or write <code>accountant.json</code> checkpoints. Setting
+<code>privacy_accounting=False</code> with a complete-horizon mechanism raises: the
+horizon snapshot is what lets a resumed run detect a changed noise strategy
+or multiplier, so it is always recorded.</p>
+<p>Setting <code>privacy_noise_multiplier=0.0</code> together with a
+<code>privacy_target_epsilon</code> raises: the non-private path can't honour a
+finite ε target, and silently dropping one of them would hide a
+configuration mistake.</p>
+<h3 id="stop-at-">Stop-at-ε<a class="headerlink" href="#stop-at-" title="Permanent link">&para;</a></h3>
+<p>When <code>privacy_target_epsilon</code> is set alongside a non-zero
+<code>privacy_noise_multiplier</code>, training halts after the first accounted step
+where the accumulated ε from the privacy accountant meets or exceeds the
+target. The halt records <code>state.privacy_target_epsilon_reached
+= True</code> and surfaces as a normal early-stop control flow (callbacks see
+the final eval / save / log pass). The crossing step is predicted before the
+loop and enforced independently of <code>logging_strategy</code> and <code>logging_steps</code>.
+This mode is supported only for independent DP-SGD mechanisms. Horizon
+mechanisms reject this combination because privacy-based early stopping is
+unsupported.
+A resume against a checkpoint where the budget is already spent
+short-circuits before the first training step.</p>
+<p><code>clipping_norm</code> accepts a positive scalar (global clipping), a dict
+keyed by regex on parameter names with a <code>"fallback"</code> entry
+(per-group clipping), or a JSON / <code>key=value,...</code> string with the
+same shape.  It also accepts <code>math.inf</code> to <strong>disable clipping</strong> (the
+single canonical no-clip value) — see the non-private baseline below.</p>
+<h2 id="non-private-baseline">Non-private baseline<a class="headerlink" href="#non-private-baseline" title="Permanent link">&para;</a></h2>
+<p>Set <code>privacy_noise_multiplier=0.0</code> to run the <em>same</em> trainer, mechanism,
+sampler, and accounting surface with <strong>no privacy</strong> (ε = ∞) — a useful
+baseline for measuring the utility cost of the DP machinery:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">args</span> <span class="o">=</span> <span class="n">TrainingArguments</span><span class="p">(</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">privacy_noise_multiplier</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>   <span class="c1"># no noise (σ = 0)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">clipping_norm</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>         <span class="c1"># optional: disable clipping too</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li><strong>No noise</strong> — the realized noise standard deviation is
+  <code>noise_multiplier × clip = 0</code>, so gradients pass through unchanged.</li>
+<li><strong>ε = ∞</strong> — the accountant composes a non-private step, so
+  <code>metrics["privacy_epsilon"]</code> is reported as <code>inf</code> (a faithful "no
+  guarantee" output, not an error). Calibration is skipped and the
+  resolved multiplier is recorded as <code>0.0</code> (source <code>"fixed"</code>).</li>
+<li><strong>Clipping is independent.</strong> It stays on by default (the configured
+  <code>clipping_norm</code> / <code>clipping_mode</code>); keep it for a "clipping-only"
+  ablation, or disable it with <code>clipping_norm=math.inf</code> for plain
+  non-private SGD.</li>
+</ul>
+<p>This works for both <code>"gaussian"</code> (DP-SGD) and the <code>mf_*</code> (DP-FTRL)
+mechanisms.  Disabling clipping (<code>clipping_norm=math.inf</code>) is rejected
+unless <code>privacy_noise_multiplier=0.0</code>, since infinite sensitivity with
+noise would yield infinite noise and <code>NaN</code> gradients.</p>
+<h2 id="sampling-and-noise">Sampling and noise<a class="headerlink" href="#sampling-and-noise" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sampling_mode</code></td>
+<td><code>"auto"</code> (default) pairs the sampler with <code>privacy_noise_mechanism</code>; accepted explicit values are listed per mechanism below.</td>
+</tr>
+<tr>
+<td><code>sampling_kwargs</code></td>
+<td>Mode-specific sampler kwargs. <code>truncated_batch_size=N</code> caps Poisson draws at <code>N</code>; k-out-of-t accepts <code>k</code> and <code>allocation</code>; other modes accept no keys.</td>
+</tr>
+<tr>
+<td><code>clipping_mode</code></td>
+<td><code>"fixed"</code> (default), <code>"adaptive"</code>, or <code>"auto"</code>. <code>adaptive</code> is rejected under any <code>mf_*</code> mechanism (MF noise requires constant per-step sensitivity).</td>
+</tr>
+<tr>
+<td><code>clipping_kwargs</code></td>
+<td>Mode-specific clipping kwargs. Adaptive accepts the public factory names <code>target_quantile</code> and <code>clipping_norm_max</code>. AUTO-S accepts <code>gamma</code>; fixed accepts no keys.</td>
+</tr>
+<tr>
+<td><code>privacy_noise_mechanism</code></td>
+<td><code>"gaussian"</code> (default, DP-SGD), or one of the DP-FTRL matrix-factorization mechanisms: <code>"mf_band"</code>, <code>"mf_blt"</code>, <code>"mf_bisr"</code>, <code>"mf_bsr"</code>, <code>"mf_lambda_cgd"</code>, <code>"mf_identity"</code>.</td>
+</tr>
+<tr>
+<td><code>privacy_noise_mechanism_kwargs</code></td>
+<td>Mechanism extras. For <code>"gaussian"</code>: <code>compute_dtype</code> as a native <code>torch.dtype</code> or the string names <code>float16</code>, <code>bfloat16</code>, <code>float32</code>, <code>float64</code>. For <code>mf_*</code>: per-strategy kwargs (auto-filled from Mellum-shaped defaults — see below).</td>
+</tr>
+<tr>
+<td><code>noise_calibration_kwargs</code></td>
+<td>Calibration search bounds; defaults <code>{"min": 0.11, "max": 10.0, "tolerance": 1e-3}</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>All dict-shaped fields accept a <code>Mapping</code>, a JSON object string, or
+the HF-style comma string <code>"a=1,b=2"</code>.</p>
+<h3 id="dp-ftrl-mechanisms">DP-FTRL mechanisms<a class="headerlink" href="#dp-ftrl-mechanisms" title="Permanent link">&para;</a></h3>
+<p>Picking a <code>mf_*</code> mechanism auto-resolves the sampler and auto-fills
+the strategy kwargs:</p>
+<table>
+<thead>
+<tr>
+<th><code>privacy_noise_mechanism</code></th>
+<th>Accepted samplers (auto first)</th>
+<th>Default kwargs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mf_band</code></td>
+<td><code>cyclic_poisson</code> (or explicit <code>b_min_sep</code>)</td>
+<td><code>{"bands": 16}</code></td>
+</tr>
+<tr>
+<td><code>mf_blt</code></td>
+<td><code>balls_in_bins</code></td>
+<td><code>{"max_buffers": 10}</code></td>
+</tr>
+<tr>
+<td><code>mf_bisr</code></td>
+<td><code>balls_in_bins</code></td>
+<td><code>{"bandwidth": 4}</code></td>
+</tr>
+<tr>
+<td><code>mf_bsr</code></td>
+<td><code>balls_in_bins</code></td>
+<td><code>{"bandwidth": 8, "alpha": 1.0, "beta": 0.9}</code></td>
+</tr>
+<tr>
+<td><code>mf_lambda_cgd</code></td>
+<td><code>balls_in_bins</code></td>
+<td><code>{"lambda_": 0.5}</code></td>
+</tr>
+<tr>
+<td><code>mf_identity</code></td>
+<td><code>poisson</code> (or explicit <code>balls_in_bins</code>)</td>
+<td><code>{}</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>"auto"</code> remains Poisson for Gaussian and identity MF. Gaussian explicitly
+accepts <code>sampling_mode="k_out_of_t"</code>. For exact block accounting, set
+<code>sampling_kwargs={"k": k, "allocation": "block"}</code> so each example participates
+once in each of <code>k</code> nearly equal blocks. With <code>"allocation": "total"</code>, each
+example chooses a uniform <code>k</code>-subset of the horizon and <code>DPTrainer</code> uses the
+conservative block bound.
+Identity MF explicitly accepts <code>sampling_mode="balls_in_bins"</code>. Horizon modes
+are accounted once for their declared <code>n_steps</code>; every privacy metric reported
+during the run is the conservative full-horizon epsilon.</p>
+<p><code>mf_band</code>'s <code>cyclic_poisson</code> sampler partitions the dataset into <code>bands</code>
+disjoint groups and rotates one active group per step (Choquette-Choo et al.
+2023, Theorem 1 / Algorithm 2). <code>sample_rate</code> here is <code>expected_batch_size /
+len(train_dataset)</code> — the <em>global</em> fraction of the whole dataset drawn per
+round — but the sampler and accountant both operate on the <em>conditional</em>
+rate within the active group, whose size is the exact per-group population
+<code>floor(dataset_size / bands)</code> (or, under DDP, <code>floor((dataset_size //
+world_size) / bands)</code>, since each rank partitions its own shard
+independently — a group's remainder examples never participate).
+<code>DPTrainer</code> converts consistently for both the runtime sampler and the
+accountant, and rejects the configuration if the resulting conditional
+rate exceeds <code>1</code> (lower <code>bands</code> or <code>expected_batch_size</code>). Plain
+<code>sampling_mode="poisson"</code> (whole-dataset subsampling every step, ignoring
+<code>bands</code>) is not a valid override for <code>mf_band</code>: it does not realize the
+grouped participation pattern <code>cyclic_poisson</code> accounting assumes. Use the
+explicit <code>sampling_mode="b_min_sep"</code> alternative (<a href="https://arxiv.org/abs/2602.09338">Dong &amp; Ganesh
+2026</a>) if cyclic rotation does not fit
+your data pipeline.</p>
+<p>So the minimal DP-FTRL configuration is one field:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">args</span> <span class="o">=</span> <span class="n">TrainingArguments</span><span class="p">(</span><span class="n">privacy_noise_mechanism</span><span class="o">=</span><span class="s2">"mf_band"</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># sampling_mode resolves to "cyclic_poisson"</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># privacy_noise_mechanism_kwargs resolves to {"bands": 16}</span>
+</code></pre></div>
+<p>Defaults are tuned for a Mellum/Kstack-shaped causal-LM target;
+they're a sensible starting point, not universally optimal. Override
+any kwarg explicitly via <code>privacy_noise_mechanism_kwargs={...}</code>; user
+keys win on collision with the defaults table.</p>
+<p>Mechanism constraints (validated at construction):</p>
+<ul>
+<li>BandMF requires <code>bands &lt;= total_steps</code>; shrink <code>bands</code> for short
+  runs.</li>
+<li>BallsInBins requires <code>total_steps % num_bins == 0</code> where
+  <code>num_bins = expected_steps_per_epoch</code> (so configure <code>max_steps</code> /
+  dataset / batch size to satisfy this).</li>
+<li>BSR requires <code>alpha &gt; beta</code> (paper constraint).</li>
+</ul>
+<h2 id="compute-precision">Compute / precision<a class="headerlink" href="#compute-precision" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bf16</code></td>
+<td><code>False</code></td>
+<td>bf16 autocast on the per-example loss closure.</td>
+</tr>
+<tr>
+<td><code>bf16_full_eval</code></td>
+<td><code>False</code></td>
+<td>Cast the model to bf16 for the eval scope only.</td>
+</tr>
+<tr>
+<td><code>gradient_checkpointing</code></td>
+<td><code>False</code></td>
+<td>Opake automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with <code>torch_compile</code>.</td>
+</tr>
+<tr>
+<td><code>torch_compile</code></td>
+<td><code>False</code></td>
+<td>Compiles the tensor-only per-microbatch <code>vmap(grad)+clip+reduce</code> kernel with <code>fullgraph=True</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="patches-and-kernels">Patches and kernels<a class="headerlink" href="#patches-and-kernels" title="Permanent link">&para;</a></h2>
+<p>Three flags drive the model patching at trainer construction time:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>use_compat_patches</code></td>
+<td><code>True</code></td>
+<td>vmap-safety patches (eager attention, batchify, vmap-safe masking / collator / checkpoint hooks).</td>
+</tr>
+<tr>
+<td><code>use_performance_kernels</code></td>
+<td><code>False</code></td>
+<td>CUDA + Triton kernel group (RoPE, RMSNorm, SwiGLU/GeGLU, cross-entropy).  Auto-<code>False</code> on hosts without CUDA + Triton.</td>
+</tr>
+<tr>
+<td><code>performance_kernels_config</code></td>
+<td><code>None</code></td>
+<td>Flat dict forwarded as kwargs to <code>apply_model_patches</code> / <code>apply_runtime_patches</code> — per-key override.</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../model-patches/">Model patches</a> for the full configuration matrix.</p>
+<h2 id="saving-and-resume">Saving and resume<a class="headerlink" href="#saving-and-resume" title="Permanent link">&para;</a></h2>
+<p>Standard HF save fields work as expected:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>save_strategy</code></td>
+<td><code>"steps"</code></td>
+<td>One of <code>{"no", "steps", "epoch", "best"}</code>. <code>"best"</code> auto-injects <code>BestModelSaveCallback</code>.</td>
+</tr>
+<tr>
+<td><code>save_steps</code> / <code>save_total_limit</code> / <code>save_safetensors</code></td>
+<td>—</td>
+<td>Standard HF semantics.</td>
+</tr>
+<tr>
+<td><code>save_on_each_node</code></td>
+<td><code>False</code></td>
+<td>Every node's rank-0 writes a copy (for node-local storage).</td>
+</tr>
+<tr>
+<td><code>save_only_model</code></td>
+<td><code>False</code></td>
+<td>Skip the DP runtime bundle (optimizer / sampler / RNG); ships weights + <code>accountant.json</code> only.</td>
+</tr>
+<tr>
+<td><code>load_best_model_at_end</code></td>
+<td><code>False</code></td>
+<td>Restore the best-eval checkpoint after <code>train()</code>. Raises if no improving step was recorded.</td>
+</tr>
+</tbody>
+</table>
+<p>Resume claims:</p>
+<ul>
+<li><code>train(resume_from_checkpoint=&lt;path&gt;)</code> restores model weights,
+  optimizer / clip / noise state, sampler cursor, RNG snapshots, and
+  the privacy accountant in one call.</li>
+<li>For independent DP-SGD, the saved accountant contains the executed
+  composition and calibration covers the remaining steps against it.
+  Horizon mechanisms retain their single declared full-horizon process.</li>
+<li><code>resume_from_checkpoint</code> requires a <strong>complete DP checkpoint</strong>
+  (<code>dp_state.pt</code> + <code>dp_optimizer.pt</code> + <code>accountant.json</code>).  A
+  weights-only export (<code>save_only_model=True</code>, an HF checkpoint, a
+  pretrained model) is rejected — to start a fresh DP run from such
+  weights, load them at construction (<code>model=...</code>); the run begins with
+  a zero accountant, which is correct only when the prior training had
+  no DP cost (e.g. public-data warmup).</li>
+<li><code>ignore_data_skip=True</code> skips sampler-state restore. Poisson resumes use a
+  distinct stream; participation samplers require the saved cursor.</li>
+<li><code>restore_callback_states_from_checkpoint=True</code> reads saved callback
+  state and copies attributes back onto the live callback instances
+  (e.g. <code>EarlyStoppingCallback</code>'s patience counter).</li>
+</ul>
+<h2 id="evaluation">Evaluation<a class="headerlink" href="#evaluation" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>eval_strategy</code></td>
+<td><code>"no"</code></td>
+<td>One of <code>{"no", "steps", "epoch"}</code>.</td>
+</tr>
+<tr>
+<td><code>eval_steps</code></td>
+<td><code>None</code></td>
+<td>Falls back to <code>logging_steps</code> when <code>eval_strategy="steps"</code> and unset.</td>
+</tr>
+<tr>
+<td><code>prediction_loss_only</code></td>
+<td><code>False</code></td>
+<td>Skip logits / labels materialisation; only loss reaches <code>compute_metrics</code>.</td>
+</tr>
+<tr>
+<td><code>include_for_metrics</code></td>
+<td><code>[]</code></td>
+<td>Subset of <code>{"inputs", "loss"}</code>.  <code>"loss"</code> switches to the vmap'd per-example eval (real per-example losses).</td>
+</tr>
+<tr>
+<td><code>metric_for_best_model</code></td>
+<td><code>None</code></td>
+<td>Required when <code>save_strategy="best"</code> or <code>load_best_model_at_end=True</code>.  Auto-prefixed with <code>eval_</code> if missing.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="distributed">Distributed<a class="headerlink" href="#distributed" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>local_rank</code>, <code>ddp_backend</code>, <code>ddp_timeout</code> follow stock HF.</li>
+<li><code>average_tokens_across_devices=True</code> (default) — averages per-rank
+  token counts into a cluster-wide total for <code>num_input_tokens_seen</code> /
+  <code>train_tokens_per_second</code>.</li>
+<li>DPTrainer is DDP-only; <code>DataParallel</code> is not supported.</li>
+</ul>
+<p>For per-rank sharding, accountant cluster-wide composition, and
+rank-gated checkpointing, see
+<a href="../../distributed-trainer/">Distributed DPTrainer</a>.</p>
+<h2 id="converting-from-hf-trl-configs">Converting from HF / TRL configs<a class="headerlink" href="#converting-from-hf-trl-configs" title="Permanent link">&para;</a></h2>
+<p>Rather than hand-port an upstream config, convert it with the classmethod on
+the matching opake config:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">opake.transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrainingArguments</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">args</span> <span class="o">=</span> <span class="n">TrainingArguments</span><span class="o">.</span><span class="n">from_hf</span><span class="p">(</span><span class="n">hf_args</span><span class="p">,</span> <span class="n">privacy_target_epsilon</span><span class="o">=</span><span class="mf">8.0</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li><code>TrainingArguments.from_hf(hf_args, …)</code> — from <code>transformers.TrainingArguments</code></li>
+<li><code>SFTConfig.from_trl(trl_cfg, …)</code> — from <code>trl.SFTConfig</code></li>
+<li><code>DPOConfig.from_trl(trl_cfg, …)</code> — from <code>trl.DPOConfig</code></li>
+</ul>
+<p>(<code>SFTConfig</code> / <code>DPOConfig</code> live in <code>opake.transformers.trl</code>.)</p>
+<p>What the converter does:</p>
+<ul>
+<li><strong>renames</strong> legacy names (<code>per_gpu_train_batch_size</code>, <code>lr_scheduler_type</code>, …);</li>
+<li><strong>collapses</strong> the HF effective batch (<code>per_device_train_batch_size ×
+  gradient_accumulation_steps</code>) into the logical Poisson batch, with
+  <code>per_device_train_batch_size</code> becoming the vmap <code>microbatch_size</code> and
+  <code>auto_find_batch_size → auto_find_microbatch_size</code>;</li>
+<li><strong>loosely maps</strong> <code>max_grad_norm → clipping_norm</code> (no warning — pass an
+  explicit <code>clipping_norm=</code> to override);</li>
+<li><strong>remaps</strong> optimizers (<code>adamw_torch</code>/<code>adamw_hf</code>/<code>adamw_torch_fused → adamw</code>,
+  <code>adafactor=True → optim="adafactor"</code>) and <code>use_liger_kernel →
+  use_performance_kernels</code>;</li>
+<li><strong>drops</strong> irrelevant fields (with a <code>RuntimeWarning</code> when non-default), and
+  <strong>raises</strong> with a per-field rationale on unsupported ones (<code>fp16</code>, <code>fsdp</code>,
+  paged optimizers, …).</li>
+</ul>
+<p>A DP knob is required as an override (<code>privacy_noise_multiplier=</code> or
+<code>privacy_target_epsilon=</code>) — upstream configs carry no privacy budget. Any
+other keyword overrides the converted field <strong>by name</strong> after translation
+(e.g. <code>use_performance_kernels=True</code>); performance kernels default OFF on
+conversion to match HF/TRL since their default can't be distinguished from an
+explicit value.</p>
+<h2 id="migrating-from-hf-unsupported-arguments">Migrating from HF: unsupported arguments<a class="headerlink" href="#migrating-from-hf-unsupported-arguments" title="Permanent link">&para;</a></h2>
+<p><code>TrainingArguments</code> is a standalone dataclass, not a subclass of
+<code>transformers.TrainingArguments</code>, so passing an unsupported HF knob to the
+constructor raises <code>TypeError</code> (the converters above translate or drop
+these for you). For reference, the notable ones:</p>
+<table>
+<thead>
+<tr>
+<th>HF argument</th>
+<th>Why it's unsupported</th>
+<th>DPTrainer alternative</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>group_by_length</code>, <code>length_column_name</code></td>
+<td>Length-bucketed batching breaks the equal per-example inclusion probability Poisson amplification relies on</td>
+<td>Leave examples unsorted; Poisson sampling handles variable lengths</td>
+</tr>
+<tr>
+<td><code>dataloader_drop_last</code></td>
+<td>The Poisson / random samplers produce variable-size batches, so dropping a "last batch" is meaningless; the sequential batch sampler already enforces drop-last internally where it matters for correctness</td>
+<td>n/a (handled by the sampler)</td>
+</tr>
+<tr>
+<td><code>deepspeed</code>, <code>fsdp</code>, <code>fsdp_config</code>, <code>accelerator_config</code>, <code>parallelism_config</code></td>
+<td>Parameter/gradient sharding is incompatible with vmap per-example gradients</td>
+<td>Use Opake's built-in DDP (<code>torchrun</code> + sharded data)</td>
+</tr>
+<tr>
+<td><code>tpu_num_cores</code>, <code>mp_parameters</code></td>
+<td>TPU/XLA and SageMaker MP are not supported execution backends</td>
+<td>CUDA / CPU only</td>
+</tr>
+<tr>
+<td><code>fp16</code>, <code>fp16_full_eval</code>, <code>fp16_opt_level</code>, <code>half_precision_backend</code>, <code>fp16_backend</code></td>
+<td>fp16 dynamic loss scaling adds a per-example unscale-before-clip step for no benefit on bf16-capable hardware</td>
+<td><code>bf16=True</code> (native bf16 autocast; no loss scaler)</td>
+</tr>
+<tr>
+<td><code>optim="adamw_8bit"</code> / paged / Apex-fused</td>
+<td>No functional torchopt equivalent</td>
+<td>A supported <code>optim</code> name (see the optimizer table)</td>
+</tr>
+<tr>
+<td><code>batch_eval_metrics</code></td>
+<td>Streaming metric reduction not implemented</td>
+<td>Eval predictions offload to CPU after every batch by default. CUDA overlaps copies through a bounded pinned staging queue and CPU chunks merge through a balanced tree. Set <code>eval_accumulation_steps</code> to a larger window only to reduce transfer calls, accepting retention of up to that many batches on device.</td>
+</tr>
+</tbody>
+</table>
+<p><code>per_gpu_*</code> and the deprecated <code>push_to_hub_*</code> aliases are <em>renamed</em> to their
+modern equivalents; <code>adafactor=True</code> is <em>mapped</em> to <code>optim="adafactor"</code>.
+<code>torchdynamo</code> and other superseded flags are dropped — use their modern
+replacements.</p>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../dptrainer/">DPTrainer</a> — what to call once the args are configured.</li>
+<li><a href="../model-patches/">Model patches</a> — kernel and patch configuration.</li>
+<li><a href="../../../reference/transformers/">API reference — transformers</a> —
+  every field, type, default, and validation rule.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/JetBrains-Research/opake" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
