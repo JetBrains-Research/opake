@@ -154,6 +154,7 @@ exclude:
       - packages/opaque-dpftrl/tests
       - packages/opaque-dpsgd/tests
       - packages/opaque-engine/tests
+      - packages/opaque-federated/tests
       - packages/opaque-jax/tests
       - packages/opaque-mlx/tests
       - packages/opaque-optimizers/tests

@@ -35,6 +35,7 @@ ships an `__init__.py`.
 | `opaque-auditing` | `opaque.api.auditing.*`; façade `opaque.auditing` | Empirical privacy auditing (one-run, coin-flip, loss attacks) | `opaque-engine`, `opaque-accounting` |
 | `opaque-patches` | `opaque.api.patches.*`; façade `opaque.patches` | Torch checkpoint patches + HF Transformers compat (vmap-safe attention, KV cache) + fused Triton kernels (SwiGLU, GeGLU, RoPE, fused CE, LoRA) | `opaque-engine` |
 | `opaque-transformers` | `opaque.api.transformers.*`; façade `opaque.transformers` | HF trainer + integration | `opaque-engine`, `opaque-patches`, transformers, peft |
+| `opaque-federated` | `opaque.api.federated.*`; façade `opaque.federated` | Federated DP on IFED: population/cohort types, min-separation cohort sampler, round loader, per-client clipped-sum strategy, round driver | `opaque-engine`, ifed-sdk |
 
 Sub-packages are independently installable; `pip install opaque-dpsgd`
 pulls only `opaque-engine`, `opaque-accounting`, and their transitive
@@ -118,6 +119,7 @@ uv run pytest packages/opaque-dpftrl/tests/
 uv run pytest packages/opaque-auditing/tests/
 uv run pytest packages/opaque-patches/tests/
 uv run pytest packages/opaque-transformers/tests/
+uv run pytest packages/opaque-federated/tests/
 uv run pytest packages/opaque-accounting/tests/  # smoke; PLD factory tests live under dpsgd/dpftrl
 ```
 
@@ -134,6 +136,7 @@ pip install opaque-dpftrl                # MF (DP-FTRL) mechanisms
 pip install opaque-patches               # PyTorch checkpoint + HF compat patches
 pip install opaque-patches[transformers] # + HF Transformers + PEFT extras
 pip install opaque-transformers          # HF trainer integration
+pip install opaque-federated             # federated DP on IFED
 pip install "opaque[all]"                # everything
 ```
 

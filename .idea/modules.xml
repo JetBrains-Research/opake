@@ -10,6 +10,7 @@
       <module fileurl="file://$PROJECT_DIR$/.idea/opaque-dpftrl.iml" filepath="$PROJECT_DIR$/.idea/opaque-dpftrl.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/opaque-dpsgd.iml" filepath="$PROJECT_DIR$/.idea/opaque-dpsgd.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/opaque-engine.iml" filepath="$PROJECT_DIR$/.idea/opaque-engine.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/opaque-federated.iml" filepath="$PROJECT_DIR$/.idea/opaque-federated.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/opaque-optimizers.iml" filepath="$PROJECT_DIR$/.idea/opaque-optimizers.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/opaque-patches.iml" filepath="$PROJECT_DIR$/.idea/opaque-patches.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/opaque-transformers.iml" filepath="$PROJECT_DIR$/.idea/opaque-transformers.iml" />

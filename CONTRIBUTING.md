@@ -59,7 +59,8 @@ packages/
 ├── opaque-auditing/     # Empirical privacy auditing
 ├── opaque-patches/      # PyTorch, Transformers, and Triton patches
 ├── opaque-transformers/ # Hugging Face trainer integration
-└── opaque-alignment/    # DP-safe SFT and DPO primitives
+├── opaque-alignment/    # DP-safe SFT and DPO primitives
+└── opaque-federated/    # Federated DP on IFED
 
 docs/                    # User documentation (getting-started, guides, tutorials, API)
 examples/                # Example scripts and notebooks
@@ -404,7 +405,7 @@ uv sync --group dev --all-packages --extra all
 
 # Dry-run the preflight script at a specific version
 bash .github/scripts/set_build_versions.sh 0.2.0
-grep -E '^version|opaque-(base|engine|optimizers|dpsgd|dpftrl|auditing|patches|transformers|alignment|accounting)' pyproject.toml \
+grep -E '^version|opaque-(base|engine|optimizers|dpsgd|dpftrl|auditing|patches|transformers|alignment|federated|accounting)' pyproject.toml \
                                packages/opaque-accounting/pyproject.toml \
                                Cargo.toml
 
@@ -414,14 +415,15 @@ uv build --wheel --out-dir dist
 
 # Build every sub-package wheel
 for pkg in opaque-base opaque-engine opaque-optimizers opaque-dpsgd opaque-dpftrl \
-                opaque-auditing opaque-patches opaque-transformers opaque-alignment; do
+                opaque-auditing opaque-patches opaque-transformers opaque-alignment \
+                opaque-federated; do
   (cd "packages/$pkg" && uv build --wheel --out-dir ../../dist)
 done
 
 # Build the accounting native wheel
 (cd packages/opaque-accounting && uv build --wheel --out-dir ../../dist)
 
-ls dist/   # expect 11 wheels, all at 0.2.0
+ls dist/   # expect 12 wheels, all at 0.2.0
 
 # Inspect a wheel's metadata
 unzip -p dist/opaque_engine-*.whl '*/METADATA' | grep '^Version:'

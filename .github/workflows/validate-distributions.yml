@@ -33,6 +33,33 @@ jobs:
           path: dist/
           merge-multiple: true
 
+      - name: Install the IFED runtime from the JetBrains index
+        run: |
+          federated_wheels=(dist/opaque_federated-*.whl)
+          if [[ "${#federated_wheels[@]}" -ne 1 ]]; then
+            echo "::error::Expected one opaque-federated wheel, found ${#federated_wheels[@]}"
+            exit 1
+          fi
+          mapfile -t ifed_requirements < <(
+            unzip -p "${federated_wheels[0]}" '*.dist-info/METADATA' \
+              | sed -n 's/^Requires-Dist: \(ifed-.*\)$/\1/p'
+          )
+          if [[ "${#ifed_requirements[@]}" -eq 0 ]]; then
+            echo "::error::opaque-federated declares no ifed-* requirement"
+            exit 1
+          fi
+          uv venv --python ${{ matrix.python-version }} .artifact-venv
+          # IFED ships from JetBrains' own index; on PyPI these names are
+          # dependency-confusion stubs. uv searches every --extra-index-url before
+          # --index-url and keeps its first-index rule, so the ifed-* names resolve
+          # here while every other name still comes from PyPI.
+          uv pip install \
+            --python .artifact-venv/bin/python \
+            --index-url https://pypi.org/simple \
+            --extra-index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/ \
+            --only-binary :all: \
+            "${ifed_requirements[@]}"
+
       - name: Install opaque[all] from built wheels
         run: |
           opaque_wheels=(dist/opaque-*.whl)
@@ -40,7 +67,6 @@ jobs:
             echo "::error::Expected one opaque wheel, found ${#opaque_wheels[@]}"
             exit 1
           fi
-          uv venv --python ${{ matrix.python-version }} .artifact-venv
           uv pip install \
             --python .artifact-venv/bin/python \
             --find-links dist \

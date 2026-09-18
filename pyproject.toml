@@ -45,6 +45,7 @@ dependencies = [
 [project.optional-dependencies]
 auditing = ["opaque-auditing>=0.0.0.dev0"]
 dpftrl = ["opaque-dpftrl>=0.0.0.dev0"]
+federated = ["opaque-federated>=0.0.0.dev0"]
 alignment = ["opaque-alignment>=0.0.0.dev0"]
 transformers = [
     "opaque-transformers>=0.0.0.dev0",
@@ -54,6 +55,7 @@ trl = ["opaque-transformers[trl]>=0.0.0.dev0"]
 all = [
     "opaque[auditing]",
     "opaque[dpftrl]",
+    "opaque[federated]",
     "opaque[alignment]",
     "opaque[transformers]",
     "opaque[trl]",
@@ -90,6 +92,7 @@ workspace.members = [
     "packages/opaque-accounting",
     "packages/opaque-patches",
     "packages/opaque-alignment",
+    "packages/opaque-federated",
 ]
 
 [tool.uv.sources]
@@ -103,6 +106,17 @@ opaque-transformers = { workspace = true }
 opaque-accounting = { workspace = true }
 opaque-patches = { workspace = true }
 opaque-alignment = { workspace = true }
+opaque-federated = { workspace = true }
+# IFED ships from JetBrains' own index, not PyPI (where the names are
+# dependency-confusion stubs).
+ifed-sdk = { index = "jetbrains-fed" }
+ifed-agent-abi = { index = "jetbrains-fed" }
+ifed-server-abi = { index = "jetbrains-fed" }
+
+[[tool.uv.index]]
+name = "jetbrains-fed"
+url = "https://packages.jetbrains.team/pypi/p/fed/python/simple/"
+explicit = true
 
 [dependency-groups]
 # Developer tooling (test runner, linter, stats helpers, cross-validation
@@ -206,6 +220,7 @@ src = [
   "packages/opaque-dpftrl/src",
   "packages/opaque-dpsgd/src",
   "packages/opaque-engine/src",
+  "packages/opaque-federated/src",
   "packages/opaque-optimizers/src",
   "packages/opaque-patches/src",
   "packages/opaque-transformers/src",

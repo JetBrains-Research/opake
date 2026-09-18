@@ -14,16 +14,12 @@
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/trainer_output" />
     </content>
-    <orderEntry type="jdk" jdkName="$MODULE_DIR$/.venv" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="~/work/opaque/.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="opaque-dpsgd" exported="" />
     <orderEntry type="module" module-name="opaque-engine" exported="" />
     <orderEntry type="module" module-name="opaque-optimizers" exported="" />
-    <orderEntry type="module" module-name="opaque-alignment" exported="" />
     <orderEntry type="module" module-name="opaque-accounting" exported="" />
-    <orderEntry type="module" module-name="opaque-auditing" exported="" />
     <orderEntry type="module" module-name="opaque-patches" exported="" />
-    <orderEntry type="module" module-name="opaque-transformers" exported="" />
-    <orderEntry type="module" module-name="opaque-dpftrl" exported="" />
   </component>
 </module>

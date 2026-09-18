@@ -95,8 +95,10 @@ release add `cargo test --lib -- --ignored` after the default unit/doc-test run.
 This private `workflow_call` workflow downloads a complete caller-selected
 artifact family, installs `opaque[all]` using only built Opaque wheels, and runs
 a representative DP-SGD + DP-FTRL cross-stack accounting scenario without
-checking out the source tree. PR, main, and release differ only in artifact
-prefix.
+checking out the source tree. The `ifed-*` requirements that `opaque-federated`
+declares are installed first from JetBrains' own index, since PyPI carries only
+dependency-confusion stubs of those names. PR, main, and release differ only in
+artifact prefix.
 
 ### `.github/workflows/prepare-release-implementation.yml`
 

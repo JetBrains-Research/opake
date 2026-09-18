@@ -39,6 +39,7 @@ Install and depend on `opaque` only. The repository is implemented as
 | `opaque-patches` | `opaque.patches` | Unified patching entrypoint for PyTorch checkpointing, Hugging Face compat wrappers, Triton kernels, and PEFT/LoRA fusion |
 | `opaque-transformers` | `opaque.transformers` | Hugging Face trainer + integration; TRL-style `SFTTrainer` / `DPOTrainer` (`opaque.transformers.trl`) built on `DPTrainer` |
 | `opaque-alignment` | `opaque.alignment` | Functional, mechanism-agnostic DP-safe SFT / DPO primitives: per-example losses, log-prob helpers, collators, reference helpers, reward metrics |
+| `opaque-federated` | `opaque.federated` | Federated DP on IFED: cohort sampler, round loader, per-client clipped-sum strategy, round driver |
 | `opaque-accounting` | `opaque.accounting` | PLD privacy accounting (Rust/PyO3 backend); torch-free standalone |
 
 [PEP 420]: https://peps.python.org/pep-0420/
@@ -57,6 +58,7 @@ opaque.auditing                                            <- opaque-auditing
 opaque.patches.{kernels,torch,transformers,peft}           <- opaque-patches
 opaque.transformers{,.trl}                                 <- opaque-transformers
 opaque.alignment.{sft,dpo,data,metric}                     <- opaque-alignment
+opaque.federated.{clipping,data,sampling}                  <- opaque-federated
 opaque.accounting                                          <- opaque-accounting
 ```
 
@@ -78,6 +80,7 @@ Extras:
 pip install "opaque[auditing]"      # empirical privacy auditing
 pip install "opaque[dpftrl]"        # correlated-noise DP-FTRL components
 pip install "opaque[transformers]"  # Hugging Face + patching components
+pip install "opaque[federated]"     # federated DP on IFED
 pip install "opaque[all]"           # all optional components
 ```
 

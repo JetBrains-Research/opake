@@ -50,6 +50,7 @@ plugins:
             - packages/opaque-patches/src
             - packages/opaque-transformers/src
             - packages/opaque-alignment/src
+            - packages/opaque-federated/src
           options:
             docstring_style: google
             show_source: true
@@ -153,6 +154,7 @@ nav:
     - Noise: reference/noise.md
     - Accounting: reference/accounting.md
     - Sampling: reference/sampling.md
+    - Federated: reference/federated.md
     - Random: reference/rng.md
     - Distributed: reference/distributed.md
     - Auditing: reference/auditing.md

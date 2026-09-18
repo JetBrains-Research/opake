@@ -84,6 +84,10 @@ jobs:
             paths: |
               packages/opaque-alignment
               packages/opaque-transformers
+          - id: federated
+            label: Federated
+            paths: |
+              packages/opaque-federated
           - id: integration
             label: Integration tests
             paths: tests

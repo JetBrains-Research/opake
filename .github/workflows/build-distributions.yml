@@ -73,6 +73,9 @@ jobs:
       - name: Build opaque-alignment
         run: uv build packages/opaque-alignment --wheel --out-dir dist
 
+      - name: Build opaque-federated
+        run: uv build packages/opaque-federated --wheel --out-dir dist
+
       - name: Validate wheel metadata
         run: >-
           uv run --isolated --no-project --with packaging==25.0

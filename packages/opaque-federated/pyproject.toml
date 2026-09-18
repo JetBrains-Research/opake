@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opaque-federated"
+dynamic = ["version"]
+description = "Opaque federated learning on IFED: federated twins of the DP loop's data primitives (population, cohort sampler, loader, clipped_sum, clipped_grad)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Opaque Contributors" }]
+requires-python = ">=3.11,<3.14"
+keywords = ["differential-privacy", "federated-learning", "pytorch", "privacy"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+]
+# No torch bound of our own: ifed-sdk pins the exact minor its prebuilt agent
+# bridge is compiled against, and a second bound here could only conflict.
+dependencies = [
+    "opaque-engine>=0.0.0.dev0",
+    # Markers track the platforms IFED publishes its prebuilt agent bridge for.
+    # The two abi wheels are listed unversioned only to route them to the
+    # jetbrains-fed index, which uv consults for direct dependencies alone;
+    # ifed-sdk pins their versions.
+    "ifed-sdk==5.4.0; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'linux' and platform_machine == 'aarch64') or (sys_platform == 'darwin' and platform_machine == 'arm64')",
+    "ifed-agent-abi; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'linux' and platform_machine == 'aarch64') or (sys_platform == 'darwin' and platform_machine == 'arm64')",
+    "ifed-server-abi; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'linux' and platform_machine == 'aarch64') or (sys_platform == 'darwin' and platform_machine == 'arm64')",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["opaque.federated*", "opaque.api.federated*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.setuptools_scm]
+root = "../.."
+fallback_version = "0.0.0"
+git_describe_command = "git describe --dirty --tags --long --match v*"
+
+[tool.uv]
+package = true
+
+# The jetbrains-fed index that serves ifed-* is declared at the WORKSPACE ROOT
+# pyproject: an index declared here would travel with this package when it is
+# consumed as a path dependency.
+[tool.uv.sources]
+opaque-engine = { workspace = true }
