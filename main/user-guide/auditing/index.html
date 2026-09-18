@@ -3592,7 +3592,10 @@ that reads the theoretical f-DP β at the inferred μ̂-GDP.</p>
 <h2 id="number-of-canaries">Number of canaries<a class="headerlink" href="#number-of-canaries" title="Permanent link">&para;</a></h2>
 <p>For the mechanism-agnostic <span class="arithmatex">\((\varepsilon,\delta)\)</span> method, a perfect attack
 has an approximate ceiling <code>ε ≲ ln(m / -ln(α))</code>. This does not apply to the
-μ-GDP estimator:</p>
+μ-GDP estimator. The μ-GDP implementation computes the 2000 most informative
+order statistics exactly and uses a conservative, μ-dependent boundary bound
+for any remaining ranks, so this numerical cutoff does not limit the supported
+number of canary guesses:</p>
 <table>
 <thead>
 <tr>
