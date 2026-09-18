@@ -211,7 +211,7 @@ _DP_SECTION_TEMPLATE = """\
 ### Privacy budget
 
 This model was trained with differential privacy using
-[Opake](https://github.com/JetBrains-Research/opake).
+[Opake](https://github.com/JetBrains-Research/opaque).
 
 - ε (epsilon): {epsilon}
 - δ (delta): {delta}

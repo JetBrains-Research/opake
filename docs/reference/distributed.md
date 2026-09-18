@@ -103,5 +103,5 @@ clip_state, aux = dist_utils.sync(clip_state, aux)
 noise_state = dist_utils.sync(noise_state)
 ```
 
-See [examples/distributed_dp_training.py](https://github.com/JetBrains-Research/opake/blob/main/examples/distributed_dp_training.py)
+See [examples/distributed_dp_training.py](https://github.com/JetBrains-Research/opaque/blob/main/examples/distributed_dp_training.py)
 for a complete working script.

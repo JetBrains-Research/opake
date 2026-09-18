@@ -43,7 +43,7 @@ running its test suite. For ordinary use, prefer the published package above.
 
 ```bash
 # Clone the repository
-git clone https://github.com/JetBrains-Research/opake.git
+git clone https://github.com/JetBrains-Research/opaque.git
 cd opake
 
 # Install with uv (recommended)

@@ -5,7 +5,7 @@ MLP branches. Previously, the MLP backward path (both eager and vmap)
 overwrote this shared buffer with dX, corrupting the QKV branch's per-sample
 LoRA weight gradients when it ran afterward.
 
-Refs: https://github.com/JetBrains-Research/opake/issues/401
+Refs: https://github.com/JetBrains-Research/opaque/issues/401
 """
 
 import pytest
@@ -29,7 +29,7 @@ class TestFusedLoRAParallelResidual:
     def test_cohere2_vmap_grad_matches_eager(self, device):
         """vmap(grad()) per-sample LoRA grads should match per-sample eager loop.
 
-        Regression test for https://github.com/JetBrains-Research/opake/issues/401
+        Regression test for https://github.com/JetBrains-Research/opaque/issues/401
 
         Cohere2 uses a parallel-residual architecture where the same normalized
         input feeds both attention-QKV and MLP branches. If the MLP backward

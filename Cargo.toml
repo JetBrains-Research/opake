@@ -7,7 +7,7 @@ version = "0.1.0"
 authors = ["Opake Contributors"]
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/JetBrains-Research/opake"
+repository = "https://github.com/JetBrains-Research/opaque"
 keywords = ["differential-privacy", "privacy", "dp-sgd"]
 
 [workspace.lints.rust]

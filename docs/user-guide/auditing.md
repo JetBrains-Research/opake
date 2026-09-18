@@ -168,8 +168,8 @@ estimate = auditing.one_run(scores, coin_flip=cf)
 print(f"ε (audit): {estimate.epsilon_at(delta=1e-5):.4f}")
 ```
 
-See [examples/train_dpsgd.py](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpsgd.py)
-and [examples/train_dpftrl.py](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpftrl.py)
+See [examples/train_dpsgd.py](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpsgd.py)
+and [examples/train_dpftrl.py](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpftrl.py)
 for complete working examples with the `--audit` flag.
 
 ### Parameter reference

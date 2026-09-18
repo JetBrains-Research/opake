@@ -244,7 +244,7 @@ torch.save(state_dict(ckpt), "step.pt")
 
 ## Runnable references
 
-- [`examples/train_dpftrl.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpftrl.py)
+- [`examples/train_dpftrl.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpftrl.py)
   — full DP-FTRL training script.
 - `tests/integration/test_dpftrl_pipeline.py` — minimal smoke test
   exercising the same flow on a tiny LlamaConfig + LoRA model (and

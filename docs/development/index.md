@@ -2,19 +2,19 @@
 
 This guide is for contributors working from a GitHub fork or a local clone of
 Opake. It summarizes the maintained workflow in
-[CONTRIBUTING.md](https://github.com/JetBrains-Research/opake/blob/main/CONTRIBUTING.md);
+[CONTRIBUTING.md](https://github.com/JetBrains-Research/opaque/blob/main/CONTRIBUTING.md);
 consult that file for the full testing, documentation, and pull-request conventions.
 
 ## Get the source
 
-Fork [JetBrains-Research/opake](https://github.com/JetBrains-Research/opake),
+Fork [JetBrains-Research/opaque](https://github.com/JetBrains-Research/opaque),
 then clone your fork and add the upstream repository if you use it to keep your
 branch current:
 
 ```bash
 git clone https://github.com/<your-account>/opake.git
 cd opake
-git remote add upstream https://github.com/JetBrains-Research/opake.git
+git remote add upstream https://github.com/JetBrains-Research/opaque.git
 ```
 
 Opake requires Python 3.11 through 3.13, Rust stable, and
@@ -58,7 +58,7 @@ cargo test --workspace
 
 CUDA, MPS, and slow tests have separate pytest markers; hardware-specific tests
 skip when their backend is unavailable. See the
-[test-marker reference](https://github.com/JetBrains-Research/opake/blob/main/CONTRIBUTING.md#test-markers-and-filtering)
+[test-marker reference](https://github.com/JetBrains-Research/opaque/blob/main/CONTRIBUTING.md#test-markers-and-filtering)
 for the available selections.
 
 ## Submit a pull request
@@ -68,5 +68,5 @@ changes, and ensure public API additions include type annotations and
 Google-style docstrings. The pull-request title follows Conventional Commits,
 for example `fix(accounting): handle empty compositions`; its body should
 briefly explain the problem and solution. See the
-[pull-request checklist](https://github.com/JetBrains-Research/opake/blob/main/CONTRIBUTING.md#pull-request-process)
+[pull-request checklist](https://github.com/JetBrains-Research/opaque/blob/main/CONTRIBUTING.md#pull-request-process)
 for the complete checklist.

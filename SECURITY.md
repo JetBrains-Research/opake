@@ -47,5 +47,5 @@ including dependency vulnerabilities that materially affect Opake. Report
 dependency vulnerabilities to their upstream project as well.
 
 [coordinated-disclosure]: https://www.jetbrains.com/legal/docs/terms/coordinated-disclosure/
-[issues]: https://github.com/JetBrains-Research/opake/issues
+[issues]: https://github.com/JetBrains-Research/opaque/issues
 [pgp-key]: https://www.jetbrains.com/privacy-security/

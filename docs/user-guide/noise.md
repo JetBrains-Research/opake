@@ -123,7 +123,7 @@ $\sigma_i \propto \sqrt{C_i}$.  `gaussian_noise` applies the optimal
 allocation automatically when `grads.max_norm` is a `PerGroup`.  Privacy
 accounting is identical under either allocation — just `gaussian(nm)`.
 
-The [training script](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpsgd.py) uses this by default
+The [training script](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpsgd.py) uses this by default
 when per-group clipping is active.
 
 Alternatively, isotropic noise (same σ everywhere) also works:

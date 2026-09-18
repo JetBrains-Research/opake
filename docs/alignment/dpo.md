@@ -300,7 +300,7 @@ are not part of the private gradient.
 
 ## Runnable references
 
-- [`examples/train_dpo.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpo.py)
+- [`examples/train_dpo.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpo.py)
   — full DP-SGD LoRA DPO script: reference precompute with
   `null_ref_context`, the preference collator, per-pair head selection,
   the per-example `vmap(grad)` loop, calibration/auditing, and reward-metric

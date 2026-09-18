@@ -18,9 +18,9 @@ hidden mutation.
 [![Python 3.11-3.13](https://img.shields.io/badge/python-3.11--3.13-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.9+](https://img.shields.io/badge/pytorch-2.9+-red.svg)](https://pytorch.org/)
 [![JetBrains Research](https://jb.gg/badges/research.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
-[![CI](https://github.com/JetBrains-Research/opake/actions/workflows/ci.yml/badge.svg)](https://github.com/JetBrains-Research/opake/actions/workflows/ci.yml)
+[![CI](https://github.com/JetBrains-Research/opaque/actions/workflows/ci.yml/badge.svg)](https://github.com/JetBrains-Research/opaque/actions/workflows/ci.yml)
 
-**[Documentation](https://jetbrains-research.github.io/opake/)**
+**[Documentation](https://jetbrains-research.github.io/opaque/)**
 
 ## Packages
 
@@ -99,7 +99,7 @@ apply_model_patches(model)
 loss-mapping fixes. `apply_model_patches(model)` wires compat wrappers and
 Triton kernels into the specific model instance, including PEFT/LoRA modules.
 
-See the [model-patches guide](https://jetbrains-research.github.io/opake/latest/user-guide/huggingface/model-patches/)
+See the [model-patches guide](https://jetbrains-research.github.io/opaque/latest/user-guide/huggingface/model-patches/)
 for patching details, model compatibility, and tuning knobs.
 
 ## Example
@@ -164,11 +164,11 @@ for batch_x, batch_y in dataloader:
 
 ## Documentation
 
-- [Documentation](https://jetbrains-research.github.io/opake/)
-- [Getting Started](https://jetbrains-research.github.io/opake/latest/getting-started/quickstart/)
-- [User Guide](https://jetbrains-research.github.io/opake/latest/user-guide/)
-- [Tutorials](https://jetbrains-research.github.io/opake/latest/tutorials/)
-- [API Reference](https://jetbrains-research.github.io/opake/latest/reference/)
+- [Documentation](https://jetbrains-research.github.io/opaque/)
+- [Getting Started](https://jetbrains-research.github.io/opaque/latest/getting-started/quickstart/)
+- [User Guide](https://jetbrains-research.github.io/opaque/latest/user-guide/)
+- [Tutorials](https://jetbrains-research.github.io/opaque/latest/tutorials/)
+- [API Reference](https://jetbrains-research.github.io/opaque/latest/reference/)
 - [Examples](examples)
 
 ## Development

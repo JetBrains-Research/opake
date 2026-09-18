@@ -1,10 +1,10 @@
 site_name: Opake
 site_description: Functional DP-SGD and DP-FTRL for PyTorch
 site_author: Opake Contributors
-site_url: https://jetbrains-research.github.io/opake/
+site_url: https://jetbrains-research.github.io/opaque/
 
-repo_name: JetBrains-Research/opake
-repo_url: https://github.com/JetBrains-Research/opake
+repo_name: JetBrains-Research/opaque
+repo_url: https://github.com/JetBrains-Research/opaque
 edit_uri: edit/main/docs/
 
 theme:
@@ -164,6 +164,6 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/JetBrains-Research/opake
+      link: https://github.com/JetBrains-Research/opaque
   version:
     provider: mike
