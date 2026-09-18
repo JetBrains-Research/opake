@@ -1,0 +1,25 @@
+Opake
+======
+
+Copyright 2025 Opake Authors
+
+Licensed under the Apache License, Version 2.0 (the "License"); see
+LICENSE in this directory for the full text.
+
+This package includes software developed by third parties whose
+licenses and copyright notices are reproduced below. Per-file SPDX and
+copyright headers in the relevant source files identify which third
+party each file derives from.
+
+
+Random-allocation reference implementation (Apache-2.0)
+------------------------------------------------------------------------
+
+The following files contain random-allocation accounting/sampling
+structure adapted from the ICML 2026 reference implementation for
+"Efficient privacy loss accounting for subsampling and random allocation",
+distributed under the Apache License, Version 2.0, and then reworked for
+Opake's DP-SGD accounting and sampler APIs:
+
+  opake/api/accounting/dpsgd/amplification/_random_allocation.py
+  opake/api/dpsgd/sampling/_random_allocation.py

@@ -10,7 +10,7 @@ on:
 
 jobs:
   install-all:
-    name: opaque[all] (Python ${{ matrix.python-version }})
+    name: opake[all] (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -33,11 +33,11 @@ jobs:
           path: dist/
           merge-multiple: true
 
-      - name: Install opaque[all] from built wheels
+      - name: Install opake[all] from built wheels
         run: |
-          opaque_wheels=(dist/opaque-*.whl)
-          if [[ "${#opaque_wheels[@]}" -ne 1 ]]; then
-            echo "::error::Expected one opaque wheel, found ${#opaque_wheels[@]}"
+          opake_wheels=(dist/opake-*.whl)
+          if [[ "${#opake_wheels[@]}" -ne 1 ]]; then
+            echo "::error::Expected one opake wheel, found ${#opake_wheels[@]}"
             exit 1
           fi
           uv venv --python ${{ matrix.python-version }} .artifact-venv
@@ -45,7 +45,7 @@ jobs:
             --python .artifact-venv/bin/python \
             --find-links dist \
             --only-binary :all: \
-            "${opaque_wheels[0]}[all]"
+            "${opake_wheels[0]}[all]"
 
       - name: Run cross-stack scenario
         run: |
@@ -54,19 +54,19 @@ jobs:
           import math
           from importlib.metadata import distributions, version
 
-          import opaque.dpftrl.accounting as dpftrl
-          import opaque.dpsgd.accounting as dpsgd
-          from opaque.dpftrl.noise import identity_strategy
+          import opake.dpftrl.accounting as dpftrl
+          import opake.dpsgd.accounting as dpsgd
+          from opake.dpftrl.noise import identity_strategy
 
-          umbrella_version = version("opaque")
-          opaque_versions = {
+          umbrella_version = version("opake")
+          opake_versions = {
               dist.metadata["Name"]: dist.version
               for dist in distributions()
-              if (name := dist.metadata["Name"]) == "opaque"
-              or name.startswith("opaque-")
+              if (name := dist.metadata["Name"]) == "opake"
+              or name.startswith("opake-")
           }
-          assert len(opaque_versions) > 1
-          assert set(opaque_versions.values()) == {umbrella_version}, opaque_versions
+          assert len(opake_versions) > 1
+          assert set(opake_versions.values()) == {umbrella_version}, opake_versions
 
           dpsgd_process = dpsgd.gaussian(1.0)
           dpftrl_process = dpftrl.poisson(
@@ -76,5 +76,5 @@ jobs:
           )
           epsilon = (dpsgd_process | dpftrl_process).epsilon_at(1e-5)
           assert math.isfinite(epsilon) and epsilon > 0
-          print(f"opaque[all] cross-stack epsilon: {epsilon:.6f}")
+          print(f"opake[all] cross-stack epsilon: {epsilon:.6f}")
           PY

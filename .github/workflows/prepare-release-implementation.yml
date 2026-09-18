@@ -127,7 +127,7 @@ jobs:
           fi
 
           cat > /tmp/prompt.md <<EOF
-          You are summarizing release changes for Opaque, a PyTorch
+          You are summarizing release changes for Opake, a PyTorch
           differential-privacy library (DP-SGD, DP-FTRL, privacy accounting).
 
           Below are the commits for $TAG from $SOURCE_BRANCH, after
@@ -294,7 +294,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
       environment-name: linux-amd64
@@ -309,7 +309,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       allow-empty-test-selection: true
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
@@ -325,7 +325,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
       dependency-selection: minimum
@@ -343,7 +343,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
       dependency-selection: latest
@@ -361,7 +361,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
       environment-name: mps
@@ -377,7 +377,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
       environment-name: linux-aarch64
@@ -393,7 +393,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       allow-empty-test-selection: true
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
@@ -410,7 +410,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       allow-empty-test-selection: true
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
@@ -429,7 +429,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/python-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/python-tests.yml@main
     with:
       allow-empty-test-selection: true
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
@@ -448,7 +448,7 @@ jobs:
     if: needs.main-ci-status.outputs.test-validation == 'run'
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/rust-tests.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/rust-tests.yml@main
     with:
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
       include-slow: true
@@ -458,7 +458,7 @@ jobs:
     needs: [plan]
     permissions:
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/build-distributions.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/build-distributions.yml@main
     with:
       artifact-prefix: candidate
       checkout-ref: ${{ needs.plan.outputs.target_sha }}
@@ -471,7 +471,7 @@ jobs:
     permissions:
       actions: read
       contents: read
-    uses: JetBrains-Research/opaque/.github/workflows/validate-distributions.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/validate-distributions.yml@main
     with:
       artifact-prefix: candidate
 

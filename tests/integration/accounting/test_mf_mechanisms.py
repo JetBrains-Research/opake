@@ -2,7 +2,7 @@
 
 The MF accounting layer collapses to one DpProcess class, ``MfGaussian``,
 parameterised by ``noise_multiplier`` and a strategy from
-``opaque.dpftrl.noise``.  These tests cover the dataclass surface,
+``opake.dpftrl.noise``.  These tests cover the dataclass surface,
 amplification dispatch via the strategy's polymorphic methods, and
 composition with other DpProcess nodes.
 """
@@ -12,12 +12,12 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-import opaque.dpftrl.accounting as ftrl_acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.api.accounting.core._base import DpProcess
-from opaque.dpftrl.accounting.amplification.types import CyclicPoisson
-from opaque.dpftrl.accounting.types import MfGaussian
-from opaque.dpftrl.noise import band_mf_strategy, blt_strategy, identity_strategy
+import opake.dpftrl.accounting as ftrl_acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.api.accounting.core._base import DpProcess
+from opake.dpftrl.accounting.amplification.types import CyclicPoisson
+from opake.dpftrl.accounting.types import MfGaussian
+from opake.dpftrl.noise import band_mf_strategy, blt_strategy, identity_strategy
 
 # ── MfGaussian(BandMfStrategy) — banded-Toeplitz path ────────────────────
 

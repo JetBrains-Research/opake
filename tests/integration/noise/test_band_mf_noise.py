@@ -5,9 +5,9 @@ import math
 import pytest
 import torch
 
-import opaque.dpftrl.accounting as ftrl_acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.api.dpftrl.noise._band_mf import BandMfStrategy, band_mf_strategy
+import opake.dpftrl.accounting as ftrl_acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.api.dpftrl.noise._band_mf import BandMfStrategy, band_mf_strategy
 
 _N_STEPS = 100
 _BANDS = 10

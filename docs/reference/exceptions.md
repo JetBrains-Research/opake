@@ -1,10 +1,10 @@
 # Exceptions
 
-`opaque.exceptions` provides stable semantic categories for handling failures
-from public Opaque APIs:
+`opake.exceptions` provides stable semantic categories for handling failures
+from public Opake APIs:
 
 ```python
-from opaque.exceptions import CalibrationError, CheckpointError, ConfigurationError
+from opake.exceptions import CalibrationError, CheckpointError, ConfigurationError
 
 try:
     result = calibrate(...)
@@ -21,18 +21,18 @@ except CheckpointError:
 
 | Exception | Common error family | Use it for |
 |---|---|---|
-| `OpaqueError` | `Exception` | Handling any semantic Opaque failure. |
+| `OpakeError` | `Exception` | Handling any semantic Opake failure. |
 | `ConfigurationError` | `ValueError` | Invalid values, incompatible options, and unsupported user configuration. |
 | `CalibrationError` | `ConfigurationError` | Invalid or unsatisfied privacy-calibration searches. |
 | `PrivacyBudgetError` | `ConfigurationError` | Invalid privacy-budget definitions. |
-| `InputTypeError` | `TypeError` | Arguments whose Python type cannot satisfy an Opaque API contract. |
-| `OperationError` | `RuntimeError` | An Opaque operation that cannot complete in its current state. |
-| `CheckpointError` | `OperationError` | Saving, restoring, or resuming an incompatible or incomplete Opaque checkpoint. |
+| `InputTypeError` | `TypeError` | Arguments whose Python type cannot satisfy an Opake API contract. |
+| `OperationError` | `RuntimeError` | An Opake operation that cannot complete in its current state. |
+| `CheckpointError` | `OperationError` | Saving, restoring, or resuming an incompatible or incomplete Opake checkpoint. |
 
 Standard Python and third-party errors still surface when they are more
 specific, such as an I/O failure while opening a caller-provided path.
 
-::: opaque.exceptions
+::: opake.exceptions
     options:
       show_source: true
       heading_level: 2

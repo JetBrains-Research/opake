@@ -6,7 +6,7 @@ Poisson subsampling provides privacy amplification, meaning you need less
 noise for the same epsilon when each example is included independently with
 small probability.
 
-Opaque provides sampler classes designed to work with PyTorch's
+Opake provides sampler classes designed to work with PyTorch's
 `DataLoader` via the `batch_sampler` parameter.
 
 ## Poisson sampling
@@ -19,7 +19,7 @@ This is the *privacy amplification by subsampling* effect. The smaller the
 sample rate, the stronger the amplification:
 
 ```python
-import opaque.accounting as acc
+import opake.accounting as acc
 
 # Without subsampling: full dataset
 full = dpsgd_acc.gaussian(1.0) * 1000
@@ -50,8 +50,8 @@ The standard sampler. Each example is included independently with probability
 `sample_rate`, producing variable-size batches.
 
 ```python
-from opaque.dpsgd.sampling import PoissonSampler
-from opaque.random import key
+from opake.dpsgd.sampling import PoissonSampler
+from opake.random import key
 import torch.utils.data as data
 
 dataset = data.TensorDataset(X, y)
@@ -104,8 +104,8 @@ same \(n\)-indexed interpretation when composing repeated releases or combining
 this accountant with another mechanism.
 
 ```python
-from opaque.dpsgd.sampling import PoissonSampler
-from opaque.random import key
+from opake.dpsgd.sampling import PoissonSampler
+from opake.random import key
 
 sampler = PoissonSampler(
     dataset,
@@ -152,9 +152,9 @@ examples, matching whole-process `dpftrl_acc.poisson` over
 participation matches correlated ``mf_gaussian_noise``.
 
 ```python
-from opaque.dpftrl.sampling import CyclicPoissonSampler
-from opaque.dpftrl.sampling.types import PartitionType
-from opaque.random import key
+from opake.dpftrl.sampling import CyclicPoissonSampler
+from opake.dpftrl.sampling.types import PartitionType
+from opake.random import key
 
 sampler = CyclicPoissonSampler(
     dataset,
@@ -198,11 +198,11 @@ stationary distribution so expected batch size is roughly stable from step 0.
 
 Use `p = p_0 / (1 - p_0 * (bands - 1))` when matching a target per-example rate
 `p_0 = expected_batch_size / dataset_size` (for `bands == 1`, `p = p_0`).
-Pair with `opaque.dpftrl.accounting.b_min_sep` for privacy accounting.
+Pair with `opake.dpftrl.accounting.b_min_sep` for privacy accounting.
 
 ```python
-from opaque.dpftrl.sampling import BMinSepSampler
-from opaque.random import key
+from opake.dpftrl.sampling import BMinSepSampler
+from opake.random import key
 
 p0 = batch_size / len(dataset)
 bands = 8
@@ -226,8 +226,8 @@ nearly equal blocks. Every example is assigned to exactly one batch in each
 block, independently across blocks.
 
 ```python
-from opaque.dpsgd.sampling import KOutOfTSampler
-from opaque.random import key
+from opake.dpsgd.sampling import KOutOfTSampler
+from opake.random import key
 
 sampler = KOutOfTSampler(
     dataset,
@@ -266,7 +266,7 @@ uses the block reduction as a valid conservative upper bound.
 
 !!! warning "Not the same scheme as `BallsInBinsSampler`"
 
-    `opaque.dpftrl.sampling.BallsInBinsSampler` fixes the bin assignment
+    `opake.dpftrl.sampling.BallsInBinsSampler` fixes the bin assignment
     once at init, because the matrix-mechanism dominating pair needs a known
     separation between an example's participations. Redrawing per epoch is
     valid only because DP-SGD noise is uncorrelated across steps — and there
@@ -283,11 +283,11 @@ Each example is independently assigned to one of `num_bins` bins (Binomial
 bin sizes; some bins may be empty). The assignment is **fixed once at init**
 and **reused across all epochs** — this is required by the dominating-pair
 BnB privacy accounting. Used with DP-λCGD, BISR, BSR, BLT, or identity MF
-mechanisms through `opaque.dpftrl.accounting.balls_in_bins`.
+mechanisms through `opake.dpftrl.accounting.balls_in_bins`.
 
 ```python
-from opaque.dpftrl.sampling import BallsInBinsSampler
-from opaque.random import key
+from opake.dpftrl.sampling import BallsInBinsSampler
+from opake.random import key
 
 sampler = BallsInBinsSampler(
     dataset,
@@ -321,7 +321,7 @@ Used by the BLT mechanism, which requires deterministic batch order with
 fixed separation between participations.
 
 ```python
-from opaque.dpftrl.sampling import SequentialBatchSampler
+from opake.dpftrl.sampling import SequentialBatchSampler
 import torch.utils.data as data
 
 sampler = SequentialBatchSampler(
@@ -379,8 +379,8 @@ and derive a per-rank key via `fold_in(key, rank)`:
    own partition.
 
 ```python
-from opaque.distributed import local_shard
-from opaque.random import key, fold_in
+from opake.distributed import local_shard
+from opake.random import key, fold_in
 import torch.distributed as dist
 
 rank = dist.get_rank()
@@ -400,7 +400,7 @@ step = dpsgd_acc.poisson(dpsgd_acc.gaussian(noise_multiplier), global_sample_rat
 
 ### Distributed helpers
 
-The `opaque.distributed` submodule provides two utilities used
+The `opake.distributed` submodule provides two utilities used
 internally by the samplers:
 
 | Function | Description |
@@ -420,7 +420,7 @@ clipped gradient sums. The running sum is held in `compute_dtype`, so the
 result matches processing the full batch to the precision of that dtype.
 
 ```python
-from opaque.dpsgd.clipping import clipped_grad
+from opake.dpsgd.clipping import clipped_grad
 
 grad_fn, clip_state = clipped_grad(
     loss_fn,
@@ -442,7 +442,7 @@ Use `step_perf` to compare a few candidate microbatch sizes and select
 the largest stable value for your device:
 
 ```python
-from opaque.profiling import reset_peak_memory, step_perf
+from opake.profiling import reset_peak_memory, step_perf
 
 for optimal in [64, 32, 16, 8, 4, 2, 1]:
     grad_fn, clip_state = clipped_grad(
@@ -492,8 +492,8 @@ grads_mb, state_mb = grad_fn_mb(params, batch_256, state=state_mb)
 |---------|-----------|---------|----------|
 | `PoissonSampler` | Variable | Standard amplification | Research, general use |
 | `PoissonSampler` + `truncated_batch_size` | Bounded above | Weaker than plain Poisson (same `sample_rate`) | Production, stable batch sizes / memory |
-| `KOutOfTSampler` (`opaque.dpsgd`, block) | Variable (Binomial) | Stronger than Poisson at rate `k/t` | DP-SGD, fixed-block passes |
-| `CyclicPoissonSampler` (`opaque.dpftrl`) | Variable | `dpftrl_acc.poisson` | DP-FTRL; identity MF → `bands=1`; BandMF → `bands` = strategy |
+| `KOutOfTSampler` (`opake.dpsgd`, block) | Variable (Binomial) | Stronger than Poisson at rate `k/t` | DP-SGD, fixed-block passes |
+| `CyclicPoissonSampler` (`opake.dpftrl`) | Variable | `dpftrl_acc.poisson` | DP-FTRL; identity MF → `bands=1`; BandMF → `bands` = strategy |
 | `BallsInBinsSampler` | Variable (Binomial) | Balls-in-bins amplification | λCGD, BISR, BLT |
 | `SequentialBatchSampler` | Fixed (deterministic) | No amplification | BLT (pre-shuffled dataset) |
 
@@ -501,7 +501,7 @@ For most DP-SGD workloads, `PoissonSampler` is sufficient.
 Use `truncated_batch_size` when you need **capped** batch sizes; expect
 **worse** privacy than plain Poisson at the same `sample_rate` unless you
 recalibrate noise. For DP-FTRL, use
-`opaque.dpftrl.sampling.CyclicPoissonSampler` as in the section above.
+`opake.dpftrl.sampling.CyclicPoissonSampler` as in the section above.
 `BallsInBinsSampler` and
 `SequentialBatchSampler` are used with matrix-factorization mechanisms
 that require fixed batch sizes.

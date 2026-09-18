@@ -21,8 +21,8 @@ For a single release, the **identity strategy** has sensitivity 1 and no
 correlation, providing a baseline for comparison with DP-SGD:
 
 ```python
-import opaque.dpftrl.accounting as ftrl_acc
-from opaque.dpftrl.noise import identity_strategy
+import opake.dpftrl.accounting as ftrl_acc
+from opake.dpftrl.noise import identity_strategy
 
 process = ftrl_acc.mf_gaussian(
     1.0, identity_strategy(), n_steps=1, min_sep=1, max_participations=1,
@@ -34,11 +34,11 @@ process = ftrl_acc.mf_gaussian(
 DP-FTRL pairs the noise mechanism with one of three amplification
 factories — **all** parameterised by `n_steps`:
 
-- `opaque.dpftrl.accounting.poisson(...)` — Poisson subsampling
+- `opake.dpftrl.accounting.poisson(...)` — Poisson subsampling
   (cyclic-Poisson under banded MF).
-- `opaque.dpftrl.accounting.b_min_sep(...)` — b-min-separation
+- `opake.dpftrl.accounting.b_min_sep(...)` — b-min-separation
   participation pattern.
-- `opaque.dpftrl.accounting.balls_in_bins(...)` — fixed-partition
+- `opake.dpftrl.accounting.balls_in_bins(...)` — fixed-partition
   participation.
 
 Each amplification factory wraps a mechanism and produces a single

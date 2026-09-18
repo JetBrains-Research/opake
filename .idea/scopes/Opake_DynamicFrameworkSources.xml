@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Opake_DynamicFrameworkSources" pattern="file[opake-patches]:src//*||file[opake-transformers]:src/opake/api/transformers/trainer//*||file[opake-transformers]:src/opake/api/transformers/trl//*||file[opake-alignment]:src/opake/api/alignment/data//*||file[opake-alignment]:src/opake/api/alignment/dpo/reference//*||file[opake-alignment]:src/opake/api/alignment/sft//*" />
+</component>

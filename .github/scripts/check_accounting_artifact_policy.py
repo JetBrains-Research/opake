@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate opaque-accounting artifact packaging policy from built artifacts."""
+"""Validate opake-accounting artifact packaging policy from built artifacts."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 TRANSIENT_BYTECODE_PATTERNS = ("**/__pycache__/**", "**/*.pyc", "**/*.pyo")
 NATIVE_LIBRARY_SUFFIXES = (".so", ".dylib", ".dll", ".pyd")
-NATIVE_MODULE_PATH = "opaque/api/accounting/core/opaque_accounting.abi3.so"
+NATIVE_MODULE_PATH = "opake/api/accounting/core/opake_accounting.abi3.so"
 MACOS_DEPLOYMENT_TARGET = 11.0
 RECORD_COLUMN_COUNT = 3
 MACHO_HEADER_SIZE = 8
@@ -36,7 +36,7 @@ def _is_transient(path: str) -> bool:
 
 def _check_pyproject_config() -> list[str]:
     """Verify pyproject.toml has correct artifact policy settings."""
-    pyproject = REPO_ROOT / "packages" / "opaque-accounting" / "pyproject.toml"
+    pyproject = REPO_ROOT / "packages" / "opake-accounting" / "pyproject.toml"
     data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
 
     errors: list[str] = []
@@ -66,7 +66,7 @@ def _check_pyproject_config() -> list[str]:
 
 def _check_cargo_config() -> list[str]:
     """Verify Cargo.toml package.exclude has transient bytecode patterns."""
-    cargo = REPO_ROOT / "packages" / "opaque-accounting" / "Cargo.toml"
+    cargo = REPO_ROOT / "packages" / "opake-accounting" / "Cargo.toml"
     data = tomllib.loads(cargo.read_text(encoding="utf-8"))
 
     errors: list[str] = []
@@ -262,7 +262,7 @@ def _validate_sdist_artifact(sdist_path: Path) -> list[str]:
 
 
 def main() -> int:
-    """Validate configured and built opaque-accounting artifact policy."""
+    """Validate configured and built opake-accounting artifact policy."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--wheel-dir",

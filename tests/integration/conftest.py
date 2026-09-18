@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from opaque_test_support import fast_mc_accounting
+from opake_test_support import fast_mc_accounting
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REPO_ROOT_S = str(_REPO_ROOT)

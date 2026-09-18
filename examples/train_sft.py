@@ -1,4 +1,4 @@
-# Copyright (c) 2025 Opaque Authors
+# Copyright (c) 2025 Opake Authors
 # SPDX-License-Identifier: Apache-2.0
 """End-to-end DP-SGD LoRA training example for SFT (Supervised Fine-Tuning).
 
@@ -7,7 +7,7 @@ DP-SGD baseline) and ``examples/train_dpo.py``. It ports the full production-sty
 DP-SGD scaffolding from ``train_dpsgd.py`` — clipping + noise + accounting +
 calibration + auditing + LoRA + LR schedules + distributed/Poisson sampling +
 W&B — and swaps in the SFT-specific loss and data machinery from
-``opaque-alignment``:
+``opake-alignment``:
 
   * ``language_modeling_collator(pad_token_id, max_length)`` builds the batch
     (``input_ids``, ``attention_mask``, ``labels`` with pad/non-completion tokens
@@ -26,7 +26,7 @@ losses cannot use.  (``train_dpsgd.py`` can opt into the fused kernel because
 it consumes ``output.loss`` directly.)
 
 Eval reports held-out *language-modeling* quality — mean eval loss + perplexity,
-plus token accuracy / prediction entropy (``opaque.alignment.metric``) — NOT
+plus token accuracy / prediction entropy (``opake.alignment.metric``) — NOT
 reward metrics (those are DPO-specific).
 
 ----------------------------------------------------------------------------
@@ -62,8 +62,8 @@ A documented fallback exists in ``_run_smoke`` for environments where
 forward + ``SFT_LOSSES["nll"]`` validates the loss wiring. The script never
 exits non-zero in smoke mode.
 
-The mechanism is the caller's choice: swap the ``opaque.dpsgd`` imports below
-for ``opaque.dpftrl`` to run DP-FTRL instead. The loss closure does not change.
+The mechanism is the caller's choice: swap the ``opake.dpsgd`` imports below
+for ``opake.dpftrl`` to run DP-FTRL instead. The loss closure does not change.
 
 USAGE:
 
@@ -85,7 +85,7 @@ USAGE:
 
 from __future__ import annotations
 
-# E402: ``apply_runtime_patches()`` must run before transformers/opaque
+# E402: ``apply_runtime_patches()`` must run before transformers/opake
 # submodules are imported (it monkeypatches their runtime behavior), so the
 # remaining imports intentionally follow that call — same as train_dpo.py.
 # ruff: noqa: E402
@@ -103,7 +103,7 @@ import torchopt
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, get_peft_model
 
-from opaque.patches import apply_model_patches, apply_runtime_patches
+from opake.patches import apply_model_patches, apply_runtime_patches
 
 apply_runtime_patches()
 
@@ -114,58 +114,58 @@ from transformers import (
     AutoTokenizer,
 )
 
-import opaque.accounting as acc
-import opaque.auditing as auditing
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.accounting import calibration as cal, Accountant
-from opaque.dpsgd.clipping import auto_clipped_grad, clipped_grad
-from opaque.dpsgd.clipping import adaptive_clipped_grad
-from opaque.distributed import sync
-from opaque.distributed.gradients import sum_gradients_
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.profiling import (
+import opake.accounting as acc
+import opake.auditing as auditing
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.accounting import calibration as cal, Accountant
+from opake.dpsgd.clipping import auto_clipped_grad, clipped_grad
+from opake.dpsgd.clipping import adaptive_clipped_grad
+from opake.distributed import sync
+from opake.distributed.gradients import sum_gradients_
+from opake.dpsgd.noise import gaussian_noise
+from opake.profiling import (
     perf_tracker,
     print_memory,
     reset_peak_memory,
 )
-from opaque.random import fold_in, key, split
-from opaque.dpsgd.sampling import PoissonSampler
-from opaque.distributed import local_shard
-from opaque.functional import make_functional
-from opaque.scheduling import (
+from opake.random import fold_in, key, split
+from opake.dpsgd.sampling import PoissonSampler
+from opake.distributed import local_shard
+from opake.functional import make_functional
+from opake.scheduling import (
     cosine_schedule,
     inverse_sqrt_schedule,
     linear_schedule,
     with_warmup,
 )
-from opaque.scheduling.types import Schedule
-from opaque.types import (
+from opake.scheduling.types import Schedule
+from opake.types import (
     ClippedPytree,
     PerGroup,
     SecondMomentClippingOutput,
     SecondMomentNoiseOutput,
 )
-from opaque.dpsgd.clipping import per_group
+from opake.dpsgd.clipping import per_group
 import wandb
 
-# SFT-specific machinery from opaque-alignment.
-from opaque.alignment.sft.collator import language_modeling_collator
-from opaque.alignment.sft.loss import dft_loss, nll_loss
-from opaque.alignment.data import (
+# SFT-specific machinery from opake-alignment.
+from opake.alignment.sft.collator import language_modeling_collator
+from opake.alignment.sft.loss import dft_loss, nll_loss
+from opake.alignment.data import (
     apply_chat_template_with_mask,
     get_training_chat_template,
 )
 
 # Token-level eval telemetry (mean token accuracy / prediction entropy).
-from opaque.alignment.metric import entropy_from_logits, mean_token_accuracy
+from opake.alignment.metric import entropy_from_logits, mean_token_accuracy
 
 # DP-FTRL mechanism swap: the loss closure is mechanism-agnostic.
-# To run DP-FTRL instead of DP-SGD, replace the two ``opaque.dpsgd`` noise/
+# To run DP-FTRL instead of DP-SGD, replace the two ``opake.dpsgd`` noise/
 # sampling imports above with their DP-FTRL counterparts, e.g.:
-#   from opaque.dpftrl.noise import band_mf_noise  # matrix-factorized noise
+#   from opake.dpftrl.noise import band_mf_noise  # matrix-factorized noise
 # and feed it the same ``ClippedPytree`` produced by ``clipped_grad`` below.
 
-# The library (``opaque.alignment.sft``) exposes direct loss functions, not a
+# The library (``opake.alignment.sft``) exposes direct loss functions, not a
 # string registry. The CLI ``--loss-type`` string is mapped to a function here,
 # at the call site — mirroring ``examples/train_dpo.py``'s ``_DPO_LOSSES``.
 _SFT_LOSSES = {"nll": nll_loss, "dft": dft_loss}
@@ -303,11 +303,11 @@ def _resolve_model_dtype(
 
 def _kernel_mode_summary(device: torch.device, dtype_name: str) -> tuple[str, str]:
     """Return concise status of kernel optimization mode for this run."""
-    if os.environ.get("OPAQUE_NO_PATCH", "0") == "1":
-        return "disabled", "OPAQUE_NO_PATCH=1"
+    if os.environ.get("OPAKE_NO_PATCH", "0") == "1":
+        return "disabled", "OPAKE_NO_PATCH=1"
 
-    if os.environ.get("OPAQUE_NO_KERNEL_PATCH", "0") == "1":
-        return "disabled", "OPAQUE_NO_KERNEL_PATCH=1"
+    if os.environ.get("OPAKE_NO_KERNEL_PATCH", "0") == "1":
+        return "disabled", "OPAKE_NO_KERNEL_PATCH=1"
 
     if device.type != "cuda":
         return "disabled", f"device={device.type} (Triton kernels are CUDA-only)"
@@ -570,7 +570,7 @@ def parse_args():
         type=str,
         choices=sorted(_SFT_LOSSES),
         default="nll",
-        help="SFT loss variant (direct functions from opaque.alignment.sft).",
+        help="SFT loss variant (direct functions from opake.alignment.sft).",
     )
 
     train_group = parser.add_argument_group("training", "Training loop settings")
@@ -633,8 +633,8 @@ def parse_args():
         ],
         help=(
             "Optimizer.  ``sgd`` and ``adam`` are torchopt's vanilla "
-            "primitives (no DP-aware paths); the others are Opaque-built "
-            "(see opaque.optimizers).  Pair with "
+            "primitives (no DP-aware paths); the others are Opake-built "
+            "(see opake.optimizers).  Pair with "
             "``--noise-bias-correction`` to enable DP-aware bias "
             "correction where applicable."
         ),
@@ -871,8 +871,8 @@ def parse_args():
     tracking_group.add_argument(
         "--wandb-project",
         type=str,
-        default=os.environ.get("WANDB_PROJECT", "opaque"),
-        help="W&B project name (default: WANDB_PROJECT env var or 'opaque')",
+        default=os.environ.get("WANDB_PROJECT", "opake"),
+        help="W&B project name (default: WANDB_PROJECT env var or 'opake')",
     )
     tracking_group.add_argument(
         "--wandb-run-name",
@@ -1135,7 +1135,7 @@ def _run_smoke(args):
 
     # --- Try the full per-example vmap DP-SGD path; fall back if it breaks ---
     try:
-        from opaque.optimizers import adamw
+        from opake.optimizers import adamw
 
         grad_fn, clip_state = clipped_grad(
             per_example_loss,
@@ -1364,7 +1364,7 @@ def main():
                 "--completion-only requires a tokenizer with a chat_template "
                 f"(model '{args.model_name}' has none).  Use an -Instruct/chat "
                 "model, or clone a template with "
-                "opaque.alignment.data.clone_chat_template."
+                "opake.alignment.data.clone_chat_template."
             )
         tokenizer.chat_template = get_training_chat_template(tokenizer)
         print("Completion-only loss: enabled (assistant-token mask via chat template)")
@@ -1466,7 +1466,7 @@ def main():
         f"Prepared datasets: {len(train_dataset)} train samples, {len(eval_dataset)} eval samples"
     )
 
-    # Language-modeling collator (opaque-alignment primitive).  Under
+    # Language-modeling collator (opake-alignment primitive).  Under
     # --completion-only it masks non-completion label positions to -100 so the
     # loss is computed only over assistant/completion tokens.
     collate_raw = language_modeling_collator(
@@ -1619,7 +1619,7 @@ def main():
 
         Token-weighted mean cross-entropy (pad / non-completion positions masked
         to ``-100`` by the collator) + its perplexity, plus mean next-token
-        accuracy and prediction entropy (``opaque.alignment.metric``) over the
+        accuracy and prediction entropy (``opake.alignment.metric``) over the
         supervised positions.  All forwards run
         under ``torch.no_grad()`` outside the clipped path.  Returns a dict of
         floats; an empty eval set yields ``nan`` loss / accuracy.
@@ -1864,7 +1864,7 @@ def main():
             f"(iterations={calibration.iterations}, converged={calibration.converged})"
         )
 
-    # Build LR schedule using opaque.scheduling primitives.  Each curve
+    # Build LR schedule using opake.scheduling primitives.  Each curve
     # returns a ``Callable[[int], float]`` and ``with_warmup`` composes a
     # 0→1 linear ramp during the warmup window; torchopt's
     # ``scale_by_neg_lr`` accepts either a callable or a scalar.  We
@@ -1926,7 +1926,7 @@ def main():
     # DP-aware path consumes that metadata.  For optimizers without a BC
     # path (sgd/lion) the flag is silently ignored.
     if args.optimizer == "adam":
-        from opaque.optimizers import adam
+        from opake.optimizers import adam
 
         base_opt = adam(
             lr=lr_for_opt,
@@ -1934,11 +1934,11 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "sgd":
-        from opaque.optimizers import sgd
+        from opake.optimizers import sgd
 
         base_opt = sgd(lr=lr_for_opt, weight_decay=args.weight_decay)
     elif args.optimizer == "adamw":
-        from opaque.optimizers import adamw
+        from opake.optimizers import adamw
 
         base_opt = adamw(
             lr=lr_for_opt,
@@ -1946,7 +1946,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "ademamix":
-        from opaque.optimizers import ademamix
+        from opake.optimizers import ademamix
 
         base_opt = ademamix(
             lr=lr_for_opt,
@@ -1954,14 +1954,14 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "lion":
-        from opaque.optimizers import lion
+        from opake.optimizers import lion
 
         base_opt = lion(
             lr=lr_for_opt,
             weight_decay=args.weight_decay,
         )
     elif args.optimizer == "adafactor":
-        from opaque.optimizers import adafactor
+        from opake.optimizers import adafactor
 
         base_opt = adafactor(
             lr=lr_for_opt,
@@ -1969,7 +1969,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "rmsprop":
-        from opaque.optimizers import rmsprop
+        from opake.optimizers import rmsprop
 
         base_opt = rmsprop(
             lr=lr_for_opt,
@@ -1977,7 +1977,7 @@ def main():
             noise_bias_correction=args.noise_bias_correction,
         )
     elif args.optimizer == "adagrad":
-        from opaque.optimizers import adagrad
+        from opake.optimizers import adagrad
 
         base_opt = adagrad(
             lr=lr_for_opt,

@@ -1,15 +1,15 @@
 # API Reference
 
-Opaque provides a functional API for differential privacy in PyTorch. This
+Opake provides a functional API for differential privacy in PyTorch. This
 reference documents all public functions and classes.
 
-Install via `opaque` (and `opaque[...]` extras) when using this API. Module
-paths remain under `opaque.*`, but the root package is the supported
+Install via `opake` (and `opake[...]` extras) when using this API. Module
+paths remain under `opake.*`, but the root package is the supported
 user-facing installation target.
 
 ## Module organization
 
-Opaque is organized into several modules, each focused on a specific aspect of DP training:
+Opake is organized into several modules, each focused on a specific aspect of DP training:
 
 ### Core utilities
 
@@ -46,7 +46,7 @@ Opaque is organized into several modules, each focused on a specific aspect of D
   - Strategy factories: `band_mf_strategy()`, `blt_strategy()`, `lambda_cgd_strategy()`, `bisr_strategy()`, `identity_strategy()`
 
 - **[Accounting](accounting.md)** — Privacy budget tracking
-  - `gaussian()`, `adaclip()` — DP-SGD mechanisms (also via `opaque.dpsgd.accounting`)
+  - `gaussian()`, `adaclip()` — DP-SGD mechanisms (also via `opake.dpsgd.accounting`)
   - `poisson()` (plain or truncated via `truncated_batch_size` / `dataset_size`), `parallel_poisson()` — Poisson-family amplification
   - `mf_gaussian()`, `poisson()`, `b_min_sep()`, `balls_in_bins()` — DP-FTRL whole-process accounting
   - `DpProcess` operators: `*` (repeat), `|` (compose)
@@ -56,7 +56,7 @@ Opaque is organized into several modules, each focused on a specific aspect of D
 - **[Sampling](sampling.md)** — Privacy-amplifying sampling
   - `PoissonSampler` — Standard Poisson sampling
   - `PoissonSampler` + `truncated_batch_size` — Bounded Poisson sampling
-  - `CyclicPoissonSampler` (`opaque.dpftrl`) — Cyclic Poisson over `bands` groups; `bands=1` = identity (full-data Poisson each step)
+  - `CyclicPoissonSampler` (`opake.dpftrl`) — Cyclic Poisson over `bands` groups; `bands=1` = identity (full-data Poisson each step)
   - `BallsInBinsSampler` — Random-partition sampling (λCGD, BISR, BLT)
   - `SequentialBatchSampler` — Deterministic sequential batching (BLT)
 
@@ -86,23 +86,23 @@ Opaque is organized into several modules, each focused on a specific aspect of D
 
 ### Hugging Face integration
 
-- **[Transformers](transformers.md)** — `opaque.transformers` — DP-SGD for Hugging Face models
+- **[Transformers](transformers.md)** — `opake.transformers` — DP-SGD for Hugging Face models
   - `DPTrainer` — full constructor, methods, callback wiring, overridable hooks
   - `TrainingArguments` — every field grouped by concern (privacy, compute, patches, save, eval, …)
-  - `opaque.transformers.trainer.types` — `EvaluationResult`, `TrainOutput` return types
-  - `opaque.patches.apply_runtime_patches` / `is_runtime_patched` — install/query the global runtime shims
-  - `opaque.transformers.trl` — TRL-style `SFTTrainer` / `DPOTrainer` (+ `SFTConfig` / `DPOConfig`), built on `DPTrainer`
+  - `opake.transformers.trainer.types` — `EvaluationResult`, `TrainOutput` return types
+  - `opake.patches.apply_runtime_patches` / `is_runtime_patched` — install/query the global runtime shims
+  - `opake.transformers.trl` — TRL-style `SFTTrainer` / `DPOTrainer` (+ `SFTConfig` / `DPOConfig`), built on `DPTrainer`
 
 ## Quick Reference
 
 ### Typical DP-SGD Workflow
 
 ```python
-import opaque.accounting as acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.random import key
+import opake.accounting as acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.random import key
 
 # Calibrate noise multiplier
 result = acc.calibrate(
@@ -170,7 +170,7 @@ See [Quick Start](../getting-started/quickstart.md) for a complete working examp
 |---------------------------|-----------------------------------|-------------------------------------------------------------------------|
 | `mf_gaussian()`          | Strategy-driven MF Gaussian mechanism | [Guide](../user-guide/accounting.md#matrix-factorization-mechanisms) |
 | `balls_in_bins()`        | Balls-in-Bins amplification       | [Guide](../user-guide/accounting.md#matrix-factorization-mechanisms)    |
-| `poisson()` (`opaque.dpftrl`) | MF Poisson amplification (BandMF / identity) | [Guide](../user-guide/accounting.md#matrix-factorization-mechanisms) |
+| `poisson()` (`opake.dpftrl`) | MF Poisson amplification (BandMF / identity) | [Guide](../user-guide/accounting.md#matrix-factorization-mechanisms) |
 | `b_min_sep()`            | Warm-start b-min-separation amplification | [Guide](../user-guide/accounting.md#matrix-factorization-mechanisms) |
 
 ### Accounting (Composition & Metrics)
@@ -202,7 +202,7 @@ See [Quick Start](../getting-started/quickstart.md) for a complete working examp
 |---------------------------|----------------------------|---------------------------------------------------------------|
 | `PoissonSampler`          | Standard Poisson sampling  | [Guide](../user-guide/sampling.md#poisson-sampling) |
 | `PoissonSampler` (with `truncated_batch_size`) | Truncated Poisson sampling | [Guide](../user-guide/sampling.md#poisson-sampling) |
-| `CyclicPoissonSampler` (`opaque.dpftrl`) | Cyclic Poisson over `bands` groups; `bands=1` = identity | [Guide](../user-guide/sampling.md#poisson-sampling) |
+| `CyclicPoissonSampler` (`opake.dpftrl`) | Cyclic Poisson over `bands` groups; `bands=1` = identity | [Guide](../user-guide/sampling.md#poisson-sampling) |
 | `BallsInBinsSampler`      | Random-partition sampling  | [Guide](../user-guide/sampling.md#balls-in-bins-sampling) |
 | `SequentialBatchSampler`  | Deterministic sequential batching (BLT) | [Guide](../user-guide/sampling.md#sequential-batch-sampling) |
 
@@ -249,10 +249,10 @@ See [Quick Start](../getting-started/quickstart.md) for a complete working examp
 
 ## Type hints
 
-Opaque uses type hints throughout. Key types:
+Opake uses type hints throughout. Key types:
 
 ```python
-import opaque.accounting as acc
+import opake.accounting as acc
 
 # PyTree: Nested structure of tensors
 PyTree = dict[str, torch.Tensor] | tuple[torch.Tensor, ...]
@@ -266,7 +266,7 @@ Generator = torch.Generator | None
 
 ## Design philosophy
 
-Opaque's API follows these principles:
+Opake's API follows these principles:
 
 1. **Functional-first**: Immutable state, pure functions
 2. **Composable**: Small, focused functions that combine naturally

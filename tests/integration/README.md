@@ -1,6 +1,6 @@
 # tests/integration/
 
-End-to-end tests that exercise multiple Opaque wheels together. Run them with
+End-to-end tests that exercise multiple Opake wheels together. Run them with
 the full workspace install: `uv sync --all-packages --extra all`.
 
 ## Layout

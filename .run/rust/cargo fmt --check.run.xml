@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="cargo fmt --check" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="Rust">
     <option name="channel" value="DEFAULT" />
-    <option name="command" value="fmt --manifest-path packages/opaque-accounting/Cargo.toml -- --check" />
+    <option name="command" value="fmt --manifest-path packages/opake-accounting/Cargo.toml -- --check" />
     <option name="allFeatures" value="false" />
     <option name="nocapture" value="false" />
     <option name="emulateTerminal" value="false" />

@@ -50,23 +50,23 @@ for supported attention implementations.
 
 ## DDP only
 
-Opaque supports `torch.nn.parallel.DistributedDataParallel` (DDP). FSDP,
+Opake supports `torch.nn.parallel.DistributedDataParallel` (DDP). FSDP,
 Tensor Parallel, and Pipeline Parallel are not supported. Multi-node DDP
 should work but is not extensively tested. First-class distributed backends are
 NCCL, Gloo, and MPI. Vendor/runtime-specific backends require external stacks
 and are not covered by default CI.
 
-## Kernel patching lives in `opaque.patches`
+## Kernel patching lives in `opake.patches`
 
 Kernel optimization and Hugging Face model patches are provided by
-`opaque.patches`. Triton kernels require CUDA; on CPU, MPS, or without
+`opake.patches`. Triton kernels require CUDA; on CPU, MPS, or without
 Triton, compatible non-kernel patches remain available. Configure them with
 the explicit flags described in [Model Patches — DPTrainer
 integration](user-guide/huggingface/model-patches.md#dptrainer-integration).
 
-Public standalone kernels (`opaque_swiglu`, `opaque_cross_entropy_loss`,
-`opaque_lora_w`, `opaque_lora_qkv`, `opaque_lora_mlp`) are importable
-from `opaque.patches.kernels`.
+Public standalone kernels (`opake_swiglu`, `opake_cross_entropy_loss`,
+`opake_lora_w`, `opake_lora_qkv`, `opake_lora_mlp`) are importable
+from `opake.patches.kernels`.
 
 ## In-place operations under vmap
 

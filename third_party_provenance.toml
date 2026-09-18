@@ -1,6 +1,6 @@
 [metadata]
 version = 1
-owner = "opaque"
+owner = "opake"
 purpose = "Conservative provenance inventory for copied/adapted/inspired third-party material."
 
 [[upstreams]]
@@ -10,8 +10,8 @@ license = "BSD-2-Clause"
 disposition = "adapted"
 requires_notice = true
 files = [
-  "packages/opaque-patches/src/opaque/api/patches/kernels/rms_norm.py",
-  "packages/opaque-patches/src/opaque/api/patches/kernels/fused_add_rms_norm.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/rms_norm.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/fused_add_rms_norm.py",
 ]
 
 [[upstreams]]
@@ -21,12 +21,12 @@ license = "Apache-2.0"
 disposition = "adapted"
 requires_notice = true
 files = [
-  "packages/opaque-patches/src/opaque/api/patches/kernels/_utils.py",
-  "packages/opaque-patches/src/opaque/api/patches/kernels/swiglu.py",
-  "packages/opaque-patches/src/opaque/api/patches/kernels/geglu.py",
-  "packages/opaque-patches/src/opaque/api/patches/kernels/rope_embedding.py",
-  "packages/opaque-patches/src/opaque/api/patches/kernels/cross_entropy.py",
-  "packages/opaque-patches/src/opaque/api/patches/kernels/lora.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/_utils.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/swiglu.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/geglu.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/rope_embedding.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/cross_entropy.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/lora.py",
 ]
 
 [[upstreams]]
@@ -36,8 +36,8 @@ license = "Apache-2.0"
 disposition = "adapted"
 requires_notice = true
 files = [
-  "packages/opaque-patches/src/opaque/api/patches/kernels/_utils.py",
-  "packages/opaque-patches/src/opaque/api/patches/kernels/linear_cross_entropy.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/_utils.py",
+  "packages/opake-patches/src/opake/api/patches/kernels/linear_cross_entropy.py",
 ]
 
 [[upstreams]]
@@ -47,8 +47,8 @@ license = "Apache-2.0"
 disposition = "adapted"
 requires_notice = true
 files = [
-  "packages/opaque-transformers/src/opaque/api/transformers/trainer/_dp_trainer.py",
-  "packages/opaque-transformers/src/opaque/api/transformers/trainer/_training_arguments.py",
+  "packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py",
+  "packages/opake-transformers/src/opake/api/transformers/trainer/_training_arguments.py",
 ]
 
 [[upstreams]]
@@ -58,10 +58,10 @@ license = "Apache-2.0"
 disposition = "adapted"
 requires_notice = true
 files = [
-  "packages/opaque-transformers/src/opaque/api/transformers/trl/_dpo_trainer.py",
-  "packages/opaque-transformers/src/opaque/api/transformers/trl/_sft_trainer.py",
-  "packages/opaque-transformers/src/opaque/api/transformers/trl/_dpo_config.py",
-  "packages/opaque-transformers/src/opaque/api/transformers/trl/_sft_config.py",
+  "packages/opake-transformers/src/opake/api/transformers/trl/_dpo_trainer.py",
+  "packages/opake-transformers/src/opake/api/transformers/trl/_sft_trainer.py",
+  "packages/opake-transformers/src/opake/api/transformers/trl/_dpo_config.py",
+  "packages/opake-transformers/src/opake/api/transformers/trl/_sft_config.py",
 ]
 
 [[upstreams]]
@@ -71,10 +71,10 @@ license = "Apache-2.0"
 disposition = "adapted"
 requires_notice = true
 files = [
-  "packages/opaque-accounting/src/opaque/api/accounting/core/_base.py",
-  "packages/opaque-accounting/src/opaque/api/accounting/core/_accountant.py",
-  "packages/opaque-accounting/src/opaque/api/accounting/core/_budgets.py",
-  "packages/opaque-accounting/src/opaque/api/accounting/core/calibration.py",
+  "packages/opake-accounting/src/opake/api/accounting/core/_base.py",
+  "packages/opake-accounting/src/opake/api/accounting/core/_accountant.py",
+  "packages/opake-accounting/src/opake/api/accounting/core/_budgets.py",
+  "packages/opake-accounting/src/opake/api/accounting/core/calibration.py",
 ]
 
 [[upstreams]]
@@ -84,8 +84,8 @@ license = "Apache-2.0"
 disposition = "adapted"
 requires_notice = true
 files = [
-  "packages/opaque-dpsgd/src/opaque/api/accounting/dpsgd/amplification/_k_out_of_t.py",
-  "packages/opaque-dpsgd/src/opaque/api/dpsgd/sampling/_k_out_of_t.py",
+  "packages/opake-dpsgd/src/opake/api/accounting/dpsgd/amplification/_k_out_of_t.py",
+  "packages/opake-dpsgd/src/opake/api/dpsgd/sampling/_k_out_of_t.py",
 ]
 
 [[upstreams]]
@@ -95,9 +95,9 @@ license = "Apache-2.0"
 disposition = "inspired"
 requires_notice = false
 files = [
-  "packages/opaque-engine/src/opaque/api/engine/functional/__init__.py",
-  "packages/opaque-engine/src/opaque/api/engine/random/_engine.py",
-  "packages/opaque-engine/src/opaque/api/engine/clipping/_clipped_grad.py",
+  "packages/opake-engine/src/opake/api/engine/functional/__init__.py",
+  "packages/opake-engine/src/opake/api/engine/random/_engine.py",
+  "packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py",
 ]
 
 [[upstreams]]
@@ -107,9 +107,9 @@ license = "MIT"
 disposition = "inspired"
 requires_notice = false
 files = [
-  "packages/opaque-accounting/src/opaque/api/accounting/core/_base.py",
-  "packages/opaque-accounting/src/opaque/api/accounting/core/_accountant.py",
-  "packages/opaque-accounting/src/opaque/api/accounting/core/_budgets.py",
-  "packages/opaque-accounting/src/opaque/api/accounting/core/calibration.py",
-  "packages/opaque-dpsgd/tests/accounting/test_cross_validation.py",
+  "packages/opake-accounting/src/opake/api/accounting/core/_base.py",
+  "packages/opake-accounting/src/opake/api/accounting/core/_accountant.py",
+  "packages/opake-accounting/src/opake/api/accounting/core/_budgets.py",
+  "packages/opake-accounting/src/opake/api/accounting/core/calibration.py",
+  "packages/opake-dpsgd/tests/accounting/test_cross_validation.py",
 ]

@@ -1,7 +1,7 @@
 """DP Supervised Fine-Tuning via the class-based ``SFTTrainer``.
 
-Hands ``opaque.alignment`` primitives to
-:class:`opaque.transformers.trl.SFTTrainer`, which orchestrates the per-example
+Hands ``opake.alignment`` primitives to
+:class:`opake.transformers.trl.SFTTrainer`, which orchestrates the per-example
 DP path on top of ``DPTrainer``.
 
 Exposes the loss paths (``nll`` / ``dft`` / the fused logits-free
@@ -47,7 +47,7 @@ from datasets import Dataset, load_dataset
 from peft import LoraConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from opaque.transformers.trl import SFTConfig, SFTTrainer
+from opake.transformers.trl import SFTConfig, SFTTrainer
 
 
 def _configure_reporting(no_wandb: bool) -> list[str]:
@@ -177,7 +177,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--no-performance-kernels",
         action="store_true",
-        help="Disable Opaque's fused performance kernels (RMSNorm, LoRA QKV, "
+        help="Disable Opake's fused performance kernels (RMSNorm, LoRA QKV, "
         "fused linear+CE). Needed for models like Mellum-2.0 whose q_norm/k_norm "
         "shapes don't fit the current Triton row/block path.",
     )
@@ -238,7 +238,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--noise-bias-correction",
         action="store_true",
-        help="Enable DP-noise-aware Adam bias correction in the opaque AdamW "
+        help="Enable DP-noise-aware Adam bias correction in the opake AdamW "
         "variant. Only meaningful at noise_multiplier > 0; default off so the "
         "noise=0 path matches stock PyTorch AdamW semantics.",
     )

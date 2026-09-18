@@ -1,0 +1,28 @@
+Opake
+======
+
+Copyright 2025 Opake Authors
+
+Licensed under the Apache License, Version 2.0 (the "License"); see
+LICENSE in this directory for the full text.
+
+This package includes software developed by third parties whose
+licenses and copyright notices are reproduced below. Per-file SPDX and
+copyright headers in the relevant source files identify which third
+party each file derives from.
+
+
+------------------------------------------------------------------------
+Google DP Accounting (Apache-2.0)
+------------------------------------------------------------------------
+
+The following files contain accounting structure and privacy-metric
+surface adapted from Google DP Accounting
+(https://github.com/google/differential-privacy/tree/main/python/dp_accounting),
+distributed under the Apache License, Version 2.0, and then reworked for
+Opake's PLD process algebra and native backend:
+
+  opake/api/accounting/core/_base.py
+  opake/api/accounting/core/_accountant.py
+  opake/api/accounting/core/_budgets.py
+  opake/api/accounting/core/calibration.py

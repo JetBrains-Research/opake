@@ -22,7 +22,7 @@ if [[ -n "${PYTEST_XDIST:-}" ]]; then
   pytest_args+=("${xdist_args[@]}")
 fi
 pytest_args+=(
-  --cov=opaque
+  --cov=opake
   --cov-append
   --cov-report=
   -q

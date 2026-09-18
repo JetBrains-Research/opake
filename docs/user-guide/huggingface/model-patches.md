@@ -1,6 +1,6 @@
 # Model Patches and Kernels
 
-`opaque.patches` is a standalone library that makes Hugging Face
+`opake.patches` is a standalone library that makes Hugging Face
 Transformers models work under `torch.func.vmap(grad(...))` and
 provides fused Triton kernels for the hot ops on the forward /
 backward path. It predates and operates independently of
@@ -30,7 +30,7 @@ Two concerns are handled:
 ## API surface
 
 ```python
-from opaque.patches import apply_runtime_patches, apply_model_patches
+from opake.patches import apply_runtime_patches, apply_model_patches
 
 apply_runtime_patches()                       # global HF shims, once at startup
 
@@ -58,7 +58,7 @@ graph.
 | `compat` | `True` | vmap-safety wrappers — `eager_attention`, `batchify`, `vmap_masking`, `empty_batches`, `vmap_checkpointing`. |
 | `performance` | `True` | Memory-efficiency patches that run on any host (`kv_cache` and the conditional fused-linear-CE wrapper). |
 | `kernels` | `performance` | CUDA + Triton kernel group — `rope`, `rms_norm`, `activation`, `cross_entropy`.  Forced `False` when CUDA + Triton aren't importable, so `performance=True` keeps `kv_cache` on CPU / MPS hosts. |
-| `peft` | `True` | LoRA / PEFT module fusion (`opaque_lora_*`). |
+| `peft` | `True` | LoRA / PEFT module fusion (`opake_lora_*`). |
 | `fused_linear_cross_entropy` | `performance` | Conditional fused LM-head loss wrapper. Set `False` to disable; only calls with `loss_only=True` return `logits=None`. |
 
 Each umbrella forwards to per-concern boolean kwargs in `**kwargs`,
@@ -204,7 +204,7 @@ primitive expects residual-first ordering).
 
 MoE families are supported via the `moe` patch — a **vmap-safety enabler**
 (under the `compat` bucket, not a CUDA kernel): it swaps HF v5's stacked-weight
-`*Experts.forward` onto `Opaque_MoE`, which is `vmap(grad)`-safe. HF's own
+`*Experts.forward` onto `Opake_MoE`, which is `vmap(grad)`-safe. HF's own
 experts forward is *not* vmap-able, so this patch is what makes **DP-SGD MoE
 training possible** at all. The router, load-balancing aux loss, and parameters
 are left untouched. Disable with `apply_model_patches(model, moe=False)`.
@@ -223,19 +223,19 @@ are left untouched. Disable with `apply_model_patches(model, moe=False)`.
 GPT-OSS and DeepSeek-V4 use custom expert activations (clamped SwiGLU + MXFP4 /
 scaled experts), so their experts are intentionally left to HF — only RMSNorm,
 RoPE (where standard), and cross-entropy are patched (mirrors Liger's choices).
-The dense `Opaque_MoE` is the always-correct DP/vmap-safe fallback. `opaque_moe`
+The dense `Opake_MoE` is the always-correct DP/vmap-safe fallback. `opake_moe`
 dispatches to a sparse grouped-GEMM path only where it pays off: CUDA bf16/fp16
-hosts with Triton use the fused Triton kernel (`Opaque_FusedMoE`); otherwise a
+hosts with Triton use the fused Triton kernel (`Opake_FusedMoE`); otherwise a
 large-expert MoE (`E >= 16`) with `torch._grouped_mm` available uses the MPS/CPU
-`Opaque_GroupedMoE` variant. Smaller MoEs (e.g. Mixtral-8) and fp32 / no-Triton
+`Opake_GroupedMoE` variant. Smaller MoEs (e.g. Mixtral-8) and fp32 / no-Triton
 hosts stay on the dense path.
 
-**Attention masks under vmap.** When evaluating per-example gradients, Opaque
+**Attention masks under vmap.** When evaluating per-example gradients, Opake
 materialises every supplied padding mask instead of selecting the SDPA
 `is_causal` fast path from the physical microbatch's contents. This ensures a
 row's attention computation is independent of which other rows are padded.
 All-valid batches that omit `attention_mask` continue to use the fast path.
-Opaque does not support packing multiple source examples into one row or
+Opake does not support packing multiple source examples into one row or
 padding-free batches.
 
 The original dense **Mellum** (`Mellum-4b`, `model_type="llama"`) needs no MoE
@@ -263,7 +263,7 @@ sequences (512–1024) when possible, or reduce the microbatch size.
 
 ## Triton kernels
 
-Opaque ships fused Triton kernels for the hot ops in transformer
+Opake ships fused Triton kernels for the hot ops in transformer
 forward / backward.  All are numerically equivalent to PyTorch
 reference implementations within floating-point precision; the
 benchmarks live in [Memory Optimizations — Kernel benchmarks](../memory-optimizations.md#kernel-benchmarks).
@@ -298,7 +298,7 @@ blocks (up to 65536), avoiding materialisation of the full
 The kernel honours `label_smoothing` natively (`F.cross_entropy(...,
 label_smoothing=...)` parity) — pass `label_smoothing=...` as a loss
 kwarg and the kernel applies the smoothed formula directly.
-Available standalone as `opaque.patches.kernels.opaque_cross_entropy_loss`.
+Available standalone as `opake.patches.kernels.opake_cross_entropy_loss`.
 
 ### Fused linear cross-entropy
 
@@ -346,12 +346,12 @@ are detected and `peft=True` is passed to `apply_model_patches`:
 
 | Kernel | Description |
 |---|---|
-| `opaque_lora_w` | Single linear: `x @ W.T + x @ A @ B * s` — avoids intermediate `x @ A`. |
-| `opaque_lora_qkv` | Fused Q+K+V: shares input across 3 projections in one call. |
-| `opaque_lora_mlp` | Fused gate+up+down: 3 projections + activation in one call. |
+| `opake_lora_w` | Single linear: `x @ W.T + x @ A @ B * s` — avoids intermediate `x @ A`. |
+| `opake_lora_qkv` | Fused Q+K+V: shares input across 3 projections in one call. |
+| `opake_lora_mlp` | Fused gate+up+down: 3 projections + activation in one call. |
 
-`opaque_lora_w` patches `peft.tuners.lora.Linear.forward` and applies
-to all LoRA layers.  `opaque_lora_qkv` and `opaque_lora_mlp` are
+`opake_lora_w` patches `peft.tuners.lora.Linear.forward` and applies
+to all LoRA layers.  `opake_lora_qkv` and `opake_lora_mlp` are
 auto-fused when all projections in an attention block or MLP block
 have LoRA adapters and no active LoRA dropout. QKV fusion supports optional
 frozen base-layer biases; PEFT configurations that train projection biases use
@@ -371,10 +371,10 @@ transpose).
 All kernels are available as standalone functions without patching:
 
 ```python
-from opaque.patches.kernels import opaque_swiglu, opaque_cross_entropy_loss
+from opake.patches.kernels import opake_swiglu, opake_cross_entropy_loss
 
-h = opaque_swiglu(gate, up)
-loss = opaque_cross_entropy_loss(logits, labels)
+h = opake_swiglu(gate, up)
+loss = opake_cross_entropy_loss(logits, labels)
 ```
 
 ## Other models
@@ -390,7 +390,7 @@ Use `with_batch_dim` to add a leading batch dimension to the
 arguments that `vmap` unbatches:
 
 ```python
-from opaque.functional import with_batch_dim
+from opake.functional import with_batch_dim
 
 def loss_fn(params, input_ids, labels):
     out = fmodel(params, input_ids=input_ids, labels=labels)
@@ -406,7 +406,7 @@ wrapper makes it `(1, seq)` before the model sees it.
 ### Wrapping the model forward
 
 Alternatively, patch the model's forward method once.  This is what
-Opaque does internally for supported HF models:
+Opake does internally for supported HF models:
 
 ```python
 model.forward = with_batch_dim(
@@ -441,7 +441,7 @@ class MyModel(torch.nn.Module):
         return {"loss": loss, "logits": logits}
 ```
 
-If the model is already vmap-safe and doesn't need opaque's compat
+If the model is already vmap-safe and doesn't need opake's compat
 shims, pass `compat=False` to `apply_model_patches` (or
 `use_compat_patches=False` to DPTrainer).
 

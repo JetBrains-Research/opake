@@ -20,8 +20,8 @@ two things change relative to [SFT](sft.md):
    per-example gradient, and each loss output depends only on that pair's
    data, keeping per-record sensitivity `O(C)` after clipping.
 
-The mechanism is still the caller's choice: swap the `opaque.dpsgd` noise
-and sampling imports for `opaque.dpftrl` to run
+The mechanism is still the caller's choice: swap the `opake.dpsgd` noise
+and sampling imports for `opake.dpftrl` to run
 [DP-FTRL](../user-guide/dp-ftrl.md); the loss closure is unchanged.
 
 ## Privacy model for preference pairs
@@ -29,7 +29,7 @@ and sampling imports for `opaque.dpftrl` to run
 The protected record is the complete `(prompt, chosen, rejected)` pair. Its
 two completions produce one joint gradient, clipped after the whole pairwise
 objective is differentiated. With fixed bound `C`, this gives gradient-sum
-sensitivity `C` under Opaque's add-or-remove adjacency (`2C` under
+sensitivity `C` under Opake's add-or-remove adjacency (`2C` under
 replace-one); user-level privacy requires grouping and clipping all of a
 user's pairs.
 
@@ -52,11 +52,11 @@ EMA-updated reference policy variant exposed on the trainer surface.
 
 Run the frozen reference once over the dataset before training. Cache the
 per-example chosen/rejected logps when reuse is needed.
-`opaque.alignment.dpo.reference.compute_ref_logprobs_for_dataset` takes a
+`opake.alignment.dpo.reference.compute_ref_logprobs_for_dataset` takes a
 `ref(batch) -> {col: (B,) tensor}` callable (wrap your model into one),
 runs a `torch.no_grad()` pass, and optionally caches a content-addressed
 `.safetensors` file keyed by the dataset, `cache_identity`, and output columns.
-The default cache is `<tempdir>/opaque_ref_cache/`; use `cache_dir=` to choose
+The default cache is `<tempdir>/opake_ref_cache/`; use `cache_dir=` to choose
 its location. Cache values are private per-example data, so remove them when
 they are no longer needed.
 
@@ -68,7 +68,7 @@ those seed values are never persisted.
 ```python
 import hashlib
 
-from opaque.alignment.dpo.reference import (
+from opake.alignment.dpo.reference import (
     compute_ref_logprobs_for_dataset,
     with_disabled_adapter,
 )
@@ -136,21 +136,21 @@ writes the cache, which is reused only when every rank can read it.
 
 !!! warning "The default cache directory is node-local"
 
-    `<tempdir>/opaque_ref_cache/` lives on the node, so on a multi-node run
+    `<tempdir>/opake_ref_cache/` lives on the node, so on a multi-node run
     only the rank-0 node holds the archive and the group recomputes the
     reference forward every time. Point `cache_dir=` at shared storage to get
     reuse across nodes.
 
 ## 2. Preference collator
 
-`opaque.alignment.dpo.collator.preference_collator` is a factory
+`opake.alignment.dpo.collator.preference_collator` is a factory
 returning `collate(examples)`. Its output carries the chosen and rejected
 trios — `chosen_input_ids`/`chosen_attention_mask`/`chosen_completion_mask`
 and the `rejected_*` trio (each `(B, L)`) — plus the precomputed
 `ref_chosen_logps` / `ref_rejected_logps` `(B,)` columns once the
 reference pass has attached them. The completion mask is `0` over prompt
 tokens and `1` over the response span, so only completion tokens score.
-Use `opaque.alignment.dpo.data.extract_prompt` to split an implicit prompt
+Use `opake.alignment.dpo.data.extract_prompt` to split an implicit prompt
 out of a chat example before tokenizing.
 
 ## 3. Per-example loss
@@ -161,8 +161,8 @@ reference logps to form per-example log-ratios, and feed those to a
 per-pair head:
 
 ```python
-from opaque.functional import make_functional
-from opaque.alignment.dpo.loss import sequence_logp, sigmoid_loss
+from opake.functional import make_functional
+from opake.alignment.dpo.loss import sequence_logp, sigmoid_loss
 
 fmodel, trainable, frozen = make_functional(
     model, disable_autograd_tracking=True, partition_trainable=True
@@ -193,7 +193,7 @@ span, and sums. On large vocabularies the `(T, V)` logits dominate memory:
 `fused_sequence_logp(hidden_states, lm_head_weight, input_ids,
 completion_mask)` is the drop-in that projects hidden states through the
 `lm_head` without materializing logits (fused linear-CE kernel on CUDA +
-half precision with `opaque-alignment[patches]`, eager fallback
+half precision with `opake-alignment[patches]`, eager fallback
 otherwise). Like the fused SFT losses it is strictly per-example — pass
 one sequence and let the outer `vmap` batch it.
 
@@ -218,7 +218,7 @@ skip the reference precompute (section 1) entirely. SimPO and ORPO use the
 `sequence_logp(..., length_normalized=True)`:
 
 ```python
-from opaque.alignment.dpo.loss import (
+from opake.alignment.dpo.loss import (
     sequence_logp, simpo_loss, odds_ratio_loss,
     chosen_nll_loss, sigmoid_loss, mpo_combine,
 )
@@ -257,8 +257,8 @@ The clip/noise/optimizer/sampler glue is identical to
 to cover all eight per-example arguments:
 
 ```python
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
 
 grad_fn, clip_state = clipped_grad(
     per_example_loss,
@@ -281,12 +281,12 @@ for indices in sampler:
 ## 5. Reward-metric evaluation
 
 DPO has no token-level CE eval objective, so evaluate with reward metrics
-on held-out pairs. `opaque.alignment.dpo.metric.reward_metrics` takes the
+on held-out pairs. `opake.alignment.dpo.metric.reward_metrics` takes the
 same per-example log-ratios and returns detached `rewards/chosen`,
 `rewards/rejected`, `rewards/accuracies`, and `rewards/margins` scalars:
 
 ```python
-from opaque.alignment.dpo.metric import reward_metrics
+from opake.alignment.dpo.metric import reward_metrics
 
 metrics = reward_metrics(
     chosen_logp - ref_chosen_logps,
@@ -300,7 +300,7 @@ are not part of the private gradient.
 
 ## Runnable references
 
-- [`examples/train_dpo.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpo.py)
+- [`examples/train_dpo.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpo.py)
   — full DP-SGD LoRA DPO script: reference precompute with
   `null_ref_context`, the preference collator, per-pair head selection,
   the per-example `vmap(grad)` loop, calibration/auditing, and reward-metric

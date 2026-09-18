@@ -1,10 +1,10 @@
-# opaque.distributed
+# opake.distributed
 
 Distributed training utilities for differential privacy with DDP.
 
 ## Overview
 
-The `opaque.distributed` module provides composable primitives for multi-GPU
+The `opake.distributed` module provides composable primitives for multi-GPU
 DP training:
 
 - **Core**: `is_distributed()`, `get_rank()`, `get_world_size()`
@@ -19,67 +19,67 @@ See [User Guide: Distributed Training](../user-guide/distributed.md) for usage.
 
 ## Core Utilities
 
-::: opaque.distributed.is_distributed
+::: opake.distributed.is_distributed
     options:
         show_source: true
         heading_level: 3
 
-::: opaque.distributed.get_rank
+::: opake.distributed.get_rank
     options:
         show_source: true
         heading_level: 3
 
-::: opaque.distributed.get_world_size
+::: opake.distributed.get_world_size
     options:
         show_source: true
         heading_level: 3
 
-::: opaque.distributed.collectives.all_reduce
+::: opake.distributed.collectives.all_reduce
     options:
         show_source: true
         heading_level: 3
 
-::: opaque.distributed.collectives.all_reduce_
+::: opake.distributed.collectives.all_reduce_
     options:
         show_source: true
         heading_level: 3
 
-::: opaque.distributed.collectives.barrier
+::: opake.distributed.collectives.barrier
     options:
         show_source: true
         heading_level: 3
 
 ## Gradient Aggregation
 
-::: opaque.distributed.sum_gradients
+::: opake.distributed.sum_gradients
     options:
         show_source: true
         heading_level: 3
 
-::: opaque.distributed.gradients.sum_gradients_
+::: opake.distributed.gradients.sum_gradients_
     options:
         show_source: true
         heading_level: 3
 
-::: opaque.distributed.gradients.reduce_pytree
+::: opake.distributed.gradients.reduce_pytree
     options:
         show_source: true
         heading_level: 3
 
-::: opaque.distributed.gradients.reduce_pytree_
+::: opake.distributed.gradients.reduce_pytree_
     options:
         show_source: true
         heading_level: 3
 
 ## State Synchronization
 
-::: opaque.distributed.sync
+::: opake.distributed.sync
     options:
         show_source: true
         heading_level: 3
 
 The `sync()` machinery is type-dispatched: clipping and noise states
-register themselves with `opaque.distributed._state.register_sync_type`
+register themselves with `opake.distributed._state.register_sync_type`
 and provide the right per-state aggregation rule. Lower-level scalar
 reductions, tensor gathers, and object syncs live in `_state.py`;
 they're internal plumbing for the registered DP runtime objects rather
@@ -103,5 +103,5 @@ clip_state, aux = dist_utils.sync(clip_state, aux)
 noise_state = dist_utils.sync(noise_state)
 ```
 
-See [examples/distributed_dp_training.py](https://github.com/JetBrains-Research/opaque/blob/main/examples/distributed_dp_training.py)
+See [examples/distributed_dp_training.py](https://github.com/JetBrains-Research/opake/blob/main/examples/distributed_dp_training.py)
 for a complete working script.

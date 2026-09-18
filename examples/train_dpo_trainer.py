@@ -1,7 +1,7 @@
 """DP Direct Preference Optimization via the class-based ``DPOTrainer``.
 
-Hands ``opaque.alignment`` DPO primitives to
-:class:`opaque.transformers.trl.DPOTrainer`, which precomputes the reference
+Hands ``opake.alignment`` DPO primitives to
+:class:`opake.transformers.trl.DPOTrainer`, which precomputes the reference
 log-probs and orchestrates the per-example DP path on top of ``DPTrainer``.
 
 The reference need is derived from ``loss_type``: the reference-free heads
@@ -66,7 +66,7 @@ def _configure_reporting(no_wandb: bool) -> list[str]:
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from opaque.transformers.trl import DPOConfig, DPOTrainer
+from opake.transformers.trl import DPOConfig, DPOTrainer
 
 
 # A run is reference-free only when *every* head is in this set, so the trainer
@@ -325,7 +325,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--noise-bias-correction",
         action="store_true",
-        help="Enable DP-noise-aware Adam bias correction in the opaque AdamW "
+        help="Enable DP-noise-aware Adam bias correction in the opake AdamW "
         "variant. Only meaningful at noise_multiplier > 0; default off so the "
         "noise=0 path matches stock PyTorch AdamW semantics.",
     )

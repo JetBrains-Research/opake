@@ -13,16 +13,16 @@ import torch
 pytest.importorskip("transformers")
 pytest.importorskip("peft")
 
-from opaque_test_support import cleanup_process_group, setup_nccl, spawn
+from opake_test_support import cleanup_process_group, setup_nccl, spawn
 from peft import LoraConfig, get_peft_model
 from transformers import AutoModelForCausalLM, LlamaConfig
 
-from opaque.api.engine.clipping import clipped_grad
-from opaque.distributed import sum_gradients
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.functional import make_functional
-from opaque.patches import apply_model_patches
-from opaque.random import key
+from opake.api.engine.clipping import clipped_grad
+from opake.distributed import sum_gradients
+from opake.dpsgd.noise import gaussian_noise
+from opake.functional import make_functional
+from opake.patches import apply_model_patches
+from opake.random import key
 
 pytestmark = [pytest.mark.slow, pytest.mark.cuda]
 

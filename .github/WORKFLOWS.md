@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-This directory contains Opaque's CI/CD configuration. Workflow files define
+This directory contains Opake's CI/CD configuration. Workflow files define
 triggers, permissions, and pipeline policy; shared implementation lives in
 private callable workflows described below.
 
@@ -86,14 +86,14 @@ when the host has no usable CUDA device; lanes excluding `cuda` skip it.
 
 This private `workflow_call` workflow runs the accounting crate's unit and doc
 tests with the shared Rust setup and dependency cache. Entry workflows call it
-as `Rust`, so checks render as `Rust / opaque-accounting`. Tests above five
+as `Rust`, so checks render as `Rust / opake-accounting`. Tests above five
 seconds use `#[ignore = "slow"]`: PRs run the default set, while main and
 release add `cargo test --lib -- --ignored` after the default unit/doc-test run.
 
 ### `.github/workflows/validate-distributions.yml`
 
 This private `workflow_call` workflow downloads a complete caller-selected
-artifact family, installs `opaque[all]` using only built Opaque wheels, and runs
+artifact family, installs `opake[all]` using only built Opake wheels, and runs
 a representative DP-SGD + DP-FTRL cross-stack accounting scenario without
 checking out the source tree. PR, main, and release differ only in artifact
 prefix.
@@ -142,7 +142,7 @@ never receive repository, package, or cloud credentials.
 
 The active `main` ruleset requires `Build documentation`, `Format Python`,
 `Format Rust`, `Conventional Commits PR title`, the selected individual Python
-environment/package checks, `Rust / opaque-accounting`, and `Junie review`.
+environment/package checks, `Rust / opake-accounting`, and `Junie review`.
 The review workflow uses the `JUNIE_API_KEY` Actions secret. Fork and Dependabot
 pull requests cannot receive the secret-backed Junie review; the job records
 that limitation and completes without invoking Junie.

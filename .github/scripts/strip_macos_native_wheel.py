@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strip local symbols from an opaque-accounting macOS wheel and repack it."""
+"""Strip local symbols from an opake-accounting macOS wheel and repack it."""
 
 from __future__ import annotations
 
@@ -10,13 +10,13 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-NATIVE_MODULE_PATH = "opaque/api/accounting/core/opaque_accounting.abi3.so"
+NATIVE_MODULE_PATH = "opake/api/accounting/core/opake_accounting.abi3.so"
 
 
 def main() -> int:
     """Strip the native extension and regenerate the wheel's RECORD metadata."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("wheel", type=Path, help="macOS opaque-accounting wheel")
+    parser.add_argument("wheel", type=Path, help="macOS opake-accounting wheel")
     args = parser.parse_args()
 
     wheel = args.wheel.resolve()

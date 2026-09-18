@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate synchronized opaque wheel pins from already built wheel metadata."""
+"""Validate synchronized opake wheel pins from already built wheel metadata."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def _project_requirements(pyproject_path: Path) -> list[Requirement]:
     requirements: list[Requirement] = [
         Requirement(requirement)
         for requirement in project.get("dependencies", [])
-        if requirement.startswith("opaque-")
+        if requirement.startswith("opake-")
     ]
     for extra_name, extra_requirements in project.get(
         "optional-dependencies", {}
@@ -48,7 +48,7 @@ def _project_requirements(pyproject_path: Path) -> list[Requirement]:
         requirements.extend(
             Requirement(f'{requirement}; extra == "{extra_name}"')
             for requirement in extra_requirements
-            if requirement.startswith("opaque-")
+            if requirement.startswith("opake-")
         )
     return requirements
 
@@ -126,7 +126,7 @@ def _metadata_requirements(
     requirements: dict[tuple[str, tuple[str, ...], str | None], Requirement] = {}
     for raw_requirement in metadata.get_all("Requires-Dist", []):
         requirement = Requirement(raw_requirement)
-        if requirement.name.startswith("opaque-"):
+        if requirement.name.startswith("opake-"):
             requirements[_requirement_key(requirement)] = requirement
     return dist_name, version, requirements
 
@@ -152,10 +152,10 @@ def _validate_wheel(
         missing = sorted(expected_requirement_keys - built_requirements.keys())
         unexpected = sorted(built_requirements.keys() - expected_requirement_keys)
         if missing:
-            errors.append(f"{wheel_path.name}: missing opaque requirements {missing}")
+            errors.append(f"{wheel_path.name}: missing opake requirements {missing}")
         if unexpected:
             errors.append(
-                f"{wheel_path.name}: unexpected opaque requirements {unexpected}"
+                f"{wheel_path.name}: unexpected opake requirements {unexpected}"
             )
         return errors
 
@@ -198,7 +198,7 @@ def main() -> int:
         print(*errors, sep="\n", file=sys.stderr)
         return 1
 
-    print(f"Validated internal opaque pins for {len(wheel_paths)} wheels.")
+    print(f"Validated internal opake pins for {len(wheel_paths)} wheels.")
     return 0
 
 

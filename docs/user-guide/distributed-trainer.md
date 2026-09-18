@@ -18,7 +18,7 @@ validates that runtime against `TrainingArguments.ddp_backend`.
 
 `ddp_backend` accepts Hugging Face-compatible values:
 
-- First-class in Opaque: `nccl`, `gloo`, `mpi`.
+- First-class in Opake: `nccl`, `gloo`, `mpi`.
 - Environment-dependent parity values: `xccl`, `hccl`, `cncl`, `mccl`.
 
 Environment-dependent values are accepted for argument parity, but they require
@@ -90,8 +90,8 @@ Under DDP, side effects are rank-gated:
 
 ## CI checklist for distributed changes
 
-- `uv run pytest packages/opaque-transformers/tests/opaque_transformers/test_config.py`
-- `CUDA_VISIBLE_DEVICES=0,1,2,3 uv run pytest packages/opaque-transformers/tests/distributed/test_ddp_trainer.py`
-- `uv run pytest packages/opaque-engine/tests/distributed/`
-- `MASTER_ADDR=127.0.0.1 MASTER_PORT=<port> uv run pytest -k gloo packages/opaque-transformers/tests/distributed/`
-- `mpirun -n 2 uv run pytest -k mpi packages/opaque-transformers/tests/distributed/` (when MPI launcher/runtime is available)
+- `uv run pytest packages/opake-transformers/tests/opake_transformers/test_config.py`
+- `CUDA_VISIBLE_DEVICES=0,1,2,3 uv run pytest packages/opake-transformers/tests/distributed/test_ddp_trainer.py`
+- `uv run pytest packages/opake-engine/tests/distributed/`
+- `MASTER_ADDR=127.0.0.1 MASTER_PORT=<port> uv run pytest -k gloo packages/opake-transformers/tests/distributed/`
+- `mpirun -n 2 uv run pytest -k mpi packages/opake-transformers/tests/distributed/` (when MPI launcher/runtime is available)

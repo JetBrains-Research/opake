@@ -1,6 +1,6 @@
 # Differential privacy review protocol
 
-Opaque is a functional differential privacy library. A change can be
+Opake is a functional differential privacy library. A change can be
 well-structured and fully tested while still invalidating a privacy guarantee.
 Reviews of privacy-sensitive code must therefore treat mathematical correctness,
 implementation correctness, and architecture as separate requirements.
@@ -39,7 +39,7 @@ Trace every affected path through the following questions.
 
 - What is the protected unit: record, example, user, sequence, or another
   contribution?
-- Which neighboring relation is assumed? Opaque uses add-or-remove adjacency by
+- Which neighboring relation is assumed? Opake uses add-or-remove adjacency by
   default. With a fixed clipping threshold, replace-one analyses generally
   require twice the sensitivity (`2 * max_norm`).
 - Do grouping, repeated participation, distributed execution, or data
@@ -109,7 +109,7 @@ Trace every affected path through the following questions.
 
 ## Functional implementation review
 
-Opaque's functional design is part of correctness:
+Opake's functional design is part of correctness:
 
 - state returned by clipping, noise, optimizers, samplers, and accountants must
   be threaded without hidden mutation;

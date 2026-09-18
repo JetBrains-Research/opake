@@ -2,7 +2,7 @@
 set -eu
 
 REPO_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
-CACHE_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/opaque-air"
+CACHE_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/opake-air"
 STATE_DIR="$CACHE_ROOT/startup"
 SYNC_STAMP="$STATE_DIR/dev-sync.sha256"
 
@@ -89,8 +89,8 @@ ensure_rust() {
 persist_shell_env() {
     # Persist the expansion for future shells.
     # shellcheck disable=SC2016
-    grep -q 'opaque uv/cargo PATH' "$HOME/.bashrc" 2>/dev/null || \
-        printf '\n# opaque uv/cargo PATH\nexport PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"\n' >> "$HOME/.bashrc"
+    grep -q 'opake uv/cargo PATH' "$HOME/.bashrc" 2>/dev/null || \
+        printf '\n# opake uv/cargo PATH\nexport PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"\n' >> "$HOME/.bashrc"
     grep -q 'PYTHONUNBUFFERED' "$HOME/.bashrc" 2>/dev/null || \
         echo 'export PYTHONUNBUFFERED=1' >> "$HOME/.bashrc"
 }
@@ -123,20 +123,20 @@ healthcheck() {
     cd "$REPO_ROOT"
 
     uv run python - <<'PY'
-import opaque.accounting
-import opaque.auditing
-import opaque.distributed
-import opaque.dpftrl
-import opaque.dpsgd
-import opaque.functional
-import opaque.profiling
-import opaque.random
-import opaque.scheduling
-import opaque.serialization
+import opake.accounting
+import opake.auditing
+import opake.distributed
+import opake.dpftrl
+import opake.dpsgd
+import opake.functional
+import opake.profiling
+import opake.random
+import opake.scheduling
+import opake.serialization
 PY
 
     uv run pytest \
-        packages/opaque-accounting/tests/test_smoke.py \
+        packages/opake-accounting/tests/test_smoke.py \
         tests/contracts/test_pep420_no_init.py \
         -m "not cuda and not mps and not slow" \
         -q

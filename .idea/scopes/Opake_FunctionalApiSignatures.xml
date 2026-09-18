@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Opake_FunctionalApiSignatures" pattern="file[opake-engine]:src/opake/api/engine/precision//*||file[opake-optimizers]:src//*" />
+</component>

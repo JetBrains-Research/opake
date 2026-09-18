@@ -100,7 +100,7 @@ sensitivity computation. There is no external amplification wrapper.
 | `dpftrl_acc.poisson` | No | For BandMF / identity MF |
 
 If you need subsampling amplification with correlated noise, use
-[BandMF](band-mf.md) with `opaque.dpftrl.accounting.poisson` instead.
+[BandMF](band-mf.md) with `opake.dpftrl.accounting.poisson` instead.
 
 !!! note "Multi-epoch vs subsampling"
     BLT and Poisson subsampling solve different problems. Poisson subsampling
@@ -109,15 +109,15 @@ If you need subsampling amplification with correlated noise, use
     multi-participation (min-sep / max-participations) sensitivity computation.
     BLT itself does **not** model subsampling amplification and has no
     `sample_rate` parameter. If you need subsampling with correlated noise,
-    use [BandMF](band-mf.md) with `opaque.dpftrl.accounting.poisson` instead.
+    use [BandMF](band-mf.md) with `opake.dpftrl.accounting.poisson` instead.
 
 ## Code examples
 
 ### Noise injection
 
 ```python
-from opaque.dpftrl.noise import mf_gaussian_noise, blt_strategy
-from opaque.random import key
+from opake.dpftrl.noise import mf_gaussian_noise, blt_strategy
+from opake.random import key
 
 # Single participation
 strategy = blt_strategy(max_buffers=10)
@@ -158,8 +158,8 @@ The bare accountant below prices the 5000-round example above, assuming each
 protected unit contributes at most five times, at least 100 rounds apart:
 
 ```python
-import opaque.dpftrl.accounting as dpftrl_acc
-from opaque.dpftrl.noise import blt_strategy
+import opake.dpftrl.accounting as dpftrl_acc
+from opake.dpftrl.noise import blt_strategy
 
 strategy = blt_strategy(max_buffers=10)
 

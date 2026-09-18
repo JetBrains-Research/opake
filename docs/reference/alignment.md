@@ -6,7 +6,7 @@ log-probability helpers, batch collators, dataset transforms,
 reference-model handling, and reward metrics. Every public symbol is a
 pure function or a factory returning a callable, so each composes under
 `vmap(grad(...))` — the per-example differentiation DP-SGD and DP-FTRL
-clipping is built on. Import everything from the `opaque.alignment.*`
+clipping is built on. Import everything from the `opake.alignment.*`
 façades; the mechanism and optimizer are chosen at the call site, never
 inside this package. For end-to-end walkthroughs see the
 [SFT](../alignment/sft.md) and [DPO](../alignment/dpo.md) guides.
@@ -22,21 +22,21 @@ aggregate). DPO per-pair heads take `(chosen_logratio, rejected_logratio,
 `head(sequence_logp(...) - ref_logp, ...)`. Eager losses take `logits`;
 the `fused_*` twins take `hidden_states` + the `lm_head` weight and never
 materialize `(T, V)` logits (CUDA + half-precision fused kernel with
-`opaque-alignment[patches]`, eager fallback otherwise).
+`opake-alignment[patches]`, eager fallback otherwise).
 
 SFT:
 
-- **`nll_loss()`** ([`opaque.alignment.sft.loss`](#api-documentation)) —
+- **`nll_loss()`** ([`opake.alignment.sft.loss`](#api-documentation)) —
   per-example causal-LM cross-entropy with a per-example token-count divisor.
-- **`dft_loss()`** ([`opaque.alignment.sft.loss`](#api-documentation)) —
+- **`dft_loss()`** ([`opake.alignment.sft.loss`](#api-documentation)) —
   Dynamic Fine-Tuning: NLL weighted by the detached softmax probability of
   each target token.
-- **`fused_nll_loss()`** ([`opaque.alignment.sft.loss`](#api-documentation))
+- **`fused_nll_loss()`** ([`opake.alignment.sft.loss`](#api-documentation))
   — memory-efficient `nll_loss` over hidden states + `lm_head` weight.
-- **`fused_dft_loss()`** ([`opaque.alignment.sft.loss`](#api-documentation))
+- **`fused_dft_loss()`** ([`opake.alignment.sft.loss`](#api-documentation))
   — memory-efficient `dft_loss` over hidden states + `lm_head` weight.
 
-DPO per-pair heads ([`opaque.alignment.dpo.loss`](#api-documentation)):
+DPO per-pair heads ([`opake.alignment.dpo.loss`](#api-documentation)):
 
 - **`sigmoid_loss()`** — standard DPO sigmoid (logistic) loss; the default.
 - **`hinge_loss()`** — DPO hinge loss.
@@ -50,13 +50,13 @@ DPO per-pair heads ([`opaque.alignment.dpo.loss`](#api-documentation)):
 - **`bco_loss()`** — BCO pairwise loss.
 - **`sppo_loss()`** — SPPO hard-label loss.
 
-Reference-free heads ([`opaque.alignment.dpo.loss`](#api-documentation)) — no
+Reference-free heads ([`opake.alignment.dpo.loss`](#api-documentation)) — no
 reference model; score the policy log-prob directly:
 
 - **`simpo_loss()`** — SimPO: length-normalized sigmoid with a target margin γ (Meng 2024).
 - **`odds_ratio_loss()`** — ORPO odds-ratio loss on length-normalized log-probs (Hong 2024); pair with `chosen_nll_loss` via `mpo_combine`.
 
-DPO log-ratio combinators ([`opaque.alignment.dpo.loss`](#api-documentation))
+DPO log-ratio combinators ([`opake.alignment.dpo.loss`](#api-documentation))
 for composite objectives:
 
 - **`f_divergence_remap()`** — remap a per-example log-ratio under the chosen f-divergence.
@@ -81,7 +81,7 @@ Primary papers for the implemented alignment objectives:
 
 ### Log-probabilities
 
-- **`sequence_logp()`** ([`opaque.alignment.dpo.loss`](#api-documentation))
+- **`sequence_logp()`** ([`opake.alignment.dpo.loss`](#api-documentation))
   — sum of completion-token log-probabilities per sequence; applies the
   causal-LM shift, masks to the completion span, and sums. Works
   per-example or on a batch axis. Pass `length_normalized=True` for the
@@ -89,7 +89,7 @@ Primary papers for the implemented alignment objectives:
   LD-DPO length-desensitized split. Its compatibility argument
   `shared_prefix_len` is the paper's public length (the shorter completion
   length), not a token-identical prefix.
-- **`fused_sequence_logp()`** ([`opaque.alignment.dpo.loss`](#api-documentation))
+- **`fused_sequence_logp()`** ([`opake.alignment.dpo.loss`](#api-documentation))
   — memory-efficient `sequence_logp` over hidden states + `lm_head` weight
   (per-example only; same `length_normalized` option).
 
@@ -97,24 +97,24 @@ Primary papers for the implemented alignment objectives:
 
 Factory functions returning a `collate(examples)` callable.
 
-- **`language_modeling_collator()`** ([`opaque.alignment.sft.collator`](#api-documentation))
+- **`language_modeling_collator()`** ([`opake.alignment.sft.collator`](#api-documentation))
   — SFT/causal-LM collation: `input_ids`/`attention_mask`/`labels` `(B, L)`
   with pad and (optionally) prompt tokens masked to `-100`, optional
   `completion_mask`, keep-start truncation to `max_length`. Output schema
-  `LMBatch` (`opaque.alignment.sft.collator.types`).
-- **`preference_collator()`** ([`opaque.alignment.dpo.collator`](#api-documentation))
+  `LMBatch` (`opake.alignment.sft.collator.types`).
+- **`preference_collator()`** ([`opake.alignment.dpo.collator`](#api-documentation))
   — DPO collation in a `(B, ...)` layout: the chosen and rejected
   `input_ids`/`attention_mask`/`completion_mask` trios, plus optional
   precomputed `ref_chosen_logps` / `ref_rejected_logps` `(B,)`. Chosen and
   rejected stay separate (not TRL's concatenated `(2B, L)`) so one pair maps
   to one clipped gradient.
-- **`extract_prompt()`** ([`opaque.alignment.dpo.data`](#api-documentation))
+- **`extract_prompt()`** ([`opake.alignment.dpo.data`](#api-documentation))
   — split an implicit shared prompt out of a preference example before
   tokenizing.
 
 ### Data
 
-Shared chat-template data prep ([`opaque.alignment.data`](#api-documentation)).
+Shared chat-template data prep ([`opake.alignment.data`](#api-documentation)).
 Install a training chat template, then tokenize chat turns into `input_ids` +
 a `completion_mask` for completion-only loss.
 
@@ -139,7 +139,7 @@ Reference-model helpers for DPO. These run **outside** the per-example
 `vmap(grad(...))` region — a separate forward pass, or PEFT adapter
 toggles.
 
-- **`compute_ref_logprobs_for_dataset()`** ([`opaque.alignment.dpo.reference`](#api-documentation))
+- **`compute_ref_logprobs_for_dataset()`** ([`opake.alignment.dpo.reference`](#api-documentation))
   — run the reference once over a dataset, attach per-example logp columns,
   and cache to a content-addressed `.safetensors` file keyed by dataset
   identity, `cache_identity`, and `output_columns` (a cache hit skips the
@@ -150,29 +150,29 @@ toggles.
   rank scores its own shard and the columns are gathered back into dataset
   order, so the result matches a single-process run — see
   [Across ranks](../alignment/dpo.md#across-ranks).
-- **`null_ref_context()`** ([`opaque.alignment.dpo.reference`](#api-documentation))
+- **`null_ref_context()`** ([`opake.alignment.dpo.reference`](#api-documentation))
   — context manager that turns a model into its own reference, dispatching
   over the separate-model / `"ref"`-adapter / disabled-adapter / no-op
   configurations.
-- **`with_disabled_adapter()`** ([`opaque.alignment.dpo.reference`](#api-documentation))
+- **`with_disabled_adapter()`** ([`opake.alignment.dpo.reference`](#api-documentation))
   — context manager that disables a PEFT adapter so the base model serves as
   the reference.
-- **`ema_update_reference()`** ([`opaque.alignment.dpo.reference`](#api-documentation))
+- **`ema_update_reference()`** ([`opake.alignment.dpo.reference`](#api-documentation))
   — TR-DPO: leafwise EMA step `(1 - alpha) * ref + alpha * policy` to move
   the reference toward the policy.
 
 ### Metrics
 
-These metrics are un-noised and outside Opaque's DP accounting. See
+These metrics are un-noised and outside Opake's DP accounting. See
 [Telemetry outside the guarantee](../limitations.md#telemetry-outside-the-guarantee).
 Shared token metrics
-([`opaque.alignment.metric`](#api-documentation)):
+([`opake.alignment.metric`](#api-documentation)):
 
 - **`mean_token_accuracy()`** — mean next-token argmax accuracy over the
   supervised (non-ignored) positions.
 - **`entropy_from_logits()`** — mean per-token predictive entropy.
 
-Preference reward telemetry ([`opaque.alignment.dpo.metric`](#api-documentation)):
+Preference reward telemetry ([`opake.alignment.dpo.metric`](#api-documentation)):
 
 - **`reward_metrics()`** — `rewards/chosen`, `rewards/rejected`,
   `rewards/accuracies`, `rewards/margins` from per-example log-ratios.
@@ -182,52 +182,52 @@ Preference reward telemetry ([`opaque.alignment.dpo.metric`](#api-documentation)
 
 ## API Documentation
 
-::: opaque.alignment.sft.loss
+::: opake.alignment.sft.loss
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.sft.collator
+::: opake.alignment.sft.collator
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.sft.collator.types
+::: opake.alignment.sft.collator.types
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.data
+::: opake.alignment.data
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.dpo.loss
+::: opake.alignment.dpo.loss
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.dpo.collator
+::: opake.alignment.dpo.collator
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.dpo.data
+::: opake.alignment.dpo.data
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.dpo.reference
+::: opake.alignment.dpo.reference
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.dpo.metric
+::: opake.alignment.dpo.metric
     options:
       show_source: true
       heading_level: 3
 
-::: opaque.alignment.metric
+::: opake.alignment.metric
     options:
       show_source: true
       heading_level: 3

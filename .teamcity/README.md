@@ -6,7 +6,7 @@ the GitHub Actions Linux amd64 test matrix. Kotlin expands the shard list in
 when TeamCity imports versioned settings.
 
 Set `teamcity.server.url` in `pom.xml` to the TeamCity server that will import
-these settings, then enable versioned settings for the Opaque TeamCity project
+these settings, then enable versioned settings for the Opake TeamCity project
 with this repository as the settings VCS root and `.teamcity` as its settings
 path. The same VCS root must track the branches and pull requests that should
 run the pipeline; the pipeline uses `DslContext.settingsRoot` as its main

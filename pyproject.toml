@@ -3,12 +3,12 @@ requires = ["setuptools>=68.0", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opaque"
+name = "opake"
 dynamic = ["version"]
 description = "Functional Differential Privacy for PyTorch"
 readme = "README.md"
 license = { text = "Apache-2.0" }
-authors = [{ name = "Opaque Contributors" }]
+authors = [{ name = "Opake Contributors" }]
 requires-python = ">=3.11,<3.14"
 keywords = [
     "differential-privacy",
@@ -35,34 +35,34 @@ dependencies = [
     # Build preflight rewrites these sentinel specs to exact synchronized wheel
     # pins for preview/release artifacts while local workspace installs continue
     # to resolve against the editable members below.
-    "opaque-engine>=0.0.0.dev0",
-    "opaque-accounting>=0.0.0.dev0",
-    "opaque-dpsgd>=0.0.0.dev0",
-    "opaque-optimizers>=0.0.0.dev0",
-    "opaque-patches>=0.0.0.dev0",
+    "opake-engine>=0.0.0.dev0",
+    "opake-accounting>=0.0.0.dev0",
+    "opake-dpsgd>=0.0.0.dev0",
+    "opake-optimizers>=0.0.0.dev0",
+    "opake-patches>=0.0.0.dev0",
 ]
 
 [project.optional-dependencies]
-auditing = ["opaque-auditing>=0.0.0.dev0"]
-dpftrl = ["opaque-dpftrl>=0.0.0.dev0"]
-alignment = ["opaque-alignment>=0.0.0.dev0"]
+auditing = ["opake-auditing>=0.0.0.dev0"]
+dpftrl = ["opake-dpftrl>=0.0.0.dev0"]
+alignment = ["opake-alignment>=0.0.0.dev0"]
 transformers = [
-    "opaque-transformers>=0.0.0.dev0",
-    "opaque-patches[transformers]>=0.0.0.dev0",
+    "opake-transformers>=0.0.0.dev0",
+    "opake-patches[transformers]>=0.0.0.dev0",
 ]
-trl = ["opaque-transformers[trl]>=0.0.0.dev0"]
+trl = ["opake-transformers[trl]>=0.0.0.dev0"]
 all = [
-    "opaque[auditing]",
-    "opaque[dpftrl]",
-    "opaque[alignment]",
-    "opaque[transformers]",
-    "opaque[trl]",
+    "opake[auditing]",
+    "opake[dpftrl]",
+    "opake[alignment]",
+    "opake[transformers]",
+    "opake[trl]",
 ]
 
-# The ``opaque`` namespace is pure PEP 420, composed by whichever
-# ``opaque-*`` sub-packages are installed alongside. The root distribution
+# The ``opake`` namespace is pure PEP 420, composed by whichever
+# ``opake-*`` sub-packages are installed alongside. The root distribution
 # ships no Python code — it pins the curated sub-package bundle so
-# ``pip install opaque`` resolves consistently.
+# ``pip install opake`` resolves consistently.
 
 [tool.setuptools]
 # Suppress setuptools auto-discovery so it doesn't scan the workspace root
@@ -80,29 +80,29 @@ git_describe_command = "git describe --dirty --tags --long --match v*"
 [tool.uv]
 package = true
 workspace.members = [
-    "packages/opaque-base",
-    "packages/opaque-engine",
-    "packages/opaque-optimizers",
-    "packages/opaque-dpsgd",
-    "packages/opaque-dpftrl",
-    "packages/opaque-auditing",
-    "packages/opaque-transformers",
-    "packages/opaque-accounting",
-    "packages/opaque-patches",
-    "packages/opaque-alignment",
+    "packages/opake-base",
+    "packages/opake-engine",
+    "packages/opake-optimizers",
+    "packages/opake-dpsgd",
+    "packages/opake-dpftrl",
+    "packages/opake-auditing",
+    "packages/opake-transformers",
+    "packages/opake-accounting",
+    "packages/opake-patches",
+    "packages/opake-alignment",
 ]
 
 [tool.uv.sources]
-opaque-base = { workspace = true }
-opaque-engine = { workspace = true }
-opaque-optimizers = { workspace = true }
-opaque-dpsgd = { workspace = true }
-opaque-dpftrl = { workspace = true }
-opaque-auditing = { workspace = true }
-opaque-transformers = { workspace = true }
-opaque-accounting = { workspace = true }
-opaque-patches = { workspace = true }
-opaque-alignment = { workspace = true }
+opake-base = { workspace = true }
+opake-engine = { workspace = true }
+opake-optimizers = { workspace = true }
+opake-dpsgd = { workspace = true }
+opake-dpftrl = { workspace = true }
+opake-auditing = { workspace = true }
+opake-transformers = { workspace = true }
+opake-accounting = { workspace = true }
+opake-patches = { workspace = true }
+opake-alignment = { workspace = true }
 
 [dependency-groups]
 # Developer tooling (test runner, linter, stats helpers, cross-validation
@@ -110,7 +110,7 @@ opaque-alignment = { workspace = true }
 # transformers, peft) live in each package's [dependencies] or
 # [project.optional-dependencies] and compose via `--extra`. Triton is not
 # explicitly declared — it is a platform-gated transitive dependency of
-# `opaque-patches` kernels (only resolved on Linux x86_64) and auto-disabled
+# `opake-patches` kernels (only resolved on Linux x86_64) and auto-disabled
 # when CUDA + Triton are not importable.
 # Install with: `uv sync --group dev --all-packages --extra all`
 dev = [
@@ -121,8 +121,8 @@ dev = [
   "setuptools>=68.0",     # Required by PyTorch's CPU dynamic-shape compiler
   "scipy>=1.11.0",         # Statistical tests
   # Cross-validation against reference DP accounting libraries. Imported by
-  # packages/opaque-dpsgd/tests/accounting/test_cross_validation.py — not a
-  # runtime dependency of opaque.
+  # packages/opake-dpsgd/tests/accounting/test_cross_validation.py — not a
+  # runtime dependency of opake.
   "dp-accounting>=0.4.4",
   "riskcal>=1.2.0",
   # Reference implementation published with Feldman & Shenfeld. Imported by
@@ -158,7 +158,7 @@ docs = [
 [tool.pytest.ini_options]
 # importlib mode gives each test file a unique module name based on its path,
 # avoiding collisions when multiple packages share directory names (e.g.
-# tests/noise/ in both opaque-dpsgd and opaque-dpftrl).
+# tests/noise/ in both opake-dpsgd and opake-dpftrl).
 addopts = "--import-mode=importlib"
 
 # Local test discovery walks the whole `packages/` tree — any package with a
@@ -195,20 +195,20 @@ filterwarnings = [
 target-version = "py311"  # inferred from requires-python (>=3.11,<3.14)
 line-length = 88
 
-# First-party source roots of the PEP 420 `opaque` namespace. Used by ruff to
+# First-party source roots of the PEP 420 `opake` namespace. Used by ruff to
 # distinguish first- from third-party imports (import sorting / unresolved-import
 # rules).
 src = [
-  "packages/opaque-accounting/src",
-  "packages/opaque-alignment/src",
-  "packages/opaque-auditing/src",
-  "packages/opaque-base/src",
-  "packages/opaque-dpftrl/src",
-  "packages/opaque-dpsgd/src",
-  "packages/opaque-engine/src",
-  "packages/opaque-optimizers/src",
-  "packages/opaque-patches/src",
-  "packages/opaque-transformers/src",
+  "packages/opake-accounting/src",
+  "packages/opake-alignment/src",
+  "packages/opake-auditing/src",
+  "packages/opake-base/src",
+  "packages/opake-dpftrl/src",
+  "packages/opake-dpsgd/src",
+  "packages/opake-engine/src",
+  "packages/opake-optimizers/src",
+  "packages/opake-patches/src",
+  "packages/opake-transformers/src",
 ]
 
 [tool.ruff.lint]
@@ -267,7 +267,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["opaque"]
+known-first-party = ["opake"]
 # Keep force-single-line off; section comments in import blocks are rare —
 # side-effect imports use an adjacent comment above the import line.
 
@@ -285,21 +285,21 @@ max-statements = 120
 
 [tool.ruff.lint.per-file-ignores]
 # Optimizer / scheduler tests import after pytest.importorskip("torch"|"torchopt").
-"packages/opaque-optimizers/tests/**" = ["E402"]
-"packages/opaque-transformers/tests/opaque_transformers/test_scheduler_dispatch.py" = ["E402"]
+"packages/opake-optimizers/tests/**" = ["E402"]
+"packages/opake-transformers/tests/opake_transformers/test_scheduler_dispatch.py" = ["E402"]
 # Triton launch/autograd signatures mirror fixed tensor/stride/shape contracts;
 # grouping these arguments would obscure the kernel ABI rather than simplify it.
-"packages/opaque-patches/src/opaque/api/patches/kernels/fused_add_rms_norm.py" = ["PLR0913", "PLR0917"]
-"packages/opaque-patches/src/opaque/api/patches/kernels/fused_moe.py" = ["PLR0913", "PLR0917"]
-"packages/opaque-patches/src/opaque/api/patches/kernels/linear_cross_entropy.py" = ["PLR0913", "PLR0917"]
-"packages/opaque-patches/src/opaque/api/patches/kernels/lora.py" = ["PLR0913", "PLR0917"]
-"packages/opaque-patches/src/opaque/api/patches/kernels/rms_norm.py" = ["PLR0913", "PLR0917"]
-"packages/opaque-patches/src/opaque/api/patches/kernels/rope_embedding.py" = ["PLR0913", "PLR0917"]
+"packages/opake-patches/src/opake/api/patches/kernels/fused_add_rms_norm.py" = ["PLR0913", "PLR0917"]
+"packages/opake-patches/src/opake/api/patches/kernels/fused_moe.py" = ["PLR0913", "PLR0917"]
+"packages/opake-patches/src/opake/api/patches/kernels/linear_cross_entropy.py" = ["PLR0913", "PLR0917"]
+"packages/opake-patches/src/opake/api/patches/kernels/lora.py" = ["PLR0913", "PLR0917"]
+"packages/opake-patches/src/opake/api/patches/kernels/rms_norm.py" = ["PLR0913", "PLR0917"]
+"packages/opake-patches/src/opake/api/patches/kernels/rope_embedding.py" = ["PLR0913", "PLR0917"]
 # INP001: pytest trees intentionally omit __init__.py.
 "**/tests/**" = ["INP001", "D", "PLR2004", "TRY003"]
 "tests/**" = ["INP001", "D", "PLR2004", "TRY003"]
 # Internal implementation methods are deliberately not selected by the
 # public-surface rules above; test helpers remain outside this docstring scope.
-# PEP 420: `opaque/` has no __init__.py (multi-wheel namespace); façade
-# modules live directly under src/opaque/.
-"packages/*/src/opaque/*.py" = ["INP001"]
+# PEP 420: `opake/` has no __init__.py (multi-wheel namespace); façade
+# modules live directly under src/opake/.
+"packages/*/src/opake/*.py" = ["INP001"]

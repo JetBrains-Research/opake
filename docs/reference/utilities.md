@@ -2,9 +2,9 @@
 
 ## Functional Utilities
 
-The `opaque.functional` module provides the `torch.func` bridges that turn
+The `opake.functional` module provides the `torch.func` bridges that turn
 standard `nn.Module` models into the pure-function form DP-SGD needs.
-`opaque.dpsgd.clipping.clipped_grad` and friends assume their `loss_fn`
+`opake.dpsgd.clipping.clipped_grad` and friends assume their `loss_fn`
 argument is functional in this sense.
 
 **Key function**: `make_functional()` — convert a PyTorch module to
@@ -12,7 +12,7 @@ functional form.
 
 ```python
 import torch.nn as nn
-from opaque.functional import make_functional
+from opake.functional import make_functional
 
 model = nn.Linear(10, 1)
 fmodel, params = make_functional(model)
@@ -49,7 +49,7 @@ patches — Fused LoRA operations](../user-guide/huggingface/model-patches.md#fu
 **See also**: [Quick Start Guide](../getting-started/quickstart.md) for
 functional API usage.
 
-::: opaque.functional
+::: opake.functional
     options:
       show_source: true
       heading_level: 3
@@ -58,8 +58,8 @@ functional API usage.
 
 ## PyTree Utilities
 
-The `opaque.pytree` module provides helpers for working with PyTrees —
-nested structures of tensors used throughout Opaque.
+The `opake.pytree` module provides helpers for working with PyTrees —
+nested structures of tensors used throughout Opake.
 
 **PyTrees** are nested dictionaries or tuples of tensors, commonly used to
 represent model parameters:
@@ -83,7 +83,7 @@ This module provides:
 **See also**: [Gradient Clipping Guide](../user-guide/clipping.md) for PyTree
 usage in DP-SGD.
 
-::: opaque.pytree
+::: opake.pytree
     options:
       show_source: true
       heading_level: 3

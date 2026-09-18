@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import pytest
 
-import opaque.dpftrl.accounting as ftrl_acc
-import opaque.dpsgd.accounting as dpsgd_acc
-from opaque.dpftrl.noise import identity_strategy
+import opake.dpftrl.accounting as ftrl_acc
+import opake.dpsgd.accounting as dpsgd_acc
+from opake.dpftrl.noise import identity_strategy
 
 _DELTAS = (1e-5, 1e-8)
 

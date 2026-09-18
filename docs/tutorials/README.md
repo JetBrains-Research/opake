@@ -1,6 +1,6 @@
 # Tutorials
 
-These Jupyter notebooks provide hands-on practice with Opaque. Each is
+These Jupyter notebooks provide hands-on practice with Opake. Each is
 self-contained: you build something concrete and see it work.
 
 For conceptual explanations, see the [User Guide](../user-guide/index.md).
@@ -43,11 +43,11 @@ Concerns that apply to either stack.
 
 ## Running the tutorials
 
-Install Opaque and its tutorial dependencies from a repository checkout:
+Install Opake and its tutorial dependencies from a repository checkout:
 
 ```bash
-git clone https://github.com/JetBrains-Research/opaque.git
-cd opaque
+git clone https://github.com/JetBrains-Research/opake.git
+cd opake
 uv sync --group examples --all-packages --extra all
 jupyter lab docs/tutorials/
 ```

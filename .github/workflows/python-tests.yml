@@ -65,25 +65,25 @@ jobs:
           - id: foundation
             label: Foundation
             paths: |
-              packages/opaque-base
-              packages/opaque-accounting
-              packages/opaque-auditing
+              packages/opake-base
+              packages/opake-accounting
+              packages/opake-auditing
           - id: dp-mechanisms
             label: DP mechanisms
             paths: |
-              packages/opaque-dpsgd
-              packages/opaque-dpftrl
+              packages/opake-dpsgd
+              packages/opake-dpftrl
           - id: runtime-and-patches
             label: Runtime and patches
             paths: |
-              packages/opaque-engine
-              packages/opaque-optimizers
-              packages/opaque-patches
+              packages/opake-engine
+              packages/opake-optimizers
+              packages/opake-patches
           - id: alignment-and-transformers
             label: Alignment and transformers
             paths: |
-              packages/opaque-alignment
-              packages/opaque-transformers
+              packages/opake-alignment
+              packages/opake-transformers
           - id: integration
             label: Integration tests
             paths: tests

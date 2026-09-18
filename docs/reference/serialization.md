@@ -1,8 +1,8 @@
 # Serialization
 
-Opaque keeps training state in explicit values (clip state, noise state,
+Opake keeps training state in explicit values (clip state, noise state,
 optimizer state, schedules, [`Accountant`](accounting.md) / [`DpProcess`](accounting.md),
-…). Use `opaque.serialization` for a single **flat**
+…). Use `opake.serialization` for a single **flat**
 `dict[str, Any]` suitable for `torch.save` / `torch.load`.
 
 Restore is **template-driven**: pass a freshly constructed object of the same
@@ -20,7 +20,7 @@ primitive raises `InputTypeError` on both save and restore instead of being
 silently skipped.
 Genuinely inert leaves that the template reproduces (vendor structure handles
 such as `optree.PyTreeSpec`) are declared with
-`opaque.serialization.register_template_restored`; nothing is written for
+`opake.serialization.register_template_restored`; nothing is written for
 them and the template supplies them on load.
 
 `PerGroup` checkpoints through the same API. Path keys serialize as their
@@ -56,8 +56,8 @@ restoring a registered leaf carries the offending key as an exception note.
 
 ## API surface (no per-type `state_dict()`)
 
-Opaque centralizes (de)serialization in `opaque.serialization.state_dict`
-and `opaque.serialization.from_state_dict`. Registered types (including
+Opake centralizes (de)serialization in `opake.serialization.state_dict`
+and `opake.serialization.from_state_dict`. Registered types (including
 `Accountant`) are written and restored **only**
 through these module-level functions — there are no instance methods named
 `state_dict` / `from_state_dict` on those classes.
@@ -65,8 +65,8 @@ through these module-level functions — there are no instance methods named
 Minimal round trip for an `Accountant`:
 
 ```python
-from opaque.accounting import Accountant, identity
-from opaque.serialization import from_state_dict, state_dict
+from opake.accounting import Accountant, identity
+from opake.serialization import from_state_dict, state_dict
 
 acct = Accountant() | identity()
 flat = state_dict(acct)
@@ -75,11 +75,11 @@ acct2 = from_state_dict(Accountant(), flat)
 
 The same pattern applies to clip state, noise state, functional optimizer
 state, and any other value that flows through the DP training loop.  Custom
-types may register handlers with `opaque.serialization.register_serializer`,
+types may register handlers with `opake.serialization.register_serializer`,
 or — when a leaf carries no run state and the template reproduces it —
-declare it inert with `opaque.serialization.register_template_restored`.
+declare it inert with `opake.serialization.register_template_restored`.
 
-::: opaque.serialization
+::: opake.serialization
     options:
       show_source: true
       heading_level: 2

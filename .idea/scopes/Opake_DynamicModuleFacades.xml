@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Opake_DynamicModuleFacades" pattern="file[opake-engine]:src/opake/api/engine/clipping//*||file[opake-engine]:src/opake/api/engine/functional//*||file[opake-engine]:src/opake/api/engine/random//*||file[opake-patches]:src//*" />
+</component>

@@ -1,6 +1,6 @@
 # Distributed Training
 
-Opaque supports multi-GPU training via PyTorch DistributedDataParallel
+Opake supports multi-GPU training via PyTorch DistributedDataParallel
 (DDP). FSDP, Tensor Parallel, and Pipeline Parallel are not supported.
 
 ## How DP-SGD works with DDP
@@ -38,13 +38,13 @@ There are two valid approaches to noise in distributed DP-SGD:
 import torch
 import torch.distributed as dist
 import torchopt
-from opaque.dpsgd.clipping import clipped_grad
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.dpsgd.sampling import PoissonSampler
-from opaque.functional import make_functional
-import opaque.distributed as dist_utils
-from opaque.random import key, fold_in
-from opaque.distributed import local_shard
+from opake.dpsgd.clipping import clipped_grad
+from opake.dpsgd.noise import gaussian_noise
+from opake.dpsgd.sampling import PoissonSampler
+from opake.functional import make_functional
+import opake.distributed as dist_utils
+from opake.random import key, fold_in
+from opake.distributed import local_shard
 
 # Distributed setup
 dist.init_process_group(backend="nccl")
@@ -78,7 +78,7 @@ sampler = PoissonSampler(
 loader = torch.utils.data.DataLoader(shard, batch_sampler=sampler)
 
 # Optimizer
-from opaque.optimizers import sgd
+from opake.optimizers import sgd
 
 optimizer = sgd(lr=0.01)
 opt_state = optimizer.init(params)
@@ -116,7 +116,7 @@ rank to get identical noise (centralized DP-SGD). Use `fold_in(key, rank)`
 to get independent per-rank noise streams when needed:
 
 ```python
-from opaque.random import key, fold_in
+from opake.random import key, fold_in
 
 # Synchronized noise — same key on all ranks
 noise_fn, noise_state = gaussian_noise(noise_multiplier=1.1, key=key(42))
@@ -137,7 +137,7 @@ in sync.
 a reduced copy:
 
 ```python
-import opaque.distributed as dist_utils
+import opake.distributed as dist_utils
 
 grads = dist_utils.sum_gradients(grads)
 ```
@@ -165,11 +165,11 @@ clipping statistics in `AdaptiveClipState`. To keep the adaptive threshold
 consistent across ranks, explicitly synchronize that state after each step:
 
 ```python
-from opaque.dpsgd.clipping import adaptive_clipped_grad
-import opaque.distributed as dist_utils
-from opaque.dpsgd.noise import gaussian_noise
-from opaque.distributed import sync
-from opaque.random import key
+from opake.dpsgd.clipping import adaptive_clipped_grad
+import opake.distributed as dist_utils
+from opake.dpsgd.noise import gaussian_noise
+from opake.distributed import sync
+from opake.random import key
 
 grad_fn, clip_state = adaptive_clipped_grad(
     loss_fn,
@@ -213,9 +213,9 @@ on the shard. Derive a per-rank key via `fold_in(key, rank)`.
 
 ```python
 import torch.distributed as dist
-from opaque.dpsgd.sampling import PoissonSampler
-from opaque.random import key, fold_in
-from opaque.distributed import local_shard
+from opake.dpsgd.sampling import PoissonSampler
+from opake.random import key, fold_in
+from opake.distributed import local_shard
 
 rank = dist.get_rank()
 world_size = dist.get_world_size()
@@ -235,7 +235,7 @@ Privacy accounting is the same as single-device training. The effective
 sample rate is the global sample rate across all devices:
 
 ```python
-import opaque.accounting as acc
+import opake.accounting as acc
 
 global_sample_rate = batch_size_per_device * world_size / dataset_size
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(noise_multiplier), global_sample_rate)
@@ -258,7 +258,7 @@ Functional optimizers (TorchOpt) stay synchronized automatically because:
 So optimizer states evolve identically on all devices without explicit
 synchronization.
 
-## `opaque.distributed` API summary
+## `opake.distributed` API summary
 
 Functions are split into copy-returning defaults and explicit in-place `_`
 variants. When `torch.distributed` is not initialized, high-level helpers such

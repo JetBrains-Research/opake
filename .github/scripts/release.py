@@ -33,7 +33,7 @@ MANIFEST_SCHEMA = 1
 
 @dataclass(frozen=True)
 class Version:
-    """Supported Opaque release version."""
+    """Supported Opake release version."""
 
     major: int
     minor: int

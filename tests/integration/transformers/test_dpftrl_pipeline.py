@@ -1,7 +1,7 @@
 """DP-FTRL end-to-end integration: clip → ``mf_gaussian_noise`` → manual update.
 
 Mirror of ``test_dpsgd_pipeline.py`` for DP-FTRL — uses
-``opaque.dpftrl.noise.mf_gaussian_noise`` with the identity strategy (the
+``opake.dpftrl.noise.mf_gaussian_noise`` with the identity strategy (the
 simplest correlated-noise case). Patches are part of normal framework
 usage and apply throughout.
 
@@ -28,11 +28,11 @@ from transformers import (
     LlamaConfig,
 )
 
-from opaque.api.engine.clipping import clipped_grad
-from opaque.dpftrl.noise import identity_strategy, mf_gaussian_noise
-from opaque.functional import make_functional
-from opaque.patches import apply_model_patches
-from opaque.random import key
+from opake.api.engine.clipping import clipped_grad
+from opake.dpftrl.noise import identity_strategy, mf_gaussian_noise
+from opake.functional import make_functional
+from opake.patches import apply_model_patches
+from opake.random import key
 
 QWEN2_REPO = "Qwen/Qwen2-0.5B"
 

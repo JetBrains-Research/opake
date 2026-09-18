@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from opaque_test_support import fast_mc_accounting
+from opake_test_support import fast_mc_accounting
 
-import opaque.accounting as acc
+import opake.accounting as acc
 
 
 def test_fast_mc_accounting_preserves_other_discretization_settings() -> None:
     """Only Monte Carlo controls change inside the temporary test configuration."""
-    from opaque.accounting import discretization
+    from opake.accounting import discretization
 
     original = discretization._default_config
     try:
