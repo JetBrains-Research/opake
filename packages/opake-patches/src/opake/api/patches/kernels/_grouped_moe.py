@@ -14,9 +14,9 @@ mode-1 (offset-grouped along the token dim) GEMMs — forward up-proj, forward
 down-proj, backward ``dx``. The mode-2 per-group weight grads (``dW1``/``dW2``)
 are ``out[g] = A_g^T @ B_g`` (contraction grouped along the *token* axis).
 ``torch._grouped_mm``'s 2D×2D layout expresses this — its 16-byte rule is on
-matrix *strides*, not group sizes — but :func:`_grouped_AtB` does it with an
-explicit per-group loop (G = E, or B*E for the per-sample DP path — both small)
-so it stays safe inside the vmap rules. All reductions accumulate in fp32.
+matrix *strides*, not group sizes — and :func:`_grouped_AtB` submits every
+group in one backend launch without copying offsets to the host. Bounded output
+tiles accumulate in fp32 and are cast once into the final gradients.
 
 Per-sample weight grads under ``vmap(grad)`` (DP-SGD) use **virtual experts**:
 sample ``b``'s tokens for real expert ``e`` go to group ``b*E + e``, so the
@@ -30,10 +30,13 @@ across the batch. The forward/dx GEMMs index the shared weights by real expert.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 import torch.nn.functional as F
 
 from ._moe_memory import (
+    _workspace_budget_bytes,
     chunk_size,
     grouped_backward_bytes_per_route,
     grouped_forward_bytes_per_route,
@@ -56,18 +59,12 @@ def _grouped_mm(A, Bw, ends):
     return torch._grouped_mm(A.contiguous(), Bw, offs=ends)
 
 
-def _grouped_AtB(A, B, seg_offs, G, *, out=None):
-    """Compute grouped ``A^T @ B`` without full-size fp32 conversion copies."""
-    P, Q = A.shape[1], B.shape[1]
+def _grouped_AtB(A, B, ends, G, *, out=None):
+    """Compute every grouped ``A^T @ B`` in one backend launch."""
+    result = torch._grouped_mm(A.float().mT, B.float(), offs=ends)
     if out is None:
-        out = torch.zeros(G, P, Q, dtype=A.dtype, device=A.device)
-    bounds = seg_offs.tolist()
-    for g in range(G):
-        lo, hi = bounds[g], bounds[g + 1]
-        if hi > lo:
-            out[g] = (A[lo:hi].float().t() @ B[lo:hi].float()).to(A.dtype)
-        else:
-            out[g].zero_()
+        return result
+    out.copy_(result)
     return out
 
 
@@ -79,10 +76,135 @@ def _route_sort(expert_of_row, n_groups):
     return sort_idx, ends
 
 
-def _seg_offsets(group_of_row, n_groups):
-    """Exclusive-prefix offsets (length ``n_groups+1``) for :func:`_grouped_AtB`."""
-    counts = torch.bincount(group_of_row, minlength=n_groups)
-    return torch.cat([counts.new_zeros(1), counts.cumsum(0)]).to(torch.int32)
+@dataclass(frozen=True)
+class _RoutePlan:
+    """Bounded on-device ordering metadata shared by all expert matrices."""
+
+    routes: torch.Tensor
+    tokens: torch.Tensor
+    real_ends: torch.Tensor
+    group_order: torch.Tensor | None
+    group_ends: torch.Tensor
+    n_groups: int
+
+    def grouped(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor if self.group_order is None else tensor[self.group_order]
+
+
+def _route_plan(
+    real_eor,
+    lo,
+    hi,
+    K,
+    E,
+    *,
+    tokens_per_sample=None,
+    n_groups=None,
+):
+    """Build one stable route plan for a bounded contiguous route chunk."""
+    local_sort, real_ends = _route_sort(real_eor[lo:hi], E)
+    routes = lo + local_sort
+    return _route_plan_from_routes(
+        real_eor,
+        routes,
+        K,
+        E,
+        real_ends=real_ends,
+        tokens_per_sample=tokens_per_sample,
+        n_groups=n_groups,
+    )
+
+
+def _route_plan_from_routes(
+    real_eor,
+    routes,
+    K,
+    E,
+    *,
+    real_ends=None,
+    tokens_per_sample=None,
+    n_groups=None,
+):
+    """Attach group metadata to routes that are already real-expert sorted."""
+    tokens = torch.div(routes, K, rounding_mode="floor")
+    if real_ends is None:
+        real_ends = (
+            torch.bincount(real_eor[routes], minlength=E).cumsum(0).to(torch.int32)
+        )
+    if tokens_per_sample is None or n_groups == E:
+        return _RoutePlan(
+            routes,
+            tokens,
+            real_ends,
+            None,
+            real_ends,
+            E,
+        )
+
+    groups = (
+        torch.div(tokens, tokens_per_sample, rounding_mode="floor") * E
+        + real_eor[routes]
+    )
+    group_order, group_ends = _route_sort(groups, n_groups)
+    return _RoutePlan(
+        routes,
+        tokens,
+        real_ends,
+        group_order,
+        group_ends,
+        n_groups,
+    )
+
+
+def _route_subplan(
+    plan,
+    lo,
+    hi,
+    real_eor,
+    K,
+    E,
+    *,
+    tokens_per_sample=None,
+    n_groups=None,
+):
+    return _route_plan_from_routes(
+        real_eor,
+        plan.routes[lo:hi],
+        K,
+        E,
+        tokens_per_sample=tokens_per_sample,
+        n_groups=n_groups,
+    )
+
+
+def _plan_bytes(plan):
+    return sum(
+        tensor.numel() * tensor.element_size()
+        for tensor in (
+            plan.routes,
+            plan.tokens,
+            plan.real_ends,
+            plan.group_order,
+            plan.group_ends,
+        )
+        if tensor is not None
+    )
+
+
+def _accumulate_grouped_AtB(
+    A,
+    B,
+    plan,
+    out,
+    workspace_bytes,
+    *,
+    grouped_atb=_grouped_AtB,
+):
+    """Accumulate grouped products in bounded output tiles without route rescans."""
+    A = plan.grouped(A)
+    B = plan.grouped(B)
+    del workspace_bytes
+    out.add_(grouped_atb(A, B, plan.group_ends, plan.n_groups))
 
 
 def _fused_moe_forward(x_flat, W1, W2, expert_of_row, tw_row, K):
@@ -93,178 +215,243 @@ def _fused_moe_forward(x_flat, W1, W2, expert_of_row, tw_row, K):
     dt = x_flat.dtype
     out = torch.zeros(N, H, dtype=torch.float32, device=x_flat.device)
     per_route = grouped_forward_bytes_per_route(H, I, x_flat.element_size())
-    route_chunk = chunk_size(
+    budget = _workspace_budget_bytes(x_flat.device)
+    plan_chunk = chunk_size(
         expert_of_row.numel(),
-        per_route,
+        24,
         x_flat.device,
         fixed_bytes=out.numel() * out.element_size(),
+        budget_bytes=budget,
     )
-    for lo in range(0, expert_of_row.numel(), route_chunk):
-        hi = min(lo + route_chunk, expert_of_row.numel())
-        local_sort, ends = _route_sort(expert_of_row[lo:hi], E)
-        sidx = lo + local_sort
-        tok_s = torch.div(sidx, K, rounding_mode="floor")
-        x_s = x_flat[tok_s]
-        gate_up = _grouped_mm(x_s, W1.mT, ends)
-        g, u = gate_up[:, :I], gate_up[:, I:]
-        h = F.silu(g.float()).to(dt) * u
-        y = _grouped_mm(h, W2.mT, ends)
-        yw = (y * tw_row[sidx].unsqueeze(-1)).float()
-        out.index_add_(0, tok_s, yw)
+    for lo in range(0, expert_of_row.numel(), plan_chunk):
+        hi = min(lo + plan_chunk, expert_of_row.numel())
+        plan = _route_plan(expert_of_row, lo, hi, K, E)
+        route_chunk = chunk_size(
+            plan.routes.numel(),
+            per_route,
+            x_flat.device,
+            fixed_bytes=out.numel() * out.element_size() + _plan_bytes(plan),
+            budget_bytes=budget,
+        )
+        for rlo in range(0, plan.routes.numel(), route_chunk):
+            rhi = min(rlo + route_chunk, plan.routes.numel())
+            subplan = _route_subplan(plan, rlo, rhi, expert_of_row, K, E)
+            sidx, tok_s, ends = (
+                subplan.routes,
+                subplan.tokens,
+                subplan.real_ends,
+            )
+            x_s = x_flat[tok_s]
+            gate_up = _grouped_mm(x_s, W1.mT, ends)
+            g, u = gate_up[:, :I], gate_up[:, I:]
+            h = F.silu(g.float()).to(dt) * u
+            y = _grouped_mm(h, W2.mT, ends)
+            yw = (y * tw_row[sidx].unsqueeze(-1)).float()
+            out.index_add_(0, tok_s, yw)
     return out.to(dt)
 
 
-def _route_groups(real_eor, routes, K, E, tokens_per_sample):
-    experts = real_eor[routes]
-    if tokens_per_sample is None:
-        return experts
-    tokens = torch.div(routes, K, rounding_mode="floor")
-    samples = torch.div(tokens, tokens_per_sample, rounding_mode="floor")
-    return samples * E + experts
+def _aligned_tile(value, limit, alignment=4):
+    if value <= alignment:
+        return value
+    return min(value, max(alignment, limit - limit % alignment))
 
 
-def _weight_grad_terms(
-    x_flat, grad_flat, W1, W2, tw_row, routes, K, expert, *, need_dgu=True
+def _iter_route_plans(
+    cached_plan,
+    real_eor,
+    plan_chunk,
+    K,
+    E,
+    tokens_per_sample,
+    n_groups,
 ):
-    """Recompute the routed terms needed by requested expert weight gradients."""
-    I = W1.shape[1] // 2
-    tokens = torch.div(routes, K, rounding_mode="floor")
-    xx = x_flat[tokens]
-    gate_up = F.linear(xx, W1[expert])
-    gate, up = gate_up[:, :I], gate_up[:, I:]
-    sig = torch.sigmoid(gate.float())
-    silu = (gate.float() * sig).to(x_flat.dtype)
-    hidden = silu * up
-    go = grad_flat[tokens]
-    dy = (tw_row[routes].unsqueeze(-1) * go).to(x_flat.dtype)
-    if not need_dgu:
-        return xx, hidden, dy, None
-    dh = F.linear(dy, W2[expert].t())
-    dsilu = (sig * (1.0 + gate.float() * (1.0 - sig))).to(x_flat.dtype)
-    dgu = torch.cat([dh * up * dsilu, dh * silu], dim=-1)
-    return xx, hidden, dy, dgu
-
-
-def _group_route_chunks(
-    real_eor, group, K, E, tokens_per_sample, chunk, fixed_bytes, per_route
-):
-    chunk = chunk_size(chunk, per_route, real_eor.device, fixed_bytes=fixed_bytes)
-    for lo in range(0, real_eor.numel(), chunk):
-        routes = torch.arange(
-            lo, min(lo + chunk, real_eor.numel()), device=real_eor.device
+    if cached_plan is not None:
+        yield cached_plan
+        return
+    for lo in range(0, real_eor.numel(), plan_chunk):
+        yield _route_plan(
+            real_eor,
+            lo,
+            min(lo + plan_chunk, real_eor.numel()),
+            K,
+            E,
+            tokens_per_sample=tokens_per_sample,
+            n_groups=n_groups,
         )
-        groups = _route_groups(real_eor, routes, K, E, tokens_per_sample)
-        yield routes[groups == group]
+
+
+@dataclass(frozen=True)
+class _WeightGradPlan:
+    per_route: int
+    budget: int
+    cached_route_plan: _RoutePlan | None
+    plan_chunk: int
 
 
 def _stream_grouped_weight_grads(
     x_flat,
     grad_flat,
-    W1,
-    W2,
+    weights,
     real_eor,
     tw_row,
     K,
     tokens_per_sample,
     n_groups,
-    dW1,
-    dW2,
-    per_route,
+    outputs,
+    config,
+    *,
+    grouped_atb=_grouped_AtB,
 ):
-    """Recompute bounded route and output tiles, one final group at a time."""
+    """Accumulate bounded FP32 output tiles, scanning routes once per tile."""
+    W1, W2 = weights
+    dW1, dW2 = outputs
+    per_route = config.per_route
+    budget = config.budget
+    cached_plan = config.cached_route_plan
+    plan_chunk = config.plan_chunk
     E = W1.shape[0]
     I = W1.shape[1] // 2
     H = x_flat.shape[1]
-    dW1_rows = chunk_size(2 * I, H * 4, x_flat.device) if dW1 is not None else 1
-    dW2_rows = chunk_size(H, I * 4, x_flat.device) if dW2 is not None else 1
-    combine = (
-        dW1 is not None
-        and dW2 is not None
-        and chunk_size(2 * I, H * 4, x_flat.device, fixed_bytes=H * I * 4) == 2 * I
-        and chunk_size(H, I * 4, x_flat.device, fixed_bytes=2 * I * H * 4) == H
+    plan_bytes = _plan_bytes(cached_plan) if cached_plan is not None else 0
+    if cached_plan is None:
+        plan_bytes = (
+            min(real_eor.numel(), plan_chunk)
+            * (32 if tokens_per_sample is not None and n_groups != E else 24)
+            + (E + n_groups) * 4
+        )
+    available = max(
+        1,
+        (budget - plan_bytes - per_route) // 2,
     )
+    gate_bytes = n_groups * 2 * I * H * 4 if dW1 is not None else 0
+    down_bytes = n_groups * H * I * 4 if dW2 is not None else 0
 
-    for group in range(n_groups):
-        expert = group % E
-        if combine:
-            dW1_acc = torch.zeros(2 * I, H, dtype=torch.float32, device=x_flat.device)
-            dW2_acc = torch.zeros(H, I, dtype=torch.float32, device=x_flat.device)
-            for routes in _group_route_chunks(
-                real_eor,
-                group,
-                K,
-                E,
-                tokens_per_sample,
-                real_eor.numel(),
-                3 * I * H * 4,
+    def accumulate_tiles(
+        gate_rows=None,
+        gate_cols=None,
+        down_rows=None,
+        down_cols=None,
+    ):
+        gate_acc = (
+            torch.zeros(
+                n_groups,
+                gate_rows.stop - gate_rows.start,
+                gate_cols.stop - gate_cols.start,
+                dtype=torch.float32,
+                device=x_flat.device,
+            )
+            if gate_rows is not None
+            else None
+        )
+        down_acc = (
+            torch.zeros(
+                n_groups,
+                down_rows.stop - down_rows.start,
+                down_cols.stop - down_cols.start,
+                dtype=torch.float32,
+                device=x_flat.device,
+            )
+            if down_rows is not None
+            else None
+        )
+        acc_bytes = sum(
+            acc.numel() * acc.element_size()
+            for acc in (gate_acc, down_acc)
+            if acc is not None
+        )
+        for plan in _iter_route_plans(
+            cached_plan,
+            real_eor,
+            plan_chunk,
+            K,
+            E,
+            tokens_per_sample,
+            n_groups,
+        ):
+            current_plan_bytes = _plan_bytes(plan)
+            route_chunk = chunk_size(
+                plan.routes.numel(),
                 per_route,
-            ):
-                if routes.numel() == 0:
-                    continue
-                xx, hidden, dy, dgu = _weight_grad_terms(
-                    x_flat, grad_flat, W1, W2, tw_row, routes, K, expert
+                x_flat.device,
+                fixed_bytes=current_plan_bytes + 2 * acc_bytes,
+                budget_bytes=budget,
+            )
+            for rlo in range(0, plan.routes.numel(), route_chunk):
+                subplan = _route_subplan(
+                    plan,
+                    rlo,
+                    min(rlo + route_chunk, plan.routes.numel()),
+                    real_eor,
+                    K,
+                    E,
+                    tokens_per_sample=tokens_per_sample,
+                    n_groups=n_groups,
                 )
-                dW1_acc.add_(dgu.float().t() @ xx.float())
-                dW2_acc.add_(dy.float().t() @ hidden.float())
-            dW1[group] = dW1_acc.to(W1.dtype)
-            dW2[group] = dW2_acc.to(W2.dtype)
+                routes, tokens, ends = (
+                    subplan.routes,
+                    subplan.tokens,
+                    subplan.real_ends,
+                )
+                xx = x_flat[tokens]
+                gate_up = _grouped_mm(xx, W1.mT, ends)
+                gate, up = gate_up[:, :I], gate_up[:, I:]
+                sig = torch.sigmoid(gate.float())
+                silu = (gate.float() * sig).to(x_flat.dtype)
+                hidden = silu * up
+                dy = (tw_row[routes].unsqueeze(-1) * grad_flat[tokens]).to(x_flat.dtype)
+                if down_acc is not None:
+                    _accumulate_grouped_AtB(
+                        dy[:, down_rows],
+                        hidden[:, down_cols],
+                        subplan,
+                        down_acc,
+                        acc_bytes,
+                        grouped_atb=grouped_atb,
+                    )
+                if gate_acc is not None:
+                    dh = _grouped_mm(dy, W2, ends)
+                    dsilu = (sig * (1.0 + gate.float() * (1.0 - sig))).to(x_flat.dtype)
+                    dgu = torch.cat([dh * up * dsilu, dh * silu], dim=-1)
+                    _accumulate_grouped_AtB(
+                        dgu[:, gate_rows],
+                        xx[:, gate_cols],
+                        subplan,
+                        gate_acc,
+                        acc_bytes,
+                        grouped_atb=grouped_atb,
+                    )
+        if gate_acc is not None:
+            dW1[:, gate_rows, gate_cols].copy_(gate_acc.to(W1.dtype))
+        if down_acc is not None:
+            dW2[:, down_rows, down_cols].copy_(down_acc.to(W2.dtype))
+
+    if gate_bytes + down_bytes <= available:
+        accumulate_tiles(
+            slice(0, 2 * I) if dW1 is not None else None,
+            slice(0, H) if dW1 is not None else None,
+            slice(0, H) if dW2 is not None else None,
+            slice(0, I) if dW2 is not None else None,
+        )
+        return
+
+    for out, P, Q, is_gate in (
+        (dW1, 2 * I, H, True),
+        (dW2, H, I, False),
+    ):
+        if out is None:
             continue
-
-        if dW1 is not None:
-            for out_lo in range(0, 2 * I, dW1_rows):
-                out_hi = min(out_lo + dW1_rows, 2 * I)
-                acc = torch.zeros(
-                    out_hi - out_lo, H, dtype=torch.float32, device=x_flat.device
-                )
-                for routes in _group_route_chunks(
-                    real_eor,
-                    group,
-                    K,
-                    E,
-                    tokens_per_sample,
-                    real_eor.numel(),
-                    acc.numel() * 4,
-                    per_route,
-                ):
-                    if routes.numel() == 0:
-                        continue
-                    xx, _, _, dgu = _weight_grad_terms(
-                        x_flat, grad_flat, W1, W2, tw_row, routes, K, expert
-                    )
-                    acc.add_(dgu[:, out_lo:out_hi].float().t() @ xx.float())
-                dW1[group, out_lo:out_hi] = acc.to(W1.dtype)
-
-        if dW2 is not None:
-            for out_lo in range(0, H, dW2_rows):
-                out_hi = min(out_lo + dW2_rows, H)
-                acc = torch.zeros(
-                    out_hi - out_lo, I, dtype=torch.float32, device=x_flat.device
-                )
-                for routes in _group_route_chunks(
-                    real_eor,
-                    group,
-                    K,
-                    E,
-                    tokens_per_sample,
-                    real_eor.numel(),
-                    acc.numel() * 4,
-                    per_route,
-                ):
-                    if routes.numel() == 0:
-                        continue
-                    _, hidden, dy, _ = _weight_grad_terms(
-                        x_flat,
-                        grad_flat,
-                        W1,
-                        W2,
-                        tw_row,
-                        routes,
-                        K,
-                        expert,
-                        need_dgu=False,
-                    )
-                    acc.add_(dy[:, out_lo:out_hi].float().t() @ hidden.float())
-                dW2[group, out_lo:out_hi] = acc.to(W2.dtype)
+        max_elements = max(16 * n_groups, available // 4)
+        q_rows = _aligned_tile(Q, max_elements // (n_groups * 4))
+        p_rows = _aligned_tile(P, max_elements // (n_groups * q_rows))
+        for p_lo in range(0, P, p_rows):
+            p_slice = slice(p_lo, min(p_lo + p_rows, P))
+            for q_lo in range(0, Q, q_rows):
+                q_slice = slice(q_lo, min(q_lo + q_rows, Q))
+                if is_gate:
+                    accumulate_tiles(p_slice, q_slice, None, None)
+                else:
+                    accumulate_tiles(None, None, p_slice, q_slice)
 
 
 def _fused_moe_backward(
@@ -299,119 +486,160 @@ def _fused_moe_backward(
         else None
     )
     if wgrad_out is None:
-        dW1 = W1.new_empty(n_groups, 2 * I, H) if compute_gate_wgrad else None
-        dW2 = W2.new_empty(n_groups, H, I) if compute_down_wgrad else None
+        dW1 = W1.new_zeros(n_groups, 2 * I, H) if compute_gate_wgrad else None
+        dW2 = W2.new_zeros(n_groups, H, I) if compute_down_wgrad else None
     else:
         dW1, dW2 = wgrad_out
+        if dW1 is not None:
+            dW1.zero_()
+        if dW2 is not None:
+            dW2.zero_()
     compute_wgrad = compute_gate_wgrad or compute_down_wgrad
 
     per_route = grouped_backward_bytes_per_route(H, I, x_flat.element_size())
-    fixed_bytes = sum(
-        buffer.numel() * buffer.element_size()
-        for buffer in (dx, dtw)
-        if buffer is not None
+    budget = _workspace_budget_bytes(x_flat.device)
+    metadata_per_route = 32 if tokens_per_sample is not None and n_groups != E else 24
+    atomic_accumulator = (
+        n_groups * 16 * 4 * int(compute_gate_wgrad + compute_down_wgrad)
     )
-    route_chunk = chunk_size(
-        real_eor.numel(), per_route, x_flat.device, fixed_bytes=fixed_bytes
+    plan_estimate = real_eor.numel() * metadata_per_route + (E + n_groups) * 4
+    gate_grad_bytes = n_groups * 2 * I * H * 4 if compute_gate_wgrad else 0
+    down_grad_bytes = n_groups * H * I * 4 if compute_down_wgrad else 0
+    full_grad_bytes = gate_grad_bytes + down_grad_bytes
+    inline_workspace = full_grad_bytes + max(gate_grad_bytes, down_grad_bytes)
+    inline_wgrad = (
+        compute_wgrad and plan_estimate + per_route + inline_workspace <= budget
     )
-    weight_grads_fit = (
-        not compute_gate_wgrad
-        or chunk_size(
-            2 * I,
-            H * 4,
+    cache_plan = atomic_accumulator + plan_estimate <= budget
+    plan_chunk = (
+        max(1, real_eor.numel())
+        if cache_plan
+        else chunk_size(
+            real_eor.numel(),
+            metadata_per_route,
             x_flat.device,
-            fixed_bytes=H * I * 4 if compute_down_wgrad else 0,
+            fixed_bytes=atomic_accumulator,
+            budget_bytes=budget,
         )
-        == 2 * I
-    ) and (
-        not compute_down_wgrad
-        or chunk_size(
-            H,
-            I * 4,
-            x_flat.device,
-            fixed_bytes=2 * I * H * 4 if compute_gate_wgrad else 0,
+    )
+    cached_plan = (
+        _route_plan(
+            real_eor,
+            0,
+            real_eor.numel(),
+            K,
+            E,
+            tokens_per_sample=tokens_per_sample,
+            n_groups=n_groups,
         )
-        == H
+        if cache_plan and real_eor.numel() > 0
+        else None
     )
-    fast_gate_wgrad = (
-        compute_gate_wgrad and route_chunk == real_eor.numel() and weight_grads_fit
+    gate_acc = (
+        torch.zeros_like(dW1, dtype=torch.float32)
+        if inline_wgrad and dW1 is not None
+        else None
     )
-    fast_down_wgrad = (
-        compute_down_wgrad and route_chunk == real_eor.numel() and weight_grads_fit
+    down_acc = (
+        torch.zeros_like(dW2, dtype=torch.float32)
+        if inline_wgrad and dW2 is not None
+        else None
     )
-    need_dy = compute_x_grad or fast_gate_wgrad or fast_down_wgrad
-    need_dgu = compute_x_grad or fast_gate_wgrad
-    run_main = compute_route_grad or need_dy
+    run_main = compute_route_grad or compute_x_grad or inline_wgrad
 
     if run_main:
-        for lo in range(0, real_eor.numel(), route_chunk):
-            hi = min(lo + route_chunk, real_eor.numel())
-            local_sort, ends = _route_sort(real_eor[lo:hi], E)
-            sidx = lo + local_sort
-            tok_s = torch.div(sidx, K, rounding_mode="floor")
-            x_s = x_flat[tok_s]
-            gate_up = _grouped_mm(x_s, W1.mT, ends)
-            g, u = gate_up[:, :I], gate_up[:, I:]
-            sig = torch.sigmoid(g.float())
-            silu = (g.float() * sig).to(dt)
-            h = silu * u
-            go_s = grad_flat[tok_s]
-            tw_s = tw_row[sidx]
-            if compute_route_grad:
-                y = _grouped_mm(h, W2.mT, ends)
-                dtw[sidx] = (go_s.float() * y.float()).sum(-1)
-            if need_dy:
-                dy = (tw_s.unsqueeze(-1) * go_s).to(dt)
-                if need_dgu:
-                    dh = _grouped_mm(dy, W2, ends)
-                    dsilu = (sig * (1.0 + g.float() * (1.0 - sig))).to(dt)
-                    dgu = torch.cat([dh * u * dsilu, dh * silu], dim=-1)
-                    if compute_x_grad:
-                        dx_s = _grouped_mm(dgu, W1, ends)
-                        dx.index_add_(0, tok_s, dx_s.float())
+        for plan in _iter_route_plans(
+            cached_plan,
+            real_eor,
+            plan_chunk,
+            K,
+            E,
+            tokens_per_sample,
+            n_groups,
+        ):
+            route_chunk = chunk_size(
+                plan.routes.numel(),
+                per_route,
+                x_flat.device,
+                fixed_bytes=_plan_bytes(plan)
+                + (inline_workspace if inline_wgrad else 0),
+                budget_bytes=budget,
+            )
+            for rlo in range(0, plan.routes.numel(), route_chunk):
+                rhi = min(rlo + route_chunk, plan.routes.numel())
+                subplan = _route_subplan(
+                    plan,
+                    rlo,
+                    rhi,
+                    real_eor,
+                    K,
+                    E,
+                    tokens_per_sample=tokens_per_sample,
+                    n_groups=n_groups,
+                )
+                sidx, tok_s, ends = (
+                    subplan.routes,
+                    subplan.tokens,
+                    subplan.real_ends,
+                )
+                x_s = x_flat[tok_s]
+                gate_up = _grouped_mm(x_s, W1.mT, ends)
+                g, u = gate_up[:, :I], gate_up[:, I:]
+                sig = torch.sigmoid(g.float())
+                silu = (g.float() * sig).to(dt)
+                h = silu * u
+                go_s = grad_flat[tok_s]
+                tw_s = tw_row[sidx]
+                if compute_route_grad:
+                    y = _grouped_mm(h, W2.mT, ends)
+                    dtw[sidx] = (go_s.float() * y.float()).sum(-1)
+                if compute_x_grad or inline_wgrad:
+                    dy = (tw_s.unsqueeze(-1) * go_s).to(dt)
+                    if down_acc is not None:
+                        _accumulate_grouped_AtB(
+                            dy, h, subplan, down_acc, full_grad_bytes
+                        )
+                    if compute_x_grad or gate_acc is not None:
+                        dh = _grouped_mm(dy, W2, ends)
+                        dsilu = (sig * (1.0 + g.float() * (1.0 - sig))).to(dt)
+                        dgu = torch.cat([dh * u * dsilu, dh * silu], dim=-1)
+                        if compute_x_grad:
+                            dx_s = _grouped_mm(dgu, W1, ends)
+                            dx.index_add_(0, tok_s, dx_s.float())
+                        if gate_acc is not None:
+                            _accumulate_grouped_AtB(
+                                dgu, x_s, subplan, gate_acc, full_grad_bytes
+                            )
 
     dx = None if dx is None else dx.to(dt)
     dtw = None if dtw is None else dtw.reshape(N, K).to(dt)
     if not compute_wgrad:
         return dx, None, None, dtw
-    if fast_gate_wgrad or fast_down_wgrad:
-        group_sorted = _route_groups(real_eor, sidx, K, E, tokens_per_sample)
-        vperm = torch.argsort(group_sorted, stable=True)
-        seg = _seg_offsets(group_sorted, n_groups)
-        if fast_gate_wgrad:
-            _grouped_AtB(dgu[vperm], x_s[vperm], seg, n_groups, out=dW1)
-        if fast_down_wgrad:
-            _grouped_AtB(dy[vperm], h[vperm], seg, n_groups, out=dW2)
-    else:
-        if run_main and real_eor.numel() > 0:
-            del local_sort, ends, sidx, tok_s, x_s, gate_up, g, u, sig, silu
-            del h, go_s, tw_s
-            if compute_route_grad:
-                del y
-            if need_dy:
-                del dy
-            if need_dgu:
-                del dh, dsilu, dgu
-            if compute_x_grad:
-                del dx_s
-            if x_flat.device.type == "cuda":
-                torch.cuda.synchronize(x_flat.device)
-            elif x_flat.device.type == "mps":
-                torch.mps.synchronize()
-        _stream_grouped_weight_grads(
-            x_flat,
-            grad_flat,
-            W1,
-            W2,
-            real_eor,
-            tw_row,
-            K,
-            tokens_per_sample,
-            n_groups,
-            dW1,
-            dW2,
-            per_route,
-        )
+    if inline_wgrad:
+        if dW1 is not None:
+            dW1.copy_(gate_acc.to(W1.dtype))
+        if dW2 is not None:
+            dW2.copy_(down_acc.to(W2.dtype))
+        return dx, dW1, dW2, dtw
+    if run_main and real_eor.numel() > 0:
+        del plan, subplan, sidx, tok_s, ends, x_s, gate_up, g, u, sig, silu
+        del h, go_s, tw_s
+        if compute_route_grad:
+            del y
+        if compute_x_grad:
+            del dy, dh, dsilu, dgu, dx_s
+    _stream_grouped_weight_grads(
+        x_flat,
+        grad_flat,
+        (W1, W2),
+        real_eor,
+        tw_row,
+        K,
+        tokens_per_sample,
+        n_groups,
+        (dW1, dW2),
+        _WeightGradPlan(per_route, budget, cached_plan, plan_chunk),
+    )
     return dx, dW1, dW2, dtw
 
 
