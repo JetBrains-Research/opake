@@ -110,7 +110,7 @@ for normalized BISR. Runtime state keeps only the newest
 per step, independent of the training horizon once `n_steps >= p`.
 
 This bounded ring is the complete `O(p)` execution design required by
-[issue #795](https://github.com/JetBrains-Research/opaque/issues/795). It is not
+[issue #795](https://github.com/JetBrains-Research/opake/issues/795). It is not
 a zero-buffer design: a large model or bandwidth can still make the retained
 pytrees significant. PRNG replay could trade that persistent tensor storage for
 extra noise generation, but replay and a reusable generic banded-inverse
@@ -135,7 +135,7 @@ noise path does not allocate its `n_steps - 1` model-shaped history.
     Exact continuation from a bounded-layout checkpoint requires the same BISR
     execution identity and base noise scale as the original run, in addition to
     the saved iid window. Open
-    [issue #789](https://github.com/JetBrains-Research/opaque/issues/789) tracks
+    [issue #789](https://github.com/JetBrains-Research/opake/issues/789) tracks
     the separate, urgent problem where calibrated DP-FTRL resume can rebuild a
     mechanism with a different noise multiplier. This bounded-state change does
     not fix or relax that resume requirement.

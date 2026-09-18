@@ -169,7 +169,7 @@ privacy budget, calibrate `noise_multiplier` first — see
 
 ## Runnable references
 
-- [`examples/train_sft.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_sft.py)
+- [`examples/train_sft.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_sft.py)
   — full DP-SGD SFT script (collator, `nll`/`dft` losses, the per-example
   `vmap(grad)` loop, and a `--smoke` CPU run on a tiny random model).
 

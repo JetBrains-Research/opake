@@ -7,7 +7,7 @@ adaptive), and Poisson subsampling. Functional optimizers
 
 ## Install
 
-Install the root package as described in the [repository installation guide](https://github.com/JetBrains-Research/opaque#installation).
+Install the root package as described in the [repository installation guide](https://github.com/JetBrains-Research/opake#installation).
 `opake-dpsgd` is included in the default `opake` package set.
 
 ## Quick start

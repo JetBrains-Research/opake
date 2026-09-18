@@ -403,9 +403,9 @@ supported and not implemented.
 
 ## Runnable references
 
-- [`examples/train_sft_trainer.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_sft_trainer.py)
+- [`examples/train_sft_trainer.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_sft_trainer.py)
   — DP SFT via the class-based `SFTTrainer` (LoRA policy, `nll`/`dft`).
-- [`examples/train_dpo_trainer.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpo_trainer.py)
+- [`examples/train_dpo_trainer.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpo_trainer.py)
   — DP DPO via the class-based `DPOTrainer` (reference precompute, LoRA
   null-ref).
 

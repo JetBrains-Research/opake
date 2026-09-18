@@ -6,7 +6,7 @@ Hugging Face trainer integration for Opake: DP-aware training loop
 
 ## Install
 
-Install the root package as described in the [repository installation guide](https://github.com/JetBrains-Research/opaque#installation).
+Install the root package as described in the [repository installation guide](https://github.com/JetBrains-Research/opake#installation).
 Use its `transformers` extra for trainer integration or `trl` for TRL config
 conversion.
 

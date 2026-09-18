@@ -12,7 +12,7 @@ report concerns.
 
 ```bash
 # Clone repository
-git clone https://github.com/JetBrains-Research/opaque.git
+git clone https://github.com/JetBrains-Research/opake.git
 cd opake
 
 # Install the complete contributor environment
@@ -82,9 +82,9 @@ the normative package/API rules and how each one is enforced.
 ## Finding Issues to Work On
 
 **Good starting points**:
-- [Issues labeled `good-first-issue`](https://github.com/JetBrains-Research/opaque/labels/good-first-issue)
-- [Issues labeled `help-wanted`](https://github.com/JetBrains-Research/opaque/labels/help-wanted)
-- [Open Discussions](https://github.com/JetBrains-Research/opaque/discussions)
+- [Issues labeled `good-first-issue`](https://github.com/JetBrains-Research/opake/labels/good-first-issue)
+- [Issues labeled `help-wanted`](https://github.com/JetBrains-Research/opake/labels/help-wanted)
+- [Open Discussions](https://github.com/JetBrains-Research/opake/discussions)
 
 **Before starting**:
 1. Comment on the issue to say you're working on it (avoid duplicated effort)
@@ -315,7 +315,7 @@ at the same version. Python sub-package versions come from
 [`setuptools-scm`](https://setuptools-scm.readthedocs.io/) — no
 `version = "..."` literal to bump in `pyproject.toml` files.
 
-Release notes live on the [GitHub Releases](https://github.com/JetBrains-Research/opaque/releases)
+Release notes live on the [GitHub Releases](https://github.com/JetBrains-Research/opake/releases)
 page. There is no `CHANGELOG.md` to maintain.
 
 ### Pipeline states
@@ -442,8 +442,8 @@ fix, and prepare the next patch from `release/X.Y`.
 
 ## Getting Help
 
-- **Questions**: Open a [Discussion](https://github.com/JetBrains-Research/opaque/discussions)
-- **Bugs**: Open an [Issue](https://github.com/JetBrains-Research/opaque/issues)
+- **Questions**: Open a [Discussion](https://github.com/JetBrains-Research/opake/discussions)
+- **Bugs**: Open an [Issue](https://github.com/JetBrains-Research/opake/issues)
 
 ---
 

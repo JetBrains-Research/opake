@@ -46,7 +46,7 @@ Concerns that apply to either stack.
 Install Opake and its tutorial dependencies from a repository checkout:
 
 ```bash
-git clone https://github.com/JetBrains-Research/opaque.git
+git clone https://github.com/JetBrains-Research/opake.git
 cd opake
 uv sync --group examples --all-packages --extra all
 jupyter lab docs/tutorials/

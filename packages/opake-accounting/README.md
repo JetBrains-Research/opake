@@ -11,7 +11,7 @@ The native module exposes flat functions that take scalar parameters
 and return opake `Pld` handles; the Python side owns composition,
 repetition, caching, and calibration.
 
-Install the root package as described in the [repository installation guide](https://github.com/JetBrains-Research/opaque#installation).
+Install the root package as described in the [repository installation guide](https://github.com/JetBrains-Research/opake#installation).
 It provides the synchronized `opake-accounting` distribution:
 
 ```bash

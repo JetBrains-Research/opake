@@ -167,7 +167,7 @@ Restore from the same flat state dict with
 
 ## Runnable references
 
-- [`examples/train_dpsgd.py`](https://github.com/JetBrains-Research/opaque/blob/main/examples/train_dpsgd.py)
+- [`examples/train_dpsgd.py`](https://github.com/JetBrains-Research/opake/blob/main/examples/train_dpsgd.py)
   — full causal-LM training script.
 - `tests/integration/test_dpsgd_pipeline.py` — minimal smoke test
   exercising the same flow on a tiny LlamaConfig + LoRA model

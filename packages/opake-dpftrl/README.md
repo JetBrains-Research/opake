@@ -9,7 +9,7 @@ that consumes private `noisy_squared_grads` streams) live in
 
 ## Install
 
-Install the root package as described in the [repository installation guide](https://github.com/JetBrains-Research/opaque#installation),
+Install the root package as described in the [repository installation guide](https://github.com/JetBrains-Research/opake#installation),
 using its `dpftrl` extra to include this component.
 
 ## Quick start

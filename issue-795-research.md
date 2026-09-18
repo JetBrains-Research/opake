@@ -5,10 +5,10 @@ Research snapshot: 2026-08-31 UTC
 ## Post-research implementation update (2026-09-01 UTC)
 
 The implementation work was rebased on the then-current `origin/main` at
-[`e64846c999701d58095a8800e50434dc922a1de1`](https://github.com/JetBrains-Research/opaque/commit/e64846c999701d58095a8800e50434dc922a1de1).
-This matters because [PR #857](https://github.com/JetBrains-Research/opaque/pull/857)
+[`e64846c999701d58095a8800e50434dc922a1de1`](https://github.com/JetBrains-Research/opake/commit/e64846c999701d58095a8800e50434dc922a1de1).
+This matters because [PR #857](https://github.com/JetBrains-Research/opake/pull/857)
 had since merged as
-[`e87a0c217728da8a25086359c715d30f0d7d66c1`](https://github.com/JetBrains-Research/opaque/commit/e87a0c217728da8a25086359c715d30f0d7d66c1),
+[`e87a0c217728da8a25086359c715d30f0d7d66c1`](https://github.com/JetBrains-Research/opake/commit/e87a0c217728da8a25086359c715d30f0d7d66c1),
 so the signed-encoder accounting safeguards described below as pending are part
 of the implementation base and must be preserved rather than cherry-picked.
 The typed, namespaced RNG folding work and realized-standard-deviation coverage
@@ -42,13 +42,13 @@ checkpoints retain the iid window, but exact continuation additionally requires
 the same BISR execution identity and base noise scale as the original run. The
 layout version prevents an incompatible history restore; it does not prove that
 a rebuilt mechanism uses the same calibrated multiplier. Open
-[issue #789](https://github.com/JetBrains-Research/opaque/issues/789) is the
+[issue #789](https://github.com/JetBrains-Research/opake/issues/789) is the
 separate, urgent calibrated-resume defect. It is not fixed by this bounded-state
 change.
 
 ## Executive conclusion
 
-[Issue #795](https://github.com/JetBrains-Research/opaque/issues/795) is a
+[Issue #795](https://github.com/JetBrains-Research/opake/issues/795) is a
 confirmed implementation defect. BISR is defined by a banded inverse strategy
 matrix, so its runtime noise operator is a finite impulse-response convolution
 over at most `p` iid noise vectors. Opake instead recovers the dense,
@@ -81,16 +81,16 @@ contract.
 The most important facts that change how this should be fixed are:
 
 1. The old `O(p)` implementation was wrong because it truncated the *forward*
-   strategy to `p` coefficients. [Issue #360](https://github.com/JetBrains-Research/opaque/issues/360)
-   and merged [PR #509](https://github.com/JetBrains-Research/opaque/pull/509)
+   strategy to `p` coefficients. [Issue #360](https://github.com/JetBrains-Research/opake/issues/360)
+   and merged [PR #509](https://github.com/JetBrains-Research/opake/pull/509)
    fixed that correctness defect by using the full horizon. Restoring the old
    code would reintroduce a numerical/covariance bug. The production path must
    convolve the banded *inverse*, not truncate the dense forward strategy.
 2. The exact bounded-state algorithm and useful scale tests already exist in
-   commit [`8c36115`](https://github.com/JetBrains-Research/opaque/commit/8c36115afdee3414af098017d00b0c06520cf560),
-   originally closed [PR #658](https://github.com/JetBrains-Research/opaque/pull/658).
+   commit [`8c36115`](https://github.com/JetBrains-Research/opake/commit/8c36115afdee3414af098017d00b0c06520cf560),
+   originally closed [PR #658](https://github.com/JetBrains-Research/opake/pull/658).
    Closure is not evidence that its BISR design was rejected: open
-   [PR #722](https://github.com/JetBrains-Research/opaque/pull/722) says it
+   [PR #722](https://github.com/JetBrains-Research/opake/pull/722) says it
    consolidated the stacked series, preserved every commit, and closed the
    stack in favor of the integration PR. Its direct-convolution branch and
    bounded-state tests remain, although surrounding engine and RNG code changed.
@@ -99,7 +99,7 @@ The most important facts that change how this should be fixed are:
 3. A narrow fix must preserve main's existing namespaced iid stream. The
    issue's suggestion to replay noise "as lambda-CGD does" refers to the
    technique, not the current key derivation: sibling
-   [issue #793](https://github.com/JetBrains-Research/opaque/issues/793) says
+   [issue #793](https://github.com/JetBrains-Research/opake/issues/793) says
    lambda-CGD's unrooted `fold_in(key, step)` is itself a privacy-relevant RNG
    collision defect.
 4. Changing the state from `n_steps - 1` past correlated outputs to `p - 1`
@@ -109,7 +109,7 @@ The most important facts that change how this should be fixed are:
    BISR checkpoints will not automatically resume safely into a ring-buffer
    implementation. The issue's acceptance criteria omit this compatibility
    decision.
-5. Open [PR #857](https://github.com/JetBrains-Research/opaque/pull/857) changes
+5. Open [PR #857](https://github.com/JetBrains-Research/opake/pull/857) changes
    the same BISR files and hardens and formally documents conservative
    accounting for already-permitted signed custom inverse coefficients. Runtime
    convolution must retain those signs. The absolute-value majorants in #857
@@ -132,7 +132,7 @@ paper, repository documentation, upstream code, tests, history, release tags,
 and unmerged pull-request heads were inspected.
 
 The authoritative upstream code snapshot for this report is `origin/main` at
-[`e89e858a31ca5e279f796f2d322d323c8d59665e`](https://github.com/JetBrains-Research/opaque/commit/e89e858a31ca5e279f796f2d322d323c8d59665e),
+[`e89e858a31ca5e279f796f2d322d323c8d59665e`](https://github.com/JetBrains-Research/opake/commit/e89e858a31ca5e279f796f2d322d323c8d59665e),
 fetched on 2026-08-31. The investigation began from the older WIP branch
 `wip/dpftrl-353-595-final` at `4b54a39`; that revision contains related
 accounting work but is not treated as the definition of current upstream
@@ -183,7 +183,7 @@ later edits: BISR selects the length-`n_steps` operator there, but the
 model-shaped allocation actually occurs in `_toeplitz.py`.
 
 The issue is a child of open tracking
-[issue #766](https://github.com/JetBrains-Research/opaque/issues/766), **“Correct
+[issue #766](https://github.com/JetBrains-Research/opake/issues/766), **“Correct
 DP-FTRL mechanism identity, noise streams, and strategy state.”** The parent has
 five independently closable children. Unlike #795's medium-severity performance
 classification, #766 is labeled `severity: high`, `impact: epsilon`, and
@@ -276,7 +276,7 @@ For a lower-triangular Toeplitz `C` whose first-column coefficients are
 \]
 
 This matches upstream's reversed cumulative-sum implementation in
-[`_toeplitz.py`](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_toeplitz.py#L271-L275).
+[`_toeplitz.py`](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_toeplitz.py#L271-L275).
 The realized row norm reported to callers must be
 
 \[
@@ -316,17 +316,17 @@ paper's `alpha < 1` workload is outside #795.
 The dedicated BISR runtime hook is currently only a wrapper around the generic
 executor:
 
-1. [`_make_bisr_noise`](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_bisr.py#L116-L145)
+1. [`_make_bisr_noise`](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_bisr.py#L116-L145)
    converts `n_steps` with `int(...)`, calls
    `strategy.streaming_matrix(n_steps=n_steps)`, and passes the result to the
    generic matrix-factorization noise engine.
-2. [`BisrStrategy.streaming_matrix`](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_bisr.py#L207-L220)
+2. [`BisrStrategy.streaming_matrix`](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_bisr.py#L207-L220)
    recovers a forward-strategy first column of length `n_steps` and calls
    `inverse_as_streaming_matrix(...)`.
 3. The same call supplies the known `p` inverse coefficients, but the code
    comment and implementation make clear that this is only a validation and
    closed-form row-norm hint.
-4. [`inverse_as_streaming_matrix`](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_toeplitz.py#L220-L267)
+4. [`inverse_as_streaming_matrix`](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_toeplitz.py#L220-L267)
    sets `bands = len(coef) = n_steps`. Its initializer allocates
    `(bands - 1, *gradient_leaf.shape)` for every tensor leaf.
 5. Each call computes the dense recurrence
@@ -337,7 +337,7 @@ executor:
 
    using `torch.tensordot`, then calls `torch.roll` on the entire history and
    stores the newest correlated output.
-6. [`_streaming_mf_noise`](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_engine.py#L378-L431)
+6. [`_streaming_mf_noise`](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_engine.py#L378-L431)
    initializes that state while the noise factory is constructed, before the
    first training step.
 
@@ -372,7 +372,7 @@ worktree on CPU with PyTorch `2.9.1+cu128`. Its template was one
 `StreamingMatrix.init_multiply`.
 
 The inverse hint introduced by PR #572 does not change this. Its use is confined
-to [`row_norms_squared`](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_toeplitz.py#L277-L309).
+to [`row_norms_squared`](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_toeplitz.py#L277-L309).
 It fixed scalar setup work, not gradient-sized execution state.
 
 ### Correctness of the current output
@@ -414,7 +414,7 @@ defect is not.
 
 ### BISR introduction: PR #121
 
-[PR #121](https://github.com/JetBrains-Research/opaque/pull/121), merged on
+[PR #121](https://github.com/JetBrains-Research/opake/pull/121), merged on
 2026-04-16, introduced lambda-CGD and BISR. Its design correctly identified
 `C^{-1}` as the banded Toeplitz object, and the documentation already advertised
 bounded memory. The implementation nevertheless recovered only `bandwidth`
@@ -424,14 +424,14 @@ represent the full finite-horizon operator.
 
 ### Full-horizon correctness: issue #360 and PR #509
 
-[Issue #360](https://github.com/JetBrains-Research/opaque/issues/360) identified
+[Issue #360](https://github.com/JetBrains-Research/opake/issues/360) identified
 that truncation on 2026-08-02. It was a high-severity numerical issue: plausible
 per-step variances did not establish that runtime covariance matched the
 selected strategy. Its criteria asked for the full operator, empirical
 covariance over multiple horizons/bandwidths, and dense/streaming agreement.
 
-[PR #509](https://github.com/JetBrains-Research/opaque/pull/509), merged as
-[`2507548`](https://github.com/JetBrains-Research/opaque/commit/2507548b20222769958fff574168b0bd68232133)
+[PR #509](https://github.com/JetBrains-Research/opake/pull/509), merged as
+[`2507548`](https://github.com/JetBrains-Research/opake/commit/2507548b20222769958fff574168b0bd68232133)
 on 2026-08-06, changed BISR to recover all `n_steps` forward coefficients. The
 title says it applies the runtime operator “directly,” but the code still routes
 through generic forward substitution. The correctness repair thus created the
@@ -444,21 +444,21 @@ bandwidths. The author added the current horizon-sensitive matrix test. That
 test proves the reference matrix is full-horizon, but it still does not compare
 actual generated runtime sequences from the dedicated raw hook. #795 should
 finally add that missing end-to-end equivalence coverage. The review thread is
-[here](https://github.com/JetBrains-Research/opaque/pull/509#discussion_r3726858053).
+[here](https://github.com/JetBrains-Research/opake/pull/509#discussion_r3726858053).
 
 The #509 behavior shipped by release `v0.13.1`, so the scaling problem affects
 released versions rather than only an unreleased branch.
 
 ### Row-norm setup optimization: issue #355 and PR #572
 
-[Issue #355](https://github.com/JetBrains-Research/opaque/issues/355) concerned
+[Issue #355](https://github.com/JetBrains-Research/opake/issues/355) concerned
 eager quadratic row-norm probing. Merged
-[PR #572](https://github.com/JetBrains-Research/opaque/pull/572) replaced it with
+[PR #572](https://github.com/JetBrains-Research/opake/pull/572) replaced it with
 a closed-form cumulative sum and let BISR supply its known banded inverse as a
 hint. GitHub records merge commit
-[`8440327d`](https://github.com/JetBrains-Research/opaque/commit/8440327d582ec883a17188215bf6341d2e1e0eeb)
+[`8440327d`](https://github.com/JetBrains-Research/opake/commit/8440327d582ec883a17188215bf6341d2e1e0eeb)
 on the PR's stacked base; the equivalent commit present on current `main` is
-[`4106222`](https://github.com/JetBrains-Research/opaque/commit/4106222d0de5c3df5d57d7fc4276e2370a1f7f27).
+[`4106222`](https://github.com/JetBrains-Research/opake/commit/4106222d0de5c3df5d57d7fc4276e2370a1f7f27).
 It explicitly documents the crucial duality: the forward coefficients are dense
 to `n_steps`, while the inverse is banded.
 
@@ -473,22 +473,22 @@ The row-norm improvement shipped in `v0.15.0`.
 
 ## Existing direct implementation in PR #658 / PR #722
 
-Commit [`8c36115`](https://github.com/JetBrains-Research/opaque/commit/8c36115afdee3414af098017d00b0c06520cf560)
+Commit [`8c36115`](https://github.com/JetBrains-Research/opake/commit/8c36115afdee3414af098017d00b0c06520cf560)
 was authored on 2026-08-19, committed on 2026-08-21 at 09:49 UTC, and present
 at #658's final force-push at 09:56 UTC; it already implements the requested
 operator. It appeared as part 7 of the backend-split stack in
-[PR #658](https://github.com/JetBrains-Research/opaque/pull/658). The relevant
+[PR #658](https://github.com/JetBrains-Research/opake/pull/658). The relevant
 parts are:
 
-- [`_plan.py`](https://github.com/JetBrains-Research/opaque/blob/8c36115afdee3414af098017d00b0c06520cf560/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_plan.py#L110-L174)
+- [`_plan.py`](https://github.com/JetBrains-Research/opake/blob/8c36115afdee3414af098017d00b0c06520cf560/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_plan.py#L110-L174)
   validates the known inverse against the dense forward strategy over the
   finite horizon, truncates a longer hint when `p > n_steps`, computes `d_t`,
   and computes closed-form row norms.
-- [`_engine.py`](https://github.com/JetBrains-Research/opaque/blob/8c36115afdee3414af098017d00b0c06520cf560/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_engine.py#L211-L243)
+- [`_engine.py`](https://github.com/JetBrains-Research/opake/blob/8c36115afdee3414af098017d00b0c06520cf560/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_engine.py#L211-L243)
   chooses direct convolution when the inverse has fewer nonzero bands than the
   forward strategy. It retains iid `z` values newest-first and applies output
   scaling after the convolution.
-- [`test_streaming_execution.py`](https://github.com/JetBrains-Research/opaque/blob/8c36115afdee3414af098017d00b0c06520cf560/packages/opaque-torch/tests/dpftrl/test_streaming_execution.py)
+- [`test_streaming_execution.py`](https://github.com/JetBrains-Research/opake/blob/8c36115afdee3414af098017d00b0c06520cf560/packages/opaque-torch/tests/dpftrl/test_streaming_execution.py)
   asserts BISR state length, actual state bytes, deterministic dense-reference
   equivalence, and a tolerant early-versus-late cost bound.
 - `BisrStrategy.streaming_matrix()` remains the dense reference while its
@@ -499,13 +499,13 @@ encountered in #572. The final commit contains the corrected horizon-truncated
 validation, making it especially valuable prior art for #795.
 
 PR #658 is closed, but closure is not evidence that its BISR design was
-rejected. Open [PR #722](https://github.com/JetBrains-Research/opaque/pull/722),
+rejected. Open [PR #722](https://github.com/JetBrains-Research/opake/pull/722),
 **“split a backend-neutral engine from the Torch provider,”** explicitly says it
 replaces the stacked series, preserves every commit, and closes the stack in
 favor of the consolidated integration branch. Its body calls this a “22-PR”
 series, although the three listed ranges enumerate 18 PR numbers. Commit
 `8c36115` is an ancestor of #722's current head
-[`9ca8d3e`](https://github.com/JetBrains-Research/opaque/commit/9ca8d3e6368d238bd2dcf7cbe0686265efb2bcee).
+[`9ca8d3e`](https://github.com/JetBrains-Research/opake/commit/9ca8d3e6368d238bd2dcf7cbe0686265efb2bcee).
 
 A comparison of `8c36115` with that head found:
 
@@ -519,7 +519,7 @@ Thus, a matching implementation remains on open, unlinked #722. As of this
 snapshot, it has 41 commits and no submitted human review, but GitHub reports
 `mergeable: false`, `mergeable_state: dirty`, and `rebaseable: false` against
 current `main`. A bot's
-[“Ready to merge” comment](https://github.com/JetBrains-Research/opaque/pull/722#issuecomment-3254981668)
+[“Ready to merge” comment](https://github.com/JetBrains-Research/opake/pull/722#issuecomment-3254981668)
 was posted on 2026-08-22 against an earlier tip and is now stale; it was never
 maintainer approval. The implementation should be coordinated with—not silently
 duplicated—but #722 cannot be assumed to land soon without conflict resolution.
@@ -646,7 +646,7 @@ abstraction is not necessary to fix BISR's horizon-dependent state on `main`.
 ## RNG and privacy invariants
 
 Current upstream generic BISR execution derives its step key as shown in
-[`_engine.py`](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_engine.py#L402-L418):
+[`_engine.py`](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_engine.py#L402-L418):
 
 ```text
 fold_in(base_key,
@@ -685,12 +685,12 @@ The issue omits checkpoint-layout behavior, so the implementation must make it
 explicit rather than relying on incidental template matching.
 
 Opake's
-[`Trainer` checkpoint path](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-transformers/src/opaque/api/transformers/trainer/_checkpoint.py#L198-L368)
+[`Trainer` checkpoint path](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-transformers/src/opaque/api/transformers/trainer/_checkpoint.py#L198-L368)
 persists the DP-FTRL state, including matrix-factorization noise history needed
 to continue the same correlated stream. Restore is template-driven: the
-[`base` structural walker](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-base/src/opaque/api/base/serialization/_structural.py#L82-L114)
+[`base` structural walker](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-base/src/opaque/api/base/serialization/_structural.py#L82-L114)
 visits the freshly constructed template, and the
-[`engine` tensor loader](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-engine/src/opaque/api/engine/serialization/_structural.py#L44-L73)
+[`engine` tensor loader](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-engine/src/opaque/api/engine/serialization/_structural.py#L44-L73)
 raises `CheckpointError` when a saved tensor at the same structural path has a
 different shape. It does **not** independently verify every path in the saved
 state.
@@ -744,7 +744,7 @@ not sufficient for exact continuation. The rebuilt mechanism must have the same
 BISR execution identity—including its strategy/horizon, RNG derivation, and
 numeric execution choices—and the same base noise scale. Otherwise the retained
 old-scale draws and newly generated draws describe a different process.
-[Issue #789](https://github.com/JetBrains-Research/opaque/issues/789) tracks the
+[Issue #789](https://github.com/JetBrains-Research/opake/issues/789) tracks the
 high-severity case where calibrated DP-FTRL resume can silently choose a new
 noise multiplier and mix scales across the boundary. #795 neither fixes that
 calibration/resume defect nor makes such a resume safe.
@@ -763,8 +763,8 @@ memory if the chosen policy retains a ring.
 
 ### Signed custom inverse coefficients and PR #857
 
-Open [PR #857](https://github.com/JetBrains-Research/opaque/pull/857), head
-[`1c0a28a`](https://github.com/JetBrains-Research/opaque/commit/1c0a28a9e61a1707c39fa232e336622df249aa34),
+Open [PR #857](https://github.com/JetBrains-Research/opake/pull/857), head
+[`1c0a28a`](https://github.com/JetBrains-Research/opake/commit/1c0a28a9e61a1707c39fa232e336622df249aa34),
 hardens privacy accounting for signed encoders. It also changes `_bisr.py`, the
 native BISR path, strategy serialization, tests, and docs. In particular, it:
 
@@ -818,7 +818,7 @@ either or both streams; the present defect then allocates the excessive history
 twice. Each stream needs its own bounded history and checkpoint coverage.
 
 Distributed MF synchronization validates key, step, and latched clipping norm;
-[`_inner_state` is marked local](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_distributed.py#L86-L120),
+[`_inner_state` is marked local](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_distributed.py#L86-L120),
 so synchronization does not compare ring history tensors. A direct ring built
 from the same namespaced draw on every rank should preserve deterministic state
 evolution, but a schema-acceptance test cannot prove it. A distributed
@@ -828,7 +828,7 @@ otherwise establish equality.
 ## Current test coverage and its gaps
 
 Upstream's
-[`test_bisr_noise.py`](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/tests/noise/test_bisr_noise.py#L85-L171)
+[`test_bisr_noise.py`](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/tests/noise/test_bisr_noise.py#L85-L171)
 currently verifies:
 
 - the dedicated raw factory exists and is dispatched;
@@ -1021,44 +1021,44 @@ selected strategy or its privacy accounting and with a reduction from
 
 ### Issue and audit context
 
-- [Issue #795: Implement BISR noise with O(p) buffers](https://github.com/JetBrains-Research/opaque/issues/795)
-- [Issue #795 REST metadata](https://api.github.com/repos/JetBrains-Research/opaque/issues/795)
-- [Issue #795 public timeline](https://api.github.com/repos/JetBrains-Research/opaque/issues/795/timeline)
-- [Parent issue #766: Correct DP-FTRL mechanism identity, noise streams, and strategy state](https://github.com/JetBrains-Research/opaque/issues/766)
-- [Parent #766 sub-issues](https://api.github.com/repos/JetBrains-Research/opaque/issues/766/sub_issues)
-- [Sibling issue #793: namespace the lambda-CGD noise stream](https://github.com/JetBrains-Research/opaque/issues/793)
-- [Issue #789: stop calibrated DP-FTRL resume from changing sigma](https://github.com/JetBrains-Research/opaque/issues/789)
-- [Issue #360: full-horizon BISR runtime operator](https://github.com/JetBrains-Research/opaque/issues/360)
-- [Issue #355: row-norm setup complexity](https://github.com/JetBrains-Research/opaque/issues/355)
-- [Issue #353: signed Toeplitz accounting](https://github.com/JetBrains-Research/opaque/issues/353)
+- [Issue #795: Implement BISR noise with O(p) buffers](https://github.com/JetBrains-Research/opake/issues/795)
+- [Issue #795 REST metadata](https://api.github.com/repos/JetBrains-Research/opake/issues/795)
+- [Issue #795 public timeline](https://api.github.com/repos/JetBrains-Research/opake/issues/795/timeline)
+- [Parent issue #766: Correct DP-FTRL mechanism identity, noise streams, and strategy state](https://github.com/JetBrains-Research/opake/issues/766)
+- [Parent #766 sub-issues](https://api.github.com/repos/JetBrains-Research/opake/issues/766/sub_issues)
+- [Sibling issue #793: namespace the lambda-CGD noise stream](https://github.com/JetBrains-Research/opake/issues/793)
+- [Issue #789: stop calibrated DP-FTRL resume from changing sigma](https://github.com/JetBrains-Research/opake/issues/789)
+- [Issue #360: full-horizon BISR runtime operator](https://github.com/JetBrains-Research/opake/issues/360)
+- [Issue #355: row-norm setup complexity](https://github.com/JetBrains-Research/opake/issues/355)
+- [Issue #353: signed Toeplitz accounting](https://github.com/JetBrains-Research/opake/issues/353)
 
 ### Paper and documentation
 
 - [BISR paper, arXiv HTML](https://arxiv.org/html/2505.12128)
 - [BISR paper abstract and version history](https://arxiv.org/abs/2505.12128)
-- [Upstream BISR mechanism documentation](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/docs/mechanisms/dp-ftrl/bisr.md)
-- [Upstream mechanism comparison and memory claims](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/docs/mechanisms/index.md#L39-L46)
+- [Upstream BISR mechanism documentation](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/docs/mechanisms/dp-ftrl/bisr.md)
+- [Upstream mechanism comparison and memory claims](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/docs/mechanisms/index.md#L39-L46)
 
 ### Current upstream implementation
 
-- [BISR raw factory and strategy](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_bisr.py#L116-L239)
-- [Generic dense Toeplitz inverse executor](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_toeplitz.py#L177-L309)
-- [Generic namespaced streaming MF engine](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_engine.py#L378-L431)
-- [Dedicated raw-factory dispatch](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_mf_gaussian_noise.py#L206-L275)
-- [Paired second-moment stream construction](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_second_moment.py#L87-L109)
-- [Template-driven structural checkpoint traversal](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-base/src/opaque/api/base/serialization/_structural.py#L82-L114)
-- [Same-path tensor shape validation](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-engine/src/opaque/api/engine/serialization/_structural.py#L44-L73)
-- [Trainer checkpoint persistence and restore](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-transformers/src/opaque/api/transformers/trainer/_checkpoint.py#L198-L368)
-- [Distributed MF state schema](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_distributed.py#L86-L120)
-- [Current BISR tests](https://github.com/JetBrains-Research/opaque/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/tests/noise/test_bisr_noise.py)
+- [BISR raw factory and strategy](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_bisr.py#L116-L239)
+- [Generic dense Toeplitz inverse executor](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_toeplitz.py#L177-L309)
+- [Generic namespaced streaming MF engine](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_engine.py#L378-L431)
+- [Dedicated raw-factory dispatch](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_mf_gaussian_noise.py#L206-L275)
+- [Paired second-moment stream construction](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_second_moment.py#L87-L109)
+- [Template-driven structural checkpoint traversal](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-base/src/opaque/api/base/serialization/_structural.py#L82-L114)
+- [Same-path tensor shape validation](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-engine/src/opaque/api/engine/serialization/_structural.py#L44-L73)
+- [Trainer checkpoint persistence and restore](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-transformers/src/opaque/api/transformers/trainer/_checkpoint.py#L198-L368)
+- [Distributed MF state schema](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/src/opaque/api/dpftrl/noise/_distributed.py#L86-L120)
+- [Current BISR tests](https://github.com/JetBrains-Research/opake/blob/e89e858a31ca5e279f796f2d322d323c8d59665e/packages/opaque-dpftrl/tests/noise/test_bisr_noise.py)
 
 ### Historical and active pull requests
 
-- [PR #121: initial lambda-CGD/BISR implementation](https://github.com/JetBrains-Research/opaque/pull/121)
-- [PR #509 / commit 2507548: full-horizon BISR correctness](https://github.com/JetBrains-Research/opaque/pull/509)
-- [PR #509 review requesting behavioral covariance/equivalence coverage](https://github.com/JetBrains-Research/opaque/pull/509#discussion_r3726858053)
-- [PR #572 / commit 4106222: closed-form row norms](https://github.com/JetBrains-Research/opaque/pull/572)
-- [PR #658 / commit 8c36115: direct bounded-state execution](https://github.com/JetBrains-Research/opaque/pull/658)
-- [PR #722: consolidated backend-neutral integration branch](https://github.com/JetBrains-Research/opaque/pull/722)
-- [PR #728 / commit 6f6d132: mechanism RNG stream roots](https://github.com/JetBrains-Research/opaque/pull/728)
-- [PR #857: signed-encoder privacy-accounting hardening](https://github.com/JetBrains-Research/opaque/pull/857)
+- [PR #121: initial lambda-CGD/BISR implementation](https://github.com/JetBrains-Research/opake/pull/121)
+- [PR #509 / commit 2507548: full-horizon BISR correctness](https://github.com/JetBrains-Research/opake/pull/509)
+- [PR #509 review requesting behavioral covariance/equivalence coverage](https://github.com/JetBrains-Research/opake/pull/509#discussion_r3726858053)
+- [PR #572 / commit 4106222: closed-form row norms](https://github.com/JetBrains-Research/opake/pull/572)
+- [PR #658 / commit 8c36115: direct bounded-state execution](https://github.com/JetBrains-Research/opake/pull/658)
+- [PR #722: consolidated backend-neutral integration branch](https://github.com/JetBrains-Research/opake/pull/722)
+- [PR #728 / commit 6f6d132: mechanism RNG stream roots](https://github.com/JetBrains-Research/opake/pull/728)
+- [PR #857: signed-encoder privacy-accounting hardening](https://github.com/JetBrains-Research/opake/pull/857)

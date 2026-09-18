@@ -233,7 +233,7 @@ class TestCreateModelCard:
         assert "### Privacy budget" in content
         assert "<!-- opake-dp:begin -->" in content
         assert "<!-- opake-dp:end -->" in content
-        assert "[Opake](https://github.com/JetBrains-Research/opaque)." in content
+        assert "[Opake](https://github.com/JetBrains-Research/opake)." in content
 
     def test_dp_section_contains_epsilon_from_log_history(self, tmp_path):
         log_history = [

@@ -32,7 +32,7 @@ jobs:
     # Keep release orchestration current even when "Use workflow from" selects
     # an older maintenance branch. The selected branch and SHA remain the only
     # source inputs tested and packaged by the called workflow.
-    uses: JetBrains-Research/opaque/.github/workflows/prepare-release-implementation.yml@main
+    uses: JetBrains-Research/opake/.github/workflows/prepare-release-implementation.yml@main
     with:
       dry_run: ${{ inputs.dry_run }}
       skip_tests: ${{ inputs.skip_tests }}

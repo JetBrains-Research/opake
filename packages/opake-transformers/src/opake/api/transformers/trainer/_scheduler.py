@@ -149,7 +149,7 @@ def build_lr_schedule(
         raise NotImplementedError(
             f"lr_scheduler={name!r} is a recognized HuggingFace scheduler "
             f"that DPTrainer doesn't implement yet. If you need it, please open "
-            f"an issue at https://github.com/JetBrains-Research/opaque/issues. "
+            f"an issue at https://github.com/JetBrains-Research/opake/issues. "
             f"Currently supported: {sorted(_ALLOWED_KWARGS)}."
         )
     if name not in _ALLOWED_KWARGS:
