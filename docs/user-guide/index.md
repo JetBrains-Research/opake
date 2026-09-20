@@ -59,9 +59,9 @@ combines them.
   curve.
 - **[Distributed Training](distributed.md)** — DDP with synchronized
   noise and gradient aggregation.
-- **[Distributed DPTrainer](distributed-trainer.md)** — DDP setup and
-  `ddp_shard` behavior for `DPTrainer`.
-- **[HuggingFace Integration](huggingface/index.md)** — `DPTrainer`,
+- **[Distributed Trainer](distributed-trainer.md)** — DDP setup and
+  `ddp_shard` behavior for `Trainer`.
+- **[HuggingFace Integration](huggingface/index.md)** — `Trainer`,
   `TrainingArguments`, model patches, and LoRA.
 - **[Memory Optimizations](memory-optimizations.md)** — Microbatching,
   gradient checkpointing, fused kernels, profiling.

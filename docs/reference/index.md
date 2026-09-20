@@ -87,11 +87,11 @@ Opake is organized into several modules, each focused on a specific aspect of DP
 ### Hugging Face integration
 
 - **[Transformers](transformers.md)** — `opake.transformers` — DP-SGD for Hugging Face models
-  - `DPTrainer` — full constructor, methods, callback wiring, overridable hooks
+  - `Trainer` — full constructor, methods, callback wiring, overridable hooks
   - `TrainingArguments` — every field grouped by concern (privacy, compute, patches, save, eval, …)
   - `opake.transformers.trainer.types` — `EvaluationResult`, `TrainOutput` return types
   - `opake.patches.apply_runtime_patches` / `is_runtime_patched` — install/query the global runtime shims
-  - `opake.transformers.trl` — TRL-style `SFTTrainer` / `DPOTrainer` (+ `SFTConfig` / `DPOConfig`), built on `DPTrainer`
+  - `opake.transformers.trl` — TRL-style `SFTTrainer` / `DPOTrainer` (+ `SFTConfig` / `DPOConfig`), built on `Trainer`
 
 ## Quick Reference
 

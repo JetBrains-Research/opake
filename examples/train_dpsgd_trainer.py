@@ -1,7 +1,7 @@
-"""End-to-end DP LoRA training with Opake's HuggingFace DPTrainer.
+"""End-to-end DP LoRA training with Opake's HuggingFace Trainer.
 
 Covers both DP-SGD (Gaussian) and DP-FTRL (matrix-factorization) via the
-``--noise-mechanism`` flag — the DPTrainer accepts both surfaces through
+``--noise-mechanism`` flag — the Trainer accepts both surfaces through
 the same ``TrainingArguments``.
 
 USAGE:
@@ -20,7 +20,7 @@ USAGE:
   python examples/train_dpsgd_trainer.py --preset smoke \
       --noise-mechanism mf_blt --noise-mechanism-kwargs max_buffers=10
 
-  # Save DPTrainer checkpoints every eval interval
+  # Save Trainer checkpoints every eval interval
   python examples/train_dpsgd_trainer.py --preset smoke --save-steps 10
 
   # Disable W&B/HF reporting callbacks
@@ -53,7 +53,7 @@ from transformers import (
 )
 
 from opake.device import device_capabilities
-from opake.transformers.trainer import DPTrainer, TrainingArguments
+from opake.transformers.trainer import Trainer, TrainingArguments
 
 log = logging.getLogger(__name__)
 
@@ -84,9 +84,9 @@ def _resolve_trainer_dtype(
     requested_name: str,
     device: torch.device,
 ) -> tuple[str, torch.dtype, str | None]:
-    """Resolve dtype for DPTrainer, honouring bf16 wherever the device runs it.
+    """Resolve dtype for Trainer, honouring bf16 wherever the device runs it.
 
-    DPTrainer's full-cast precision supports float32 everywhere and bf16 wherever
+    Trainer's full-cast precision supports float32 everywhere and bf16 wherever
     the device can actually execute it — CUDA (Ampere+), Apple Silicon (MPS) on a
     recent PyTorch, and CPU (functional but slow, used under ``use_cpu=True``).
     We ask :func:`device_capabilities` rather than hard-coding a per-device table
@@ -104,7 +104,7 @@ def _resolve_trainer_dtype(
     # bf16 requested but this device can't run it → fall back to fp32.
     reason = (
         f"Requested dtype '{requested_name}' is not supported on "
-        f"{device.type} for DPTrainer; using 'float32' instead."
+        f"{device.type} for Trainer; using 'float32' instead."
     )
     return "float32", torch.float32, reason
 
@@ -121,7 +121,7 @@ def _kernel_mode_summary(device: torch.device, dtype_name: str) -> tuple[str, st
         return "disabled", "triton package not installed"
     if dtype_name != "bfloat16":
         return "partial", f"dtype={dtype_name} (fused CE prefers bf16 here)"
-    return "enabled", "applied by DPTrainer"
+    return "enabled", "applied by Trainer"
 
 
 def _print_runtime_mode_report(
@@ -208,7 +208,7 @@ def _require_configured(parser, args, required=("model_name", "dataset")):
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments with logical groups."""
     parser = argparse.ArgumentParser(
-        description="DP-SGD LoRA training for causal LMs using DPTrainer"
+        description="DP-SGD LoRA training for causal LMs using Trainer"
     )
     parser.add_argument(
         "--preset",
@@ -241,7 +241,7 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="bfloat16",
         choices=["float32", "bfloat16"],
-        help="Model precision. DPTrainer supports float32 and bf16.",
+        help="Model precision. Trainer supports float32 and bf16.",
     )
 
     data_group = parser.add_argument_group("data", "Dataset and tokenization settings")
@@ -274,7 +274,7 @@ def parse_args() -> argparse.Namespace:
         "--batch-size",
         type=int,
         default=16,
-        help="Expected Poisson batch size, i.e. DPTrainer logical batch.",
+        help="Expected Poisson batch size, i.e. Trainer logical batch.",
     )
     train_group.add_argument(
         "--eval-batch-size",
@@ -311,7 +311,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "HF TrainingArguments.max_grad_norm forwarded verbatim. In "
-            "DPTrainer this field is inert (DP per-example clipping owns "
+            "Trainer this field is inert (DP per-example clipping owns "
             "the clip path; HF's clip_grad_norm_ is never called), but "
             "exposing the knob lets validators confirm ε is unaffected "
             "when users carry over a non-DP recipe that sets it. Default: "
@@ -332,7 +332,7 @@ def parse_args() -> argparse.Namespace:
         "--save-steps",
         type=int,
         default=None,
-        help="Save DPTrainer checkpoints every N steps. Default: disabled.",
+        help="Save Trainer checkpoints every N steps. Default: disabled.",
     )
     train_group.add_argument(
         "--save-strategy",
@@ -419,13 +419,13 @@ def parse_args() -> argparse.Namespace:
         "--activation-offloading",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Use DPTrainer activation_offloading.",
+        help="Use Trainer activation_offloading.",
     )
     train_group.add_argument(
         "--auto-find-microbatch-size",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Let DPTrainer retry with smaller physical microbatches on OOM.",
+        help="Let Trainer retry with smaller physical microbatches on OOM.",
     )
     train_group.add_argument(
         "--torch-compile",
@@ -855,7 +855,7 @@ def _sampling_kwargs_for_trainer(args: argparse.Namespace) -> dict[str, Any]:
 def _resolve_trainer_batching(args: argparse.Namespace) -> int:
     """Return the per-rank logical Poisson batch.
 
-    DPTrainer no longer supports gradient accumulation; ``--batch-size``
+    Trainer no longer supports gradient accumulation; ``--batch-size``
     is the per-rank logical batch (vmap chunk size = logical batch by
     default; ``auto_find_microbatch_size`` may shrink the internal chunk
     on OOM, but the logical batch is privacy-fixed).
@@ -892,7 +892,7 @@ def main() -> int:
         args.eval_batch_size = args.microbatch_size or args.batch_size
 
     print("=" * 80)
-    print("DP-SGD LoRA Training for Causal Language Models with DPTrainer")
+    print("DP-SGD LoRA Training for Causal Language Models with Trainer")
     print("=" * 80)
 
     device, device_label = _select_device()
@@ -1128,13 +1128,13 @@ def main() -> int:
     # replaced by the per-example DP clipping path.  We still let users
     # pass ``--max-grad-norm`` to validate that the field is inert: we
     # stamp it onto the args post-construction so any downstream code
-    # path that read ``args.max_grad_norm`` would surface it.  DPTrainer
+    # path that read ``args.max_grad_norm`` would surface it.  Trainer
     # currently has zero references to it, so ε must remain bit-exact
     # against a baseline that did not set the flag.
     if args.max_grad_norm is not None:
         object.__setattr__(training_args, "max_grad_norm", args.max_grad_norm)
 
-    print("\nDPTrainer argument summary:")
+    print("\nTrainer argument summary:")
     print(f"  Output dir: {training_args.output_dir}")
     print(f"  Optimizer: {training_args.optim}")
     print(f"  Learning rate: {training_args.learning_rate}")
@@ -1161,7 +1161,7 @@ def main() -> int:
         print(f"  Hub private repo: {training_args.hub_private_repo}")
         print(f"  Hub revision: {training_args.hub_revision or 'main'}")
 
-    trainer = DPTrainer(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -1184,7 +1184,7 @@ def main() -> int:
             resume_arg = args.resume_from_checkpoint
 
     print("\n" + "=" * 80)
-    print("Starting DPTrainer training...")
+    print("Starting Trainer training...")
     print(f"  resume_from_checkpoint: {resume_arg!r}")
     print("=" * 80)
     train_output = trainer.train(resume_from_checkpoint=resume_arg)

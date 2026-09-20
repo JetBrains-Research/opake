@@ -1,4 +1,4 @@
-"""Checkpoint helpers for DPTrainer.
+"""Checkpoint helpers for Trainer.
 
 Defines the on-disk layout (parallel to HuggingFace ``Trainer``), discovery and
 rotation utilities, an RNG snapshot helper, and the DP-side runtime bundle

@@ -61,8 +61,8 @@ and are not covered by default CI.
 Kernel optimization and Hugging Face model patches are provided by
 `opake.patches`. Triton kernels require CUDA; on CPU, MPS, or without
 Triton, compatible non-kernel patches remain available. Configure them with
-the explicit flags described in [Model Patches — DPTrainer
-integration](user-guide/huggingface/model-patches.md#dptrainer-integration).
+the explicit flags described in [Model Patches — Trainer
+integration](user-guide/huggingface/model-patches.md#trainer-integration).
 
 Public standalone kernels (`opake_swiglu`, `opake_cross_entropy_loss`,
 `opake_lora_w`, `opake_lora_qkv`, `opake_lora_mlp`) are importable

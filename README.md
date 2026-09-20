@@ -37,7 +37,7 @@ Install and depend on `opake` only. The repository is implemented as
 | `opake-dpftrl` | `opake.dpftrl` | DP-FTRL mechanisms (BLT, BSR, BiSR, band-MF, λ-CGD), private second moments, correlated-noise samplers, DP-FTRL-specific accounting factories |
 | `opake-auditing` | `opake.auditing` | Empirical privacy auditing (one-run, coin-flip, loss attacks) |
 | `opake-patches` | `opake.patches` | Unified patching entrypoint for PyTorch checkpointing, Hugging Face compat wrappers, Triton kernels, and PEFT/LoRA fusion |
-| `opake-transformers` | `opake.transformers` | Hugging Face trainer + integration; TRL-style `SFTTrainer` / `DPOTrainer` (`opake.transformers.trl`) built on `DPTrainer` |
+| `opake-transformers` | `opake.transformers` | Hugging Face trainer + integration; TRL-style `SFTTrainer` / `DPOTrainer` (`opake.transformers.trl`) built on `Trainer` |
 | `opake-alignment` | `opake.alignment` | Functional, mechanism-agnostic DP-safe SFT / DPO primitives: per-example losses, log-prob helpers, collators, reference helpers, reward metrics |
 | `opake-accounting` | `opake.accounting` | PLD privacy accounting (Rust/PyO3 backend); torch-free standalone |
 

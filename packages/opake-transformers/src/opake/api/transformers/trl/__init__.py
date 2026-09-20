@@ -1,6 +1,6 @@
-"""TRL-style class trainers for :class:`DPTrainer` (implementation package).
+"""TRL-style class trainers for :class:`Trainer` (implementation package).
 
-``SFTTrainer`` / ``DPOTrainer`` are thin :class:`~opake.api.transformers.trainer.DPTrainer`
+``SFTTrainer`` / ``DPOTrainer`` are thin :class:`~opake.api.transformers.trainer.Trainer`
 subclasses that wire the merged ``opake-alignment`` primitives through
 TRL-shaped methods. Import the stable façade from :mod:`opake.transformers.trl`.
 

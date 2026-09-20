@@ -267,7 +267,7 @@ dicts. Prefer `per_group(params, …)` over hand-building `PerGroup` with
 dotted string keys — a bare string normalizes to a one-segment path and
 will not match nested leaves.
 
-`DPTrainer` / examples still use flat trainable params from
+`Trainer` / examples still use flat trainable params from
 `make_functional(..., partition_trainable=True)` by choice; custom loops
 may pass any tensor pytree.
 

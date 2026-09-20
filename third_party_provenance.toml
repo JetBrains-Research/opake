@@ -47,7 +47,7 @@ license = "Apache-2.0"
 disposition = "adapted"
 requires_notice = true
 files = [
-  "packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py",
+  "packages/opake-transformers/src/opake/api/transformers/trainer/_trainer.py",
   "packages/opake-transformers/src/opake/api/transformers/trainer/_training_arguments.py",
 ]
 

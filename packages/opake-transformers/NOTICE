@@ -21,7 +21,7 @@ Hugging Face Transformers (https://github.com/huggingface/transformers),
 distributed under the Apache License, Version 2.0, and then modified for
 Opake's functional per-example DP training flow:
 
-  opake/api/transformers/trainer/_dp_trainer.py
+  opake/api/transformers/trainer/_trainer.py
   opake/api/transformers/trainer/_training_arguments.py
 
 

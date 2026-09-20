@@ -1,7 +1,7 @@
 """Rank-local sampler resume under DDP (T25).
 
 Single-process emulation of a two-rank DDP run: each "rank" builds its
-sampler exactly as ``DPTrainer.get_train_dataloader`` does (trimmed
+sampler exactly as ``Trainer.get_train_dataloader`` does (trimmed
 dataset, ``local_shard``, key ``fold_in(pre_rank_key, rank)``), the snapshot
 is written by rank 0 only, the checkpoint records the pre-rank key, and
 every rank restores through ``_rank_local_sampler_state`` before
@@ -22,8 +22,8 @@ import pytest
 from torch.utils.data import Subset
 
 from opake.api.transformers._rng import IGNORE_DATA_SKIP_STREAM_FOLD
-from opake.api.transformers.trainer._dp_trainer import (
-    DPTrainer,
+from opake.api.transformers.trainer._trainer import (
+    Trainer,
     _rank_local_sampler_state,
 )
 from opake.distributed import local_shard
@@ -60,7 +60,7 @@ def _shard(rank: int):
 
 
 def _rank_key(rank: int, base=None):
-    # ``DPTrainer.get_train_dataloader``: ``fold_in(sampler_key, self._ddp.rank)``.
+    # ``Trainer.get_train_dataloader``: ``fold_in(sampler_key, self._ddp.rank)``.
     return fold_in(key(SEED) if base is None else base, rank)
 
 
@@ -125,7 +125,7 @@ def _masks(sampler, n: int) -> np.ndarray:
 
 
 def _restore(factory, rank: int, snapshot, *, lineage=None):
-    """Resume ``rank`` as ``DPTrainer._restore_sampler`` does.
+    """Resume ``rank`` as ``Trainer._restore_sampler`` does.
 
     The template is built on the checkpoint's pre-rank ``lineage`` key (the
     plain seed by default), never on the current arguments.
@@ -238,7 +238,7 @@ def test_template_without_stream_key_raises():
 
 
 def test_ddp_restore_rejects_checkpoint_without_stream_lineage():
-    trainer = object.__new__(DPTrainer)
+    trainer = object.__new__(Trainer)
     trainer._ddp = SimpleNamespace(rank=1, world_size=WORLD)
 
     with pytest.raises(CheckpointError, match="does not record sampler stream lineage"):

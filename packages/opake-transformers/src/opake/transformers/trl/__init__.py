@@ -4,7 +4,7 @@ Implementation lives in :mod:`opake.api.transformers.trl`.
 
 ``SFTTrainer`` / ``DPOTrainer`` mirror ``trl.SFTTrainer`` / ``trl.DPOTrainer``
 in structure and method names (iteration 1), built on Opake's per-example DP
-:class:`~opake.transformers.trainer.DPTrainer` and consuming the
+:class:`~opake.transformers.trainer.Trainer` and consuming the
 ``opake.alignment`` primitives.
 """
 

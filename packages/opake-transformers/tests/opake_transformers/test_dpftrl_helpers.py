@@ -4,7 +4,7 @@
 
 Covers strategy construction, amplifier wiring, per-step composition,
 and sampler dispatch — the pure-function surface that the trainer
-calls into.  End-to-end DPTrainer + DP-FTRL is covered by
+calls into.  End-to-end Trainer + DP-FTRL is covered by
 ``tests/validation/test_dp_ftrl_trainer.py``.
 """
 

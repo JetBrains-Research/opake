@@ -2,7 +2,7 @@
 
 Hands ``opake.alignment`` DPO primitives to
 :class:`opake.transformers.trl.DPOTrainer`, which precomputes the reference
-log-probs and orchestrates the per-example DP path on top of ``DPTrainer``.
+log-probs and orchestrates the per-example DP path on top of ``Trainer``.
 
 The reference need is derived from ``loss_type``: the reference-free heads
 ``simpo`` / ``cpo`` / ``orpo`` / ``sft`` skip the reference precompute, every

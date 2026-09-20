@@ -29,7 +29,7 @@ from peft import LoraConfig, TaskType, get_peft_model
 
 from opake.api.transformers.trainer._state import DPTrainerState
 from opake.exceptions import CheckpointError
-from opake.transformers.trainer import DPTrainer, TrainingArguments
+from opake.transformers.trainer import Trainer, TrainingArguments
 
 # ---------------------------------------------------------------------------
 # Fixtures (same shape as test_callback_hooks.py).
@@ -143,7 +143,7 @@ class TestLoadBestModelMutates:
         ckpt_root.mkdir()
         save_target = tmp_path / "post_train"
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(
                 ckpt_root,
@@ -222,7 +222,7 @@ class TestBestFolderLookup:
         def compute_metrics(_):
             return {"score": next(scores)}
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(
                 tmp_path,
@@ -260,7 +260,7 @@ class TestBestFolderLookup:
         """
         model, tokenizer = lora_model
 
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(
                 tmp_path,
@@ -317,7 +317,7 @@ class TestBestOnEvalOnlyStep:
         self, lora_model, tiny_dataset, tmp_path, monkeypatch
     ):
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(
                 tmp_path,
@@ -385,7 +385,7 @@ class TestSaveOnlyModelStillWritesTrainerState:
         tmp_path,
     ):
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(
                 tmp_path,
@@ -426,7 +426,7 @@ class TestEarlyStoppingExportableState:
 
     This test pins the *save-side* contract.  The *load-side*
     contract (attribute-set on resume) is covered by the simpler
-    legacy callback test in ``test_dp_trainer.py``
+    legacy callback test in ``test_trainer.py``
     (``test_resume_restores_callback_state``).
     """
 
@@ -440,7 +440,7 @@ class TestEarlyStoppingExportableState:
 
         model, tokenizer = lora_model
         cb = EarlyStoppingCallback(early_stopping_patience=2)
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(
                 tmp_path,
@@ -525,7 +525,7 @@ class TestArgDriftWarnings:
     ):
         """A synthetic bundle whose ``expected_batch_size`` differs warns."""
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path, per_device_train_batch_size=2),
             processing_class=tokenizer,
@@ -553,7 +553,7 @@ class TestArgDriftWarnings:
     def test_no_drift_no_warning(self, lora_model, tiny_dataset, tmp_path, caplog):
         """Identical saved/current bundle emits no drift warning."""
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path, per_device_train_batch_size=2),
             processing_class=tokenizer,
@@ -578,7 +578,7 @@ class TestArgDriftWarnings:
         training routinely (intentional_extend disposition).
         """
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path, per_device_train_batch_size=2, max_steps=10),
             processing_class=tokenizer,
@@ -604,7 +604,7 @@ class TestArgDriftWarnings:
         is shape-locked for the original composition.
         """
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path, per_device_train_batch_size=2, max_steps=10),
             processing_class=tokenizer,
@@ -622,7 +622,7 @@ class TestArgDriftWarnings:
         self, lora_model, tiny_dataset, tmp_path
     ):
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path, per_device_train_batch_size=2, max_steps=10),
             processing_class=tokenizer,
@@ -641,7 +641,7 @@ class TestArgDriftWarnings:
     ):
         """``lr_scheduler`` drift is a shape-disposition warning."""
         model, tokenizer = lora_model
-        trainer = DPTrainer(
+        trainer = Trainer(
             model=model,
             args=_args(tmp_path, per_device_train_batch_size=2, lr_scheduler="linear"),
             processing_class=tokenizer,

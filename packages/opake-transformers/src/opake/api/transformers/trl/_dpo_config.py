@@ -36,7 +36,7 @@ _MAX_ROBUST_LABEL_SMOOTHING = 0.5
 
 @dataclasses.dataclass
 class DPOConfig(TrainingArguments):
-    """Arguments for Direct Preference Optimization on :class:`DPTrainer`."""
+    """Arguments for Direct Preference Optimization on :class:`Trainer`."""
 
     # ---- Learning rate override (TRL default differs from HF) ------------
     learning_rate: float = 1e-6

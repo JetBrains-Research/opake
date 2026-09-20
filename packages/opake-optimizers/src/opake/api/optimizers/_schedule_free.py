@@ -42,7 +42,7 @@ The wrapper's published params are ``x_t``, not the ``params`` argument
 the trainer passes in (``y_t``).  Trainer integrations must consult the
 ``x`` field of :class:`ScheduleFreeState` at save / eval boundaries and
 reconstruct ``y_t`` from the saved ``z_t`` and ``x_t`` when resuming.
-``DPTrainer`` implements those integration boundaries.
+``Trainer`` implements those integration boundaries.
 """
 
 from __future__ import annotations

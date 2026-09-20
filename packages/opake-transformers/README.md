@@ -1,7 +1,7 @@
 # opake-transformers
 
 Hugging Face trainer integration for Opake: DP-aware training loop
-(`opake.transformers.trainer.DPTrainer`) with TRL-style SFT/DPO support
+(`opake.transformers.trainer.Trainer`) with TRL-style SFT/DPO support
 (`opake.transformers.trl`) and Hugging Face compatibility layers.
 
 ## Install
@@ -21,26 +21,24 @@ and gate on CUDA + Triton at runtime.
 ## Quick start
 
 Runtime compat patches (vmap-safe masking, collator / checkpoint hooks) are
-applied when you construct :class:`opake.transformers.trainer.DPTrainer`, or
+applied when you construct :class:`opake.transformers.trainer.Trainer`, or
 when you call :func:`opake.patches.apply_runtime_patches` explicitly (e.g. in
 a notebook that uses HF primitives without the trainer).
 
 ```python
 from opake.patches import apply_runtime_patches, is_runtime_patched
-from opake.transformers import DPTrainer
+from opake.transformers import Trainer
 
 apply_runtime_patches(compat=True)  # global runtime shims — idempotent
-trainer = DPTrainer(
-    model, args, ...
-)  # runtime compat + apply_model_patches on the model
+trainer = Trainer(model, args, ...)  # runtime compat + apply_model_patches on the model
 
 assert is_runtime_patched()
 ```
 
 ## Layout
 
-- **`opake.api.transformers.trainer`** — DPTrainer implementation
-  (`_dp_trainer.py`, `_config.py`, `_state.py`, `_optim.py`,
+- **`opake.api.transformers.trainer`** — Trainer implementation
+  (`_trainer.py`, `_config.py`, `_state.py`, `_optim.py`,
   `_scheduler.py`, `_checkpoint.py`, `_distributed.py`,
   `_performance_kernels.py`, …).
 - **`opake.transformers`** / **`opake.transformers.trainer`** — thin

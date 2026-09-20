@@ -1,4 +1,4 @@
-"""DP-FTRL integration helpers for :class:`DPTrainer`.
+"""DP-FTRL integration helpers for :class:`Trainer`.
 
 Pure factories: MF strategy construction, accountant amplifier
 construction, sampler dispatch.  No state lives here — the trainer

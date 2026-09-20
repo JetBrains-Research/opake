@@ -24,7 +24,7 @@ from opake.exceptions import ConfigurationError
 from opake.optimizers.types import ScheduleFreeState
 from opake.random import key
 from opake.serialization import state_dict as opake_state_dict
-from opake.transformers.trainer import DPTrainer, TrainingArguments
+from opake.transformers.trainer import Trainer, TrainingArguments
 from opake.transformers.trainer.types import EvaluationResult
 
 
@@ -41,7 +41,7 @@ def _trainer(tmp_path, **overrides):
     }
     kwargs.update(overrides)
     args = TrainingArguments(**kwargs)
-    return DPTrainer(
+    return Trainer(
         model=model,
         args=args,
         train_dataset=[{"x": torch.zeros(4)}],
