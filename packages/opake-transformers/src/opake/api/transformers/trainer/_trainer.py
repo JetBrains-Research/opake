@@ -104,7 +104,7 @@ from ._callback import (
 from ._eval import EvalPrediction
 from ._precision import eval_dtype
 from ._scheduler import build_lr_schedule
-from ._state import DPTrainerState
+from ._state import TrainerState
 from ._training_arguments import TrainingArguments, _default_privacy_delta
 from .types import EvaluationResult, TrainOutput
 
@@ -664,7 +664,7 @@ class Trainer:
         # are handled exactly as HF does — and so callbacks running at
         # ``on_init_end`` see the post-resolution cadence rather than
         # zeros from a premature ``int(...)`` truncation.
-        self.state = DPTrainerState()
+        self.state = TrainerState()
         self.state.max_steps = self._predict_total_steps()
         self.state.compute_steps(args)
         self._stamp_ddp_flags(self.state)
@@ -838,18 +838,18 @@ class Trainer:
         """Whether this is the world-rank-0 process (HF parity)."""
         return self._ddp.is_world_zero
 
-    def _stamp_ddp_flags(self, state: DPTrainerState) -> None:
+    def _stamp_ddp_flags(self, state: TrainerState) -> None:
         """Stamp per-rank ``is_*_process_zero`` flags onto ``state``.
 
         The flags are per-rank metadata (not part of the durable
         checkpoint contract), so any newly-constructed or
-        freshly-deserialized ``DPTrainerState`` needs them set.
+        freshly-deserialized ``TrainerState`` needs them set.
         """
         state.is_world_process_zero = self._ddp.is_world_zero
         state.is_local_process_zero = self._ddp.is_local_zero
 
     def _reset_state_for_new_run(self) -> None:
-        self.state = DPTrainerState()
+        self.state = TrainerState()
         self.state.max_steps = self._predict_total_steps()
         self.state.compute_steps(self.args)
         self._stamp_ddp_flags(self.state)
@@ -1100,7 +1100,7 @@ class Trainer:
 
         initial_microbatch_size = effective_microbatch_size
         current_microbatch_size = initial_microbatch_size
-        state_snapshot = DPTrainerState.from_json(self.state.to_json())
+        state_snapshot = TrainerState.from_json(self.state.to_json())
         model_snapshot = {
             k: v.detach().to("cpu").clone() for k, v in self._model.state_dict().items()
         }
@@ -1228,7 +1228,7 @@ class Trainer:
             self._validate_horizon_resume_calibration(runtime_payload)
             trainer_state_json = self._read_trainer_state(resume_path)
             if trainer_state_json is not None:
-                self.state = DPTrainerState.from_json(trainer_state_json)
+                self.state = TrainerState.from_json(trainer_state_json)
                 self._stamp_ddp_flags(self.state)
                 # Re-bind callback handler to the new state object.
                 self._callback_handler.state = self.state
@@ -1411,8 +1411,8 @@ class Trainer:
         torch.distributed.all_reduce(flag, op=torch.distributed.ReduceOp.MAX)
         return bool(flag.item() > 0.0)
 
-    def _reset_state_for_batch_size_retry(self, snapshot: DPTrainerState) -> None:
-        self.state = DPTrainerState.from_json(snapshot.to_json())
+    def _reset_state_for_batch_size_retry(self, snapshot: TrainerState) -> None:
+        self.state = TrainerState.from_json(snapshot.to_json())
         self._stamp_ddp_flags(self.state)
         self._callback_handler.state = self.state
         self._control = TrainerControl()
@@ -5481,9 +5481,9 @@ class Trainer:
         )
 
     def _save_trainer_state(self, ckpt_dir: str) -> None:
-        """Serialize :class:`DPTrainerState` to ``trainer_state.json``.
+        """Serialize :class:`TrainerState` to ``trainer_state.json``.
 
-        Round-trips through ``DPTrainerState.to_json`` / ``from_json``.
+        Round-trips through ``TrainerState.to_json`` / ``from_json``.
         Callback state is collected via HF's ``ExportableState`` protocol
         (modern shape ``{"args": {...}, "attributes": {...}}`` produced
         by ``cb.state()``); callbacks that don't implement ``state()`` are
@@ -5722,7 +5722,7 @@ class Trainer:
         """Restore each callback's state when ``restore_callback_states_from_checkpoint`` is set.
 
         Reads from ``self.state.stateful_callbacks`` — the dataclass field
-        populated by ``DPTrainerState.from_json`` during resume.  The
+        populated by ``TrainerState.from_json`` during resume.  The
         payload uses HF's ``ExportableState`` shape ``{"args": {...},
         "attributes": {...}}``; saved attributes are set back onto the
         live callback instance so its identity is preserved

@@ -320,7 +320,7 @@ class TestDpFtrlSamplerDispatch:
         assert sampler.sample_rate == pytest.approx(accountant_process.sample_rate)
 
 
-class TestDpTrainerAllocationModes:
+class TestTrainerAllocationModes:
     @pytest.mark.parametrize(
         ("mechanism", "sampling_mode", "max_steps", "allocation"),
         [

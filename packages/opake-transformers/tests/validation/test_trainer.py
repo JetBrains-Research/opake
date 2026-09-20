@@ -19,7 +19,7 @@ from peft import LoraConfig, TaskType, get_peft_model
 from transformers import TrainerCallback as _HFTrainerCallback
 
 from opake.api.transformers.trainer import _dpftrl
-from opake.api.transformers.trainer._state import DPTrainerState
+from opake.api.transformers.trainer._state import TrainerState
 from opake.exceptions import CheckpointError, ConfigurationError
 from opake.random import fold_in, key, split
 from opake.transformers.trainer import Trainer, TrainingArguments
@@ -1367,7 +1367,7 @@ class TestTrainerCheckpointing:
     def test_trainer_state_json_round_trips(
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
-        """Saved trainer_state.json deserializes to an equivalent DPTrainerState."""
+        """Saved trainer_state.json deserializes to an equivalent TrainerState."""
         import json
 
         model, tokenizer = gpt2_with_lora
@@ -1387,7 +1387,7 @@ class TestTrainerCheckpointing:
         assert data["max_steps"] == 2
         assert isinstance(data["log_history"], list)
 
-        restored = DPTrainerState.from_json(data)
+        restored = TrainerState.from_json(data)
         assert restored.global_step == 2
 
     def test_save_model_public_api(self, gpt2_with_lora, tiny_lm_dataset, tmp_path):

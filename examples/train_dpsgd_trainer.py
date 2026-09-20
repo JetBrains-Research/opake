@@ -268,7 +268,7 @@ def parse_args() -> argparse.Namespace:
 
     train_group = parser.add_argument_group("training", "Training loop settings")
     train_group.add_argument(
-        "--output-dir", type=str, default="trainer_output/dp_trainer_causal_lm"
+        "--output-dir", type=str, default="trainer_output/trainer_causal_lm"
     )
     train_group.add_argument(
         "--batch-size",

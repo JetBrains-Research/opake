@@ -135,7 +135,7 @@ trainer.is_world_process_zero()  # True on global rank-0
 trainer.is_local_process_zero()  # True on each node's rank-0
 ```
 
-`DPTrainerState` mirrors these flags
+`TrainerState` mirrors these flags
 (`state.is_world_process_zero`, `state.is_local_process_zero`) so
 callbacks can rank-gate side effects.
 

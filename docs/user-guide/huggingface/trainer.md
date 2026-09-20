@@ -9,7 +9,7 @@ that.
 
 This page covers the common usage patterns. For the full constructor
 signature, every method's parameters / return type, and the public
-state objects (`EvaluationResult`, `DPTrainerState`, `TrainOutput`),
+state objects (`EvaluationResult`, `TrainerState`, `TrainOutput`),
 see [API reference — transformers](../../reference/transformers.md).
 
 ## Minimal training loop

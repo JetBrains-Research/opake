@@ -1,4 +1,4 @@
-"""DP Trainer public façade.
+"""Trainer public façade.
 
 Implementation lives in :mod:`opake.api.transformers.trainer`.
 """

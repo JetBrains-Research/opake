@@ -32,16 +32,16 @@ import dataclasses
 import math
 from typing import Any
 
-__all__ = ["DPTrainerState"]
+__all__ = ["TrainerState"]
 
 
 @dataclasses.dataclass
-class DPTrainerState:
-    """Trainer state for Trainer (standalone; not a ``TrainerState`` subclass).
+class TrainerState:
+    """State for :class:`Trainer`, independent of ``transformers.TrainerState``.
 
     HF callbacks (TensorBoard, WandB, EarlyStoppingCallback, …) read
     ``state.global_step``, ``state.epoch``, ``state.log_history`` etc.
-    via attribute access — not ``isinstance(state, TrainerState)`` —
+    via attribute access — not ``isinstance(state, transformers.TrainerState)`` —
     so duck-typing parity is preserved by keeping the field names.
     """
 
@@ -115,7 +115,7 @@ class DPTrainerState:
         return dataclasses.asdict(self)
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> DPTrainerState:
+    def from_json(cls, data: dict[str, Any]) -> TrainerState:
         """Reconstruct from a dict loaded from ``trainer_state.json``.
 
         Unknown keys are filtered (forward-compat with newer writers).
