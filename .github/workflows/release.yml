@@ -143,6 +143,92 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  publish-pypi:
+    name: Publish attached assets to PyPI
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      actions: read
+      contents: read
+      # Trusted publishing exchanges the runner's OIDC token for a short-lived
+      # PyPI token, so this job stores no long-lived PyPI secret. The grant has
+      # to be repeated here: a job-level `permissions` block replaces the
+      # workflow-level default instead of narrowing it.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Download verified publication input
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: publication-candidate
+          path: assets
+
+      # Stage exactly the archives named by the verified release manifest. A
+      # missing or unreadable source aborts here, and release-manifest.json
+      # stays outside dist/ because the publish action uploads whole directories.
+      - name: Stage distribution archives
+        run: |
+          mkdir -p dist
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from shutil import copy2
+
+          assets = Path("assets")
+          staged = Path("dist")
+          manifest = json.loads((assets / "release-manifest.json").read_text())
+          names = [
+              entry["name"]
+              for entry in manifest["files"]
+              if entry["name"].endswith((".whl", ".tar.gz"))
+          ]
+          if not names:
+              raise SystemExit("release manifest lists no distribution archives")
+          missing = [name for name in names if not (assets / name).is_file()]
+          if missing:
+              raise SystemExit(f"release assets are missing: {', '.join(missing)}")
+          for name in names:
+              copy2(assets / name, staged / name)
+          print(f"staged {len(names)} distributions for PyPI")
+          PY
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: false
+
+      - name: Check publication state
+        run: >-
+          uv run --isolated --no-project --with packaging==25.0
+          python .github/scripts/publish_release.py
+          --asset-dir dist
+          --manifest assets/release-manifest.json
+          --repository-url https://upload.pypi.org/legacy/
+          --simple-url https://pypi.org/simple/
+          --dry-run
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          # Re-running a partially published release stays possible because the
+          # check above rejects any file whose published digest differs, and the
+          # verification below fails unless the release ends up complete.
+          skip-existing: true
+
+      - name: Verify published distributions
+        run: >-
+          uv run --isolated --no-project --with packaging==25.0
+          python .github/scripts/publish_release.py
+          --asset-dir dist
+          --manifest assets/release-manifest.json
+          --repository-url https://upload.pypi.org/legacy/
+          --simple-url https://pypi.org/simple/
+          --verify-published
+
   deploy-docs:
     name: Deploy immutable release documentation
     needs: [resolve, publish]
@@ -157,7 +243,7 @@ jobs:
 
   complete:
     name: Release deployment complete
-    needs: [resolve, publish, deploy-docs]
+    needs: [resolve, publish, publish-pypi, deploy-docs]
     runs-on: ubuntu-latest
     steps:
       - name: Write completion summary
@@ -168,6 +254,7 @@ jobs:
           \`${{ needs.resolve.outputs.tag }}\` was published from
           \`${{ needs.resolve.outputs.target_sha }}\`.
 
-          The attached distributions are present in JetBrains Packages and
-          documentation \`${{ needs.resolve.outputs.version }}\` is deployed.
+          The attached distributions are present in JetBrains Packages and on
+          PyPI, and documentation \`${{ needs.resolve.outputs.version }}\` is
+          deployed.
           EOF

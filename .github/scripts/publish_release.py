@@ -113,7 +113,7 @@ def _read_url(
     password: str,
 ) -> tuple[bytes, str]:
     headers = {"Accept": "text/html, application/octet-stream"}
-    if _origin(url) == repository_origin:
+    if username and password and _origin(url) == repository_origin:
         headers["Authorization"] = _authorization(username, password)
     request = Request(url, headers=headers)
     with build_opener(_SafeRedirectHandler).open(request, timeout=30) as response:
@@ -269,8 +269,14 @@ def publish_assets(
     simple_url: str,
     username: str,
     password: str,
+    dry_run: bool = False,
 ) -> list[tuple[str, str]]:
-    """Upload missing files and accept existing files only when hashes match."""
+    """Upload missing files and accept existing files only when hashes match.
+
+    With ``dry_run`` nothing is uploaded: the report still resolves every
+    manifest entry against the index, so a missing local asset or a remote
+    file with a different digest still fails the caller.
+    """
     version = manifest.get("version")
     files = manifest.get("files")
     if not isinstance(version, str) or not isinstance(files, list):
@@ -301,6 +307,12 @@ def publish_assets(
                 f"repository already contains {filename} with a different digest"
             )
         candidates[filename] = (path, project, remote_digest)
+
+    if dry_run:
+        return [
+            (filename, "already published" if remote is not None else "to publish")
+            for filename, (_, _, remote) in candidates.items()
+        ]
 
     # Finish every local and remote check before the first irreversible upload,
     # then expose foundations before their exact-pinned dependents.
@@ -343,6 +355,69 @@ def publish_assets(
     return results
 
 
+def verify_assets(
+    *,
+    asset_dir: Path,
+    manifest: dict[str, object],
+    simple_url: str,
+    username: str,
+    password: str,
+    timeout: float = 180.0,
+    delay: float = 10.0,
+) -> list[tuple[str, str]]:
+    """Require every manifest distribution to be published with its own digest.
+
+    A file that the index has not listed yet is retried until ``timeout``
+    expires, then reported as missing; a file listed with another digest fails
+    immediately. A verification window that ends without a complete release is
+    an error, never a pass.
+    """
+    version = manifest.get("version")
+    files = manifest.get("files")
+    if not isinstance(version, str) or not isinstance(files, list) or not files:
+        raise ValueError("invalid release manifest")
+
+    pending: dict[str, tuple[str, str]] = {}
+    for entry in files:
+        filename = entry.get("name")
+        expected_digest = entry.get("sha256")
+        if not isinstance(filename, str) or not isinstance(expected_digest, str):
+            raise ValueError("invalid release manifest file metadata")
+        path = asset_dir / filename
+        if not path.is_file():
+            raise FileNotFoundError(f"staged release asset is missing: {filename}")
+        digest = _sha256(path)
+        if digest != expected_digest:
+            raise ValueError(f"local release asset digest mismatch: {filename}")
+        pending[filename] = (_project_name(filename, version), digest)
+
+    deadline = time.monotonic() + timeout
+    while pending:
+        for filename, (project, expected_digest) in list(pending.items()):
+            remote_digest = _remote_digest(
+                simple_url=simple_url,
+                project=project,
+                filename=filename,
+                username=username,
+                password=password,
+            )
+            if remote_digest is None:
+                continue
+            if remote_digest != expected_digest:
+                raise ValueError(f"{filename} is published with an unexpected digest")
+            del pending[filename]
+        if not pending:
+            break
+        if time.monotonic() >= deadline:
+            raise ValueError(
+                "package index is still missing after "
+                + f"{timeout:.0f}s: {', '.join(sorted(pending))}"
+            )
+        time.sleep(delay)
+
+    return [(entry["name"], "published") for entry in files]
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--asset-dir", type=Path, required=True)
@@ -351,25 +426,47 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--simple-url", required=True)
     parser.add_argument("--username", default=os.environ.get("TWINE_USERNAME", ""))
     parser.add_argument("--password", default=os.environ.get("TWINE_PASSWORD", ""))
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report the publication state without uploading anything.",
+    )
+    parser.add_argument(
+        "--verify-published",
+        action="store_true",
+        help="Fail unless every manifest distribution is already published "
+        "with its expected digest. Uploads nothing.",
+    )
     return parser
 
 
 def main() -> int:
-    """Publish all files described by a previously verified manifest."""
+    """Publish or verify the files described by a previously verified manifest."""
     args = _build_parser().parse_args()
-    if not args.username or not args.password:
+    check_only = args.dry_run or args.verify_published
+    if not check_only and (not args.username or not args.password):
         raise SystemExit(
             "TWINE_USERNAME and TWINE_PASSWORD (or matching arguments) are required"
         )
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-    results = publish_assets(
-        asset_dir=args.asset_dir,
-        manifest=manifest,
-        repository_url=args.repository_url,
-        simple_url=args.simple_url,
-        username=args.username,
-        password=args.password,
-    )
+    if args.verify_published:
+        results = verify_assets(
+            asset_dir=args.asset_dir,
+            manifest=manifest,
+            simple_url=args.simple_url,
+            username=args.username,
+            password=args.password,
+        )
+    else:
+        results = publish_assets(
+            asset_dir=args.asset_dir,
+            manifest=manifest,
+            repository_url=args.repository_url,
+            simple_url=args.simple_url,
+            username=args.username,
+            password=args.password,
+            dry_run=args.dry_run,
+        )
     for filename, state in results:
         print(f"{filename}: {state}")
     return 0
