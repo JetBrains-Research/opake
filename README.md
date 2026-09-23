@@ -72,13 +72,19 @@ uv add opake \
   --index https://packages.jetbrains.team/pypi/p/fed/python/simple/
 ```
 
-Extras:
+Extras (pass `--index-url` on every command — it does not persist from the
+block above; without it, pip resolves from public PyPI, where the unrelated
+`opaque` OPAQUE-PAKE wrapper also lives):
 
 ```bash
-pip install "opake[auditing]"      # empirical privacy auditing
-pip install "opake[dpftrl]"        # correlated-noise DP-FTRL components
-pip install "opake[transformers]"  # Hugging Face + patching components
-pip install "opake[all]"           # all optional components
+pip install "opake[auditing]" \
+  --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/  # empirical privacy auditing
+pip install "opake[dpftrl]" \
+  --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/  # correlated-noise DP-FTRL components
+pip install "opake[transformers]" \
+  --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/  # Hugging Face + patching components
+pip install "opake[all]" \
+  --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/  # all optional components
 ```
 
 ### Patching

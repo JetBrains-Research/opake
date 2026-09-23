@@ -6,7 +6,7 @@ need to make. For hands-on practice, see the
 [Tutorials](../tutorials/README.md). For complete function
 signatures, see the [API Reference](../reference/index.md).
 
-Install with `pip install opake` (plus `opake[...]` extras).
+Install with `pip install opake --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/` (plus `opake[...]` extras with the same flag).
 
 ## End-to-end pipelines
 

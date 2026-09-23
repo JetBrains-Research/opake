@@ -317,7 +317,8 @@ Opake equivalents through three class methods:
 
 - `TrainingArguments.from_hf(hf_args, ...)` — base HF translation.
 - `SFTConfig.from_trl(trl_sft_cfg, ...)` — TRL SFT translation.
-  Requires the optional `trl` extra: `pip install opake[trl]`.
+  Requires the optional `trl` extra:
+  `pip install "opake[trl]" --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/`.
 - `DPOConfig.from_trl(trl_dpo_cfg, ...)` — TRL DPO translation. Same
   extra.
 

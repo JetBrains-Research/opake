@@ -123,18 +123,21 @@ uv run pytest packages/opake-accounting/tests/  # smoke; PLD factory tests live 
 
 ## Installation matrix
 
+All commands require the JetBrains Packages index (`--index-url` does not
+persist across shell invocations):
+
 ```bash
-pip install opake-base                  # serialization registry only (stdlib-only, torch-free)
-pip install opake-engine                # torch substrate (types, pytree, clipping, distributed, ...)
-pip install opake-optimizers            # torchopt-based functional optimizers
-pip install opake-accounting            # PLD accounting (torch-free standalone)
-pip install opake-dpsgd                 # DP-SGD mechanisms
-pip install opake-dpsgd[optimizers]     # DP-SGD + opake-optimizers
-pip install opake-dpftrl                # MF (DP-FTRL) mechanisms
-pip install opake-patches               # PyTorch checkpoint + HF compat patches
-pip install opake-patches[transformers] # + HF Transformers + PEFT extras
-pip install opake-transformers          # HF trainer integration
-pip install "opake[all]"                # everything
+pip install opake-base --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/                  # serialization registry only (stdlib-only, torch-free)
+pip install opake-engine --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/                # torch substrate (types, pytree, clipping, distributed, ...)
+pip install opake-optimizers --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/              # torchopt-based functional optimizers
+pip install opake-accounting --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/              # PLD accounting (torch-free standalone)
+pip install opake-dpsgd --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/                   # DP-SGD mechanisms
+pip install opake-dpsgd[optimizers] --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/      # DP-SGD + opake-optimizers
+pip install opake-dpftrl --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/                  # MF (DP-FTRL) mechanisms
+pip install opake-patches --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/                 # PyTorch checkpoint + HF compat patches
+pip install opake-patches[transformers] --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/   # + HF Transformers + PEFT extras
+pip install opake-transformers --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/            # HF trainer integration
+pip install "opake[all]" --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/                    # everything
 ```
 
 ### Dependency groups
