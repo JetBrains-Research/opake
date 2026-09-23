@@ -77,13 +77,11 @@ def _docstring_nodes(tree: ast.AST) -> list[tuple[str, str]]:
 
 
 def _comment_nodes(source: str) -> list[tuple[str, str]]:
-    comments: list[tuple[str, str]] = []
-    for tok in tokenize.tokenize(BytesIO(source.encode()).readline):
-        if tok.type == tokenize.COMMENT:
-            comments.append(
-                (f"comment:L{tok.start[0]}", tok.string.lstrip("# ").strip())
-            )
-    return comments
+    return [
+        (f"comment:L{tok.start[0]}", tok.string.lstrip("# ").strip())
+        for tok in tokenize.tokenize(BytesIO(source.encode()).readline)
+        if tok.type == tokenize.COMMENT
+    ]
 
 
 def _stable_ids(text: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
