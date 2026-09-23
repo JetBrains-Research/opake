@@ -26,10 +26,8 @@ SWEEP_C1_FILES = (
     REPO_ROOT / "packages/opake-optimizers/src/opake/api/optimizers/_schedule_free.py",
     REPO_ROOT
     / "packages/opake-alignment/src/opake/api/alignment/dpo/loss/_discopop.py",
-    REPO_ROOT
-    / "packages/opake-alignment/src/opake/api/alignment/logprob/_sequence.py",
-    REPO_ROOT
-    / "packages/opake-dpftrl/src/opake/api/dpftrl/sampling/_balls_in_bins.py",
+    REPO_ROOT / "packages/opake-alignment/src/opake/api/alignment/logprob/_sequence.py",
+    REPO_ROOT / "packages/opake-dpftrl/src/opake/api/dpftrl/sampling/_balls_in_bins.py",
 )
 
 FORBIDDEN_SNIPPETS = (
@@ -82,7 +80,9 @@ def _comment_nodes(source: str) -> list[tuple[str, str]]:
     comments: list[tuple[str, str]] = []
     for tok in tokenize.tokenize(BytesIO(source.encode()).readline):
         if tok.type == tokenize.COMMENT:
-            comments.append((f"comment:L{tok.start[0]}", tok.string.lstrip("# ").strip()))
+            comments.append(
+                (f"comment:L{tok.start[0]}", tok.string.lstrip("# ").strip())
+            )
     return comments
 
 
@@ -127,7 +127,9 @@ def test_sweep_c1_file_has_expected_identifier(path: Path) -> None:
     """Each audited file exposes the canonical arXiv id for its primary record."""
     text = _file_doc_comment_text(path)
     for snippet in FORBIDDEN_SNIPPETS:
-        assert snippet not in text, f"{path.name} still contains forbidden snippet: {snippet!r}"
+        assert snippet not in text, (
+            f"{path.name} still contains forbidden snippet: {snippet!r}"
+        )
 
     expected = EXPECTED_FILE_IDENTIFIERS[path]
     found = sorted({m.group(1) for m in ARXIV_ID_RE.finditer(text)})
