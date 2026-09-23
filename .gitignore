@@ -116,4 +116,4 @@ results/
 output.log
 trainer_output/
 
-# Claude Code / Junie — each has its own .gitignore inside
+# Claude Code / Junie — each has its own .gitignore insid

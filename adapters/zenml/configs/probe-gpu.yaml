@@ -1,0 +1,35 @@
+enable_cache: false
+enable_step_logs: true
+parameters:
+  require_gpu: true
+  required_secret_env:
+    - HF_TOKEN
+    - WANDB_API_KEY
+  check_huggingface: true
+settings:
+  docker:
+    parent_image: pytorch/pytorch:2.14.0-cuda12.6-cudnn9-runtime
+    build_config:
+      build_options:
+        platform: linux/amd64
+    python_package_installer: pip
+    python_package_installer_args:
+      break-system-packages:
+    requirements: adapters/zenml/requirements.txt
+    disable_automatic_requirements_detection: true
+    target_repository: opaque-zenml
+    user: "1000"
+steps:
+  probe_environment:
+    enable_cache: false
+    settings:
+      resources:
+        cpu_count: 4
+        gpu_count: 1
+        memory: 16GB
+  verify_probe_artifact:
+    enable_cache: false
+    settings:
+      resources:
+        cpu_count: 1
+        memory: 1GB

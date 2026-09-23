@@ -1,0 +1,18 @@
+--extra-index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/
+--pre
+
+zenml==0.96.4
+slack-sdk==3.30.0
+kubernetes>=21.7,<26
+Jinja2
+kfp>=2.6.0
+urllib3<2.6.0
+
+# Runtime tested by the distributed Mellum experiments. ZenML uploads the
+# current adapter and example source separately from these published wheels.
+opaque[all]==0.15.6rc1
+datasets==5.0.1
+peft==0.20.0
+transformers==5.16.1
+torchopt==0.7.3
+wandb==0.21.4

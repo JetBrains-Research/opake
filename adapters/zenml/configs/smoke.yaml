@@ -1,0 +1,80 @@
+enable_cache: false
+enable_step_logs: true
+parameters:
+  config:
+    model_name_or_path: JetBrains/Mellum2-12B-A2.5B-Base
+    model_revision: main
+    dataset_name: ise-uiuc/Magicoder-OSS-Instruct-75K
+    dataset_revision: main
+    dataset_config: null
+    dataset_split: train
+    dataset_text_field: text
+    prompt_field: problem
+    completion_field: solution
+    completion_only_loss: true
+    packing: false
+    loss_type: chunked_nll
+    compute_loss_func: false
+    assistant_only_loss: false
+    eos_token: null
+    log_completion_metrics: false
+    max_length: 2048
+    max_train_samples: 512
+    max_eval_samples: 64
+    eval_fraction: 0.01
+    split_seed: 42
+    num_train_epochs: 1.0
+    max_steps: 2
+    learning_rate: 0.00001
+    logical_batch_size: 128
+    physical_microbatch_size: 2
+    auto_microbatch_backoff: true
+    target_epsilon: 8.0
+    target_delta: null
+    noise_multiplier: null
+    max_grad_norm: 1.0
+    lora_rank: 4
+    lora_alpha: 8.0
+    lora_dropout: 0.0
+    lora_target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+    chat_template_path: null
+    bf16: true
+    attn_implementation: sdpa
+    use_performance_kernels: false
+    gradient_checkpointing: true
+    activation_offloading: false
+    chunked_nll: true
+    save_steps: 1
+    eval_steps: 1
+    eval_on_start: true
+    per_device_eval_batch_size: null
+    logging_steps: 1
+    noise_bias_correction: false
+    no_wandb: false
+    seed: 42
+    output_dir: trainer_output/sft
+settings:
+  docker:
+    parent_image: pytorch/pytorch:2.14.0-cuda12.6-cudnn9-runtime
+    build_config:
+      build_options:
+        platform: linux/amd64
+    python_package_installer: pip
+    python_package_installer_args:
+      break-system-packages:
+    requirements: adapters/zenml/training-requirements.txt
+    disable_automatic_requirements_detection: true
+    target_repository: opaque-zenml
+    user: "1000"
+steps:
+  train_sft_step:
+    enable_cache: false
+    settings:
+      resources:
+        cpu_count: 16
+        gpu_count: 1
+        memory: 64GB

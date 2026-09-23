@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Pin the source commit because the latest release tag targets an older ZenML SDK.
+jb-mlops[zenml] @ git+https://github.com/JetBrains/jetbrains-ai-tools.git@acef0e191a33a135e4ab14b281758fb61ba6082e#subdirectory=libs/jb_mlops
