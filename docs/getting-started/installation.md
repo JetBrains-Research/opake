@@ -29,11 +29,19 @@ uv add opake \
 
 ### Extras
 
+Pass `--index-url` on every command below — it does not persist from the
+install block above; without it, pip resolves from public PyPI (where the
+unrelated `opaque` OPAQUE-PAKE wrapper also lives).
+
 ```bash
-pip install "opake[auditing]"      # + opake-auditing (empirical privacy auditing)
-pip install "opake[dpftrl]"        # + opake-dpftrl (correlated-noise mechanisms)
-pip install "opake[transformers]"  # + opake-transformers + opake-patches[transformers]
-pip install "opake[all]"           # everything above
+pip install "opake[auditing]" \      # + opake-auditing (empirical privacy auditing)
+  --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/
+pip install "opake[dpftrl]" \        # + opake-dpftrl (correlated-noise mechanisms)
+  --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/
+pip install "opake[transformers]" \  # + opake-transformers + opake-patches[transformers]
+  --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/
+pip install "opake[all]" \           # everything above
+  --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/
 ```
 
 ## From Source
