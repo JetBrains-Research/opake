@@ -610,7 +610,9 @@ def _run_metadata_value(run_metadata: Mapping[str, object], key: str) -> object:
     entry = run_metadata.get(key)
     if isinstance(entry, Mapping):
         return entry.get("value")
-    return getattr(entry, "value", None)
+    if hasattr(entry, "value"):
+        return entry.value
+    return entry
 
 
 def find_latest_checkpoint(client: object, run_id: str) -> str:
@@ -639,6 +641,9 @@ def find_latest_checkpoint(client: object, run_id: str) -> str:
     candidates: list[tuple[int, str]] = []
     for version in versions:
         run_metadata = getattr(version, "run_metadata", None)
+        if not isinstance(run_metadata, Mapping):
+            metadata = getattr(version, "metadata", None)
+            run_metadata = getattr(metadata, "run_metadata", None)
         if not isinstance(run_metadata, Mapping):
             continue
         schema_version = _run_metadata_value(run_metadata, "schema_version")

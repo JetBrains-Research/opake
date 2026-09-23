@@ -471,6 +471,28 @@ def test_find_latest_checkpoint_is_run_scoped_and_uses_highest_step() -> None:
     ]
 
 
+def test_find_latest_checkpoint_supports_hydrated_zenml_metadata() -> None:
+    checkpoint_id = UUID("44444444-4444-4444-4444-444444444444")
+    version = SimpleNamespace(
+        id=checkpoint_id,
+        metadata=SimpleNamespace(
+            run_metadata={
+                "schema_version": checkpoints.MANIFEST_SCHEMA_VERSION,
+                "parent_run_id": str(PIPELINE_RUN_ID),
+                "global_step": 2,
+            }
+        ),
+    )
+    client = SimpleNamespace(
+        get_pipeline_run=lambda run_id: SimpleNamespace(id=PIPELINE_RUN_ID),
+        list_artifact_versions=lambda **kwargs: SimpleNamespace(
+            items=[version], total=1
+        ),
+    )
+
+    assert checkpoints.find_latest_checkpoint(client, "named-run") == str(checkpoint_id)
+
+
 @pytest.mark.parametrize(
     "run_metadata",
     [
