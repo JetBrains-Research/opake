@@ -12,11 +12,13 @@ Negative-axis indexing is used throughout so it works both when called
 per-example (``logits`` ``(T, V)``, ``input_ids`` ``(T,)``) and when called on a
 batched input (``logits`` ``(B, T, V)``, ``input_ids`` ``(B, T)``).
 
-When ``ld_alpha`` is set, the function implements the LD-DPO
+When ``ld_alpha`` is set, :func:`sequence_logp` implements the LD-DPO
 length-desensitised split from equations (9)-(12) of
 https://arxiv.org/abs/2409.06411. The caller supplies the paper's public length
 (the shorter completion length) through the compatibility name
-``shared_prefix_len``.
+``shared_prefix_len``. :func:`fused_sequence_logp` does not support the
+``ld_alpha`` weighting — LD-DPO needs per-token log-probs, so use the eager
+:func:`sequence_logp` path instead.
 
 """
 
