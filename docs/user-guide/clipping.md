@@ -191,6 +191,7 @@ grad_fn, clip_state = adaptive_clipped_grad(
     initial_clipping_norm=1.0,
     target_quantile=0.5,  # aim for 50% of gradients clipped
     normalize_by=batch_size,
+    expected_batch_size=batch_size,  # public expected batch size
     key=key(7),  # required for quantile noise
 )
 
@@ -202,9 +203,9 @@ grads, clip_state = grad_fn(params, batch, state=clip_state)
 
 After each step:
 
-1. Compute the fraction of per-example gradients whose norm exceeded the
-   current clip norm.
-2. Add calibrated Gaussian noise to this fraction (for privacy).
+1. Sum centered clipping indicators and divide by the public expected batch
+   size: `0.5 + (num_clipped - sampled_batch_size / 2) / expected_batch_size`.
+2. Add Gaussian noise with standard deviation `fraction_noise_std`.
 3. Apply a geometric update: if the noisy clipping rate exceeds the target
    quantile, increase the clip norm; otherwise, decrease it.
 
@@ -230,7 +231,8 @@ for batch in dataloader:
 ### Privacy accounting for adaptive clipping
 
 Adaptive clipping introduces an additional privacy cost (the noisy clipping
-rate query). Account for it using `dpsgd_acc.adaclip()`:
+rate query). Pass the fixed public expected batch size to both
+`adaptive_clipped_grad()` and `dpsgd_acc.adaclip()`:
 
 ```python
 import opake.dpsgd.accounting as dpsgd_acc
@@ -473,6 +475,7 @@ grad_fn, clip_state = adaptive_clipped_grad(
     target_quantile=0.5,
     batch_argnums=(1, 2),
     normalize_by=batch_size,
+    expected_batch_size=batch_size,  # public expected batch size
     key=key(7),
 )
 ```
