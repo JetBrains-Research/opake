@@ -1,21 +1,20 @@
-"""Trainer-level wiring for ``torch_compile``, ``use_performance_kernels``, and
-compute-precision flags.
-
-These tests target the *plumbing* — compile / kernel features behave
-correctly when flags flip — without running full training (which would
-require a complete
-data collator, sampler, dataset, accountant). The actual training/eval
-behavior is covered by the broader trainer suite.
-"""
+"""Trainer compile, kernel, and precision wiring."""
 
 from __future__ import annotations
+
+import logging
 
 import pytest
 import torch
 import torch.nn as nn
 from peft import LoraConfig, get_peft_model
 from torch._dynamo.testing import CompileCounterWithBackend
-from transformers import PretrainedConfig, PreTrainedModel
+from transformers import (
+    LlamaConfig,
+    LlamaForCausalLM,
+    PretrainedConfig,
+    PreTrainedModel,
+)
 
 from opake.api.transformers.trainer._distributed import DDPState
 from opake.api.transformers.trainer._dp_trainer import _compile_strict_chunk
@@ -125,7 +124,8 @@ def test_torch_compile_true_accepted(tmp_path):
     assert trainer.args.torch_compile is True
 
 
-def test_torch_compile_runs_poisson_training_strictly(tmp_path):
+@pytest.mark.slow
+def test_torch_compile_runs_poisson_training_strictly(tmp_path, monkeypatch, caplog):
     generator = torch.Generator().manual_seed(0)
     dataset = [
         {"input_ids": torch.randint(0, 16, (4,), generator=generator)}
@@ -151,10 +151,130 @@ def test_torch_compile_runs_poisson_training_strictly(tmp_path):
         train_dataset=dataset,
         data_collator=collate,
     )
+    torch._dynamo.reset()
+    counter = CompileCounterWithBackend("aot_eager")
+    original_compile = torch.compile
 
-    result = trainer.train()
+    def compile_with_counter(fn, *, backend, mode, fullgraph):
+        assert backend == "aot_eager"
+        return original_compile(fn, backend=counter, mode=mode, fullgraph=fullgraph)
+
+    monkeypatch.setattr(torch, "compile", compile_with_counter)
+    with caplog.at_level(logging.WARNING):
+        result = trainer.train()
 
     assert result.global_step == 3
+    assert counter.frame_count > 0
+    assert not any(
+        "Strict DP gradient compilation failed" in record.message
+        for record in caplog.records
+    )
+
+
+class _ClipStateTrainer(DPTrainer):
+    def _inner_training_loop(self, ctx, **kwargs):
+        result = super()._inner_training_loop(ctx, **kwargs)
+        self.final_clip_state = ctx.clip_state
+        return result
+
+
+def _train_llama(tmp_path, *, mode, compiled, fused_ce=True):
+    torch.manual_seed(1060)
+    config = LlamaConfig(
+        vocab_size=32,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        max_position_embeddings=32,
+        pad_token_id=0,
+    )
+    model = LlamaForCausalLM(config)
+    generator = torch.Generator().manual_seed(1060)
+    dataset = []
+    for _ in range(32):
+        ids = torch.randint(1, 32, (8,), generator=generator)
+        dataset.append(
+            {
+                "input_ids": ids,
+                "labels": ids.clone(),
+                "attention_mask": torch.ones_like(ids),
+            }
+        )
+    args = _args(
+        tmp_path,
+        per_device_train_batch_size=3,
+        max_steps=2,
+        privacy_target_epsilon=None,
+        torch_compile=compiled,
+        torch_compile_backend="aot_eager",
+        clipping_mode=mode,
+        clipping_kwargs={"gamma": 0.01} if mode == "auto" else {},
+        performance_kernels_config=(
+            None if fused_ce else {"fused_linear_cross_entropy": False}
+        ),
+        report_to=[],
+        logging_strategy="no",
+        disable_tqdm=True,
+    )
+    trainer = _ClipStateTrainer(model=model, args=args, train_dataset=dataset)
+    assert trainer._fused_forward_uses_marker == fused_ce
+    result = trainer.train()
+    assert result.global_step == 2
+    weights = {name: value.clone() for name, value in model.state_dict().items()}
+    return result.training_loss, weights, trainer.final_clip_state
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("mode", ["fixed", "adaptive", "auto"])
+def test_torch_compile_trains_fused_llama(tmp_path, caplog, mode):
+    torch._dynamo.reset()
+    eager_loss, eager_weights, eager_state = _train_llama(
+        tmp_path / "eager", mode=mode, compiled=False
+    )
+    with caplog.at_level(logging.WARNING):
+        compiled_loss, compiled_weights, compiled_state = _train_llama(
+            tmp_path / "compiled", mode=mode, compiled=True
+        )
+
+    fallback_warnings = [
+        record
+        for record in caplog.records
+        if "Strict DP gradient compilation failed" in record.message
+    ]
+    assert len(fallback_warnings) <= 1
+    assert compiled_loss == pytest.approx(eager_loss, rel=1e-5, abs=1e-6)
+    assert compiled_state == eager_state
+    assert compiled_weights.keys() == eager_weights.keys()
+    for name in eager_weights:
+        torch.testing.assert_close(
+            compiled_weights[name], eager_weights[name], rtol=1e-5, atol=1e-6
+        )
+
+
+@pytest.mark.slow
+def test_torch_compile_auto_clipping_uses_strict_graph_without_fused_ce(
+    tmp_path, monkeypatch, caplog
+):
+    torch._dynamo.reset()
+    counter = CompileCounterWithBackend("aot_eager")
+    original_compile = torch.compile
+
+    def compile_with_counter(fn, *, backend, mode, fullgraph):
+        assert backend == "aot_eager"
+        assert fullgraph
+        return original_compile(fn, backend=counter, mode=mode, fullgraph=fullgraph)
+
+    monkeypatch.setattr(torch, "compile", compile_with_counter)
+    with caplog.at_level(logging.WARNING):
+        _train_llama(tmp_path, mode="auto", compiled=True, fused_ce=False)
+
+    assert counter.frame_count > 0
+    assert not any(
+        "Strict DP gradient compilation failed" in record.message
+        for record in caplog.records
+    )
 
 
 def test_torch_compile_with_backend_and_mode(tmp_path):
@@ -214,11 +334,11 @@ def test_torch_compile_rejects_model_with_checkpointing_already_enabled(tmp_path
 # ----------------------------------------------------------------------------
 
 
-def test_strict_chunk_compiler_requests_dynamic_fullgraph(monkeypatch):
+def test_strict_chunk_compiler_requests_fullgraph_with_automatic_shapes(monkeypatch):
     compile_calls = []
 
-    def fake_compile(fn, *, backend, mode, fullgraph, dynamic):
-        compile_calls.append((fn, backend, mode, fullgraph, dynamic))
+    def fake_compile(fn, *, backend, mode, fullgraph):
+        compile_calls.append((fn, backend, mode, fullgraph))
         return fn
 
     monkeypatch.setattr(torch, "compile", fake_compile)
@@ -227,51 +347,121 @@ def test_strict_chunk_compiler_requests_dynamic_fullgraph(monkeypatch):
         return params + x.sum() + y.sum()
 
     compiled = _compile_strict_chunk(
-        chunk,
-        backend="aot_eager",
-        mode="default",
+        chunk, backend="aot_eager", mode="default", on_fallback=lambda _: None
     )
     torch.testing.assert_close(
         compiled(torch.tensor(1.0), torch.ones(3), torch.ones(3)),
         torch.tensor(7.0),
     )
-    assert compile_calls == [(chunk, "aot_eager", "default", True, True)]
+    assert compile_calls == [(chunk, "aot_eager", "default", True)]
 
 
-def test_strict_chunk_compiler_reuses_dynamic_graph_across_batch_sizes():
+def test_strict_chunk_compiler_handles_batch_sizes():
     torch._dynamo.reset()
     backend = CompileCounterWithBackend("aot_eager")
+    fallbacks = []
 
     def chunk(x):
         return x.sin().sum(dim=0)
 
-    compiled = _compile_strict_chunk(chunk, backend=backend, mode="default")
+    compiled = _compile_strict_chunk(
+        chunk, backend=backend, mode="default", on_fallback=fallbacks.append
+    )
     generator = torch.Generator().manual_seed(0)
     for batch_size in (4, 2, 3, 1):
         x = torch.randn(batch_size, 5, generator=generator)
         torch.testing.assert_close(compiled(x), chunk(x))
 
-    # Symbolic dimensions specialize at size one on supported PyTorch versions.
-    assert 1 <= backend.frame_count <= 2
+    assert not fallbacks
+    assert backend.frame_count > 0
 
 
-def test_strict_chunk_compiler_propagates_lazy_compile_failure(monkeypatch):
+@pytest.mark.parametrize("failure_at", [1, 3])
+def test_strict_chunk_compiler_falls_back_once(monkeypatch, failure_at):
+    failure = torch._dynamo.exc.Unsupported("graph break")
+    compiled_calls = 0
+    eager_calls = 0
+    fallbacks = []
+
+    def fake_compile(fn, *, backend, mode, fullgraph):
+        def compiled(x):
+            nonlocal compiled_calls
+            compiled_calls += 1
+            if compiled_calls == failure_at:
+                raise failure
+            return x + 10
+
+        return compiled
+
+    def chunk(x):
+        nonlocal eager_calls
+        eager_calls += 1
+        return x + 1
+
+    monkeypatch.setattr(torch, "compile", fake_compile)
+    compiled = _compile_strict_chunk(
+        chunk, backend="aot_eager", mode="default", on_fallback=fallbacks.append
+    )
+    for value in range(1, failure_at):
+        assert compiled(value) == value + 10
+    assert compiled(failure_at) == failure_at + 1
+    assert compiled(failure_at + 1) == failure_at + 2
+    assert compiled_calls == failure_at
+    assert eager_calls == 2
+    assert fallbacks == [failure]
+
+
+@pytest.mark.parametrize("failure_type", [RuntimeError, torch.OutOfMemoryError])
+def test_strict_chunk_compiler_does_not_retry_other_failures(monkeypatch, failure_type):
+    fallbacks = []
+    eager_calls = 0
+
+    def fake_compile(fn, *, backend, mode, fullgraph):
+        def compiled(x):
+            raise failure_type("not a Dynamo failure")
+
+        return compiled
+
+    def chunk(x):
+        nonlocal eager_calls
+        eager_calls += 1
+        return x
+
+    monkeypatch.setattr(torch, "compile", fake_compile)
+    compiled = _compile_strict_chunk(
+        chunk, backend="aot_eager", mode="default", on_fallback=fallbacks.append
+    )
+    with pytest.raises(failure_type, match="not a Dynamo failure"):
+        compiled(torch.ones(2))
+    assert eager_calls == 0
+    assert not fallbacks
+
+
+def test_grad_compiler_warns_once_across_chunks(tmp_path, monkeypatch, caplog):
     failure = torch._dynamo.exc.Unsupported("graph break")
 
-    def fake_compile(fn, *, backend, mode, fullgraph, dynamic):
-        def compiled(*args, **kwargs):
+    def fake_compile(fn, *, backend, mode, fullgraph):
+        def compiled(x):
             raise failure
 
         return compiled
 
     monkeypatch.setattr(torch, "compile", fake_compile)
-    compiled = _compile_strict_chunk(
-        lambda x: x,
-        backend="aot_eager",
-        mode="default",
+    trainer, _ = _tiny_trainer(
+        tmp_path, torch_compile=True, torch_compile_backend="aot_eager"
     )
-    with pytest.raises(torch._dynamo.exc.Unsupported, match="graph break"):
-        compiled(torch.ones(2))
+    compiler = trainer._grad_compiler()
+    assert compiler is not None
+    with caplog.at_level(logging.WARNING):
+        assert compiler(lambda x: x + 1)(1) == 2
+        assert compiler(lambda x: x + 2)(1) == 3
+
+    warnings = [
+        record
+        for record in caplog.records
+        if "Strict DP gradient compilation failed" in record.message
+    ]
+    assert len(warnings) == 1
 
 
 def _make_fake_distributed(trainer):

@@ -225,7 +225,7 @@ Mechanism constraints (validated at construction):
 | `bf16` | `False` | bf16 autocast on the per-example loss closure. |
 | `bf16_full_eval` | `False` | Cast the model to bf16 for the eval scope only. |
 | `gradient_checkpointing` | `False` | Opake automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with `torch_compile`. |
-| `torch_compile` | `False` | Compiles the tensor-only per-microbatch `vmap(grad)+clip+reduce` kernel with `fullgraph=True`. |
+| `torch_compile` | `False` | Strictly compiles each tensor-only `vmap(grad)+clip+reduce` chunk with automatic dynamic shapes. On a Dynamo failure, warns once and runs the affected chunk eagerly thereafter. |
 
 ## Patches and kernels
 
@@ -236,6 +236,8 @@ Three flags drive the model patching at trainer construction time:
 | `use_compat_patches` | `True` | vmap-safety patches (eager attention, batchify, vmap-safe masking / collator / checkpoint hooks). |
 | `use_performance_kernels` | `False` | CUDA + Triton kernel group (RoPE, RMSNorm, SwiGLU/GeGLU, cross-entropy).  Auto-`False` on hosts without CUDA + Triton. |
 | `performance_kernels_config` | `None` | Flat dict forwarded as kwargs to `apply_model_patches` / `apply_runtime_patches` — per-key override. |
+
+If fused CE prevents full-graph capture, `performance_kernels_config={"fused_linear_cross_entropy": False}` disables it at the cost of higher logits memory use.
 
 See [Model patches](model-patches.md) for the full configuration matrix.
 

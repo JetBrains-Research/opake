@@ -255,7 +255,7 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
             else self.config.output_hidden_states
         )
         return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
+            return_dict if return_dict is not None else self.config.return_dict
         )
 
         # Call backbone
