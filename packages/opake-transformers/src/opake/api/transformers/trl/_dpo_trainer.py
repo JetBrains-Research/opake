@@ -73,6 +73,7 @@ from opake.api.transformers.trainer._dp_trainer import _is_peft_model
 from opake.exceptions import ConfigurationError, InputTypeError
 
 from ._dpo_config import _REFERENCE_FREE_HEADS, DPOConfig
+from ._logits import _has_family_logit_transform
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -391,7 +392,9 @@ class DPOTrainer(DPTrainer):
             model, self._fused_logp_eligible
         )
         self._use_fused_logp = (
-            self._fused_logp_eligible and self._lm_head_param_name is not None
+            self._fused_logp_eligible
+            and self._lm_head_param_name is not None
+            and not _has_family_logit_transform(model)
         )
         if self._sync_ref_model and self._is_peft:
             raise ConfigurationError(
