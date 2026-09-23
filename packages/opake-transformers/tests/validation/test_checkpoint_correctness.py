@@ -18,14 +18,25 @@ Covers:
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
 from _hf_shared import build_lm_dataset, gpt2_tokenizer, make_gpt2_model
-from peft import LoraConfig, TaskType, get_peft_model
+from datasets import Dataset
+from peft import (
+    LoraConfig,
+    PromptEncoderConfig,
+    TaskType,
+    get_peft_model,
+    get_peft_model_state_dict,
+)
+from safetensors.torch import load_file, save_file
+from transformers import GPT2Config, GPT2LMHeadModel, LlamaConfig, LlamaForCausalLM
 
 from opake.api.transformers.trainer._state import DPTrainerState
 from opake.exceptions import CheckpointError
@@ -198,6 +209,388 @@ class TestLoadBestModelMutates:
             )
 
 
+class TestModelRestore:
+    def test_resume_restores_fresh_lora_model(
+        self, small_model_and_tokenizer, tiny_dataset, tmp_path
+    ):
+        base, tokenizer = small_model_and_tokenizer
+        fresh_base = copy.deepcopy(base)
+        config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=4,
+            lora_alpha=8,
+            target_modules=["c_attn"],
+            fan_in_fan_out=True,
+        )
+        source = get_peft_model(base, copy.deepcopy(config))
+        fresh = get_peft_model(fresh_base, copy.deepcopy(config))
+        first = DPTrainer(
+            model=source,
+            args=_args(tmp_path, max_steps=2, save_strategy="steps", save_steps=2),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        first.train()
+        checkpoint = tmp_path / "checkpoint-2"
+        saved = load_file(str(checkpoint / "adapter_model.safetensors"))
+        initial = get_peft_model_state_dict(fresh)
+        assert any(not torch.equal(saved[name], initial[name]) for name in saved)
+
+        resumed = DPTrainer(
+            model=fresh,
+            args=_args(tmp_path, max_steps=2),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        resumed.train(resume_from_checkpoint=checkpoint)
+        restored = get_peft_model_state_dict(fresh)
+        assert set(restored) == set(saved)
+        assert all(torch.equal(restored[name], value) for name, value in saved.items())
+
+    def test_partial_lora_checkpoint_fails_with_matching_bias(
+        self, small_model_and_tokenizer, tiny_dataset, tmp_path
+    ):
+        base, tokenizer = small_model_and_tokenizer
+        source = get_peft_model(
+            base,
+            LoraConfig(
+                r=2,
+                lora_alpha=4,
+                target_modules=["c_attn"],
+                bias="all",
+                fan_in_fan_out=True,
+            ),
+        )
+        folder = tmp_path / "adapter"
+        source.save_pretrained(folder)
+        weights_path = folder / "adapter_model.safetensors"
+        weights = load_file(str(weights_path))
+        biases = {name: value for name, value in weights.items() if "bias" in name}
+        assert biases
+        assert len(biases) < len(weights)
+        save_file(biases, str(weights_path))
+        trainer = DPTrainer(
+            model=copy.deepcopy(source),
+            args=_args(tmp_path / "run"),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        with pytest.raises(CheckpointError, match="Incomplete PEFT adapter"):
+            trainer._restore_checkpoint_model(str(folder))
+
+    def test_missing_peft_weights_fail(self, lora_model, tiny_dataset, tmp_path):
+        model, tokenizer = lora_model
+        folder = tmp_path / "adapter"
+        model.save_pretrained(folder)
+        (folder / "adapter_model.safetensors").unlink()
+        trainer = DPTrainer(
+            model=model,
+            args=_args(tmp_path / "run"),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        with pytest.raises(CheckpointError, match="Missing PEFT weights"):
+            trainer._restore_checkpoint_model(str(folder))
+
+    def test_peft_config_drift_fails(
+        self, small_model_and_tokenizer, tiny_dataset, tmp_path
+    ):
+        base, tokenizer = small_model_and_tokenizer
+        config = LoraConfig(
+            r=2, lora_alpha=4, target_modules=["c_attn"], fan_in_fan_out=True
+        )
+        target_base = copy.deepcopy(base)
+        source = get_peft_model(base, config)
+        folder = tmp_path / "adapter"
+        source.save_pretrained(folder)
+        target = get_peft_model(
+            target_base,
+            LoraConfig(
+                r=2, lora_alpha=8, target_modules=["c_attn"], fan_in_fan_out=True
+            ),
+        )
+        trainer = DPTrainer(
+            model=target,
+            args=_args(tmp_path / "run"),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        with pytest.raises(CheckpointError, match="lora_alpha"):
+            trainer._restore_checkpoint_model(str(folder))
+
+    def test_restores_trainable_tokens(
+        self, small_model_and_tokenizer, tiny_dataset, tmp_path
+    ):
+        base, tokenizer = small_model_and_tokenizer
+        source = get_peft_model(
+            base,
+            LoraConfig(
+                task_type=TaskType.CAUSAL_LM,
+                r=2,
+                lora_alpha=4,
+                target_modules=["c_attn"],
+                fan_in_fan_out=True,
+                trainable_token_indices={"transformer.wte": [1, 2]},
+            ),
+        )
+        folder = tmp_path / "adapter"
+        source.save_pretrained(folder)
+        saved = load_file(str(folder / "adapter_model.safetensors"))
+        assert any("trainable_tokens_delta" in name for name in saved)
+        target = copy.deepcopy(source)
+        with torch.no_grad():
+            for parameter in target.parameters():
+                if parameter.requires_grad:
+                    parameter.zero_()
+        trainer = DPTrainer(
+            model=target,
+            args=_args(tmp_path / "run"),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        trainer._restore_checkpoint_model(str(folder))
+        restored = get_peft_model_state_dict(target)
+        assert set(restored) == set(saved)
+        assert all(torch.equal(restored[name], value) for name, value in saved.items())
+
+    def test_lossy_prompt_encoder_checkpoint_fails(self, tiny_dataset, tmp_path):
+        config = LlamaConfig(
+            vocab_size=32,
+            hidden_size=16,
+            intermediate_size=32,
+            num_hidden_layers=1,
+            num_attention_heads=2,
+            num_key_value_heads=2,
+            max_position_embeddings=32,
+        )
+        source = get_peft_model(
+            LlamaForCausalLM(config),
+            PromptEncoderConfig(
+                num_virtual_tokens=2,
+                task_type=TaskType.CAUSAL_LM,
+                encoder_hidden_size=16,
+            ),
+        )
+        folder = tmp_path / "prompt"
+        source.save_pretrained(folder)
+        target = copy.deepcopy(source)
+        with torch.no_grad():
+            for parameter in target.parameters():
+                if parameter.requires_grad:
+                    parameter.zero_()
+        trainer = DPTrainer(
+            model=target,
+            args=_args(tmp_path / "run"),
+            train_dataset=tiny_dataset,
+        )
+        with pytest.raises(CheckpointError, match="prompt_embeddings"):
+            trainer._restore_checkpoint_model(str(folder))
+
+    @pytest.mark.parametrize("safe_serialization", [True, False])
+    def test_restores_each_named_adapter(
+        self, lora_model, tiny_dataset, tmp_path, safe_serialization
+    ):
+        source, tokenizer = lora_model
+        source.add_adapter("custom", copy.deepcopy(source.peft_config["default"]))
+        with torch.no_grad():
+            for name, parameter in source.named_parameters():
+                if ".lora_" in name and ".default." in name:
+                    parameter.fill_(0.125)
+                elif ".lora_" in name and ".custom." in name:
+                    parameter.fill_(0.375)
+        source.set_adapter("custom")
+        folder = tmp_path / "adapters"
+        source.save_pretrained(folder, safe_serialization=safe_serialization)
+
+        target = copy.deepcopy(source)
+        with torch.no_grad():
+            for name, parameter in target.named_parameters():
+                if ".lora_" in name:
+                    parameter.zero_()
+        trainer = DPTrainer(
+            model=target,
+            args=_args(tmp_path / "run"),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        trainer._restore_checkpoint_model(str(folder))
+        assert target.active_adapter == "custom"
+        for adapter in ("default", "custom"):
+            path = folder if adapter == "default" else folder / adapter
+            if safe_serialization:
+                saved = load_file(str(path / "adapter_model.safetensors"))
+            else:
+                saved = torch.load(
+                    path / "adapter_model.bin", map_location="cpu", weights_only=True
+                )
+            restored = get_peft_model_state_dict(target, adapter_name=adapter)
+            assert set(restored) == set(saved)
+            assert all(
+                torch.equal(restored[name], value) for name, value in saved.items()
+            )
+
+    @pytest.mark.parametrize(
+        ("sharded", "legacy_binary"), [(False, False), (True, False), (False, True)]
+    )
+    def test_restores_tied_full_model(
+        self,
+        small_model_and_tokenizer,
+        tiny_dataset,
+        tmp_path,
+        sharded,
+        legacy_binary,
+    ):
+        source, tokenizer = small_model_and_tokenizer
+        folder = tmp_path / "full"
+        source.save_pretrained(folder, max_shard_size="5MB" if sharded else "5GB")
+        if sharded:
+            index = json.loads((folder / "model.safetensors.index.json").read_text())
+            saved_keys = index["weight_map"]
+        else:
+            weights_path = folder / "model.safetensors"
+            saved = load_file(str(weights_path))
+            saved_keys = saved
+            if legacy_binary:
+                torch.save(saved, folder / "pytorch_model.bin")
+                weights_path.unlink()
+        assert "lm_head.weight" not in saved_keys
+        target = copy.deepcopy(source)
+        with torch.no_grad():
+            for parameter in target.parameters():
+                parameter.zero_()
+        trainer = DPTrainer(
+            model=target,
+            args=_args(tmp_path / "run"),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        trainer._restore_checkpoint_model(str(folder))
+        for name, value in source.state_dict().items():
+            assert torch.equal(target.state_dict()[name], value)
+        assert (
+            target.lm_head.weight.data_ptr() == target.transformer.wte.weight.data_ptr()
+        )
+
+    def test_missing_untied_weight_fails(
+        self, small_model_and_tokenizer, tiny_dataset, tmp_path
+    ):
+        base, tokenizer = small_model_and_tokenizer
+        config = copy.deepcopy(base.config)
+        config.tie_word_embeddings = False
+        source = type(base)(config)
+        folder = tmp_path / "full"
+        source.save_pretrained(folder)
+        weights_path = folder / "model.safetensors"
+        weights = load_file(str(weights_path))
+        weights.pop("lm_head.weight")
+        save_file(weights, str(weights_path))
+        trainer = DPTrainer(
+            model=type(base)(config),
+            args=_args(tmp_path / "run"),
+            processing_class=tokenizer,
+            train_dataset=tiny_dataset,
+        )
+        with pytest.raises(CheckpointError, match=r"lm_head\.weight"):
+            trainer._restore_checkpoint_model(str(folder))
+
+
+@pytest.fixture
+def tiny_tied_model_and_dataset():
+    config = GPT2Config(
+        vocab_size=32,
+        n_positions=16,
+        n_ctx=16,
+        n_embd=16,
+        n_layer=1,
+        n_head=2,
+        tie_word_embeddings=True,
+        pad_token_id=0,
+        bos_token_id=1,
+        eos_token_id=2,
+    )
+    model = GPT2LMHeadModel(config)
+    tokens = [[1, 2 + i, 3 + i, 4, 5, 0, 0, 0] for i in range(6)]
+    dataset = Dataset.from_dict(
+        {
+            "input_ids": tokens,
+            "attention_mask": [[1] * 5 + [0] * 3 for _ in tokens],
+            "labels": [row[:5] + [-100] * 3 for row in tokens],
+        }
+    )
+    return model, dataset
+
+
+class TestTiedModelTraining:
+    def test_resume_restores_tied_model(self, tiny_tied_model_and_dataset, tmp_path):
+        source, dataset = tiny_tied_model_and_dataset
+        fresh = copy.deepcopy(source)
+        first = DPTrainer(
+            model=source,
+            args=_args(tmp_path, max_steps=2, save_strategy="steps", save_steps=2),
+            train_dataset=dataset,
+        )
+        first.train()
+        checkpoint = tmp_path / "checkpoint-2"
+        saved = load_file(str(checkpoint / "model.safetensors"))
+        assert "lm_head.weight" not in saved
+        assert not torch.equal(
+            fresh.transformer.wte.weight, saved["transformer.wte.weight"]
+        )
+
+        resumed = DPTrainer(
+            model=fresh,
+            args=_args(tmp_path, max_steps=2),
+            train_dataset=dataset,
+        )
+        resumed.train(resume_from_checkpoint=checkpoint)
+        restored = fresh.state_dict()
+        assert all(torch.equal(restored[name], value) for name, value in saved.items())
+        assert (
+            fresh.lm_head.weight.data_ptr() == fresh.transformer.wte.weight.data_ptr()
+        )
+
+    def test_best_checkpoint_restores_tied_model(
+        self, tiny_tied_model_and_dataset, tmp_path, monkeypatch
+    ):
+        model, dataset = tiny_tied_model_and_dataset
+        trainer = DPTrainer(
+            model=model,
+            args=_args(
+                tmp_path,
+                max_steps=4,
+                eval_strategy="steps",
+                eval_steps=2,
+                save_strategy="steps",
+                save_steps=2,
+                metric_for_best_model="eval_loss",
+                load_best_model_at_end=True,
+            ),
+            train_dataset=dataset,
+            eval_dataset=dataset,
+        )
+        losses = iter((0.1, 0.9))
+        evaluate = trainer._run_evaluation_loop
+
+        def scripted_evaluation(*args, **kwargs):
+            result = evaluate(*args, **kwargs)
+            result.metrics["eval_loss"] = next(losses)
+            return result
+
+        monkeypatch.setattr(trainer, "_run_evaluation_loop", scripted_evaluation)
+        trainer.train()
+        assert trainer.state.best_global_step == 2
+        best = load_file(str(tmp_path / "checkpoint-2" / "model.safetensors"))
+        last = load_file(str(tmp_path / "checkpoint-4" / "model.safetensors"))
+        assert not torch.equal(
+            best["transformer.wte.weight"], last["transformer.wte.weight"]
+        )
+        restored = model.state_dict()
+        assert all(torch.equal(restored[name], value) for name, value in best.items())
+        assert (
+            model.lm_head.weight.data_ptr() == model.transformer.wte.weight.data_ptr()
+        )
+
+
 # ---------------------------------------------------------------------------
 # Best-folder lookup keyed on best_global_step (HF parity).
 # ---------------------------------------------------------------------------
@@ -368,6 +761,18 @@ class TestBestOnEvalOnlyStep:
         assert Path(best).resolve() == (tmp_path / "checkpoint-2").resolve()
         assert Path(best).is_dir()
         assert (Path(best) / "adapter_model.safetensors").exists()
+        best_weights = load_file(str(Path(best) / "adapter_model.safetensors"))
+        last_weights = load_file(
+            str(tmp_path / "checkpoint-4" / "adapter_model.safetensors")
+        )
+        assert any(
+            not torch.equal(best_weights[name], last_weights[name])
+            for name in best_weights
+        )
+        restored = get_peft_model_state_dict(model)
+        assert all(
+            torch.equal(restored[name], value) for name, value in best_weights.items()
+        )
 
 
 # ---------------------------------------------------------------------------
