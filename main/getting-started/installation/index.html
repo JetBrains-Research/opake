@@ -595,15 +595,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#from-jetbrains-packages" class="md-nav__link">
+  <a href="#from-pypi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        From JetBrains Packages
+        From PyPI
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="From JetBrains Packages">
+    <nav class="md-nav" aria-label="From PyPI">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -619,6 +619,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-jetbrains-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From JetBrains Packages
+      
+    </span>
+  </a>
   
 </li>
       
@@ -3174,15 +3185,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#from-jetbrains-packages" class="md-nav__link">
+  <a href="#from-pypi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        From JetBrains Packages
+        From PyPI
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="From JetBrains Packages">
+    <nav class="md-nav" aria-label="From PyPI">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3198,6 +3209,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-jetbrains-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From JetBrains Packages
+      
+    </span>
+  </a>
   
 </li>
       
@@ -3306,51 +3328,73 @@ your use case.</p>
 <li>Python 3.11 through 3.13</li>
 <li>PyTorch 2.9 or later</li>
 </ul>
-<h2 id="from-jetbrains-packages">From JetBrains Packages<a class="headerlink" href="#from-jetbrains-packages" title="Permanent link">&para;</a></h2>
+<h2 id="from-pypi">From PyPI<a class="headerlink" href="#from-pypi" title="Permanent link">&para;</a></h2>
 <p>Install <code>opake</code> as the single public package entry point:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>opake<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--index-url<span class="w"> </span>https://packages.jetbrains.team/pypi/p/fed/python/simple/
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>opake
 </code></pre></div>
 <p>Or with <code>uv</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>add<span class="w"> </span>opake<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--index<span class="w"> </span>https://packages.jetbrains.team/pypi/p/fed/python/simple/
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>add<span class="w"> </span>opake
 </code></pre></div>
+<p>The umbrella <code>opake</code> distribution pulls in a curated bundle of sub-packages.
+Each sub-package is also published separately (<code>opake-base</code>, <code>opake-engine</code>,
+<code>opake-optimizers</code>, <code>opake-accounting</code>, <code>opake-dpsgd</code>, <code>opake-dpftrl</code>,
+<code>opake-auditing</code>, <code>opake-patches</code>, <code>opake-transformers</code>, <code>opake-alignment</code>),
+so you can install an individual distribution when you want a narrower
+dependency footprint — for example <code>pip install opake-accounting</code> for the
+torch-free PLD accounting alone. Prefer <code>opake</code> unless you have a specific
+reason to pick sub-packages apart; the umbrella keeps the versions of the
+sub-packages it bundles consistent.</p>
 <h3 id="extras">Extras<a class="headerlink" href="#extras" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"opake[auditing]"</span><span class="w">      </span><span class="c1"># + opake-auditing (empirical privacy auditing)</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"opake[dpftrl]"</span><span class="w">        </span><span class="c1"># + opake-dpftrl (correlated-noise mechanisms)</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"opake[transformers]"</span><span class="w">  </span><span class="c1"># + opake-transformers + opake-patches[transformers]</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"opake[all]"</span><span class="w">           </span><span class="c1"># everything above</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"opake[alignment]"</span><span class="w">     </span><span class="c1"># + opake-alignment (DP-safe SFT / DPO primitives)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"opake[transformers]"</span><span class="w">  </span><span class="c1"># + opake-transformers + opake-patches[transformers]</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"opake[trl]"</span><span class="w">           </span><span class="c1"># + trl (config converters only; trainers are native)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"opake[all]"</span><span class="w">           </span><span class="c1"># everything above</span>
 </code></pre></div>
+<h2 id="from-jetbrains-packages">From JetBrains Packages<a class="headerlink" href="#from-jetbrains-packages" title="Permanent link">&para;</a></h2>
+<p>Every release published to PyPI is mirrored to the JetBrains Packages index.
+The index additionally carries <code>.dev</code> wheels built from <code>main</code>, which are not
+published to PyPI:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>install<span class="w"> </span>opake<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--index-url<span class="w"> </span>https://packages.jetbrains.team/pypi/p/fed/python/simple/
+</code></pre></div>
+<p>Or with <code>uv</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>uv<span class="w"> </span>add<span class="w"> </span>opake<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--index<span class="w"> </span>https://packages.jetbrains.team/pypi/p/fed/python/simple/
+</code></pre></div>
+<p>To install an unreleased <code>.dev</code> wheel by hand, pin the exact version so the
+index is consulted (<code>pip install opake==0.16.1.dev3 --index-url ...</code>).</p>
 <h2 id="from-source">From Source<a class="headerlink" href="#from-source" title="Permanent link">&para;</a></h2>
 <p>Clone the repository when developing Opake, inspecting its implementation, or
 running its test suite. For ordinary use, prefer the published package above.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Clone the repository</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/JetBrains-Research/opake.git
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">cd</span><span class="w"> </span>opake
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Install with uv (recommended)</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>dev<span class="w"> </span>--all-packages<span class="w"> </span>--extra<span class="w"> </span>all
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Clone the repository</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/JetBrains-Research/opake.git
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">cd</span><span class="w"> </span>opake
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Install with uv (recommended)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>dev<span class="w"> </span>--all-packages<span class="w"> </span>--extra<span class="w"> </span>all
 </code></pre></div>
 <h2 id="development-installation">Development Installation<a class="headerlink" href="#development-installation" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Install dev dependencies for all packages</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>dev<span class="w"> </span>--all-packages<span class="w"> </span>--extra<span class="w"> </span>all
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Verify installation (non-GPU tests)</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">"not cuda and not mps and not slow"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Install dev dependencies for all packages</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>dev<span class="w"> </span>--all-packages<span class="w"> </span>--extra<span class="w"> </span>all
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Verify installation (non-GPU tests)</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">"not cuda and not mps and not slow"</span>
 </code></pre></div>
 <h2 id="optional-dependencies">Optional Dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">&para;</a></h2>
 <h3 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h3>
 <p>To build documentation locally:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>docs
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>uv<span class="w"> </span>run<span class="w"> </span>mkdocs<span class="w"> </span>serve
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>docs
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>uv<span class="w"> </span>run<span class="w"> </span>mkdocs<span class="w"> </span>serve
 </code></pre></div>
 <p>Visit <a href="http://localhost:8000">http://localhost:8000</a> to view the docs.</p>
 <h2 id="verify-installation">Verify Installation<a class="headerlink" href="#verify-installation" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">importlib.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">version</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"opake-base version:"</span><span class="p">,</span> <span class="n">version</span><span class="p">(</span><span class="s2">"opake-base"</span><span class="p">))</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"opake-engine version:"</span><span class="p">,</span> <span class="n">version</span><span class="p">(</span><span class="s2">"opake-engine"</span><span class="p">))</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"opake-dpsgd version:"</span><span class="p">,</span> <span class="n">version</span><span class="p">(</span><span class="s2">"opake-dpsgd"</span><span class="p">))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">importlib.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">version</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"opake-base version:"</span><span class="p">,</span> <span class="n">version</span><span class="p">(</span><span class="s2">"opake-base"</span><span class="p">))</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"opake-engine version:"</span><span class="p">,</span> <span class="n">version</span><span class="p">(</span><span class="s2">"opake-engine"</span><span class="p">))</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"opake-dpsgd version:"</span><span class="p">,</span> <span class="n">version</span><span class="p">(</span><span class="s2">"opake-dpsgd"</span><span class="p">))</span>
 </code></pre></div>
 <p><code>opake</code> itself is a <a href="https://peps.python.org/pep-0420/">PEP 420</a> namespace with no top-level Python code, so
 query the installed distributions individually.</p>
