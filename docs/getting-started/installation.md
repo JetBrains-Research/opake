@@ -11,9 +11,46 @@
 - Python 3.11 through 3.13
 - PyTorch 2.9 or later
 
-## From JetBrains Packages
+## From PyPI
 
 Install `opake` as the single public package entry point:
+
+```bash
+pip install opake
+```
+
+Or with `uv`:
+
+```bash
+uv add opake
+```
+
+The umbrella `opake` distribution pulls in a curated bundle of sub-packages.
+Each sub-package is also published separately (`opake-base`, `opake-engine`,
+`opake-optimizers`, `opake-accounting`, `opake-dpsgd`, `opake-dpftrl`,
+`opake-auditing`, `opake-patches`, `opake-transformers`, `opake-alignment`),
+so you can install an individual distribution when you want a narrower
+dependency footprint — for example `pip install opake-accounting` for the
+torch-free PLD accounting alone. Prefer `opake` unless you have a specific
+reason to pick sub-packages apart; the umbrella keeps the versions of the
+sub-packages it bundles consistent.
+
+### Extras
+
+```bash
+pip install "opake[auditing]"      # + opake-auditing (empirical privacy auditing)
+pip install "opake[dpftrl]"        # + opake-dpftrl (correlated-noise mechanisms)
+pip install "opake[alignment]"     # + opake-alignment (DP-safe SFT / DPO primitives)
+pip install "opake[transformers]"  # + opake-transformers + opake-patches[transformers]
+pip install "opake[trl]"           # + trl (config converters only; trainers are native)
+pip install "opake[all]"           # everything above
+```
+
+## From JetBrains Packages
+
+Every release published to PyPI is mirrored to the JetBrains Packages index.
+The index additionally carries `.dev` wheels built from `main`, which are not
+published to PyPI:
 
 ```bash
 pip install opake \
@@ -27,14 +64,8 @@ uv add opake \
   --index https://packages.jetbrains.team/pypi/p/fed/python/simple/
 ```
 
-### Extras
-
-```bash
-pip install "opake[auditing]"      # + opake-auditing (empirical privacy auditing)
-pip install "opake[dpftrl]"        # + opake-dpftrl (correlated-noise mechanisms)
-pip install "opake[transformers]"  # + opake-transformers + opake-patches[transformers]
-pip install "opake[all]"           # everything above
-```
+To install an unreleased `.dev` wheel by hand, pin the exact version so the
+index is consulted (`pip install opake==0.16.1.dev3 --index-url ...`).
 
 ## From Source
 

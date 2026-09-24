@@ -62,8 +62,20 @@ opake.accounting                                          <- opake-accounting
 
 ## Installation
 
+Opake is published on [PyPI](https://pypi.org/project/opake/), so a plain
+install works:
+
 ```bash
-# From JetBrains Packages
+pip install opake
+
+# Or with uv
+uv add opake
+```
+
+Releases are mirrored to JetBrains Packages, which also carries `.dev` wheels
+built from `main`:
+
+```bash
 pip install opake \
   --index-url https://packages.jetbrains.team/pypi/p/fed/python/simple/
 
@@ -77,8 +89,21 @@ Extras:
 ```bash
 pip install "opake[auditing]"      # empirical privacy auditing
 pip install "opake[dpftrl]"        # correlated-noise DP-FTRL components
+pip install "opake[alignment]"     # DP-safe SFT / DPO primitives
 pip install "opake[transformers]"  # Hugging Face + patching components
+pip install "opake[trl]"           # converters that accept real trl configs
 pip install "opake[all]"           # all optional components
+```
+
+Each sub-package is also a separate distribution, so you can install only what
+you need (see the table above for which distribution provides each import
+path):
+
+```bash
+pip install opake-accounting       # PLD privacy accounting (torch-free)
+pip install opake-dpsgd            # DP-SGD noise, clipping, sampling
+pip install opake-dpftrl           # matrix-factorization noise
+pip install "opake-patches[transformers]"  # HF compat + Triton kernels
 ```
 
 ### Patching
