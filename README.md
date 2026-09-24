@@ -2,6 +2,10 @@
 
 Functional DP-SGD and DP-FTRL for PyTorch.
 
+*Opake* is an older spelling of *opaque*—it keeps individual training
+details hidden under differential privacy—and the name *Opaque* is already
+taken on PyPI.
+
 Opake provides composable primitives for differentially private model
 training in PyTorch: per-example gradient clipping, calibrated noise
 injection, privacy accounting, and Poisson sampling. Built on `torch.func`,
