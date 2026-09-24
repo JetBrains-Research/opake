@@ -7,7 +7,7 @@ name = "opake-dpftrl"
 dynamic = ["version"]
 description = "Opake DP-FTRL mechanisms: matrix-factorization noise (BLT, BSR, BISR, lambda-CGD) and private second moments"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "Opake Contributors" }]
 requires-python = ">=3.11,<3.14"
 keywords = ["differential-privacy", "dp-ftrl", "matrix-factorization", "pytorch", "privacy"]
@@ -15,7 +15,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
