@@ -1,0 +1,5 @@
+# CUDA runtime only. Client orchestration retains the reviewed CPU lock's pins.
+# BuildKit supplies private-index authentication; never embed credentials here.
+--only-binary :all:
+--no-binary kfp-server-api
+-r requirements-gpu.lock

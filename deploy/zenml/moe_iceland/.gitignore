@@ -1,0 +1,16 @@
+.check-venv/
+.client-venv/
+.credentials/
+.public.lock
+.local-zenml/
+.pytest-cache/
+.test-tmp/
+.ruff_cache/
+.submission.lock
+__pycache__/
+staging/
+receipts/
+submissions/
+source-stages/
+gpu-authorizations/
+*.local.json

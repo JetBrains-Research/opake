@@ -1,0 +1,126 @@
+# syntax=docker/dockerfile:1.7.0
+# Build separately, then pass a trusted local image reference to code_eval.py.
+# No repository tree, model, credentials, datasets, or ground-truth caches are
+# copied into this image. The runtime launcher resolves its immutable image ID.
+FROM python:3.12.10-slim-bookworm
+
+LABEL org.opaque.code-eval.protocol="1" \
+      org.opaque.code-eval.evalplus="0.3.1"
+
+ENV XDG_CACHE_HOME=/tmp/cache \
+    HF_HUB_OFFLINE=1 \
+    HF_DATASETS_OFFLINE=1 \
+    TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1
+
+# EvalPlus's normal dependencies include datasets and codegen import support;
+# no GPU framework or optional performance/code-generation backend is needed.
+RUN python -m pip install --no-cache-dir \
+      "evalplus==0.3.1" "numpy==1.26.4" "datasets==3.0.2" \
+      "transformers==4.45.2" "tree-sitter==0.23.2" "tree-sitter-python==0.23.2" \
+    && python -c "from importlib.metadata import version; from evalplus.evaluate import evaluate; assert version('evalplus') == '0.3.1'"
+
+# This worker is deliberately not a host Python entry point. All syntax parsing,
+# candidate execution, and canonical-solution execution happen inside Docker.
+COPY sandbox_network.py /usr/local/lib/python3.12/site-packages/opaque_sandbox_network.py
+COPY <<'PY' /opt/evaluate.py
+import ast
+import hashlib
+import json
+import os
+import shutil
+import sys
+from importlib.metadata import version
+from pathlib import Path
+
+from opaque_sandbox_network import assert_network_disabled
+
+
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
+require(Path("/.dockerenv").is_file(), "Docker execution required")
+require(os.getuid() == os.getgid() == 65534, "Unprivileged sandbox UID required")
+status = dict(line.split(":", 1) for line in Path("/proc/self/status").read_text().splitlines())
+require(int(status["CapEff"].strip(), 16) == 0, "Drop all capabilities")
+require(status["NoNewPrivs"].strip() == "1", "no-new-privileges required")
+assert_network_disabled()
+for path in ("/", "/input/benchmark.jsonl", "/input/samples.jsonl"):
+    require(os.statvfs(path).f_flag & os.ST_RDONLY, f"Read-only mount required: {path}")
+require(version("evalplus") == "0.3.1", "Wrong EvalPlus release")
+require(sys.version_info[:2] == (3, 12), "Python 3.12 required")
+require(len(sys.argv) == 3, "Expected dataset and full/smoke mode")
+dataset, mode = sys.argv[1:]
+require(dataset in ("humaneval", "mbpp") and mode in ("full", "smoke"), "Invalid protocol")
+
+source_path = Path("/input/benchmark.jsonl")
+source = source_path.read_bytes()
+problems = [json.loads(line) for line in source.splitlines() if line.strip()]
+problem_ids = [task["task_id"] for task in problems]
+expected_count = 164 if dataset == "humaneval" else 378
+require(len(problems) == len(set(problem_ids)) == expected_count, "Full source dataset required")
+ordered_ids = sorted(problem_ids, key=lambda task_id: int(task_id.split("/")[1]))
+samples = [json.loads(line) for line in Path("/input/samples.jsonl").read_bytes().splitlines() if line.strip()]
+sample_ids = [sample["task_id"] for sample in samples]
+require(bool(samples) and len(sample_ids) == len(set(sample_ids)), "One completion per task required")
+require(sample_ids == (ordered_ids if mode == "full" else ordered_ids[:len(samples)]), "Task IDs do not match protocol")
+require(all(set(sample) == {"task_id", "solution"} and isinstance(sample["solution"], str) for sample in samples), "Expected canonical solution records")
+
+effective = source
+if mode == "smoke":
+    # EvalPlus requires complete coverage of its loaded dataset, even for smoke.
+    # Keep the mounted full source intact and label/hash this explicit subset.
+    selected = set(sample_ids)
+    effective = b"\n".join(line for line in source.splitlines() if line.strip() and json.loads(line)["task_id"] in selected) + b"\n"
+    source_path = Path("/tmp/smoke.jsonl")
+    source_path.write_bytes(effective)
+override = "HUMANEVAL_OVERRIDE_PATH" if dataset == "humaneval" else "MBPP_OVERRIDE_PATH"
+os.environ[override] = str(source_path)
+
+syntax = {}
+for sample in samples:
+    try:
+        ast.parse(sample["solution"])
+        syntax[sample["task_id"]] = True
+    except (SyntaxError, ValueError, RecursionError):
+        syntax[sample["task_id"]] = False
+
+# Import only after setting the documented dataset override. No mounted pickle
+# caches: EvalPlus builds its canonical outputs in the fresh /tmp cache here.
+from evalplus.evaluate import evaluate
+
+result_path = Path("/output/samples_eval_results.json")
+require(not result_path.exists(), "Refusing cached evaluation results")
+shutil.copyfile("/input/samples.jsonl", "/output/samples.jsonl")
+evaluate(
+    dataset=dataset,
+    samples="/output/samples.jsonl",
+    base_only=False,
+    parallel=1,
+    test_details=False,
+    min_time_limit=1.0,
+    gt_time_limit_factor=4.0,
+    mini=False,
+    noextreme=False,
+    version="v0.1.10" if dataset == "humaneval" else "v0.2.0",
+)
+require(result_path.is_file(), "EvalPlus produced no results")
+execution = {
+    "evalplus_version": version("evalplus"),
+    "python_version": sys.version,
+    "source_sha256": hashlib.sha256(source).hexdigest(),
+    "dataset_hash": hashlib.md5(effective, usedforsecurity=False).hexdigest(),
+    "mode": mode,
+    "task_ids": sample_ids,
+    "syntax": syntax,
+}
+with Path("/output/execution.json").open("x") as output:
+    json.dump(execution, output, allow_nan=False)
+PY
+
+USER 65534:65534
+WORKDIR /output
+ENTRYPOINT ["python", "-I", "/opt/evaluate.py"]

@@ -1,0 +1,19 @@
+{
+  "name": "smoke",
+  "train_sequences": 32,
+  "validation_sequences": 8,
+  "sequence_length": 12,
+  "expected_batch_size": 4,
+  "microbatch_size": 1,
+  "steps": 2,
+  "eval_every": 1,
+  "learning_rate": 0.25,
+  "clipping_norm": 1.0,
+  "target_epsilon": 8.0,
+  "delta": 0.00001,
+  "router_aux_loss_coef": 0.05,
+  "load_noise_ratio": 0.02,
+  "filter_beta": 0.99,
+  "data_seed": 20260917,
+  "validation_seed": 20260918
+}

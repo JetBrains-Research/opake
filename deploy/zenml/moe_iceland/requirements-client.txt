@@ -1,0 +1,3 @@
+# Deliberately identical to runtime: never resolve the laptop independently.
+# requirements.lock must first be resolved with private-index access and reviewed.
+-r requirements.lock

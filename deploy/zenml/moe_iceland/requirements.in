@@ -1,0 +1,4 @@
+# Resolve this single universal input for BOTH client and runtime; see README.md.
+# The private index must be supplied through a local credential file, never here.
+-r requirements-public.in
+jb-mlops[zenml]==0.0.45

@@ -1,0 +1,19 @@
+{
+  "name": "pilot",
+  "train_sequences": 4096,
+  "validation_sequences": 1024,
+  "sequence_length": 32,
+  "expected_batch_size": 32,
+  "microbatch_size": 1,
+  "steps": 256,
+  "eval_every": 32,
+  "learning_rate": 0.25,
+  "clipping_norm": 1.0,
+  "target_epsilon": 8.0,
+  "delta": 0.00001,
+  "router_aux_loss_coef": 0.05,
+  "load_noise_ratio": 0.02,
+  "filter_beta": 0.99,
+  "data_seed": 20260917,
+  "validation_seed": 20260918
+}

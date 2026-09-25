@@ -131,9 +131,10 @@ class TestAmplifiers:
 
 
 class TestCalibration:
-    def test_calibrated_multiplier_is_inflated_by_sqrt_one_plus_ratio(self):
+    @pytest.mark.slow
+    @pytest.mark.parametrize("ratio", [0.1, 0.5, 1.0])
+    def test_calibrated_multiplier_is_inflated_by_sqrt_one_plus_ratio(self, ratio):
         """At a fixed budget the gradient multiplier grows by exactly ``sqrt(1 + ratio)``."""
-        ratio = 0.5
         budget = cal.epsilon_budget(4.0, delta=_DELTA)
         plain = cal.calibrate(
             budget,

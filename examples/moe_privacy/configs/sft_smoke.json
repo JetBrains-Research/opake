@@ -1,0 +1,11 @@
+{
+  "name": "mellum2-code-sft-smoke",
+  "train_sequences": 64,
+  "validation_sequences": 16,
+  "sequence_length": 128,
+  "expected_batch_size": 2,
+  "microbatch_size": 1,
+  "eval_batch_size": 1,
+  "steps": 2,
+  "eval_every": 2
+}

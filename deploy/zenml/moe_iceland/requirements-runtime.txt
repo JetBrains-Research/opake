@@ -1,0 +1,2 @@
+# Install with --require-hashes. Dependency changes require a new image digest.
+-r requirements.lock

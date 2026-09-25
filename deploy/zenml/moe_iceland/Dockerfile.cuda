@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1.10
+# Build only from the launcher's bounded context, after explicit approval.
+# CUDA 12.6 libraries are hash-locked Python wheels, matching Iceland driver 12.8.
+FROM --platform=linux/amd64 rust:1.89.0-slim-bookworm@sha256:294917190b5a3fed18d3303213943f40ec9b644b3cd6e5cdc8cd029334a770b3 AS rust
+FROM --platform=linux/amd64 python:3.12.10-slim-bookworm@sha256:97983fa8cc88343512862c62307159a82261c3528dc025f79e5a3f7af43e50b4 AS builder
+COPY --from=rust /usr/local/cargo /usr/local/cargo
+COPY --from=rust /usr/local/rustup /usr/local/rustup
+ENV CARGO_HOME=/usr/local/cargo RUSTUP_HOME=/usr/local/rustup
+ENV PATH=/usr/local/cargo/bin:/opt/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential=12.9 \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir --no-deps \
+    https://files.pythonhosted.org/packages/5c/07/9d85d0a9ddd49dbec18bde741ffb33d0c671a153461b094a9c73504e1b92/uv-0.7.2-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=7236ec776c559fbc3ae4389b7cd506a2428ad9dd0402ac3d9446200ea3dc45f6 \
+    && uv venv --python /usr/local/bin/python /opt/venv
+WORKDIR /src
+COPY source/ /src/
+RUN uv --no-config pip install --python /opt/venv/bin/python --no-deps \
+    --index-url https://pypi.org/simple --only-binary :all: --require-hashes \
+    -r deploy/zenml/moe_iceland/requirements-gpu-build.txt
+RUN --mount=type=secret,id=uv_config,target=/run/secrets/uv.toml,required=true \
+    --mount=type=secret,id=space_tools_username,env=UV_INDEX_SPACE_TOOLS_USERNAME,required=true \
+    --mount=type=secret,id=space_tools_password,env=UV_INDEX_SPACE_TOOLS_PASSWORD,required=true \
+    uv --config-file /run/secrets/uv.toml pip install --python /opt/venv/bin/python \
+    --no-build-isolation --require-hashes \
+    --extra-index-url https://download.pytorch.org/whl/cu126 \
+    --index-strategy unsafe-best-match \
+    -r deploy/zenml/moe_iceland/requirements-gpu-runtime.txt
+RUN python -m deploy.zenml.moe_iceland.build_workspace
+RUN ZENML_ANALYTICS_OPT_IN=false python -m deploy.zenml.moe_iceland.provenance \
+    --accelerator cuda --root /src --output /opt/moe-image.json
+
+FROM --platform=linux/amd64 python:3.12.10-slim-bookworm@sha256:97983fa8cc88343512862c62307159a82261c3528dc025f79e5a3f7af43e50b4
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /opt/moe-image.json /opt/moe-image.json
+ENV PATH=/opt/venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV ZENML_CONFIG_PATH=/tmp/moe-zenml ZENML_ANALYTICS_OPT_IN=false
+ENV HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+# Torch 2.14 routes some eager ops through Triton JIT; the NVIDIA backend needs a C compiler.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc=4:12.2.0-3 g++=4:12.2.0-3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1000 moe && useradd --uid 1000 --gid 1000 --create-home moe \
+    && mkdir /app && chown 1000:1000 /app
+WORKDIR /app
+USER 1000:1000
+CMD ["python", "-c", "print('Use the isolated Iceland launcher and its verified CUDA source archive.')"]

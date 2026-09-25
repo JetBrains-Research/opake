@@ -1,0 +1,17 @@
+**
+!source/
+!source/**
+!Dockerfile.cpu
+**/.venv/**
+**/vendor/**
+**/target/**
+**/.git/**
+**/.temp/**
+**/.worktrees/**
+**/.junie/**
+**/__pycache__/**
+**/.check-venv/**
+**/.client-venv/**
+**/.credentials/**
+**/source-stages/**
+**/receipts/**
