@@ -23,6 +23,7 @@ filter_unconventional = false
 split_commits = false
 commit_preprocessors = []
 commit_parsers = [
+    { field = "breaking", pattern = "^true$", group = "Breaking" },
     { message = "^feat",              group = "Added"         },
     { message = "^add",               group = "Added"         },
     { message = "^fix",               group = "Fixed"         },
@@ -37,8 +38,6 @@ commit_parsers = [
     { message = "^chore",             skip = true             },
     { message = "^style",             skip = true             },
     { message = "^delete",            group = "Removed"       },
-    { body = ".*BREAKING CHANGE",     group = "Breaking"      },
-    { message = ".*!:",               group = "Breaking"      },
     { message = ".*",                 group = "Other"         },
 ]
 protect_breaking_commits = true
