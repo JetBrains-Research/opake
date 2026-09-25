@@ -1,6 +1,6 @@
 # Opake
 
-Functional DP-SGD and DP-FTRL for PyTorch.
+**Opake** (/oʊˈpeɪk/, archaic *opaque*) — Functional DP-SGD and DP-FTRL for PyTorch.
 
 Opake provides composable primitives for differentially private model
 training in PyTorch: per-example gradient clipping, calibrated noise
