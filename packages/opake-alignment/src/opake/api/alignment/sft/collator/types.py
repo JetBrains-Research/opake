@@ -57,9 +57,9 @@ class LMBatch(TypedDict):
     ``completion_mask``
         Binary mask, shape ``(B, L)``.  Included when **at least one** input
         example in the batch carries a ``"completion_mask"`` field.  ``1`` on
-        completion tokens, ``0`` elsewhere (including pad positions). If an
-        example in such a mixed batch has no mask, all its real tokens are
-        marked as completion tokens to match its fully supervised labels.
+        completion tokens and ``0`` elsewhere. Completion-only collation
+        requires every example to carry a mask; otherwise, a maskless row in a
+        mixed batch is represented by ones over its real tokens.
     """
 
     input_ids: torch.Tensor

@@ -16,20 +16,26 @@ auditing.coin_flip(
 Create a coin-flip partition. Randomly selects `num_canaries` examples
 and flips a fair coin for each to decide inclusion/exclusion. Selection
 uses the whole dataset unless `candidate_indices` restricts it to a pool.
+The built-in scorers guard against source substitution using the dataset's
+native `_fingerprint` when available. Otherwise, they record a canonical digest
+of every selected canary in supported in-memory datasets: lists, tuples, dense
+tensors, numeric NumPy arrays, `TensorDataset`, and `Subset`. Custom, lazy, or
+transformed datasets must expose a deterministic, non-empty string
+`_fingerprint`.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `dataset` | any with `len()` | required | Full training dataset |
+| `dataset` | fingerprinted or supported in-memory dataset | required | Full training dataset |
 | `num_canaries` | `int` | required | Number of canaries to designate |
 | `key` | `RngKey` | required | RNG key for reproducibility |
 | `candidate_indices` | array-like \| `None` | `None` | Unique, in-range integer indices eligible to become canaries; order is ignored |
 
-**Raises** `ConfigurationError` if the candidate pool is malformed or contains fewer
-than `num_canaries` indices.
+**Raises** `ConfigurationError` if the candidate pool is malformed or too small,
+or if the dataset cannot be deterministically attested.
 
 ```python
 cf = auditing.coin_flip(dataset, num_canaries=1000, key=key(42))
-train_data = dataset.select(cf.train_indices(len(dataset)))
+train_data = dataset.select(cf.train_indices())
 ```
 
 To designate a precommitted block of constructed canaries:
@@ -89,8 +95,9 @@ with [`canary_scores`](#canary_scores) instead.
 **Returns** [`CanaryScores`](#canaryscores) of shape `(n,)`, one score per
 canary. Higher = more likely member.
 
-**Raises** `ConfigurationError` if `batch_argnums` is malformed, `batch_size` is
-not positive, or `collate_fn` changes the batch row count; `InputTypeError` if
+**Raises** `ConfigurationError` if `batch_argnums` is malformed, `batch_size`
+is not positive, the dataset size or identity differs from the partition, or
+`collate_fn` changes the batch row count; `InputTypeError` if
 `reference_scores` does not carry identifiers.
 
 ```python
@@ -146,7 +153,8 @@ loader, with the same pairing guarantees and `collate_fn` obligation as
 canary. Higher = more likely member.
 
 **Raises** `ConfigurationError` if `0 in batch_argnums`, `batch_size` is not
-positive, or `collate_fn` changes the batch row count; `InputTypeError` if
+positive, the dataset size or identity differs from the partition, or
+`collate_fn` changes the batch row count; `InputTypeError` if
 `reference_scores` does not carry identifiers.
 
 ```python
@@ -241,15 +249,26 @@ state carrier directly.
 | `canary_indices` | `np.ndarray` | All canary dataset indices |
 | `in_indices` | `np.ndarray` | Included in training (heads) |
 | `out_indices` | `np.ndarray` | Excluded from training (tails) |
+| `dataset_size` | `int \| None` | Size of the dataset used to create the partition |
 
 ### train_indices
 
 ```python
-cf.train_indices(dataset_size) -> list[int]
+cf.train_indices(dataset_size=None) -> list[int]
 ```
 
 All indices except held-out canaries. Returns `list[int]` for HuggingFace
-`dataset.select()`.
+`dataset.select()`. The recorded `dataset_size` is used by default; an
+explicit conflicting size raises `ConfigurationError`.
+
+### train_subset
+
+```python
+cf.train_subset(dataset) -> torch.utils.data.Subset
+```
+
+The training subset of a PyTorch-style dataset. A size that differs from the
+recorded `dataset_size` raises `ConfigurationError`.
 
 ### split_scores
 

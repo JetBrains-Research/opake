@@ -7,7 +7,7 @@ factory methods (``eps_delta()``, ``gdp()``); attack-side metrics
 (``auc``, ``beta_at``) live directly on the estimate.
 
 References:
-    - Xiang et al. (2025), https://arxiv.org/abs/2509.08704
+    - Xiang et al. (2025), https://arxiv.org/abs/2509.08704v1
     - Steinke, Nasr, Jagielski (2023), https://arxiv.org/abs/2305.08846
     - Carlini et al. (2022), https://arxiv.org/abs/2112.03570
 """
@@ -32,15 +32,10 @@ if TYPE_CHECKING:
 __all__ = ["OneRunEstimate", "one_run"]
 
 
-# Minimum grid points for the GDP numerical integration.  Coarser grids
-# are not merely inaccurate — they can silently erase detectable leakage:
-# at grid_size=16 a fully separable 500/500 canary split audits as
-# eps=0.  The floor is validated against the v_k order-statistic identity
-# (Xiang et al. 2025, Eq. 12): at grid_size=1_000 the n=1 Bayes error
-# v_1 = Phi(-mu/2) is reproduced with absolute error ~1.2e-6, and
-# detected-leak configurations stay well away from the eps=0 collapse.
-# This keeps the accepted-range cost roughly an order of magnitude below
-# the 10_000-point default while remaining numerically meaningful.
+# Minimum grid points for GDP integration. With 500 in, 500 out, and 250
+# errors at the best threshold, grid sizes 16, 64, and 1_000 yield epsilon
+# 0.0, 2.70, and 5.08 respectively. The n=1 convergence test separately
+# validates the v1 Equation 25 integral at the accepted floor.
 _MIN_GRID_SIZE = 1_000
 
 

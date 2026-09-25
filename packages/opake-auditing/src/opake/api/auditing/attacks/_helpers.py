@@ -176,6 +176,13 @@ def _scoring_loader(
                 "the CoinFlip",
             )
         )
+    if not coin_flip._matches_dataset(dataset):
+        raise ConfigurationError(
+            *(
+                "dataset content does not match the dataset used to construct "
+                "this CoinFlip; scoring requires the original full dataset",
+            )
+        )
     if isinstance(batch_size, bool) or not isinstance(batch_size, int):
         raise InputTypeError(
             *(f"batch_size must be an int, got {type(batch_size).__name__}",)
