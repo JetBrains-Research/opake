@@ -30,6 +30,7 @@ from transformers import (
 )
 
 from opake.alignment.dpo.loss import sequence_logp
+from opake.api.transformers.trl._logits import _has_family_logit_transform
 from opake.exceptions import ConfigurationError
 from opake.transformers.trl import (
     DPOConfig,
@@ -106,6 +107,15 @@ def _tiny_transformed_model(family):
     config = config_cls(**config_kwargs)
     config._attn_implementation = "eager"
     return model_cls(config)
+
+
+def test_family_logit_transform_gate_covers_subclasses():
+    model = _tiny_transformed_model("granite")
+
+    class CustomGranite(type(model)):
+        pass
+
+    assert _has_family_logit_transform(CustomGranite(model.config))
 
 
 def _stub_tokenizer() -> types.SimpleNamespace:

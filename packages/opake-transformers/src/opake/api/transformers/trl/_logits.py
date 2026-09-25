@@ -19,7 +19,7 @@ def _has_family_logit_transform(model: object) -> bool:
         model = getattr(getattr(model, "base_model", None), "model", None)
     if model is None:
         return False
-    return (
-        type(model).__module__,
-        type(model).__name__,
-    ) in _POST_HEAD_TRANSFORM_CAUSAL_LM
+    return any(
+        (cls.__module__, cls.__name__) in _POST_HEAD_TRANSFORM_CAUSAL_LM
+        for cls in type(model).__mro__
+    )
