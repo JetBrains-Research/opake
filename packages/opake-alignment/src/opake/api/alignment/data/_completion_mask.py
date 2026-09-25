@@ -92,14 +92,12 @@ def apply_chat_template_with_mask(
     )
     if not _has_generation_marker(active_template):
         raise ConfigurationError(
-            *(
-                "apply_chat_template_with_mask: the active chat template does not "
-                "carry the '{% generation %}' / '{% endgeneration %}' markers that "
-                "return_assistant_tokens_mask=True relies on, so no "
-                "assistant-token mask can be produced.  Install them first with "
-                "opake.alignment.data.get_training_chat_template:\n\n"
-                "    tokenizer.chat_template = get_training_chat_template(tokenizer)\n",
-            )
+            "apply_chat_template_with_mask: the active chat template does not "
+            "carry the '{% generation %}' / '{% endgeneration %}' markers that "
+            "return_assistant_tokens_mask=True relies on, so no "
+            "assistant-token mask can be produced.  Install them first with "
+            "opake.alignment.data.get_training_chat_template:\n\n"
+            "    tokenizer.chat_template = get_training_chat_template(tokenizer)\n"
         )
 
     encoded = tokenizer.apply_chat_template(
@@ -113,14 +111,12 @@ def apply_chat_template_with_mask(
     assistant_masks = encoded.get("assistant_masks")
     if not _has_assistant_tokens(assistant_masks):
         raise ConfigurationError(
-            *(
-                "apply_chat_template_with_mask: the tokenizer returned no "
-                "assistant-token mask.  This means the chat template does not "
-                "carry the '{% generation %}' / '{% endgeneration %}' markers that "
-                "return_assistant_tokens_mask=True relies on.  Install them first "
-                "with opake.alignment.data.get_training_chat_template:\n\n"
-                "    tokenizer.chat_template = get_training_chat_template(tokenizer)\n",
-            )
+            "apply_chat_template_with_mask: the tokenizer returned no "
+            "assistant-token mask.  This means the chat template does not "
+            "carry the '{% generation %}' / '{% endgeneration %}' markers that "
+            "return_assistant_tokens_mask=True relies on.  Install them first "
+            "with opake.alignment.data.get_training_chat_template:\n\n"
+            "    tokenizer.chat_template = get_training_chat_template(tokenizer)\n"
         )
 
     result: dict[str, Any] = {

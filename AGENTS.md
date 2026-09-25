@@ -225,7 +225,7 @@ no dedicated regression test when neither is available.
 
 ### Test markers
 
-Four orthogonal markers, declared in the root `pyproject.toml`:
+Five orthogonal markers, declared in the root `pyproject.toml`:
 
 - `cuda` — test needs CUDA; auto-skipped on non-CUDA hosts.
 - `mps` — test needs Apple Metal; auto-skipped on non-MPS hosts.
@@ -234,6 +234,8 @@ Four orthogonal markers, declared in the root `pyproject.toml`:
   clause conditionally).
 - `distributed` — test launches multiple CPU/Gloo ranks; selected by the
   dedicated Linux distributed lane rather than general platform lanes.
+- `kernel_stress` — test measures model-scale CUDA kernel performance and is
+  skipped when the device has less than 24 GiB of memory.
 
 Rust tests above five seconds use `#[ignore = "slow"]`. PR CI runs the default
 unit/doc-test set; main and release additionally run the ignored library tests.

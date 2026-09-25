@@ -69,17 +69,13 @@ def map_leaves_with_path(
     for i, (other_paths, other_leaves, _) in enumerate(other_flat):
         if other_paths != paths:
             raise ConfigurationError(
-                *(
-                    f"pytree ParamPath mismatch for argument {i}: "
-                    f"primary paths {paths!r}, got {other_paths!r}.",
-                )
+                f"pytree ParamPath mismatch for argument {i}: "
+                f"primary paths {paths!r}, got {other_paths!r}."
             )
         if len(other_leaves) != len(leaves):
             raise ConfigurationError(
-                *(
-                    f"pytree leaf count mismatch: primary has {len(leaves)}, "
-                    f"argument {i} has {len(other_leaves)}",
-                )
+                f"pytree leaf count mismatch: primary has {len(leaves)}, "
+                f"argument {i} has {len(other_leaves)}"
             )
     out_leaves = []
     for j, path in enumerate(paths):
@@ -117,7 +113,7 @@ def resolve_noise_variance(
     if isinstance(noise_stddev, PerGroup):
         if path is None:
             raise ConfigurationError(
-                *("resolve_noise_variance requires `path` for PerGroup noise_stddev",)
+                "resolve_noise_variance requires `path` for PerGroup noise_stddev"
             )
         return float(noise_stddev.for_path(path)) ** 2
     return float(noise_stddev) ** 2
@@ -143,10 +139,8 @@ def update_phi_ema(
     if isinstance(phi, dict):
         if not isinstance(new_variance, dict):
             raise InputTypeError(
-                *(
-                    "phi is per-group dict but new_variance is scalar; "
-                    "either both must be per-group or both must be scalar.",
-                )
+                "phi is per-group dict but new_variance is scalar; "
+                "either both must be per-group or both must be scalar."
             )
         return {k: b2 * phi[k] + (1 - b2) * new_variance[k] for k in phi}
     return b2 * phi + (1 - b2) * float(new_variance)

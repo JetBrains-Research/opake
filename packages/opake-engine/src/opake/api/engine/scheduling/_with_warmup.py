@@ -72,11 +72,11 @@ def with_warmup(
     """
     if transition_steps <= 0:
         raise ConfigurationError(
-            *(f"with_warmup requires transition_steps > 0; got {transition_steps}.",)
+            f"with_warmup requires transition_steps > 0; got {transition_steps}."
         )
     if not 0.0 <= init_value <= 1.0:
         raise ConfigurationError(
-            *(f"with_warmup requires init_value in [0, 1]; got {init_value}.",)
+            f"with_warmup requires init_value in [0, 1]; got {init_value}."
         )
     # Fail-fast on bad string ramps (round-trip the resolver to validate).
     resolve_ramp(ramp)

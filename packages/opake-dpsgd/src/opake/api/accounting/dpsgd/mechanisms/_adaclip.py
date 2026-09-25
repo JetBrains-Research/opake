@@ -44,19 +44,15 @@ class AdaClip(DpProcess):
         # quantile release as free (e.g. ``num_groups=0``).
         if self.fraction_noise_std <= 0:
             raise ConfigurationError(
-                *(
-                    f"fraction_noise_std must be positive, got {self.fraction_noise_std}",
-                )
+                f"fraction_noise_std must be positive, got {self.fraction_noise_std}"
             )
         if self.expected_batch_size <= 0:
             raise ConfigurationError(
-                *(
-                    f"expected_batch_size must be positive, got {self.expected_batch_size}",
-                )
+                f"expected_batch_size must be positive, got {self.expected_batch_size}"
             )
         if self.num_groups < 1 or self.num_groups != int(self.num_groups):
             raise ConfigurationError(
-                *(f"num_groups must be an integral number >= 1, got {self.num_groups}",)
+                f"num_groups must be an integral number >= 1, got {self.num_groups}"
             )
         # Normalise a whole-numbered float (e.g. ``2.0``) so the field matches
         # its ``int`` annotation before reaching the native primitives.
@@ -166,10 +162,8 @@ def adaclip(
             pass
         case _:
             raise InputTypeError(
-                *(
-                    f"adaclip() requires a Gaussian or NonPrivate inner mechanism, "
-                    f"got {type(inner).__name__}.",
-                )
+                f"adaclip() requires a Gaussian or NonPrivate inner mechanism, "
+                f"got {type(inner).__name__}."
             )
     # Parameter bounds (fraction_noise_std, expected_batch_size, num_groups)
     # are validated in ``AdaClip.__post_init__`` so direct construction and

@@ -112,7 +112,7 @@ def banded_lower_triangular_mask(n: int, num_bands: int) -> torch.Tensor:
         An integer tensor with 1s in the first b lower-triangular bands.
     """
     if num_bands < 1:
-        raise ConfigurationError(*(f"num_bands must be >= 1, found {num_bands}",))
+        raise ConfigurationError(f"num_bands must be >= 1, found {num_bands}")
     return (
         torch.tril(torch.ones(n, n)) - torch.tril(torch.ones(n, n), diagonal=-num_bands)
     ).to(torch.int32)
@@ -129,7 +129,7 @@ def banded_symmetric_mask(n: int, num_bands: int) -> torch.Tensor:
         An integer tensor with 1s in a symmetric band of width 2b-1.
     """
     if num_bands < 1:
-        raise ConfigurationError(*(f"num_bands must be >= 1, found {num_bands}",))
+        raise ConfigurationError(f"num_bands must be >= 1, found {num_bands}")
     return (
         torch.tril(torch.ones(n, n), diagonal=num_bands - 1)
         - torch.tril(torch.ones(n, n), diagonal=-num_bands)
@@ -203,15 +203,13 @@ def get_sensitivity_banded_for_X(
     n = X.shape[0]
     if min_sep < 1 or min_sep > n:
         raise ConfigurationError(
-            *(f"min_sep must be in the range [1, {n}], found {min_sep}.",)
+            f"min_sep must be in the range [1, {n}], found {min_sep}."
         )
 
     expected_zeros = ~banded_symmetric_mask(n, min_sep).bool()
     if not torch.all(X[expected_zeros] == 0):
         raise ConfigurationError(
-            *(
-                "X must be min_sep-banded: entries with |i - j| >= min_sep must be zero.",
-            )
+            "X must be min_sep-banded: entries with |i - j| >= min_sep must be zero."
         )
 
     x = torch.diag(X)

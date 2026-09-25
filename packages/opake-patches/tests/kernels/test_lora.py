@@ -12,7 +12,7 @@ Covers three LoRA variants:
 - LoRA_QKV: Fused Q, K, V projections with LoRA
 - LoRA_MLP: Fused MLP (gate, up, down) with SwiGLU and LoRA
 
-Config: Mellum-4b scale (hidden=3072, intermediate=8256, rank=64)
+Correctness tests use representative shapes; performance tests use Mellum-4b scale.
 """
 
 import gc
@@ -347,12 +347,12 @@ def test_rectangular_linear_and_qkv_vmap_gradients_match_pytorch(assert_precisio
 class TestLoRAWForward:
     """Test LoRA-W forward pass precision."""
 
-    def test_forward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_forward_matches_pytorch(self, assert_precision, kernel_config):
         """Forward: opake vs pytorch (non-vmap, bfloat16)."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        RANK = mellum_config["rank"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        RANK = kernel_config["rank"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -373,12 +373,12 @@ class TestLoRAWForward:
 class TestLoRAWBackward:
     """Test LoRA-W backward pass precision."""
 
-    def test_backward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_backward_matches_pytorch(self, assert_precision, kernel_config):
         """Backward: opake vs pytorch (non-vmap, test X.grad, A.grad, B.grad)."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        RANK = mellum_config["rank"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        RANK = kernel_config["rank"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -443,13 +443,13 @@ class TestLoRAWBackward:
 class TestLoRAWVmapForward:
     """Test LoRA-W vmap forward precision."""
 
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         """Batched forward: opake Triton vmap vs PyTorch reference."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        RANK = mellum_config["rank"]
-        VMAP_BATCH = mellum_config["vmap_batch"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        RANK = kernel_config["rank"]
+        VMAP_BATCH = kernel_config["vmap_batch"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -471,13 +471,13 @@ class TestLoRAWVmapForward:
 class TestLoRAWVmapGrad:
     """Test vmap(grad): per-example gradients — the DP-SGD path."""
 
-    def test_vmap_grad_precision(self, assert_precision, mellum_config):
+    def test_vmap_grad_precision(self, assert_precision, kernel_config):
         """Per-example gradients: opake Triton vs PyTorch reference."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        RANK = mellum_config["rank"]
-        VMAP_BATCH = mellum_config["vmap_batch"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        RANK = kernel_config["rank"]
+        VMAP_BATCH = kernel_config["vmap_batch"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -501,6 +501,7 @@ class TestLoRAWVmapGrad:
             grads_op, grads_pt, rtol=RTOL_LORA_BWD, atol=ATOL_LORA_BWD, label="X.grad"
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -539,6 +540,7 @@ class TestLoRAWVmapGrad:
         )
 
 
+@pytest.mark.kernel_stress
 class TestLoRAWPerformance:
     """Test LoRA-W kernel performance (non-vmap)."""
 
@@ -650,13 +652,13 @@ class TestLoRAQKVForward:
 
     @pytest.mark.parametrize("bias_layout", ["none", "mixed", "all"])
     def test_forward_matches_pytorch(
-        self, assert_precision, mellum_config, bias_layout
+        self, assert_precision, kernel_config, bias_layout
     ):
         """Forward: opake vs pytorch (non-vmap, check Q, K, V each)."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        RANK = mellum_config["rank"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        RANK = kernel_config["rank"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -719,12 +721,12 @@ class TestLoRAQKVForward:
 class TestLoRAQKVBackward:
     """Test LoRA-QKV backward pass precision."""
 
-    def test_backward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_backward_matches_pytorch(self, assert_precision, kernel_config):
         """Backward: opake vs pytorch (non-vmap)."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        RANK = mellum_config["rank"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        RANK = kernel_config["rank"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -843,13 +845,13 @@ class TestLoRAQKVBackward:
 class TestLoRAQKVVmapForward:
     """Test LoRA-QKV vmap forward precision."""
 
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         """Batched forward: opake Triton vmap vs PyTorch reference."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        RANK = mellum_config["rank"]
-        VMAP_BATCH = mellum_config["vmap_batch"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        RANK = kernel_config["rank"]
+        VMAP_BATCH = kernel_config["vmap_batch"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -876,13 +878,13 @@ class TestLoRAQKVVmapForward:
 class TestLoRAQKVVmapGrad:
     """Test vmap(grad): per-example gradients — the DP-SGD path."""
 
-    def test_vmap_grad_precision(self, assert_precision, mellum_config):
+    def test_vmap_grad_precision(self, assert_precision, kernel_config):
         """Per-example gradients: opake Triton vs PyTorch reference."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        RANK = mellum_config["rank"]
-        VMAP_BATCH = mellum_config["vmap_batch"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        RANK = kernel_config["rank"]
+        VMAP_BATCH = kernel_config["vmap_batch"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -942,6 +944,7 @@ class TestLoRAQKVVmapGrad:
             grads_op, grads_pt, rtol=RTOL_LORA_BWD, atol=ATOL_LORA_BWD, label="X.grad"
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -983,6 +986,7 @@ class TestLoRAQKVVmapGrad:
         )
 
 
+@pytest.mark.kernel_stress
 class TestLoRAQKVPerformance:
     """Test LoRA-QKV kernel performance (non-vmap)."""
 
@@ -1067,13 +1071,13 @@ class TestLoRAQKVPerformance:
 class TestLoRAMLPForward:
     """Test LoRA-MLP forward pass precision."""
 
-    def test_forward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_forward_matches_pytorch(self, assert_precision, kernel_config):
         """Forward: opake vs pytorch (non-vmap, bfloat16)."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        INTERMEDIATE = mellum_config["intermediate_dim"]
-        RANK = mellum_config["rank"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        INTERMEDIATE = kernel_config["intermediate_dim"]
+        RANK = kernel_config["rank"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -1111,13 +1115,13 @@ class TestLoRAMLPForward:
 class TestLoRAMLPBackward:
     """Test LoRA-MLP backward pass precision."""
 
-    def test_backward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_backward_matches_pytorch(self, assert_precision, kernel_config):
         """Backward: opake vs pytorch (non-vmap)."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        INTERMEDIATE = mellum_config["intermediate_dim"]
-        RANK = mellum_config["rank"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        INTERMEDIATE = kernel_config["intermediate_dim"]
+        RANK = kernel_config["rank"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -1259,14 +1263,14 @@ class TestLoRAMLPBackward:
 class TestLoRAMLPVmapForward:
     """Test LoRA-MLP vmap forward precision."""
 
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         """Batched forward: opake Triton vmap vs PyTorch reference."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        INTERMEDIATE = mellum_config["intermediate_dim"]
-        RANK = mellum_config["rank"]
-        VMAP_BATCH = mellum_config["vmap_batch"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        INTERMEDIATE = kernel_config["intermediate_dim"]
+        RANK = kernel_config["rank"]
+        VMAP_BATCH = kernel_config["vmap_batch"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -1426,14 +1430,14 @@ class TestLoRAMLPVmapGrad:
             label="vmapped X.grad",
         )
 
-    def test_vmap_grad_precision(self, assert_precision, mellum_config):
+    def test_vmap_grad_precision(self, assert_precision, kernel_config):
         """Per-example gradients: opake Triton vs PyTorch reference."""
-        BATCH = mellum_config["batch_size"]
-        SEQ = mellum_config["seq_len"]
-        HIDDEN = mellum_config["hidden_dim"]
-        INTERMEDIATE = mellum_config["intermediate_dim"]
-        RANK = mellum_config["rank"]
-        VMAP_BATCH = mellum_config["vmap_batch"]
+        BATCH = kernel_config["batch_size"]
+        SEQ = kernel_config["seq_len"]
+        HIDDEN = kernel_config["hidden_dim"]
+        INTERMEDIATE = kernel_config["intermediate_dim"]
+        RANK = kernel_config["rank"]
+        VMAP_BATCH = kernel_config["vmap_batch"]
         torch.manual_seed(42)
         kw = {"device": "cuda", "dtype": torch.bfloat16}
 
@@ -1473,6 +1477,7 @@ class TestLoRAMLPVmapGrad:
             label="X.grad",
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -1524,6 +1529,7 @@ class TestLoRAMLPVmapGrad:
         )
 
 
+@pytest.mark.kernel_stress
 class TestLoRAMLPPerformance:
     """Test LoRA-MLP kernel performance (non-vmap)."""
 

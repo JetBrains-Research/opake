@@ -29,7 +29,7 @@ from opake.exceptions import ConfigurationError
 try:
     from torchopt.base import GradientTransformation
 except ImportError as exc:
-    raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+    raise ImportError(
         "torchopt is required for opake.optimizers. "
         "Install it with: pip install 'torchopt>=0.7.3'"
     ) from exc
@@ -99,17 +99,15 @@ def lion(
         A ``torchopt.base.GradientTransformation``.
     """
     if len(betas) != 2:  # noqa: PLR2004 - Lion exposes the documented beta pair
-        raise ConfigurationError(
-            *(f"betas must contain exactly two values, got {betas}",)
-        )
+        raise ConfigurationError(f"betas must contain exactly two values, got {betas}")
     b1, b2 = betas
     if not 0 <= b1 < 1:
-        raise ConfigurationError(*(f"beta_1 must satisfy 0 <= beta_1 < 1, got {b1}",))
+        raise ConfigurationError(f"beta_1 must satisfy 0 <= beta_1 < 1, got {b1}")
     if not 0 <= b2 < 1:
-        raise ConfigurationError(*(f"beta_2 must satisfy 0 <= beta_2 < 1, got {b2}",))
+        raise ConfigurationError(f"beta_2 must satisfy 0 <= beta_2 < 1, got {b2}")
     if weight_decay < 0:
         raise ConfigurationError(
-            *(f"weight_decay must be non-negative, got {weight_decay}",)
+            f"weight_decay must be non-negative, got {weight_decay}"
         )
     return make_optimizer_chain(
         _scale_by_lion(b1, b2),

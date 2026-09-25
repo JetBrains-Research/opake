@@ -125,10 +125,8 @@ def f_divergence_remap(
             return logratio
         return (_cap_exp((alpha - 1) * logratio) - 1) / (alpha - 1)
     raise ConfigurationError(
-        *(
-            f"Unknown f_divergence_type {f_divergence_type!r}; expected one of "
-            '"reverse_kl", "forward_kl", "js_divergence", "alpha_divergence".',
-        )
+        f"Unknown f_divergence_type {f_divergence_type!r}; expected one of "
+        '"reverse_kl", "forward_kl", "js_divergence", "alpha_divergence".'
     )
 
 

@@ -28,13 +28,11 @@ class ParallelPoisson(DpProcess):
             or self.num_workers < 1
         ):
             raise ConfigurationError(
-                *(f"num_workers must be a positive integer, got {self.num_workers}",)
+                f"num_workers must be a positive integer, got {self.num_workers}"
             )
         if self.inner.truncated_batch_size is not None:
             raise ConfigurationError(
-                *(
-                    "ParallelPoisson does not support truncated Poisson inner mechanisms.",
-                )
+                "ParallelPoisson does not support truncated Poisson inner mechanisms."
             )
 
     @pld_cache(maxsize=8)
@@ -92,10 +90,8 @@ class ParallelPoisson(DpProcess):
                 )
             case _:
                 raise InputTypeError(
-                    *(
-                        "ParallelPoisson requires a Poisson inner mechanism, got "
-                        f"{type(self.inner).__name__}.",
-                    )
+                    "ParallelPoisson requires a Poisson inner mechanism, got "
+                    f"{type(self.inner).__name__}."
                 )
 
 
@@ -124,20 +120,16 @@ def parallel_poisson(
     """
     if not 0 < float(sample_rate) < 1:
         raise ConfigurationError(
-            *(
-                f"parallel_poisson: sample_rate must be in (0, 1), got {sample_rate}. "
-                "q=1 (full participation on every worker) is not supported here.",
-            )
+            f"parallel_poisson: sample_rate must be in (0, 1), got {sample_rate}. "
+            "q=1 (full participation on every worker) is not supported here."
         )
     match inner:
         case Gaussian() | AdaClip() | NonPrivate():
             pass
         case _:
             raise InputTypeError(
-                *(
-                    "parallel_poisson() requires a Gaussian, AdaClip, or NonPrivate "
-                    f"inner mechanism, got {type(inner).__name__}.",
-                )
+                "parallel_poisson() requires a Gaussian, AdaClip, or NonPrivate "
+                f"inner mechanism, got {type(inner).__name__}."
             )
     poisson_inner = poisson(inner=inner, sample_rate=sample_rate)
     return ParallelPoisson(inner=poisson_inner, num_workers=num_workers)

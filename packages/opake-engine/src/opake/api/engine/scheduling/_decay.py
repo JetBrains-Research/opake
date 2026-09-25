@@ -48,9 +48,7 @@ def resolve_decay(
         return decay
     if decay not in NAMED_DECAYS:
         raise ConfigurationError(
-            *(
-                f"Unknown {field}={decay!r}; expected one of "
-                f"{sorted(NAMED_DECAYS)} or a callable.",
-            )
+            f"Unknown {field}={decay!r}; expected one of "
+            f"{sorted(NAMED_DECAYS)} or a callable."
         )
     return NAMED_DECAYS[decay]

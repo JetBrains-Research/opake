@@ -9,8 +9,7 @@ Tests:
 
 Performance: opake must beat reference on time (within tolerance) or peak memory.
 
-Config: Mellum-4b ``hidden_dim`` and sequence length via ``mellum_config``
-(``conftest``), comparable to ``train_dpsgd.py --preset mellum-kstack`` geometry.
+Correctness tests use representative shapes; performance tests use Mellum-4b scale.
 """
 
 import pytest
@@ -60,10 +59,10 @@ def opake_gemma(x, w, eps=1e-6, offset=1.0):
 
 
 class TestRMSNormForward:
-    def test_llama_forward_bf16(self, assert_precision, mellum_config):
+    def test_llama_forward_bf16(self, assert_precision, kernel_config):
         torch.manual_seed(0)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
         x = torch.randn(b, s, h, device="cuda", dtype=torch.bfloat16)
         w = torch.randn(h, device="cuda", dtype=torch.bfloat16)
         eps = 1e-5
@@ -71,10 +70,10 @@ class TestRMSNormForward:
         y_r = ref_llama_rms(x, w, eps)
         assert_precision(y_o, y_r, rtol=RTOL_F, atol=ATOL_F, label="llama fwd")
 
-    def test_gemma_forward_bf16(self, assert_precision, mellum_config):
+    def test_gemma_forward_bf16(self, assert_precision, kernel_config):
         torch.manual_seed(1)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
         x = torch.randn(b, s, h, device="cuda", dtype=torch.bfloat16)
         w = torch.randn(h, device="cuda", dtype=torch.bfloat16)
         eps = 1e-6
@@ -141,10 +140,10 @@ class TestRMSNormForward:
 
 
 class TestRMSNormBackward:
-    def test_llama_backward_bf16(self, assert_precision, mellum_config):
+    def test_llama_backward_bf16(self, assert_precision, kernel_config):
         torch.manual_seed(2)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
         eps = 1e-5
 
         x0 = torch.randn(
@@ -201,11 +200,11 @@ class TestRMSNormBackward:
 class TestRMSNormVmapForward:
     """vmap over microbatch dim: Triton vmap vs PyTorch vmap (Llama)."""
 
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         torch.manual_seed(42)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
-        n = mellum_config["vmap_batch"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
+        n = kernel_config["vmap_batch"]
         eps = 1e-5
 
         x = torch.randn(n, b, s, h, device="cuda", dtype=torch.bfloat16)
@@ -223,6 +222,7 @@ class TestRMSNormVmapForward:
         print("\nvmap forward precision check:")
         assert_precision(y_op, y_pt, rtol=RTOL_F, atol=ATOL_F, label="vmap forward")
 
+    @pytest.mark.kernel_stress
     def test_vmap_forward_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -343,11 +343,11 @@ class TestRMSNormVmapGradPerExampleDW:
 class TestRMSNormVmapGrad:
     """vmap(grad): per-example gradients (Llama)."""
 
-    def test_vmap_grad_llama(self, assert_precision, mellum_config):
+    def test_vmap_grad_llama(self, assert_precision, kernel_config):
         torch.manual_seed(42)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
-        n = mellum_config["vmap_batch"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
+        n = kernel_config["vmap_batch"]
         eps = 1e-5
 
         x = torch.randn(n, b, s, h, device="cuda", dtype=torch.bfloat16)
@@ -366,6 +366,7 @@ class TestRMSNormVmapGrad:
         assert_precision(gx_op, gx_pt, rtol=RTOL_B, atol=ATOL_B, label="vmap gx")
         assert_precision(gw_op, gw_pt, rtol=RTOL_B, atol=ATOL_B, label="vmap gw")
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -395,6 +396,7 @@ class TestRMSNormVmapGrad:
         assert_perf_benefit(pt_stats, op_stats, label="rmsnorm vmap(grad)")
 
 
+@pytest.mark.kernel_stress
 class TestRMSNormPerformance:
     """Benchmark forward-only and forward+backward vs PyTorch reference."""
 

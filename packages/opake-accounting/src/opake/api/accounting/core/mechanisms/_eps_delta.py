@@ -24,10 +24,10 @@ class EpsDelta(DpProcess):
         # because ``eps_delta(0, 1)`` is the documented non-private equivalent.
         if self.epsilon < 0:
             raise ConfigurationError(
-                *(f"epsilon must be non-negative, got {self.epsilon}",)
+                f"epsilon must be non-negative, got {self.epsilon}"
             )
         if not (0.0 <= self.delta <= 1.0):
-            raise ConfigurationError(*(f"delta must be in [0, 1], got {self.delta}",))
+            raise ConfigurationError(f"delta must be in [0, 1], got {self.delta}")
 
     @pld_cache(maxsize=8)
     def pld(

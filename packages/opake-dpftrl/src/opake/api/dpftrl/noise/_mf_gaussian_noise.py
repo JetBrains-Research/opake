@@ -114,7 +114,7 @@ def mf_gaussian_noise(
     """
     resolved_noise_multiplier = _resolve_noise_multiplier(noise_multiplier)
     if not isinstance(key, RngKey):
-        raise InputTypeError(*(f"key must be RngKey, got {type(key)}",))
+        raise InputTypeError(f"key must be RngKey, got {type(key)}")
 
     if second_moment_strategy is not None:
         return make_second_moment_mf_noise(
@@ -152,12 +152,10 @@ def mf_gaussian_noise(
     ) -> tuple[NoisedPytree, MFNoiseState]:
         if isinstance(clipped_grads, SecondMomentClippingOutput):
             raise InputTypeError(
-                *(
-                    "mf_gaussian_noise was constructed without `second_moment_strategy` "
-                    "and cannot consume SecondMomentClippingOutput inputs.  Either "
-                    "pass a single-stream ClippedPytree, or rebuild the noise "
-                    "function with `second_moment_strategy=...`.",
-                )
+                "mf_gaussian_noise was constructed without `second_moment_strategy` "
+                "and cannot consume SecondMomentClippingOutput inputs.  Either "
+                "pass a single-stream ClippedPytree, or rebuild the noise "
+                "function with `second_moment_strategy=...`."
             )
         clipped_grads = _expect_clipped(clipped_grads, op="mf_gaussian_noise")
         max_norm = _validate_constant_max_norm(

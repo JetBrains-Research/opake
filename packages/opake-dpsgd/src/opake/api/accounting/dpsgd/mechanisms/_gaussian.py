@@ -27,7 +27,7 @@ class Gaussian(DpProcess):
         # non-private value, short-circuited before the native call.
         if self.noise_multiplier < 0:
             raise ConfigurationError(
-                *(f"noise_multiplier must be >= 0, got {self.noise_multiplier}",)
+                f"noise_multiplier must be >= 0, got {self.noise_multiplier}"
             )
 
     @pld_cache(maxsize=8)

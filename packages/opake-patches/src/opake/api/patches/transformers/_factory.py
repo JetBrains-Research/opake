@@ -162,10 +162,8 @@ def _resolve(
     if spec in registry:
         return registry[spec]
     raise ConfigurationError(
-        *(
-            f"Unknown kind {spec!r}; registered: {sorted(registry)}.  "
-            "Pass a callable directly, or use ``register_*_kind`` to add a custom name.",
-        )
+        f"Unknown kind {spec!r}; registered: {sorted(registry)}.  "
+        "Pass a callable directly, or use ``register_*_kind`` to add a custom name."
     )
 
 
@@ -174,11 +172,11 @@ def _normalize_chunked_linear_cross_entropy(value: object) -> bool | int:
         return value
     if isinstance(value, int):
         if value < 0:
-            ConfigurationError.raise_(
+            raise ConfigurationError(
                 "chunked_linear_cross_entropy must be a boolean or non-negative integer"
             )
         return False if value == 0 else value
-    ConfigurationError.raise_(
+    raise ConfigurationError(
         "chunked_linear_cross_entropy must be a boolean or non-negative integer"
     )
 

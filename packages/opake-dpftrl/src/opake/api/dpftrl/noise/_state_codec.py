@@ -55,11 +55,9 @@ def _require_fields(
     actual = set(saved)
     if actual != expected:
         raise CheckpointError(
-            *(
-                f"{label} fields do not match the current layout: "
-                f"missing={sorted(expected - actual, key=repr)}, "
-                f"unexpected={sorted(actual - expected, key=repr)}.",
-            )
+            f"{label} fields do not match the current layout: "
+            f"missing={sorted(expected - actual, key=repr)}, "
+            f"unexpected={sorted(actual - expected, key=repr)}."
         )
 
 
@@ -74,11 +72,11 @@ def _wire_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def _decode_json(value: Any, *, label: str) -> Any:
     if not isinstance(value, str):
-        raise CheckpointError(*(f"{label} must be encoded as text.",))
+        raise CheckpointError(f"{label} must be encoded as text.")
     try:
         return json.loads(value, object_pairs_hook=_wire_object)
     except (TypeError, ValueError) as exc:
-        raise CheckpointError(*(f"{label} is not valid JSON.",)) from exc
+        raise CheckpointError(f"{label} is not valid JSON.") from exc
 
 
 def _encode_json(value: Any) -> str:
@@ -87,9 +85,7 @@ def _encode_json(value: Any) -> str:
 
 def _require_group_value(value: Any, *, label: str) -> int | float:
     if type(value) not in (int, float) or math.isnan(float(value)) or value < 0:
-        raise CheckpointError(
-            *(f"{label} must be a non-negative, non-NaN int or float.",)
-        )
+        raise CheckpointError(f"{label} must be a non-negative, non-NaN int or float.")
     return value
 
 
@@ -99,29 +95,29 @@ def _encode_max_norm(value: float | PerGroup | None) -> str:
     if not isinstance(value, PerGroup):
         if isinstance(value, bool) or not isinstance(value, Real):
             raise CheckpointError(
-                *(f"MF max-norm latch has unsupported type {type(value).__name__}.",)
+                f"MF max-norm latch has unsupported type {type(value).__name__}."
             )
         scalar = float(value)
         if scalar < 0:
-            raise CheckpointError(*("MF scalar max-norm latch must be non-negative.",))
+            raise CheckpointError("MF scalar max-norm latch must be non-negative.")
         return _encode_json({"kind": "scalar", "value": scalar})
 
     groups: list[list[Any]] = []
     used_groups: set[str] = set()
     for path, group in value.groups.items():
         if not isinstance(group, str):
-            raise CheckpointError(*("MF per-group latch has an invalid group name.",))
+            raise CheckpointError("MF per-group latch has an invalid group name.")
         if any(
             isinstance(part, bool) or not isinstance(part, (str, int)) for part in path
         ):
-            raise CheckpointError(*("MF per-group latch has an invalid path.",))
+            raise CheckpointError("MF per-group latch has an invalid path.")
         groups.append([list(path), group])
         used_groups.add(group)
 
     values: list[list[Any]] = []
     for group, group_value in value.values.items():
         if not isinstance(group, str):
-            raise CheckpointError(*("MF per-group latch has an invalid value name.",))
+            raise CheckpointError("MF per-group latch has an invalid value name.")
         values.append(
             [
                 group,
@@ -134,7 +130,7 @@ def _encode_max_norm(value: float | PerGroup | None) -> str:
     missing_values = sorted(used_groups - set(value.values))
     if missing_values:
         raise CheckpointError(
-            *(f"MF per-group latch has no value for groups {missing_values}.",)
+            f"MF per-group latch has no value for groups {missing_values}."
         )
     return _encode_json({"kind": "per_group", "groups": groups, "values": values})
 
@@ -149,14 +145,14 @@ def _decode_per_group(saved: Mapping[str, Any]) -> PerGroup:
     values_wire = saved["values"]
     if not isinstance(groups_wire, list) or not isinstance(values_wire, list):
         raise CheckpointError(
-            *("MF per-group max-norm latch has invalid groups or values.",)
+            "MF per-group max-norm latch has invalid groups or values."
         )
 
     groups: dict[tuple[str | int, ...], str] = {}
     used_groups: set[str] = set()
     for entry in groups_wire:
         if not isinstance(entry, list) or len(entry) != _WIRE_ENTRY_SIZE:
-            raise CheckpointError(*("MF per-group latch has an invalid group entry.",))
+            raise CheckpointError("MF per-group latch has an invalid group entry.")
         path, group = entry
         if (
             not isinstance(path, list)
@@ -166,11 +162,11 @@ def _decode_per_group(saved: Mapping[str, Any]) -> PerGroup:
                 for part in path
             )
         ):
-            raise CheckpointError(*("MF per-group latch has an invalid assignment.",))
+            raise CheckpointError("MF per-group latch has an invalid assignment.")
         normalized_path = tuple(path)
         if normalized_path in groups:
             raise CheckpointError(
-                *(f"MF per-group latch repeats path {normalized_path!r}.",)
+                f"MF per-group latch repeats path {normalized_path!r}."
             )
         groups[normalized_path] = group
         used_groups.add(group)
@@ -178,12 +174,12 @@ def _decode_per_group(saved: Mapping[str, Any]) -> PerGroup:
     values: dict[str, int | float] = {}
     for entry in values_wire:
         if not isinstance(entry, list) or len(entry) != _WIRE_ENTRY_SIZE:
-            raise CheckpointError(*("MF per-group latch has an invalid value entry.",))
+            raise CheckpointError("MF per-group latch has an invalid value entry.")
         group, value = entry
         if not isinstance(group, str):
-            raise CheckpointError(*("MF per-group latch has an invalid value name.",))
+            raise CheckpointError("MF per-group latch has an invalid value name.")
         if group in values:
-            raise CheckpointError(*(f"MF per-group latch repeats value {group!r}.",))
+            raise CheckpointError(f"MF per-group latch repeats value {group!r}.")
         values[group] = _require_group_value(
             value,
             label=f"MF per-group latch value for {group!r}",
@@ -191,7 +187,7 @@ def _decode_per_group(saved: Mapping[str, Any]) -> PerGroup:
     missing_values = sorted(used_groups - set(values))
     if missing_values:
         raise CheckpointError(
-            *(f"MF per-group latch has no value for groups {missing_values}.",)
+            f"MF per-group latch has no value for groups {missing_values}."
         )
     return PerGroup(groups=groups, values=values)
 
@@ -199,7 +195,7 @@ def _decode_per_group(saved: Mapping[str, Any]) -> PerGroup:
 def _decode_max_norm(value: Any) -> float | PerGroup | None:
     saved = _decode_json(value, label="MF max-norm latch")
     if not isinstance(saved, Mapping):
-        raise CheckpointError(*("MF max-norm latch must encode an object.",))
+        raise CheckpointError("MF max-norm latch must encode an object.")
     kind = saved.get("kind")
     if kind == "none":
         _require_fields(saved, {"kind"}, label="MF max-norm latch")
@@ -211,7 +207,7 @@ def _decode_max_norm(value: Any) -> float | PerGroup | None:
         )
     if kind == "per_group":
         return _decode_per_group(saved)
-    raise CheckpointError(*(f"Unknown MF max-norm latch kind {kind!r}.",))
+    raise CheckpointError(f"Unknown MF max-norm latch kind {kind!r}.")
 
 
 def _validate_fingerprint(
@@ -221,11 +217,11 @@ def _validate_fingerprint(
     if max_norm is None:
         if fingerprint is not None:
             raise CheckpointError(
-                *("MF max-norm latch is empty but its fingerprint is present.",)
+                "MF max-norm latch is empty but its fingerprint is present."
             )
         return
     if type(fingerprint) is not int:
-        raise CheckpointError(*("MF max-norm latch requires an integer fingerprint.",))
+        raise CheckpointError("MF max-norm latch requires an integer fingerprint.")
 
     from ._distributed import (
         fingerprint_per_group_max_norm,
@@ -239,7 +235,7 @@ def _validate_fingerprint(
     )
     if fingerprint != expected:
         raise CheckpointError(
-            *("MF max-norm latch fingerprint does not match its saved value.",)
+            "MF max-norm latch fingerprint does not match its saved value."
         )
 
 
@@ -312,17 +308,15 @@ def _validate_inner_manifest(
         or any(not _is_inner_field(field) for field in declared)
         or declared != sorted(set(declared))
     ):
-        raise CheckpointError(*("MF inner-state field manifest is invalid.",))
+        raise CheckpointError("MF inner-state field manifest is invalid.")
 
     actual = {field for field in saved if _is_inner_field(field)}
     declared_fields = set(declared)
     if actual != declared_fields:
         raise CheckpointError(
-            *(
-                "MF inner-state fields do not match their manifest: "
-                f"missing={sorted(declared_fields - actual)}, "
-                f"unexpected={sorted(actual - declared_fields)}.",
-            )
+            "MF inner-state fields do not match their manifest: "
+            f"missing={sorted(declared_fields - actual)}, "
+            f"unexpected={sorted(actual - declared_fields)}."
         )
 
     configured = _template_inner_fields(template)
@@ -335,13 +329,11 @@ def _validate_inner_manifest(
         if resolve_serializer(type(template._inner_state)) is not None:
             from_state_dict(template._inner_state, _inner_state_dict(saved))
         raise CheckpointError(
-            *(
-                "MF inner-state fields do not match the configured runtime: "
-                f"missing={sorted(configured - declared_fields)}, "
-                f"unexpected={sorted(declared_fields - configured)}. Rebuild "
-                "the mechanism with the checkpoint's strategy and parameter-tree "
-                "structure.",
-            )
+            "MF inner-state fields do not match the configured runtime: "
+            f"missing={sorted(configured - declared_fields)}, "
+            f"unexpected={sorted(declared_fields - configured)}. Rebuild "
+            "the mechanism with the checkpoint's strategy and parameter-tree "
+            "structure."
         )
 
 
@@ -370,14 +362,12 @@ def _load(template: MFNoiseState, saved: Mapping[str, Any]) -> MFNoiseState:
     version = saved.get("layout_version")
     if version is None:
         raise CheckpointError(
-            *("Cannot restore a legacy unversioned MF noise-state checkpoint.",)
+            "Cannot restore a legacy unversioned MF noise-state checkpoint."
         )
     if type(version) is not int or version != _LAYOUT_VERSION:
         raise CheckpointError(
-            *(
-                f"Unsupported MF noise-state version {version!r}; "
-                f"expected {_LAYOUT_VERSION}.",
-            )
+            f"Unsupported MF noise-state version {version!r}; "
+            f"expected {_LAYOUT_VERSION}."
         )
 
     actual = set(saved)
@@ -388,10 +378,8 @@ def _load(template: MFNoiseState, saved: Mapping[str, Any]) -> MFNoiseState:
     )
     if missing or unexpected:
         raise CheckpointError(
-            *(
-                "MF noise-state fields do not match the current layout: "
-                f"missing={missing}, unexpected={unexpected}.",
-            )
+            "MF noise-state fields do not match the current layout: "
+            f"missing={missing}, unexpected={unexpected}."
         )
 
     _validate_inner_manifest(saved, template)
@@ -412,24 +400,20 @@ def _load(template: MFNoiseState, saved: Mapping[str, Any]) -> MFNoiseState:
     )
     if type(payload._step_counter) is not int or payload._step_counter < 0:
         raise CheckpointError(
-            *(
-                "MF noise-state step must be a non-negative int, "
-                f"got {payload._step_counter!r}.",
-            )
+            "MF noise-state step must be a non-negative int, "
+            f"got {payload._step_counter!r}."
         )
     if type(payload._rng_key.seed) is not int or not isinstance(
         payload._rng_key.impl, str
     ):
         raise CheckpointError(
-            *(f"MF noise-state RNG key is invalid: {payload._rng_key!r}.",)
+            f"MF noise-state RNG key is invalid: {payload._rng_key!r}."
         )
     if (
         payload._first_max_norm_sync_fingerprint is not None
         and type(payload._first_max_norm_sync_fingerprint) is not int
     ):
-        raise CheckpointError(
-            *("MF max-norm latch fingerprint must be an int or None.",)
-        )
+        raise CheckpointError("MF max-norm latch fingerprint must be an int or None.")
 
     max_norm = _decode_max_norm(saved["_first_max_norm"])
     fingerprint = payload._first_max_norm_sync_fingerprint

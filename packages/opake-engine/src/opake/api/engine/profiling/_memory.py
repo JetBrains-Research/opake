@@ -377,9 +377,7 @@ class _StepPerfBuilder:
         """
         if self._perf is None:
             raise OperationError(
-                *(
-                    "StepPerf is not available until the step_perf context manager exits.",
-                )
+                "StepPerf is not available until the step_perf context manager exits."
             )
         return self._perf
 
@@ -701,7 +699,7 @@ class PerfTracker:
     def __getattr__(self, name: str) -> PerfStage:
         if name in _STAGE_SHORTCUTS:
             return self._get_stage(name)
-        raise AttributeError(  # noqa: TRY003 - preserve standard Python error contract
+        raise AttributeError(
             f"{type(self).__name__!r} has no attribute {name!r}. "
             f"Use tracker[{name!r}] for custom stages."
         )

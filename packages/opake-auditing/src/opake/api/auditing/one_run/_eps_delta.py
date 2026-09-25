@@ -108,7 +108,7 @@ class EpsDeltaMethod:
         """
         validate_significance(significance)
         if epsilon < 0:
-            raise ConfigurationError(*(f"epsilon must be >= 0, got {epsilon}",))
+            raise ConfigurationError(f"epsilon must be >= 0, got {epsilon}")
         r, u = self._estimate._best_r_u(threshold)
 
         if _p_value(r, u, epsilon, 0.0) >= significance:

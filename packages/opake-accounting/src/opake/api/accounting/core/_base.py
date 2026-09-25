@@ -465,10 +465,8 @@ class DpProcess(ABC):
         """
         if count < 1:
             raise ConfigurationError(
-                *(
-                    f"Repeat count must be >= 1, got {count}. "
-                    "Use identity() for zero privacy loss.",
-                )
+                f"Repeat count must be >= 1, got {count}. "
+                "Use identity() for zero privacy loss."
             )
 
         from opake.api.accounting.core.composition.types import Repeated

@@ -5,6 +5,7 @@ set -euo pipefail
 
 : "${DEPENDENCY_SELECTION:=locked}"
 
+# Later commands use `uv run --no-sync` so this selected resolution stays installed.
 case "$DEPENDENCY_SELECTION" in
   locked)
     uv sync --locked --group dev --all-packages --extra all

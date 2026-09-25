@@ -19,28 +19,22 @@ def _validate_batch_argnums(batch_argnums: tuple[int, ...], n_non_batch: int) ->
     """Validate batch_argnums constraints."""
     if not batch_argnums:
         raise ConfigurationError(
-            *(f"batch_argnums must be non-empty, got {batch_argnums}",)
+            f"batch_argnums must be non-empty, got {batch_argnums}"
         )
     if any(a < 0 for a in batch_argnums):
         raise ConfigurationError(
-            *(f"batch_argnums must be non-negative, got {batch_argnums}",)
+            f"batch_argnums must be non-negative, got {batch_argnums}"
         )
     if len(set(batch_argnums)) != len(batch_argnums):
-        raise ConfigurationError(
-            *(f"batch_argnums must be unique, got {batch_argnums}",)
-        )
+        raise ConfigurationError(f"batch_argnums must be unique, got {batch_argnums}")
     if tuple(sorted(batch_argnums)) != batch_argnums:
-        raise ConfigurationError(
-            *(f"batch_argnums must be sorted, got {batch_argnums}",)
-        )
+        raise ConfigurationError(f"batch_argnums must be sorted, got {batch_argnums}")
     n_total = n_non_batch + len(batch_argnums)
     if max(batch_argnums) >= n_total:
         raise ConfigurationError(
-            *(
-                f"batch_argnums index {max(batch_argnums)} out of range for "
-                f"{n_total} total arguments ({n_non_batch} non-batched + "
-                f"{len(batch_argnums)} batched), got {batch_argnums}",
-            )
+            f"batch_argnums index {max(batch_argnums)} out of range for "
+            f"{n_total} total arguments ({n_non_batch} non-batched + "
+            f"{len(batch_argnums)} batched), got {batch_argnums}"
         )
 
 
@@ -130,12 +124,10 @@ def _canary_loader(
         n_collated = _collated_length(collated)
         if n_collated is not None and n_collated != len(positions):
             raise ConfigurationError(
-                *(
-                    f"collate_fn returned {n_collated} rows for a batch of "
-                    f"{len(positions)} canaries; it must emit exactly one row "
-                    "per example, in the order received, or scores lose the "
-                    "identifiers they are paired with",
-                )
+                f"collate_fn returned {n_collated} rows for a batch of "
+                f"{len(positions)} canaries; it must emit exactly one row "
+                "per example, in the order received, or scores lose the "
+                "identifiers they are paired with"
             )
         return positions, collated
 
@@ -159,36 +151,30 @@ def _scoring_loader(
     dataset_size = len(dataset)
     if coin_flip.dataset_size is not None and dataset_size != coin_flip.dataset_size:
         raise ConfigurationError(
-            *(
-                f"dataset length ({dataset_size}) does not match the dataset size "
-                f"({coin_flip.dataset_size}) the CoinFlip was constructed from; "
-                "scoring requires the full concatenated dataset, not a training "
-                "subset or split",
-            )
+            f"dataset length ({dataset_size}) does not match the dataset size "
+            f"({coin_flip.dataset_size}) the CoinFlip was constructed from; "
+            "scoring requires the full concatenated dataset, not a training "
+            "subset or split"
         )
     if np.any(coin_flip.canary_indices < 0) or np.any(
         coin_flip.canary_indices >= dataset_size
     ):
         raise ConfigurationError(
-            *(
-                f"canary indices must be within dataset bounds [0, {dataset_size}); "
-                "scoring requires the full concatenated dataset used to construct "
-                "the CoinFlip",
-            )
+            f"canary indices must be within dataset bounds [0, {dataset_size}); "
+            "scoring requires the full concatenated dataset used to construct "
+            "the CoinFlip"
         )
     if isinstance(batch_size, bool) or not isinstance(batch_size, int):
         raise InputTypeError(
-            *(f"batch_size must be an int, got {type(batch_size).__name__}",)
+            f"batch_size must be an int, got {type(batch_size).__name__}"
         )
     if batch_size < 1:
-        raise ConfigurationError(*(f"batch_size must be positive, got {batch_size}",))
+        raise ConfigurationError(f"batch_size must be positive, got {batch_size}")
     if reference_scores is not None and not isinstance(reference_scores, CanaryScores):
         raise InputTypeError(
-            *(
-                "reference_scores must carry canary identifiers; compute it "
-                "with the same coin_flip= and dataset=, or attest identifiers "
-                "with canary_scores(values, canary_indices=...)",
-            )
+            "reference_scores must carry canary identifiers; compute it "
+            "with the same coin_flip= and dataset=, or attest identifiers "
+            "with canary_scores(values, canary_indices=...)"
         )
     return _canary_loader(dataset, coin_flip, batch_size, collate_fn)
 
@@ -199,10 +185,8 @@ def _aligned_reference(ids: np.ndarray, reference_scores: CanaryScores) -> np.nd
     if ref_ids.size == 0:
         if ids.size:
             raise ConfigurationError(
-                *(
-                    "reference_scores are empty but scores are not; compute "
-                    "the reference over the same coin_flip and dataset",
-                )
+                "reference_scores are empty but scores are not; compute "
+                "the reference over the same coin_flip and dataset"
             )
         return np.empty(0, dtype=float)
     sorter = np.argsort(ref_ids, kind="stable")
@@ -210,10 +194,8 @@ def _aligned_reference(ids: np.ndarray, reference_scores: CanaryScores) -> np.nd
     pos = np.minimum(pos, ref_ids.size - 1)
     if not np.all(ref_ids[sorter][pos] == ids):
         raise ConfigurationError(
-            *(
-                "reference_scores do not cover the scored canaries; compute "
-                "the reference over the same coin_flip and dataset",
-            )
+            "reference_scores do not cover the scored canaries; compute "
+            "the reference over the same coin_flip and dataset"
         )
     return reference_scores.scores[sorter[pos]]
 

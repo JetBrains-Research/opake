@@ -39,11 +39,11 @@ formatting jobs.
 ### `.github/actions/run-qodana`
 
 This composite action downloads the selected coverage artifacts, runs Qodana,
-and uploads its SARIF report. The PR workflow calls it through `qodana.yml` as
-a required check, except on Dependabot pull requests because they cannot access
-the `QODANA_TOKEN` Actions secret. The main workflow uses the same action in an
-allowed-to-fail job so policy violations remain visible without gating wheel
-publication.
+and uploads its SARIF report. The PR workflow calls it through `qodana.yml` for
+eligible same-repository pull requests. The always-present `Qodana gate` check
+requires a successful scan when eligible and an intentional skip otherwise.
+The main workflow uses the same action in an allowed-to-fail job so policy
+violations remain visible without gating wheel publication.
 
 ### `.github/workflows/build-distributions.yml`
 
@@ -69,7 +69,8 @@ arguments. Its five fixed test-group matrix legs keep each caller collapsed as
 one environment block in the Actions graph while the groups still run in
 parallel.
 Dependency selection is `locked`, `minimum` (uv `lowest-direct`), or `latest`
-(`uv` `highest`). Validation callers report every test phase taking at
+(`uv` `highest`); subsequent `uv run` commands use `--no-sync` to preserve that
+resolution. Validation callers report every test phase taking at
 least five seconds, so newly slow tests cannot disappear behind a fixed-size
 duration table. Every selected pytest failure, dependency resolution failure,
 and workflow failure blocks its caller.
@@ -80,7 +81,8 @@ Linux arm64, and CUDA platform coverage. Main and release include slow tests in
 platform lanes. Fork pull requests never receive the self-hosted CUDA runner.
 
 Lanes selecting `cuda` run `.github/scripts/assert_cuda_available.sh` and fail
-when the host has no usable CUDA device; lanes excluding `cuda` skip it.
+when the host has no usable CUDA device with compute capability 8.0 or newer;
+lanes excluding `cuda` skip it.
 
 ### `.github/workflows/rust-tests.yml`
 

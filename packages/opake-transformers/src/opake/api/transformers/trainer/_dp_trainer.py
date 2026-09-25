@@ -237,11 +237,9 @@ def _rank_local_sampler_state(
     template_key = getattr(template_sampler, "_stream_key", None)
     if template_key is None:
         raise CheckpointError(
-            *(
-                "Sampler snapshot carries a stream key but the template "
-                f"{type(template_sampler).__name__} exposes none; cannot restore "
-                "a rank-local sampling stream under DDP.",
-            )
+            "Sampler snapshot carries a stream key but the template "
+            f"{type(template_sampler).__name__} exposes none; cannot restore "
+            "a rank-local sampling stream under DDP."
         )
     local_state = dict(saved_state)
     local_state["key_seed"] = int(template_key.seed)
@@ -483,18 +481,16 @@ class DPTrainer:
         else:
             set_seed(args.seed)
         if model is None:
-            raise OperationError(*("`DPTrainer` requires a `model` argument",))
+            raise OperationError("`DPTrainer` requires a `model` argument")
         self._functional_optimizer_factory: (
             tuple[Callable[..., Any], dict[str, Any]] | None
         ) = None
         self._functional_optimizer_name: str | None = None
         if any(item is not None for item in optimizers):
             raise ConfigurationError(
-                *(
-                    "Passing `optimizers` is not supported by DPTrainer: the DP path "
-                    "uses a functional torchopt optimizer built after per-example "
-                    "gradient clipping/noising is configured.",
-                )
+                "Passing `optimizers` is not supported by DPTrainer: the DP path "
+                "uses a functional torchopt optimizer built after per-example "
+                "gradient clipping/noising is configured."
             )
         if optimizer_cls_and_kwargs is not None:
             from ._optim import (
@@ -519,13 +515,11 @@ class DPTrainer:
             getattr(model, "is_gradient_checkpointing", False)
         ):
             raise ConfigurationError(
-                *(
-                    "torch_compile=True is incompatible with a model that already "
-                    "has gradient checkpointing enabled: checkpointed functional "
-                    "transforms use saved-tensor hooks that AOTAutograd cannot safely "
-                    "compose with torch.compile(vmap(grad(...))). Disable gradient "
-                    "checkpointing on the model or disable torch compilation.",
-                )
+                "torch_compile=True is incompatible with a model that already "
+                "has gradient checkpointing enabled: checkpointed functional "
+                "transforms use saved-tensor hooks that AOTAutograd cannot safely "
+                "compose with torch.compile(vmap(grad(...))). Disable gradient "
+                "checkpointing on the model or disable torch compilation."
             )
         self._processing_class = processing_class
         self._base_callbacks: list[Any] = list(callbacks) if callbacks else []
@@ -587,11 +581,9 @@ class DPTrainer:
         self._eval_dataset = eval_dataset
         if args.eval_strategy != "no" and eval_dataset is None:
             raise CheckpointError(
-                *(
-                    f"You have set `args.eval_strategy` to {args.eval_strategy} but "
-                    "didn't pass an `eval_dataset` to `DPTrainer`. Either set "
-                    "`eval_strategy='no'` or pass an eval_dataset.",
-                )
+                f"You have set `args.eval_strategy` to {args.eval_strategy} but "
+                "didn't pass an `eval_dataset` to `DPTrainer`. Either set "
+                "`eval_strategy='no'` or pass an eval_dataset."
             )
 
         # Resolve device via ``args.device`` (forwards to
@@ -606,11 +598,9 @@ class DPTrainer:
         _SUPPORTED_DEVICE_TYPES = {"cpu", "cuda", "mps"}
         if self._device.type not in _SUPPORTED_DEVICE_TYPES:
             raise ConfigurationError(
-                *(
-                    f"DPTrainer only supports cpu, cuda, and mps devices; "
-                    f"got device={self._device!r}. "
-                    f"Other backends (xpu, npu, mlu, musa, hpu, ...) are not supported.",
-                )
+                f"DPTrainer only supports cpu, cuda, and mps devices; "
+                f"got device={self._device!r}. "
+                f"Other backends (xpu, npu, mlu, musa, hpu, ...) are not supported."
             )
         # resolve rank/world topology immediately after the device
         # pick so every subsequent setup site (sampler, checkpoint, hub,
@@ -1075,7 +1065,7 @@ class DPTrainer:
     ) -> TrainOutput:
         """Inner dispatch."""
         if self._train_dataset is None:
-            raise ConfigurationError(*("DPTrainer.train() requires a train_dataset.",))
+            raise ConfigurationError("DPTrainer.train() requires a train_dataset.")
 
         # ``microbatch_size`` controls the vmap chunk and defaults to
         # ``per_device_train_batch_size`` (one chunk per rank).
@@ -1158,20 +1148,16 @@ class DPTrainer:
                     if local_oom_error is not None:
                         raise local_oom_error
                     raise OperationError(
-                        *(
-                            "auto_find_microbatch_size exhausted: a sibling rank "
-                            "still OOMs at microbatch_size=1. Reduce "
-                            "per_device_train_batch_size (the logical Poisson batch) "
-                            "or the model/sequence length.",
-                        )
+                        "auto_find_microbatch_size exhausted: a sibling rank "
+                        "still OOMs at microbatch_size=1. Reduce "
+                        "per_device_train_batch_size (the logical Poisson batch) "
+                        "or the model/sequence length."
                     )
                 next_microbatch_size = max(1, current_microbatch_size // 2)
                 if next_microbatch_size == current_microbatch_size:
                     raise OperationError(
-                        *(
-                            "auto_find_microbatch_size cannot step down below "
-                            f"microbatch_size={current_microbatch_size}.",
-                        )
+                        "auto_find_microbatch_size cannot step down below "
+                        f"microbatch_size={current_microbatch_size}."
                     )
                 log.warning(
                     "auto_find_microbatch_size: cluster OOM at microbatch_size=%d "
@@ -1389,11 +1375,11 @@ class DPTrainer:
         if flags[1].item() > 0.0:
             if error is not None and not local_oom:
                 raise error
-            raise RuntimeError(  # noqa: TRY003 - preserve rank symmetry
+            raise RuntimeError(
                 "collective gradient computation failed on a sibling rank"
             )
         if flags[0].item() > 0.0:
-            raise torch.OutOfMemoryError(  # noqa: TRY003 - preserve PyTorch OOM type
+            raise torch.OutOfMemoryError(
                 "collective microbatch retry (a rank OOM'd in grad_fn; "
                 "whole cluster steps down to a smaller microbatch)."
             )
@@ -1530,15 +1516,13 @@ class DPTrainer:
         )
 
         if self._train_dataset is None:
-            raise ConfigurationError(*("DPTrainer.train() requires a train_dataset.",))
+            raise ConfigurationError("DPTrainer.train() requires a train_dataset.")
         dataset_size = self._effective_train_dataset_size()
         if dataset_size <= 0:
             raise ConfigurationError(
-                *(
-                    "DPTrainer requires a non-empty train_dataset: DP-SGD needs "
-                    "at least one example to build the per-example loss surface "
-                    "and calibrate Poisson sampling.",
-                )
+                "DPTrainer requires a non-empty train_dataset: DP-SGD needs "
+                "at least one example to build the per-example loss surface "
+                "and calibrate Poisson sampling."
             )
         # Rank-local sample rate.  The user's ``expected_batch_size`` is the
         # *global* (cluster-wide) expected Poisson round size.  Under DDP we
@@ -1556,11 +1540,9 @@ class DPTrainer:
         sample_rate = expected_batch_size / dataset_size
         if sample_rate > 1.0:
             raise ConfigurationError(
-                *(
-                    "DPTrainer requires expected_batch_size <= len(train_dataset) "
-                    "for Poisson sampling; got expected_batch_size="
-                    f"{expected_batch_size} and len(train_dataset)={dataset_size}.",
-                )
+                "DPTrainer requires expected_batch_size <= len(train_dataset) "
+                "for Poisson sampling; got expected_batch_size="
+                f"{expected_batch_size} and len(train_dataset)={dataset_size}."
             )
         expected_steps_per_epoch, total_steps, num_epochs = self._steps_breakdown(
             dataset_size
@@ -1747,10 +1729,8 @@ class DPTrainer:
             _amp = mf.amplifier_factory(noise_multiplier)
             if int(_amp.n_steps) != total_steps:
                 raise OperationError(
-                    *(
-                        "DP-FTRL amplifier horizon does not match the training "
-                        f"horizon: {_amp.n_steps} != {total_steps}.",
-                    )
+                    "DP-FTRL amplifier horizon does not match the training "
+                    f"horizon: {_amp.n_steps} != {total_steps}."
                 )
             noise_fn, noise_state = mf_gaussian_noise(
                 trainable_params,
@@ -1832,11 +1812,9 @@ class DPTrainer:
         if saved_stream_key is None:
             if self._ddp.world_size > 1:
                 raise CheckpointError(
-                    *(
-                        "Cannot resume this checkpoint under DDP: it does not "
-                        "record sampler stream lineage. Start a new DDP run to "
-                        "create a resumable checkpoint.",
-                    )
+                    "Cannot resume this checkpoint under DDP: it does not "
+                    "record sampler stream lineage. Start a new DDP run to "
+                    "create a resumable checkpoint."
                 )
         else:
             ctx.sampler_stream_key = RngKey(
@@ -2258,10 +2236,8 @@ class DPTrainer:
         ctx = self._ctx
         if ctx is None:
             raise OperationError(
-                *(
-                    "training_step called outside an active training run; "
-                    "DPTrainer's functional context is not initialised.",
-                )
+                "training_step called outside an active training run; "
+                "DPTrainer's functional context is not initialised."
             )
         inputs = self._prepare_input(inputs)
         # Subclass hook: augment the batch with tensors computed *outside* vmap
@@ -2277,11 +2253,9 @@ class DPTrainer:
             batch_args = tuple(inputs[k] for k in ctx.batch_keys)
         except KeyError as missing:
             raise InputTypeError(
-                *(
-                    f"data_collator output is missing required key {missing!s}; "
-                    f"expected keys {list(ctx.batch_keys)!r} (discovered at "
-                    f"_setup_training time from a dry run on one example).",
-                )
+                f"data_collator output is missing required key {missing!s}; "
+                f"expected keys {list(ctx.batch_keys)!r} (discovered at "
+                f"_setup_training time from a dry run on one example)."
             ) from None
         # Tracked separately for batch-size accounting; the first
         # tensor's leading dim is what HF's ``find_batch_size`` would
@@ -2566,11 +2540,9 @@ class DPTrainer:
             loss = output.get("loss")
         if loss is None:
             raise OperationError(
-                *(
-                    "DPTrainer.compute_per_example_loss: model forward returned no "
-                    "`loss` field.  Pass `compute_loss_func=` for a custom loss, "
-                    "or override `compute_per_example_loss` in a subclass.",
-                )
+                "DPTrainer.compute_per_example_loss: model forward returned no "
+                "`loss` field.  Pass `compute_loss_func=` for a custom loss, "
+                "or override `compute_per_example_loss` in a subclass."
             )
 
         # Trainer-side rebuild: when logits are exposed, rewrite the
@@ -2752,13 +2724,11 @@ class DPTrainer:
             missing = [k for k in batch_keys if inputs.get(k) is None]
             if missing:
                 raise ConfigurationError(
-                    *(
-                        "Per-example eval (include_for_metrics=['loss']) expects the "
-                        f"eval batch to carry the train-discovered keys {list(batch_keys)!r}, "
-                        f"but {missing!r} are absent (or None).  The eval collator/"
-                        "dataset differs from the training one; align them, or drop "
-                        "'loss' from include_for_metrics to use the standard eval path.",
-                    )
+                    "Per-example eval (include_for_metrics=['loss']) expects the "
+                    f"eval batch to carry the train-discovered keys {list(batch_keys)!r}, "
+                    f"but {missing!r} are absent (or None).  The eval collator/"
+                    "dataset differs from the training one; align them, or drop "
+                    "'loss' from include_for_metrics to use the standard eval path."
                 )
             batch_args = tuple(inputs.get(k) for k in batch_keys)
             with torch.no_grad():
@@ -2872,11 +2842,9 @@ class DPTrainer:
 
         if not isinstance(output, Mapping):
             raise InputTypeError(
-                *(
-                    "DPTrainer requires model.forward to return a dict-like "
-                    "ModelOutput (or Mapping). "
-                    f"Got {type(output).__name__}; wrap forward to return a dict.",
-                )
+                "DPTrainer requires model.forward to return a dict-like "
+                "ModelOutput (or Mapping). "
+                f"Got {type(output).__name__}; wrap forward to return a dict."
             )
 
         # Collect every output field that survives the ``ignore_keys +
@@ -3114,7 +3082,7 @@ class DPTrainer:
         # mid-loop OOM on any rank then raises on every rank so nobody enters
         # ``reduce_scalar`` / gather. Matches the training-step guard.
         if self._ddp.is_distributed and self._cluster_needs_step_down(local_oom):
-            raise torch.OutOfMemoryError(  # noqa: TRY003 - preserve PyTorch OOM type
+            raise torch.OutOfMemoryError(
                 "collective eval batch retry (a rank OOM'd during eval batch "
                 "processing; "
                 "whole cluster steps down to a smaller "
@@ -3254,9 +3222,7 @@ class DPTrainer:
         """
         dataset = eval_dataset if eval_dataset is not None else self._eval_dataset
         if dataset is None:
-            raise ConfigurationError(
-                *("DPTrainer.evaluate() requires an eval_dataset.",)
-            )
+            raise ConfigurationError("DPTrainer.evaluate() requires an eval_dataset.")
 
         # Multi-dataset eval: recurse per split with a namespaced prefix and
         # merge (mirrors transformers.Trainer.evaluate).
@@ -3341,9 +3307,7 @@ class DPTrainer:
             return
         output_dir = self._effective_output_dir()
         if output_dir is None:
-            raise ConfigurationError(
-                *("save_metrics requires args.output_dir to be set",)
-            )
+            raise ConfigurationError("save_metrics requires args.output_dir to be set")
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         path = Path(output_dir) / f"{split}_results.json"
         with path.open("w") as f:
@@ -3365,9 +3329,7 @@ class DPTrainer:
             return
         output_dir = self._effective_output_dir()
         if output_dir is None:
-            raise ConfigurationError(
-                *("save_state requires args.output_dir to be set",)
-            )
+            raise ConfigurationError("save_state requires args.output_dir to be set")
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         self._save_trainer_state(output_dir)
 
@@ -3518,11 +3480,9 @@ class DPTrainer:
                 if local_oom_error is not None:
                     raise local_oom_error
                 raise OperationError(
-                    *(
-                        "auto_find_microbatch_size: eval OOMs at "
-                        "per_device_eval_batch_size=1. Reduce the eval sequence "
-                        "length or the model size.",
-                    )
+                    "auto_find_microbatch_size: eval OOMs at "
+                    "per_device_eval_batch_size=1. Reduce the eval sequence "
+                    "length or the model size."
                 )
             reduced = max(1, current // 2)
             log.warning(
@@ -3717,13 +3677,11 @@ class DPTrainer:
         columns = [k for k in signature_columns if k in dataset.column_names]
         if not columns:
             raise ConfigurationError(
-                *(
-                    "No columns in the dataset match the model's forward method signature: "
-                    f"({', '.join(signature_columns)}). The following columns have "
-                    f"been ignored: [{', '.join(ignored_columns)}]. Please check the "
-                    "dataset and model. You may need to set `remove_unused_columns=False` "
-                    "in TrainingArguments.",
-                )
+                "No columns in the dataset match the model's forward method signature: "
+                f"({', '.join(signature_columns)}). The following columns have "
+                f"been ignored: [{', '.join(ignored_columns)}]. Please check the "
+                "dataset and model. You may need to set `remove_unused_columns=False` "
+                "in TrainingArguments."
             )
         return dataset.remove_columns(ignored_columns)
 
@@ -3901,7 +3859,7 @@ class DPTrainer:
         """
         if len(self._train_dataset) == 0:
             raise ConfigurationError(
-                *("Cannot discover batch keys: train_dataset is empty.",)
+                "Cannot discover batch keys: train_dataset is empty."
             )
         prepared_dataset, prepared_collator = self._prepare_dataset_and_collator(
             self._train_dataset,
@@ -3911,16 +3869,14 @@ class DPTrainer:
         sample = prepared_collator([prepared_dataset[0]])
         if not isinstance(sample, Mapping):
             raise InputTypeError(
-                *(f"data_collator must return a mapping; got {type(sample).__name__}.",)
+                f"data_collator must return a mapping; got {type(sample).__name__}."
             )
         keys = tuple(k for k, v in sample.items() if isinstance(v, Tensor))
         if not keys:
             raise InputTypeError(
-                *(
-                    "data_collator produced no tensor outputs on a one-example dry "
-                    f"run; got keys={list(sample.keys())!r}.  The DP path requires "
-                    "at least one batched tensor.",
-                )
+                "data_collator produced no tensor outputs on a one-example dry "
+                f"run; got keys={list(sample.keys())!r}.  The DP path requires "
+                "at least one batched tensor."
             )
         return keys
 
@@ -4125,12 +4081,10 @@ class DPTrainer:
             # hang.  Reject it under DDP rather than deadlock.
             if not self.args.eval_do_concat_batches:
                 raise ConfigurationError(
-                    *(
-                        "eval_do_concat_batches=False is not supported under "
-                        "distributed evaluation (world_size>1): the per-batch list "
-                        "gather issues a data-dependent number of collectives and "
-                        "can deadlock.  Set eval_do_concat_batches=True for DDP eval.",
-                    )
+                    "eval_do_concat_batches=False is not supported under "
+                    "distributed evaluation (world_size>1): the per-batch list "
+                    "gather issues a data-dependent number of collectives and "
+                    "can deadlock.  Set eval_do_concat_batches=True for DDP eval."
                 )
             dataset = local_shard(
                 dataset,
@@ -4578,10 +4532,8 @@ class DPTrainer:
         if a.privacy_noise_mechanism != "gaussian":
             if mf_amplifier_factory is None:
                 raise OperationError(
-                    *(
-                        "_build_mechanism reached the DP-FTRL branch without an "
-                        "amplifier factory; _setup_training should populate it.",
-                    )
+                    "_build_mechanism reached the DP-FTRL branch without an "
+                    "amplifier factory; _setup_training should populate it."
                 )
             return mf_amplifier_factory
 
@@ -4616,17 +4568,13 @@ class DPTrainer:
             allocation = sk.get("allocation")
             if k_raw is None or allocation is None:
                 raise ConfigurationError(
-                    *(
-                        "sampling_mode='k_out_of_t' requires sampling_kwargs with "
-                        "'k' and 'allocation'.",
-                    )
+                    "sampling_mode='k_out_of_t' requires sampling_kwargs with "
+                    "'k' and 'allocation'."
                 )
             if allocation not in ("block", "total"):
                 raise ConfigurationError(
-                    *(
-                        "sampling_kwargs['allocation'] must be 'block' or 'total', "
-                        f"got {allocation!r}.",
-                    )
+                    "sampling_kwargs['allocation'] must be 'block' or 'total', "
+                    f"got {allocation!r}."
                 )
 
             def mechanism(
@@ -4688,12 +4636,10 @@ class DPTrainer:
                 resume_horizon_noise_multiplier,
             ):
                 raise CheckpointError(
-                    *(
-                        "Whole-horizon resume forbids privacy_noise_multiplier "
-                        f"drift: saved={resume_horizon_noise_multiplier!r}, "
-                        f"current={a.privacy_noise_multiplier!r}. Restart from "
-                        "scratch to use a different fixed multiplier.",
-                    )
+                    "Whole-horizon resume forbids privacy_noise_multiplier "
+                    f"drift: saved={resume_horizon_noise_multiplier!r}, "
+                    f"current={a.privacy_noise_multiplier!r}. Restart from "
+                    "scratch to use a different fixed multiplier."
                 )
             log.info(
                 "Restoring whole-horizon noise multiplier: %.4f",
@@ -4776,10 +4722,8 @@ class DPTrainer:
         unexpected = set(trainable_params) - model_keys
         if unexpected:
             raise ConfigurationError(
-                *(
-                    "DPTrainer._restore_params: trainable_params contains keys not "
-                    f"present in the model: {sorted(unexpected)}",
-                )
+                "DPTrainer._restore_params: trainable_params contains keys not "
+                f"present in the model: {sorted(unexpected)}"
             )
         state_dict = self._model.state_dict()
         for name, tensor in trainable_params.items():
@@ -4849,11 +4793,9 @@ class DPTrainer:
             n -= n % world_size
         if n == 0:
             raise ConfigurationError(
-                *(
-                    "Train dataset is empty; every rank requires at least "
-                    f"one example after sharding across world_size="
-                    f"{world_size} ranks.",
-                )
+                "Train dataset is empty; every rank requires at least "
+                f"one example after sharding across world_size="
+                f"{world_size} ranks."
             )
         return n
 
@@ -4956,12 +4898,10 @@ class DPTrainer:
             if not key.startswith("eval_"):
                 key = f"eval_{key}"
             raise ConfigurationError(
-                *(
-                    f"The `metric_for_best_model` training argument is set to {key!r}, "
-                    "which is not found in the evaluation metrics. The available "
-                    f"evaluation metrics are: {list(eval_metrics.keys())}. Consider "
-                    "changing `metric_for_best_model`.",
-                )
+                f"The `metric_for_best_model` training argument is set to {key!r}, "
+                "which is not found in the evaluation metrics. The available "
+                f"evaluation metrics are: {list(eval_metrics.keys())}. Consider "
+                "changing `metric_for_best_model`."
             )
         _, value = resolved
         if not is_metric_improved(
@@ -4999,25 +4939,21 @@ class DPTrainer:
         ckpt_dir = self.state.best_model_checkpoint
         if ckpt_dir is None:
             raise OperationError(
-                *(
-                    "load_best_model_at_end=True but no best checkpoint was recorded "
-                    "during training (eval never improved on metric_for_best_model="
-                    f"{self.args.metric_for_best_model!r}).  Either disable "
-                    "load_best_model_at_end, or verify the eval/metric configuration "
-                    "produces at least one improving step.",
-                )
+                "load_best_model_at_end=True but no best checkpoint was recorded "
+                "during training (eval never improved on metric_for_best_model="
+                f"{self.args.metric_for_best_model!r}).  Either disable "
+                "load_best_model_at_end, or verify the eval/metric configuration "
+                "produces at least one improving step."
             )
         log.info("Loading best model from %s", ckpt_dir)
         new_state, mutated = self._read_weights_file(ckpt_dir)
         if not new_state and not mutated:
             raise OperationError(
-                *(
-                    f"load_best_model_at_end=True: best checkpoint recorded at "
-                    f"{ckpt_dir!r} but no weights file (model.safetensors / "
-                    "pytorch_model.bin / sharded index) was found there.  The "
-                    "directory may have been pruned or moved between save and "
-                    "end-of-train load.",
-                )
+                f"load_best_model_at_end=True: best checkpoint recorded at "
+                f"{ckpt_dir!r} but no weights file (model.safetensors / "
+                "pytorch_model.bin / sharded index) was found there.  The "
+                "directory may have been pruned or moved between save and "
+                "end-of-train load."
             )
 
         # Mutate the underlying module so ``save_model()`` and any callback
@@ -5145,7 +5081,7 @@ class DPTrainer:
         target = output_dir or self._effective_output_dir()
         if target is None:
             raise ConfigurationError(
-                *("save_model requires output_dir (arg or args.output_dir)",)
+                "save_model requires output_dir (arg or args.output_dir)"
             )
         with self._use_published_model_params():
             if self._ctx is not None and not isinstance(
@@ -5198,7 +5134,7 @@ class DPTrainer:
         target = output_dir or self._effective_output_dir()
         if target is None:
             raise ConfigurationError(
-                *("save_accountant requires output_dir (arg or args.output_dir)",)
+                "save_accountant requires output_dir (arg or args.output_dir)"
             )
         accountant = self._ctx.accounting if self._ctx is not None else self._accountant
         if accountant is None:
@@ -5238,19 +5174,17 @@ class DPTrainer:
         ctx = self._ctx
         if ctx is None:
             raise OperationError(
-                *(
-                    "DPTrainer._save_checkpoint called with no active training "
-                    "context. Checkpoints carry DP accountant + sampler RNG + "
-                    "optimizer state, which only exist while ``train()`` is "
-                    "running.",
-                )
+                "DPTrainer._save_checkpoint called with no active training "
+                "context. Checkpoints carry DP accountant + sampler RNG + "
+                "optimizer state, which only exist while ``train()`` is "
+                "running."
             )
         step = int(self.state.global_step)
         a = self.args
         output_dir = self._effective_output_dir()
         if output_dir is None:
             raise ConfigurationError(
-                *("Saving checkpoints requires args.output_dir to be set",)
+                "Saving checkpoints requires args.output_dir to be set"
             )
         ckpt_dir = str(Path(output_dir) / f"{ckpt.PREFIX_CHECKPOINT_DIR}-{step}")
         # Atomic publish: write everything into a sibling ``*.tmp`` staging
@@ -5560,7 +5494,7 @@ class DPTrainer:
             output_dir = self._effective_output_dir()
             if output_dir is None:
                 raise ConfigurationError(
-                    *("resume_from_checkpoint=True requires args.output_dir to be set",)
+                    "resume_from_checkpoint=True requires args.output_dir to be set"
                 )
             found = ckpt.get_last_checkpoint(output_dir)
             if found is None:
@@ -5575,14 +5509,12 @@ class DPTrainer:
             value = os.fspath(value)
         if not isinstance(value, str):
             raise InputTypeError(
-                *(
-                    "resume_from_checkpoint must be str | bool | PathLike | None, "
-                    f"got {type(value).__name__}",
-                )
+                "resume_from_checkpoint must be str | bool | PathLike | None, "
+                f"got {type(value).__name__}"
             )
         if not Path(value).is_dir():
             raise CheckpointError(
-                *(f"resume_from_checkpoint directory does not exist: {value}",)
+                f"resume_from_checkpoint directory does not exist: {value}"
             )
         return value
 
@@ -5635,17 +5567,15 @@ class DPTrainer:
         missing = [name for name in required if not (Path(ckpt_dir) / name).exists()]
         if missing:
             raise CheckpointError(
-                *(
-                    f"Cannot resume training from {ckpt_dir}: missing DP runtime "
-                    f"file(s) {missing}.  This is a weights-only export (e.g. "
-                    "save_only_model=True, an HF checkpoint, or a pretrained "
-                    "model), not a resumable DP checkpoint.  To start a fresh DP "
-                    "run from these weights, load them at construction "
-                    "(model=AutoModel.from_pretrained(...)) — the run begins with "
-                    "a zero privacy accountant, sound only when the prior training "
-                    "had no DP cost.  resume_from_checkpoint requires a complete DP "
-                    "checkpoint produced by this trainer (save_only_model=False).",
-                )
+                f"Cannot resume training from {ckpt_dir}: missing DP runtime "
+                f"file(s) {missing}.  This is a weights-only export (e.g. "
+                "save_only_model=True, an HF checkpoint, or a pretrained "
+                "model), not a resumable DP checkpoint.  To start a fresh DP "
+                "run from these weights, load them at construction "
+                "(model=AutoModel.from_pretrained(...)) — the run begins with "
+                "a zero privacy accountant, sound only when the prior training "
+                "had no DP cost.  resume_from_checkpoint requires a complete DP "
+                "checkpoint produced by this trainer (save_only_model=False)."
             )
 
         runtime_payload = ckpt.load_dp_runtime_state(
@@ -5779,24 +5709,20 @@ class DPTrainer:
         )
         if runtime.calibration_source != current_source:
             raise CheckpointError(
-                *(
-                    "Whole-horizon resume forbids calibration mode drift: "
-                    f"saved={runtime.calibration_source!r}, "
-                    f"current={current_source!r}. Restart from scratch to change "
-                    "between fixed and calibrated noise.",
-                )
+                "Whole-horizon resume forbids calibration mode drift: "
+                f"saved={runtime.calibration_source!r}, "
+                f"current={current_source!r}. Restart from scratch to change "
+                "between fixed and calibrated noise."
             )
         if current_source == "calibrated" and _drift_differs(
             runtime.target_epsilon,
             self.args.privacy_target_epsilon,
         ):
             raise CheckpointError(
-                *(
-                    "Whole-horizon resume forbids privacy_target_epsilon drift: "
-                    f"saved={runtime.target_epsilon!r}, "
-                    f"current={self.args.privacy_target_epsilon!r}. Restart from "
-                    "scratch to calibrate against a different privacy budget.",
-                )
+                "Whole-horizon resume forbids privacy_target_epsilon drift: "
+                f"saved={runtime.target_epsilon!r}, "
+                f"current={self.args.privacy_target_epsilon!r}. Restart from "
+                "scratch to calibrate against a different privacy budget."
             )
 
     def _warn_on_arg_drift(self, runtime: ckpt.RuntimeCheckpoint) -> None:
@@ -5853,12 +5779,10 @@ class DPTrainer:
             if disposition == "dp_relevant":
                 if saved_mechanism != "gaussian" or horizon_resume:
                     raise CheckpointError(
-                        *(
-                            f"Whole-horizon resume forbids drift on {f.name!r}: "
-                            f"saved={saved!r}, current={current!r}. The "
-                            "accounting process is defined for the original "
-                            "declared horizon; restart from scratch with the new arg.",
-                        )
+                        f"Whole-horizon resume forbids drift on {f.name!r}: "
+                        f"saved={saved!r}, current={current!r}. The "
+                        "accounting process is defined for the original "
+                        "declared horizon; restart from scratch with the new arg."
                     )
                 log.warning(
                     "Resume arg drift on %s (dp_relevant, DP-SGD): "

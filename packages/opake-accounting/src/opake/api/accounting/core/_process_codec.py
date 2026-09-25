@@ -110,7 +110,7 @@ def _load_dp_process(sd: dict[str, Any]) -> Any:
         t = node.get("type")
         if t is None:
             raise CheckpointError(
-                *("missing required field 'type' for serialized DpProcess",)
+                "missing required field 'type' for serialized DpProcess"
             )
         child_fields = _WRAPPER_CHILD_FIELDS.get(t)
         if child_fields is None:
@@ -133,10 +133,8 @@ def _load_dp_process(sd: dict[str, Any]) -> Any:
                     continue  # missing: handled by the defaults pass below
                 if not isinstance(child, dict):
                     raise CheckpointError(
-                        *(
-                            f"field {k!r} of {t} must be a serialized DpProcess "
-                            f"dict, got {type(child).__name__}",
-                        )
+                        f"field {k!r} of {t} must be a serialized DpProcess "
+                        f"dict, got {type(child).__name__}"
                     )
                 stack.append((child, False))
             continue
@@ -146,7 +144,7 @@ def _load_dp_process(sd: dict[str, Any]) -> Any:
         extra = set(node) - {"type", *field_names}
         if extra:
             raise CheckpointError(
-                *(f"unexpected keys for {cls.__name__}: {sorted(extra)!r}",)
+                f"unexpected keys for {cls.__name__}: {sorted(extra)!r}"
             )
         kwargs: dict[str, Any] = {}
         for f in fields(dataclass_cls):
@@ -164,7 +162,7 @@ def _load_dp_process(sd: dict[str, Any]) -> Any:
                 kwargs[f.name] = f.default_factory()
             else:
                 raise CheckpointError(
-                    *(f"missing required field {f.name!r} for {cls.__name__}",)
+                    f"missing required field {f.name!r} for {cls.__name__}"
                 )
         built[id(node)] = dataclass_cls(**kwargs)
     return built[id(sd)]
@@ -179,9 +177,9 @@ def _load_leaf(sd: dict[str, Any]) -> Any:
     t = sd.pop("type")
     cls = _PROCESS_REGISTRY.get(t)
     if cls is None:
-        raise CheckpointError(*(f"Unknown DpProcess type: {t}",))
+        raise CheckpointError(f"Unknown DpProcess type: {t}")
     if not dataclasses.is_dataclass(cls):
-        raise CheckpointError(*(f"DpProcess type {t!r} is not a dataclass",))
+        raise CheckpointError(f"DpProcess type {t!r} is not a dataclass")
 
     dataclass_cls: Any = cls
     kwargs: dict[str, Any] = {}
@@ -192,10 +190,8 @@ def _load_leaf(sd: dict[str, Any]) -> Any:
                 inner_cls = _PROCESS_REGISTRY.get(raw["type"])
                 if inner_cls is None:
                     raise CheckpointError(
-                        *(
-                            f"Unknown nested DpProcess type {raw['type']!r} "
-                            f"in field {f.name!r} of {cls.__name__}",
-                        )
+                        f"Unknown nested DpProcess type {raw['type']!r} "
+                        f"in field {f.name!r} of {cls.__name__}"
                     )
                 template = inner_cls.__new__(inner_cls)
                 kwargs[f.name] = opake_from_state_dict(template, raw)
@@ -207,11 +203,11 @@ def _load_leaf(sd: dict[str, Any]) -> Any:
             kwargs[f.name] = f.default_factory()
         else:
             raise CheckpointError(
-                *(f"missing required field {f.name!r} for {cls.__name__}",)
+                f"missing required field {f.name!r} for {cls.__name__}"
             )
 
     if sd:
-        raise CheckpointError(*(f"unexpected keys for {cls.__name__}: {sorted(sd)!r}",))
+        raise CheckpointError(f"unexpected keys for {cls.__name__}: {sorted(sd)!r}")
 
     return dataclass_cls(**kwargs)
 

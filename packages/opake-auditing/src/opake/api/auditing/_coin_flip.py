@@ -69,29 +69,21 @@ class CanaryScores:
         scores = np.array(self.scores, dtype=float)
         indices = np.array(self.canary_indices)
         if scores.ndim != 1:
-            raise ConfigurationError(
-                *(f"scores must be 1-D, got shape {scores.shape}",)
-            )
+            raise ConfigurationError(f"scores must be 1-D, got shape {scores.shape}")
         if indices.ndim != 1 or not np.issubdtype(indices.dtype, np.integer):
             raise ConfigurationError(
-                *(
-                    "canary_indices must be a 1-D integer array, got "
-                    f"shape {indices.shape}, dtype {indices.dtype}",
-                )
+                "canary_indices must be a 1-D integer array, got "
+                f"shape {indices.shape}, dtype {indices.dtype}"
             )
         if scores.shape != indices.shape:
             raise ConfigurationError(
-                *(
-                    f"scores and canary_indices must have equal length, got "
-                    f"{scores.shape[0]} scores for {indices.shape[0]} indices",
-                )
+                f"scores and canary_indices must have equal length, got "
+                f"{scores.shape[0]} scores for {indices.shape[0]} indices"
             )
         if np.unique(indices).size != indices.size:
             raise ConfigurationError(
-                *(
-                    "canary_indices must be unique; duplicate identifiers make "
-                    "the score join ambiguous",
-                )
+                "canary_indices must be unique; duplicate identifiers make "
+                "the score join ambiguous"
             )
         scores.setflags(write=False)
         indices.setflags(write=False)
@@ -189,7 +181,7 @@ class CoinFlip:
         size = self.dataset_size if dataset_size is None else dataset_size
         if size is None:
             raise ConfigurationError(
-                *("dataset_size must be provided when not recorded on CoinFlip",)
+                "dataset_size must be provided when not recorded on CoinFlip"
             )
         excluded = set(self.out_indices.tolist())
         return [i for i in range(size) if i not in excluded]
@@ -232,16 +224,14 @@ class CoinFlip:
         """
         if not isinstance(scores, CanaryScores):
             raise InputTypeError(
-                *(
-                    f"split_scores() requires CanaryScores, got "
-                    f"{type(scores).__name__}. Bare score arrays cannot prove "
-                    "score-to-membership pairing (a shuffled scoring loader "
-                    "silently misaligns scores with coin flips). Score with "
-                    "loss_scores(..., coin_flip=cf, dataset=dataset) / "
-                    "gradient_scores(..., coin_flip=cf, dataset=dataset), or "
-                    "attest identifiers explicitly with canary_scores(values, "
-                    "canary_indices=...).",
-                )
+                f"split_scores() requires CanaryScores, got "
+                f"{type(scores).__name__}. Bare score arrays cannot prove "
+                "score-to-membership pairing (a shuffled scoring loader "
+                "silently misaligns scores with coin flips). Score with "
+                "loss_scores(..., coin_flip=cf, dataset=dataset) / "
+                "gradient_scores(..., coin_flip=cf, dataset=dataset), or "
+                "attest identifiers explicitly with canary_scores(values, "
+                "canary_indices=...)."
             )
         canonical = self._join_scores(scores)
         return canonical[self._in_mask], canonical[~self._in_mask]
@@ -253,15 +243,13 @@ class CoinFlip:
 
         if np.unique(want).size != want.size:
             raise ConfigurationError(
-                *(
-                    "canary_indices of this partition contain duplicates; "
-                    "the score join is ambiguous",
-                )
+                "canary_indices of this partition contain duplicates; "
+                "the score join is ambiguous"
             )
         if want.size == 0:
             if have.size:
                 raise ConfigurationError(
-                    *(f"got {have.size} scores for a partition with no canaries",)
+                    f"got {have.size} scores for a partition with no canaries"
                 )
             return np.empty(0, dtype=float)
 
@@ -273,12 +261,10 @@ class CoinFlip:
         if not np.all(matched):
             unexpected = have[~matched]
             raise ConfigurationError(
-                *(
-                    f"{unexpected.size} score identifier(s) are not canaries of "
-                    f"this partition (e.g. {unexpected[:5].tolist()}); the "
-                    "scores were computed for different examples or a different "
-                    "CoinFlip.",
-                )
+                f"{unexpected.size} score identifier(s) are not canaries of "
+                f"this partition (e.g. {unexpected[:5].tolist()}); the "
+                "scores were computed for different examples or a different "
+                "CoinFlip."
             )
 
         slots = sorter[pos]
@@ -287,13 +273,11 @@ class CoinFlip:
         missing = want[filled == 0]
         if duplicated.size or missing.size:
             raise ConfigurationError(
-                *(
-                    f"score identifiers do not cover the partition's canaries "
-                    f"one-to-one: {duplicated.size} duplicated "
-                    f"(e.g. {duplicated[:5].tolist()}), {missing.size} missing "
-                    f"(e.g. {missing[:5].tolist()}). Check for drop_last=True, "
-                    "distributed samplers, or scoring a wrong subset.",
-                )
+                f"score identifiers do not cover the partition's canaries "
+                f"one-to-one: {duplicated.size} duplicated "
+                f"(e.g. {duplicated[:5].tolist()}), {missing.size} missing "
+                f"(e.g. {missing[:5].tolist()}). Check for drop_last=True, "
+                "distributed samplers, or scoring a wrong subset."
             )
 
         canonical = np.empty(want.size, dtype=float)
@@ -306,26 +290,24 @@ def _candidate_pool(candidate_indices: Any, dataset_size: int) -> np.ndarray:
     pool = np.asarray(candidate_indices)
     if pool.ndim != 1:
         raise ConfigurationError(
-            *(f"candidate_indices must be 1-D, got shape {pool.shape}",)
+            f"candidate_indices must be 1-D, got shape {pool.shape}"
         )
     if pool.size == 0:
         return np.empty(0, dtype=np.intp)
     if not np.issubdtype(pool.dtype, np.integer):
         raise ConfigurationError(
-            *(f"candidate_indices must contain integers, got dtype {pool.dtype}",)
+            f"candidate_indices must contain integers, got dtype {pool.dtype}"
         )
 
     unique = np.unique(pool)
     if unique.size != pool.size:
-        raise ConfigurationError(*("candidate_indices must be unique",))
+        raise ConfigurationError("candidate_indices must be unique")
 
     invalid = unique[(unique < 0) | (unique >= dataset_size)]
     if invalid.size:
         raise ConfigurationError(
-            *(
-                "candidate_indices must be within range(len(dataset)); "
-                f"got {invalid[:5].tolist()}",
-            )
+            "candidate_indices must be within range(len(dataset)); "
+            f"got {invalid[:5].tolist()}"
         )
     return unique
 
@@ -366,7 +348,7 @@ def coin_flip(
     dataset_size = len(dataset)
     if num_canaries < 0:
         raise ConfigurationError(
-            *(f"num_canaries must be non-negative, got {num_canaries}",)
+            f"num_canaries must be non-negative, got {num_canaries}"
         )
     if candidate_indices is None:
         population: int | np.ndarray = dataset_size
@@ -378,7 +360,7 @@ def coin_flip(
         pool_name = "candidate pool size"
     if num_canaries > pool_size:
         raise ConfigurationError(
-            *(f"num_canaries ({num_canaries}) exceeds {pool_name} ({pool_size})",)
+            f"num_canaries ({num_canaries}) exceeds {pool_name} ({pool_size})"
         )
 
     rng = np.random.default_rng(fold_in(key, _CANARY_SELECTION_DOMAIN).seed)

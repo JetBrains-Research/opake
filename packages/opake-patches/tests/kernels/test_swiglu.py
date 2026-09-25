@@ -13,7 +13,7 @@ Target precision (bfloat16):
   where threshold filters out near-zero values that inflate relative errors
 - Performance: speedup > 1.0x OR memory reduction > 1.0x for vmap
 
-Config: Mellum-4b scale (intermediate_dim=8256)
+Correctness tests use representative shapes; performance tests use Mellum-4b scale.
 """
 
 import pytest
@@ -49,13 +49,13 @@ def opake_swiglu(gate, up):
 class TestSwiGLUForward:
     """Test forward pass precision."""
 
-    def test_forward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_forward_matches_pytorch(self, assert_precision, kernel_config):
         """Forward: opake vs pytorch."""
         torch.manual_seed(42)
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(batch, seq, dim, device="cuda", dtype=torch.bfloat16)
@@ -77,13 +77,13 @@ class TestSwiGLUForward:
 class TestSwiGLUBackward:
     """Test backward pass precision."""
 
-    def test_backward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_backward_matches_pytorch(self, assert_precision, kernel_config):
         """Backward: opake vs pytorch."""
         torch.manual_seed(42)
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         # PyTorch reference
@@ -122,14 +122,14 @@ class TestSwiGLUBackward:
 class TestSwiGLUVmapForward:
     """Test vmap forward: Triton vmap vs PyTorch vmap."""
 
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         """Batched forward: opake Triton vmap vs PyTorch reference."""
         torch.manual_seed(42)
-        vmap_batch = mellum_config["vmap_batch"]
+        vmap_batch = kernel_config["vmap_batch"]
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(
@@ -147,6 +147,7 @@ class TestSwiGLUVmapForward:
             out_op, out_pt, rtol=RTOL_FORWARD, atol=ATOL_FORWARD, label="vmap forward"
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_forward_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -183,14 +184,14 @@ class TestSwiGLUVmapGrad:
     _SwiGLUBackward.vmap() (backward) with Triton kernels.
     """
 
-    def test_vmap_grad_precision(self, assert_precision, mellum_config):
+    def test_vmap_grad_precision(self, assert_precision, kernel_config):
         """Per-example gradients: opake Triton vs PyTorch reference."""
         torch.manual_seed(42)
-        vmap_batch = mellum_config["vmap_batch"]
+        vmap_batch = kernel_config["vmap_batch"]
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(
@@ -225,6 +226,7 @@ class TestSwiGLUVmapGrad:
             label="vmap(grad) up",
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -262,6 +264,7 @@ class TestSwiGLUVmapGrad:
         assert_perf_benefit(pt_stats, op_stats, label="vmap(grad)")
 
 
+@pytest.mark.kernel_stress
 class TestSwiGLUPerformance:
     """Benchmark forward and backward performance."""
 

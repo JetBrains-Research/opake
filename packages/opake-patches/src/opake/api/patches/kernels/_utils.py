@@ -48,10 +48,8 @@ def calculate_settings(n: int) -> tuple[int, int]:
     BLOCK_SIZE: int = next_power_of_2(n)
     if BLOCK_SIZE > MAX_FUSED_SIZE:
         raise OperationError(
-            *(
-                f"Cannot launch Triton kernel since n = {n} exceeds "
-                f"the maximum CUDA blocksize = {MAX_FUSED_SIZE}.",
-            )
+            f"Cannot launch Triton kernel since n = {n} exceeds "
+            f"the maximum CUDA blocksize = {MAX_FUSED_SIZE}."
         )
     num_warps: int = 4
     if BLOCK_SIZE >= _BLOCK_SIZE_FOR_32_WARPS:
@@ -209,11 +207,9 @@ def ensure_cuda_tensors(*tensors: torch.Tensor, fn_name: str) -> None:
             continue
         if tensor.device.type != "cuda":
             raise OperationError(
-                *(
-                    f"{fn_name} requires CUDA tensors (Triton kernel backend); "
-                    f"got device={tensor.device.type}. "
-                    "Use non-kernel PyTorch path on MPS/CPU.",
-                )
+                f"{fn_name} requires CUDA tensors (Triton kernel backend); "
+                f"got device={tensor.device.type}. "
+                "Use non-kernel PyTorch path on MPS/CPU."
             )
 
 

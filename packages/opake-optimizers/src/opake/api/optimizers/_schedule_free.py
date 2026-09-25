@@ -55,7 +55,7 @@ from opake.exceptions import ConfigurationError
 try:
     from torchopt.base import GradientTransformation
 except ImportError as exc:
-    raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+    raise ImportError(
         "torchopt is required for opake.optimizers. "
         "Install it with: pip install 'torchopt>=0.7.3'"
     ) from exc
@@ -117,10 +117,10 @@ def schedule_free(
         published weights for saving / evaluation.
     """
     if not 0.0 <= beta <= 1.0:
-        raise ConfigurationError(*(f"beta must satisfy 0 <= beta <= 1, got {beta}",))
+        raise ConfigurationError(f"beta must satisfy 0 <= beta <= 1, got {beta}")
     if warmup_steps < 0:
         raise ConfigurationError(
-            *(f"warmup_steps must be non-negative, got {warmup_steps}",)
+            f"warmup_steps must be non-negative, got {warmup_steps}"
         )
 
     def init_fn(params: Any) -> ScheduleFreeState:
@@ -146,10 +146,8 @@ def schedule_free(
         # ``updates`` is the gradient ∇L(y_t); ``params`` is y_t.
         if params is None:
             raise ConfigurationError(
-                *(
-                    "schedule_free requires `params` (interpreted as y_t) "
-                    "to be passed at update time.",
-                )
+                "schedule_free requires `params` (interpreted as y_t) "
+                "to be passed at update time."
             )
         # Step the wrapped optimizer to get its delta (already
         # negative-LR-scaled by the wrapped chain).  Crucially, the

@@ -1,6 +1,6 @@
 """Fused residual + RMSNorm kernel tests (forward, backward, vmap, vmap(grad)).
 
-Shapes use ``mellum_config`` (Mellum-4b–style tensors from ``conftest``).
+Correctness tests use representative shapes; performance tests use Mellum-4b scale.
 """
 
 import pytest
@@ -52,10 +52,10 @@ def opake_llama(x, r, w, eps=1e-5):
 
 
 class TestFusedAddRMSNormForward:
-    def test_llama_forward_bf16(self, assert_precision, mellum_config):
+    def test_llama_forward_bf16(self, assert_precision, kernel_config):
         torch.manual_seed(0)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
         x = torch.randn(b, s, h, device="cuda", dtype=torch.bfloat16)
         r = torch.randn(b, s, h, device="cuda", dtype=torch.bfloat16)
         w = torch.randn(h, device="cuda", dtype=torch.bfloat16)
@@ -67,10 +67,10 @@ class TestFusedAddRMSNormForward:
 
 
 class TestFusedAddRMSNormBackward:
-    def test_llama_backward_bf16(self, assert_precision, mellum_config):
+    def test_llama_backward_bf16(self, assert_precision, kernel_config):
         torch.manual_seed(2)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
         eps = 1e-5
 
         x0 = torch.randn(
@@ -160,11 +160,11 @@ class TestFusedAddRMSNormBackward:
 
 
 class TestFusedAddRMSNormVmapForward:
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         torch.manual_seed(42)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
-        n = mellum_config["vmap_batch"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
+        n = kernel_config["vmap_batch"]
         eps = 1e-5
         x = torch.randn(n, b, s, h, device="cuda", dtype=torch.bfloat16)
         r = torch.randn(n, b, s, h, device="cuda", dtype=torch.bfloat16)
@@ -183,6 +183,7 @@ class TestFusedAddRMSNormVmapForward:
         assert_precision(s_op, s_pt, rtol=RTOL_F, atol=ATOL_F, label="vmap S")
         assert_precision(y_op, y_pt, rtol=RTOL_F, atol=ATOL_F, label="vmap y")
 
+    @pytest.mark.kernel_stress
     def test_vmap_forward_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -313,11 +314,11 @@ class TestFusedAddRMSNormVmapGradPerExampleDW:
 
 
 class TestFusedAddRMSNormVmapGrad:
-    def test_vmap_grad_precision(self, assert_precision, mellum_config):
+    def test_vmap_grad_precision(self, assert_precision, kernel_config):
         torch.manual_seed(42)
-        h = mellum_config["hidden_dim"]
-        b, s = mellum_config["batch_size"], mellum_config["seq_len"]
-        n = mellum_config["vmap_batch"]
+        h = kernel_config["hidden_dim"]
+        b, s = kernel_config["batch_size"], kernel_config["seq_len"]
+        n = kernel_config["vmap_batch"]
         eps = 1e-5
         x = torch.randn(n, b, s, h, device="cuda", dtype=torch.bfloat16)
         r = torch.randn(n, b, s, h, device="cuda", dtype=torch.bfloat16)
@@ -337,6 +338,7 @@ class TestFusedAddRMSNormVmapGrad:
         assert_precision(gx_op, gx_pt, rtol=RTOL_B, atol=ATOL_B, label="vgx")
         assert_precision(gr_op, gr_pt, rtol=RTOL_B, atol=ATOL_B, label="vgr")
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -368,6 +370,7 @@ class TestFusedAddRMSNormVmapGrad:
         assert_perf_benefit(pt_stats, op_stats, label="fused add rms vmap(grad)")
 
 
+@pytest.mark.kernel_stress
 class TestFusedAddRMSNormPerformance:
     def test_forward_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config

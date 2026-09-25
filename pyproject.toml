@@ -173,6 +173,7 @@ markers = [
   "mps: Test requires Apple Metal (MPS); auto-skipped on non-MPS hosts.",
   "slow: Test takes >5 s on CPU; opted out in PR gate via `and not slow`, run on push to main.",
   "distributed: Test launches multiple CPU/Gloo ranks; selected by the Linux distributed gate.",
+  "kernel_stress: Test measures production-scale CUDA kernel performance and needs a high-memory GPU.",
 ]
 
 filterwarnings = [
@@ -244,7 +245,6 @@ select = [
   "FA",
   "ICN",
   "PGH",
-  "TRY003",
   "PT",
   "LOG",
   "SLOT",
@@ -263,6 +263,7 @@ ignore = [
   "RUF002", # intentional unicode in docstrings
   "RUF003", # intentional unicode in comments
   "RUF022", # keep thematic __all__ section comments
+  "TRY003", # semantic categories, not diagnostic-specific exception classes
 ]
 
 [tool.ruff.lint.isort]
@@ -295,8 +296,8 @@ max-statements = 120
 "packages/opake-patches/src/opake/api/patches/kernels/rms_norm.py" = ["PLR0913", "PLR0917"]
 "packages/opake-patches/src/opake/api/patches/kernels/rope_embedding.py" = ["PLR0913", "PLR0917"]
 # INP001: pytest trees intentionally omit __init__.py.
-"**/tests/**" = ["INP001", "D", "PLR2004", "TRY003"]
-"tests/**" = ["INP001", "D", "PLR2004", "TRY003"]
+"**/tests/**" = ["INP001", "D", "PLR2004"]
+"tests/**" = ["INP001", "D", "PLR2004"]
 # Internal implementation methods are deliberately not selected by the
 # public-surface rules above; test helpers remain outside this docstring scope.
 # PEP 420: `opake/` has no __init__.py (multi-wheel namespace); façade

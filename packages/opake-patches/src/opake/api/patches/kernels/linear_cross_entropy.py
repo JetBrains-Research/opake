@@ -1128,11 +1128,11 @@ class Opake_LinearCrossEntropyLoss(torch.autograd.Function):
 
         if h_bdim != 0:
             raise ConfigurationError(
-                *(f"hidden_states should be batched at dim 0, got {h_bdim}",)
+                f"hidden_states should be batched at dim 0, got {h_bdim}"
             )
         if lab_bdim != 0:
             raise ConfigurationError(
-                *(f"labels should be batched at dim 0, got {lab_bdim}",)
+                f"labels should be batched at dim 0, got {lab_bdim}"
             )
         assert w_bdim is None, "weight should not be batched"
         assert ii_bdim is None, "ignore_index should not be batched"

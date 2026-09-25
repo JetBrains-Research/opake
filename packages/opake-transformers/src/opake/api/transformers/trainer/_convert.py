@@ -33,12 +33,10 @@ def _normalize_dp_overrides(
     target_eps = overrides.get("privacy_target_epsilon")
     if noise_mult is None and target_eps is None:
         raise ConfigurationError(
-            *(
-                "Converting to an opake config requires a DP knob: pass either "
-                "``privacy_noise_multiplier=<float>`` (fixed-noise mode) or "
-                "``privacy_target_epsilon=<float>`` (calibrated-noise mode) as a "
-                "keyword argument to the converter.",
-            )
+            "Converting to an opake config requires a DP knob: pass either "
+            "``privacy_noise_multiplier=<float>`` (fixed-noise mode) or "
+            "``privacy_target_epsilon=<float>`` (calibrated-noise mode) as a "
+            "keyword argument to the converter."
         )
     # Pass through every override verbatim — opake's TrainingArguments
     # __post_init__ does the cross-field validation.
@@ -98,10 +96,8 @@ def _get_dataclass_field_values(
     """Return a name→value dict for every field of a dataclass instance."""
     if not dataclasses.is_dataclass(obj):
         raise InputTypeError(
-            *(
-                f"Expected a dataclass instance, got {type(obj).__name__}. "
-                "The HF/TRL converters accept dataclass instances only.",
-            )
+            f"Expected a dataclass instance, got {type(obj).__name__}. "
+            "The HF/TRL converters accept dataclass instances only."
         )
     return {f.name: getattr(obj, f.name) for f in dataclasses.fields(obj)}
 
@@ -189,7 +185,7 @@ def _apply_manifest(
 
     if errors:
         raise ConfigurationError(
-            *(f"Converting {source_label} to opake failed:\n" + "\n".join(errors),)
+            f"Converting {source_label} to opake failed:\n" + "\n".join(errors)
         )
 
     # Run all transforms — they see the full source dict.

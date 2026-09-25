@@ -153,10 +153,8 @@ def null_ref_context(
     """
     if ref_model is model:
         raise ConfigurationError(
-            *(
-                "ref_model must be a separate model; omit ref_model to use the "
-                "policy's PEFT reference adapter or adapter-disabled base model.",
-            )
+            "ref_model must be a separate model; omit ref_model to use the "
+            "policy's PEFT reference adapter or adapter-disabled base model."
         )
 
     # ── Row 1: separate ref_model ───────────────────────────────────────────

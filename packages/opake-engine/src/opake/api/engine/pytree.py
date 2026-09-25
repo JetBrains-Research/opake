@@ -62,9 +62,7 @@ def param_path(path: tuple[Any, ...] | list[Any] | str) -> ParamPath:
             out.append(part)
         else:
             raise InputTypeError(
-                *(
-                    f"ParamPath components must be str or int; got {type(part).__name__}",
-                )
+                f"ParamPath components must be str or int; got {type(part).__name__}"
             )
     return tuple(out)
 
@@ -346,9 +344,7 @@ def _merge_two(tree1: Any, tree2: Any) -> Any:
         # Must have same length
         if len(tree1) != len(tree2):
             raise ConfigurationError(
-                *(
-                    f"Cannot merge sequences of different lengths: {len(tree1)} vs {len(tree2)}",
-                )
+                f"Cannot merge sequences of different lengths: {len(tree1)} vs {len(tree2)}"
             )
         merged = [_merge_two(a, b) for a, b in zip(tree1, tree2, strict=True)]
         return type(tree1)(merged)
@@ -418,13 +414,11 @@ def global_norm(
         torch.empty((), dtype=compute_dtype)
     ):
         raise InputTypeError(
-            *(
-                f"compute_dtype must be a real floating-point dtype, got "
-                f"{compute_dtype!r}.  Integer/bool/complex compute dtypes can "
-                f"silently corrupt the L2-norm reduction (the squared sum is "
-                f"non-negative real and the final sqrt assumes a real "
-                f"accumulator).",
-            )
+            f"compute_dtype must be a real floating-point dtype, got "
+            f"{compute_dtype!r}.  Integer/bool/complex compute dtypes can "
+            f"silently corrupt the L2-norm reduction (the squared sum is "
+            f"non-negative real and the final sqrt assumes a real "
+            f"accumulator)."
         )
 
     leaves = tree_leaves(tree)

@@ -176,7 +176,7 @@ class _SwiGLUBackward(torch.autograd.Function):
         if not (grad_h_bdim == gate_bdim == up_bdim):
             # Mismatched batch dims would silently pair elements across examples.
             raise ConfigurationError(
-                *(f"SwiGLU backward vmap requires matching batch dims, got {in_dims}",)
+                f"SwiGLU backward vmap requires matching batch dims, got {in_dims}"
             )
 
         # Merge vmap batch dim into flat dim (element-wise kernel)
@@ -270,7 +270,7 @@ class Opake_SwiGLU(torch.autograd.Function):
         gate_bdim, up_bdim = in_dims
 
         if gate_bdim != 0 or up_bdim != 0:
-            raise ConfigurationError(*("Both gate and up should be batched at dim 0",))
+            raise ConfigurationError("Both gate and up should be batched at dim 0")
 
         batched_shape = gate.shape
         gate_flat = gate.reshape(-1)

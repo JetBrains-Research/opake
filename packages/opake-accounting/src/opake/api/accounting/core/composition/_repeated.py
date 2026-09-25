@@ -20,10 +20,8 @@ class Repeated(DpProcess):
         # Same bound as ``DpProcess.__mul__``; native self_compose rejects it late.
         if self.count < 1:
             raise ConfigurationError(
-                *(
-                    f"Repeat count must be >= 1, got {self.count}. "
-                    "Use identity() for zero privacy loss.",
-                )
+                f"Repeat count must be >= 1, got {self.count}. "
+                "Use identity() for zero privacy loss."
             )
 
     def __hash__(self) -> int:

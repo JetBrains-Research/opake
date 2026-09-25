@@ -270,7 +270,7 @@ def _ce_forward_impl(
     ls = float(label_smoothing)
     if not (0.0 <= ls <= 1.0):
         raise ConfigurationError(
-            *(f"label_smoothing must be in [0.0, 1.0]; got {label_smoothing!r}.",)
+            f"label_smoothing must be in [0.0, 1.0]; got {label_smoothing!r}."
         )
     DO_LABEL_SMOOTHING = ls > 0.0
 
@@ -443,10 +443,8 @@ class _CrossEntropyBackward(torch.autograd.Function):
         if logits_bdim != 0 or lse_bdim != 0 or labels_bdim != 0 or grad_bdim != 0:
             # Non-leading batch dims would pair rows with the wrong labels/LSE.
             raise ConfigurationError(
-                *(
-                    "CrossEntropy backward vmap requires all tensors batched at "
-                    f"dim 0, got in_dims={in_dims}",
-                )
+                "CrossEntropy backward vmap requires all tensors batched at "
+                f"dim 0, got in_dims={in_dims}"
             )
 
         original_shape = logits.shape
@@ -566,11 +564,11 @@ class Opake_CrossEntropyLoss(torch.autograd.Function):
 
         if logits_bdim != 0:
             raise ConfigurationError(
-                *(f"logits should be batched at dim 0, got {logits_bdim}",)
+                f"logits should be batched at dim 0, got {logits_bdim}"
             )
         if labels_bdim != 0:
             raise ConfigurationError(
-                *(f"labels should be batched at dim 0, got {labels_bdim}",)
+                f"labels should be batched at dim 0, got {labels_bdim}"
             )
         assert sc_bdim is None, "logit_softcapping should not be batched"
         assert ls_bdim is None, "logit_scaling should not be batched"
@@ -682,11 +680,11 @@ class Opake_SelectiveLogSoftmax(torch.autograd.Function):
         logits_bdim, indices_bdim = in_dims
         if logits_bdim != 0:
             raise ConfigurationError(
-                *(f"logits should be batched at dim 0, got {logits_bdim}",)
+                f"logits should be batched at dim 0, got {logits_bdim}"
             )
         if indices_bdim != 0:
             raise ConfigurationError(
-                *(f"indices should be batched at dim 0, got {indices_bdim}",)
+                f"indices should be batched at dim 0, got {indices_bdim}"
             )
         batched_shape = logits.shape[:-1]
         vocab_size = logits.shape[-1]

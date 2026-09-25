@@ -186,10 +186,8 @@ class SFTTrainer(DPTrainer):
         # loss.
         if args.loss_type in ("dft", "chunked_nll") and compute_loss_func is not None:
             raise ConfigurationError(
-                *(
-                    f"loss_type={args.loss_type!r} computes its own loss; pass "
-                    "loss_type='nll' to use a custom compute_loss_func.",
-                )
+                f"loss_type={args.loss_type!r} computes its own loss; pass "
+                "loss_type='nll' to use a custom compute_loss_func."
             )
         # Loss path: ``chunked_nll`` computes its own loss via the fused linear-CE
         # kernel (logits-free on CUDA, eager fallback elsewhere); ``nll`` / ``dft``
@@ -338,10 +336,8 @@ class SFTTrainer(DPTrainer):
             name = getattr(model.config, "_name_or_path", None)
             if not name:
                 raise ConfigurationError(
-                    *(
-                        "processing_class is None and the model config has no "
-                        "_name_or_path to load a tokenizer from; pass processing_class.",
-                    )
+                    "processing_class is None and the model config has no "
+                    "_name_or_path to load a tokenizer from; pass processing_class."
                 )
             processing_class = AutoTokenizer.from_pretrained(
                 name,
@@ -368,7 +364,7 @@ class SFTTrainer(DPTrainer):
         is_prompt_completion = "prompt" in row and "completion" in row
         has_completion_mask = "completion_mask" in row
         if args.assistant_only_loss and not is_chat:
-            ConfigurationError.raise_(
+            raise ConfigurationError(
                 "assistant_only_loss=True requires a conversational dataset "
                 "with a messages, conversations, or chat column."
             )
@@ -378,7 +374,7 @@ class SFTTrainer(DPTrainer):
             and not is_prompt_completion
             and not has_completion_mask
         ):
-            ConfigurationError.raise_(
+            raise ConfigurationError(
                 "completion_only_loss=True requires a prompt-completion dataset "
                 "or examples with a completion_mask. Use assistant_only_loss=True "
                 "for conversational datasets."
@@ -679,11 +675,9 @@ class SFTTrainer(DPTrainer):
         missing = [k for k in batch_keys if inputs.get(k) is None]
         if missing:
             raise ConfigurationError(
-                *(
-                    "DFT eval expects the eval batch to carry the train-discovered "
-                    f"keys {list(batch_keys)!r}, but {missing!r} are absent (or "
-                    "None); align the eval collator/dataset with the training one.",
-                )
+                "DFT eval expects the eval batch to carry the train-discovered "
+                f"keys {list(batch_keys)!r}, but {missing!r} are absent (or "
+                "None); align the eval collator/dataset with the training one."
             )
         batch_args = tuple(inputs[k] for k in batch_keys)
 
