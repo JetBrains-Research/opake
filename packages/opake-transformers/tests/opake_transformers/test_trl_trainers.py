@@ -31,7 +31,7 @@ from transformers import (
 
 from opake.alignment.dpo.loss import sequence_logp
 from opake.api.transformers.trl._logits import _has_family_logit_transform
-from opake.exceptions import ConfigurationError
+from opake.exceptions import ConfigurationError, OperationError
 from opake.transformers.trl import (
     DPOConfig,
     DPOTrainer,
@@ -228,6 +228,17 @@ class _PromptCompletionChatTokenizer(_ChatTokenizer):
         result = {"input_ids": list(input_ids), "attention_mask": [1] * len(input_ids)}
         if return_assistant_tokens_mask:
             result["assistant_masks"] = list(self.assistant_mask)
+
+
+class _TruncatingChatTokenizer(_ChatTokenizer):
+    def apply_chat_template(self, conversation, **kwargs):
+        result = super().apply_chat_template(conversation, **kwargs)
+        if (
+            kwargs.get("return_assistant_tokens_mask")
+            and kwargs.get("truncation")
+            and conversation[-1]["content"] == "Truncated"
+        ):
+            result["assistant_masks"] = [0] * len(result["input_ids"])
         return result
 
 
@@ -535,6 +546,40 @@ def test_sft_prompt_completion_requires_matching_representations(
             args,
             chat_col=None,
             completion_only=True,
+        )
+
+
+def test_sft_assistant_only_loss_reports_dataset_row(tmp_path):
+    valid = [
+        {"role": "user", "content": "Question"},
+        {"role": "assistant", "content": "Answer"},
+    ]
+    truncated = [
+        {"role": "user", "content": "Question"},
+        {"role": "assistant", "content": "Truncated"},
+    ]
+    dataset = Dataset.from_list(
+        [
+            {"messages": valid},
+            {"messages": truncated},
+        ]
+    )
+
+    with pytest.raises(
+        OperationError,
+        match=r"train dataset row 1:.*truncation removed.*max_length=8",
+    ):
+        SFTTrainer(
+            model=_tiny_model(),
+            args=_args(
+                SFTConfig,
+                tmp_path,
+                max_length=8,
+                loss_type="nll",
+                assistant_only_loss=True,
+            ),
+            train_dataset=dataset,
+            processing_class=_TruncatingChatTokenizer(),
         )
 
 

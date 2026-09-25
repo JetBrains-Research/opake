@@ -62,6 +62,120 @@ class TestLossScores:
                 dataset=mismatched,
             )
 
+    def test_scoring_with_same_length_different_dataset_raises(self, linear_setup):
+        params, dataset, loss_fn = linear_setup
+        cf = auditing.coin_flip(dataset, num_canaries=50, key=key(42))
+        mismatched = TensorDataset(*(tensor.flip(0) for tensor in dataset.tensors))
+
+        with pytest.raises(ValueError, match="dataset content"):
+            loss_scores(
+                loss_fn,
+                params,
+                batch_argnums=(1, 2),
+                coin_flip=cf,
+                dataset=mismatched,
+            )
+
+    def test_scoring_with_equal_content_copy_succeeds(self, linear_setup):
+        params, dataset, loss_fn = linear_setup
+        copied = TensorDataset(*(tensor.clone() for tensor in dataset.tensors))
+        cf = auditing.coin_flip(dataset, num_canaries=50, key=key(42))
+
+        expected = loss_scores(
+            loss_fn,
+            params,
+            batch_argnums=(1, 2),
+            coin_flip=cf,
+            dataset=dataset,
+        )
+        actual = loss_scores(
+            loss_fn,
+            params,
+            batch_argnums=(1, 2),
+            coin_flip=cf,
+            dataset=copied,
+        )
+
+        np.testing.assert_array_equal(actual.canary_indices, expected.canary_indices)
+        np.testing.assert_allclose(actual.scores, expected.scores)
+
+    def test_scoring_attests_numpy_dataset_values(self):
+        dataset = np.arange(36, dtype=np.float32).reshape(12, 3)
+        params = torch.zeros(3)
+
+        def loss_fn(params, row):
+            return (row - params).square().sum()
+
+        cf = auditing.coin_flip(dataset, num_canaries=len(dataset), key=key(42))
+        expected = loss_scores(
+            loss_fn,
+            params,
+            batch_argnums=(1,),
+            coin_flip=cf,
+            dataset=dataset,
+        )
+        actual = loss_scores(
+            loss_fn,
+            params,
+            batch_argnums=(1,),
+            coin_flip=cf,
+            dataset=dataset.copy(),
+        )
+
+        np.testing.assert_array_equal(actual.canary_indices, expected.canary_indices)
+        np.testing.assert_allclose(actual.scores, expected.scores)
+
+        mismatched = dataset.copy()
+        mismatched[int(cf.canary_indices[0]), 0] += 1
+        with pytest.raises(ValueError, match="dataset content"):
+            loss_scores(
+                loss_fn,
+                params,
+                batch_argnums=(1,),
+                coin_flip=cf,
+                dataset=mismatched,
+            )
+
+    def test_scoring_checks_every_canary(self, linear_setup):
+        params, dataset, loss_fn = linear_setup
+        cf = auditing.coin_flip(dataset, num_canaries=50, key=key(42))
+        tensors = [tensor.clone() for tensor in dataset.tensors]
+        changed_index = int(cf.canary_indices[-1])
+        tensors[0][changed_index, 0] += 1
+        mismatched = TensorDataset(*tensors)
+
+        with pytest.raises(ValueError, match="dataset content"):
+            loss_scores(
+                loss_fn,
+                params,
+                batch_argnums=(1, 2),
+                coin_flip=cf,
+                dataset=mismatched,
+            )
+
+    def test_scoring_with_different_native_fingerprint_raises(self, linear_setup):
+        params, dataset, loss_fn = linear_setup
+
+        class FingerprintedTensorDataset(TensorDataset):
+            def __init__(self, *tensors, fingerprint):
+                super().__init__(*tensors)
+                self._fingerprint = fingerprint
+
+        original = FingerprintedTensorDataset(*dataset.tensors, fingerprint="original")
+        mismatched = FingerprintedTensorDataset(
+            *dataset.tensors, fingerprint="different"
+        )
+        cf = auditing.coin_flip(original, num_canaries=50, key=key(42))
+
+        with pytest.raises(ValueError, match="dataset content"):
+            loss_scores(
+                loss_fn,
+                params,
+                batch_argnums=(1, 2),
+                coin_flip=cf,
+                dataset=mismatched,
+            )
+
     @pytest.mark.parametrize(
         ("batch_argnums", "message"),
         [
@@ -220,17 +334,7 @@ class TestLossScoresDictBatch:
 
         tokens = torch.randn(n_samples, dim)
 
-        class DictDataset:
-            def __init__(self, data):
-                self.data = data
-
-            def __len__(self):
-                return len(self.data)
-
-            def __getitem__(self, idx):
-                return {"input_ids": self.data[idx]}
-
-        dataset = DictDataset(tokens)
+        dataset = [{"input_ids": row} for row in tokens]
         params = torch.randn(dim)
 
         def loss_fn(params, tokens):
@@ -365,17 +469,7 @@ class TestEndToEnd:
 
         tokens = torch.randn(n_samples, dim)
 
-        class DictDataset:
-            def __init__(self, data):
-                self.data = data
-
-            def __len__(self):
-                return len(self.data)
-
-            def __getitem__(self, idx):
-                return {"input_ids": self.data[idx]}
-
-        dataset = DictDataset(tokens)
+        dataset = [{"input_ids": row} for row in tokens]
         params = torch.randn(dim)
 
         def loss_fn(params, tokens):

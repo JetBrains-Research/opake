@@ -31,7 +31,7 @@ from opake.alignment.metric import entropy_from_logits, mean_token_accuracy
 from opake.alignment.sft.collator import language_modeling_collator
 from opake.alignment.sft.loss import dft_loss, fused_dft_loss, nll_loss
 from opake.api.transformers.trainer import DPTrainer
-from opake.exceptions import ConfigurationError
+from opake.exceptions import ConfigurationError, OperationError
 
 from ._logits import _has_family_logit_transform
 from ._sft_config import SFTConfig
@@ -479,20 +479,28 @@ class SFTTrainer(DPTrainer):
 
         tokenize_fn = self.tokenize_row
 
-        def tokenize_row(example: dict) -> dict:
-            return tokenize_fn(
-                example,
-                processing_class,
-                args,
-                chat_col=chat_col,
-                completion_only=completion_only,
-            )
+        def tokenize_row(example: dict, index: int | None = None) -> dict:
+            try:
+                return tokenize_fn(
+                    example,
+                    processing_class,
+                    args,
+                    chat_col=chat_col,
+                    completion_only=completion_only,
+                )
+            except OperationError as error:
+                if index is None:
+                    raise
+                raise OperationError(
+                    *(f"{dataset_name} dataset row {index}: {error}",)
+                ) from error
 
         return dataset.map(
             tokenize_row,
             remove_columns=column_names,
             num_proc=args.dataset_num_proc,
             desc=f"Tokenizing {dataset_name} dataset",
+            with_indices=args.assistant_only_loss,
         )
 
     @staticmethod

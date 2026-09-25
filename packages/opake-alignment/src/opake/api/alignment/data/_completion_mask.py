@@ -23,7 +23,7 @@ from opake.api.alignment.data._chat_template import (
     _has_generation_marker,
     _resolve_chat_template,
 )
-from opake.exceptions import ConfigurationError
+from opake.exceptions import ConfigurationError, OperationError
 
 __all__ = ["apply_chat_template_with_mask"]
 
@@ -72,12 +72,9 @@ def apply_chat_template_with_mask(
         length.
 
     Raises:
-        ValueError: If the chat template does not carry ``{% generation %}``
-            markers, or if the tokenized result carries no (or an empty)
-            ``assistant_masks``.  Without the markers Hugging Face only logs a
-            warning and returns an all-zero mask (no assistant tokens flagged),
-            so this function checks the template up front and raises instead.
-            Install the markers with :func:`get_training_chat_template`.
+        ConfigurationError: If the template lacks generation markers or the
+            tokenizer returns no assistant-mask field.
+        OperationError: If the conversation yields no assistant tokens.
     """
     # Hugging Face only populates assistant_masks when the active chat template
     # contains the '{% generation %}' keyword; otherwise it merely logs a
@@ -111,15 +108,37 @@ def apply_chat_template_with_mask(
     )
 
     assistant_masks = encoded.get("assistant_masks")
-    if not _has_assistant_tokens(assistant_masks):
+    if assistant_masks is None:
         raise ConfigurationError(
             *(
-                "apply_chat_template_with_mask: the tokenizer returned no "
-                "assistant-token mask.  This means the chat template does not "
-                "carry the '{% generation %}' / '{% endgeneration %}' markers that "
-                "return_assistant_tokens_mask=True relies on.  Install them first "
-                "with opake.alignment.data.get_training_chat_template:\n\n"
-                "    tokenizer.chat_template = get_training_chat_template(tokenizer)\n",
+                "apply_chat_template_with_mask: the tokenizer did not return "
+                "assistant_masks for a template with generation markers",
+            )
+        )
+    if not _has_assistant_tokens(assistant_masks):
+        if kwargs.get("truncation"):
+            untruncated_kwargs = {**kwargs, "truncation": False}
+            untruncated_kwargs.pop("max_length", None)
+            untruncated = tokenizer.apply_chat_template(
+                conversation,
+                tokenize=True,
+                return_assistant_tokens_mask=True,
+                return_dict=True,
+                **untruncated_kwargs,
+            )
+            if _has_assistant_tokens(untruncated.get("assistant_masks")):
+                limit = kwargs.get("max_length")
+                suffix = f" at max_length={limit}" if limit is not None else ""
+                raise OperationError(
+                    *(
+                        "apply_chat_template_with_mask: truncation removed all "
+                        f"assistant tokens{suffix}",
+                    )
+                )
+        raise OperationError(
+            *(
+                "apply_chat_template_with_mask: the conversation produced no "
+                "assistant tokens",
             )
         )
 
