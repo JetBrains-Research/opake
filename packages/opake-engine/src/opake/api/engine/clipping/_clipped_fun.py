@@ -276,6 +276,9 @@ def _microbatch_accumulate_reduced(
         grad_acc.add_reduced(reduced, markers)
         if second_moment:
             squared_acc.add_reduced(squared_reduced, squared_markers)
+        # The accumulator owns any still-needed storage. Do not keep the last
+        # reduction alive while the next chunk's gradients are materialized.
+        del reduced, markers, squared_reduced, squared_markers
 
         if return_aux:
             aux_list.append(diagnostics)
@@ -293,6 +296,8 @@ def _microbatch_accumulate_reduced(
             else:
                 assert isinstance(chunk_stats.num_clipped, float)
                 total_num_clipped += chunk_stats.num_clipped
+            del chunk_stats
+        del diagnostics, microbatch_args
 
     if return_aux:
 
