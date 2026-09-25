@@ -10,6 +10,8 @@ from torch.func import vmap as _vmap
 
 from opake.api.engine.clipping._helpers import batch_size_from_args, normalize_to_tuple
 from opake.api.engine.clipping._pytree import clip_pytree
+from opake.api.engine.clipping._streaming import _stream_clip_and_sum
+from opake.api.engine.functional._transform_stack import under_differentiating_transform
 from opake.api.engine.pytree import global_norm, tree_leaves, tree_map
 from opake.api.engine.types import (
     ClippedPytree,
@@ -276,6 +278,9 @@ def _microbatch_accumulate_reduced(
         grad_acc.add_reduced(reduced, markers)
         if second_moment:
             squared_acc.add_reduced(squared_reduced, squared_markers)
+        # The accumulator owns any still-needed storage. Do not keep the last
+        # reduction alive while the next chunk's gradients are materialized.
+        del reduced, markers, squared_reduced, squared_markers
 
         if return_aux:
             aux_list.append(diagnostics)
@@ -293,6 +298,8 @@ def _microbatch_accumulate_reduced(
             else:
                 assert isinstance(chunk_stats.num_clipped, float)
                 total_num_clipped += chunk_stats.num_clipped
+            del chunk_stats
+        del diagnostics, microbatch_args
 
     if return_aux:
 
@@ -400,6 +407,30 @@ def _resolve_runtime_clipping_norm(
     output_bound = current / normalize_by
     squared_bound = (current * current) / normalize_by if second_moment else None
     return current, output_bound, squared_bound
+
+
+def _attach_value_aux(diagnostics, value, aux, has_aux):
+    if isinstance(aux, dict):
+        aux_value = aux.get("values", value)
+        diagnostics["values"] = (
+            aux_value.detach() if isinstance(aux_value, torch.Tensor) else aux_value
+        )
+        if has_aux:
+            diagnostics["value_aux"] = aux.get("value_aux", aux)
+    else:
+        diagnostics["values"] = (
+            value.detach() if isinstance(value, torch.Tensor) else value
+        )
+        if has_aux:
+            diagnostics["value_aux"] = aux
+
+
+def _streaming_supported(clipping_norm, second_moment, scale_fn) -> bool:
+    return (
+        not isinstance(clipping_norm, PerGroup)
+        and not second_moment
+        and scale_fn is None
+    )
 
 
 def clipped_fun(
@@ -562,26 +593,8 @@ def clipped_fun(
                     for key, group_norm in norm.group_norms.items()
                 }
 
-            if return_aux and isinstance(aux, dict):
-                if "values" in aux:
-                    aux_value = aux["values"]
-                    diagnostics["values"] = (
-                        aux_value.detach()
-                        if isinstance(aux_value, torch.Tensor)
-                        else aux_value
-                    )
-                else:
-                    diagnostics["values"] = (
-                        value.detach() if isinstance(value, torch.Tensor) else value
-                    )
-                if has_aux:
-                    diagnostics["value_aux"] = aux.get("value_aux", aux)
-            elif return_aux:
-                diagnostics["values"] = (
-                    value.detach() if isinstance(value, torch.Tensor) else value
-                )
-                if has_aux:
-                    diagnostics["value_aux"] = aux
+            if return_aux:
+                _attach_value_aux(diagnostics, value, aux, has_aux)
 
             if second_moment:
                 return clipped_value, squared_value, diagnostics
@@ -595,12 +608,39 @@ def clipped_fun(
             *("_chunk_compiler requires a finite microbatch_size",)
         )
 
-    def _make_chunk_kernel(in_dims):
+    def _streaming_kernel(in_dims, kernel_clipping_norm, args, kwargs, reduce_leaf):
+        values, value_aux = _vmap(
+            fun_with_aux, in_dims=in_dims, out_dims=(0, 0), randomness="same"
+        )(*args, **kwargs)
+        reduced, markers, diagnostics = _stream_clip_and_sum(
+            values,
+            kernel_clipping_norm,
+            batch_size=batch_size_from_args(args, batch_argnums),
+            reduce_leaf=reduce_leaf,
+            compute_dtype=compute_dtype,
+            return_aux=return_aux,
+            return_stats=return_stats,
+        )
+        if return_aux:
+            _attach_value_aux(diagnostics, values, value_aux, has_aux)
+        return reduced, markers, (), (), diagnostics
+
+    def _make_chunk_kernel(in_dims, stream):
         # Fixed and AUTO-S scaling are construction-time constants.  A
         # stateful scaling parameter must cross this private boundary as a
         # tensor input rather than be captured as changing Python state.
         def _chunk_kernel(kernel_clipping_norm, *chunk_args, **call_kwargs):
             """Run vmap, clipping, diagnostics, and reduction for one chunk."""
+            if stream:
+                return _streaming_kernel(
+                    in_dims,
+                    kernel_clipping_norm,
+                    chunk_args,
+                    call_kwargs,
+                    lambda x: torch.sum(
+                        x, dim=0, dtype=_accumulation_dtype(x, dtype, compute_dtype)
+                    ),
+                )
             n_outputs = 1 + int(bool(second_moment)) + int(return_aux or return_stats)
             out_dims = 0 if n_outputs == 1 else (0,) * n_outputs
             vmapped = _vmap(
@@ -662,7 +702,7 @@ def clipped_fun(
     # Cache by positional batching structure so callers may use any valid
     # positional/default-argument arrangement without reusing incompatible
     # vmap ``in_dims``.
-    chunk_kernels: dict[tuple[int | None, ...], Callable] = {}
+    chunk_kernels: dict[tuple[tuple[int | None, ...], bool], Callable] = {}
 
     def clipped_fn(runtime_clipping_norm, *args, **kwargs):
         current_clipping_norm, output_max_norm, output_squared_max_norm = (
@@ -677,11 +717,26 @@ def clipped_fun(
             current_clipping_norm, args, batch_argnums
         )
         in_dims = tuple(0 if i in batch_argnums else None for i in range(len(args)))
-        per_example_fn = _per_example_fn
+        stream = (
+            runtime_clipping_norm is None
+            and not under_differentiating_transform(when_compiling=True)
+            and _streaming_supported(current_clipping_norm, second_moment, _scale_fn)
+        )
 
         # Choose execution path based on microbatch_size
         stats = None
-        if microbatch_size is None:
+        if microbatch_size is None and stream:
+            result, _, _, _, aux = _streaming_kernel(
+                in_dims,
+                kernel_clipping_norm,
+                args,
+                kwargs,
+                lambda x: _sum_clipped_tensor(
+                    x, dim=0, output_dtype=dtype, compute_dtype=compute_dtype
+                ),
+            )
+            squared_result = None
+        elif microbatch_size is None:
             # Fast path: vmap entire batch at once.  Output shape depends
             # on the (second_moment, return_aux) flags — see the per_example_fn
             # branches above.  When n_outputs == 1, vmap returns the single
@@ -691,7 +746,7 @@ def clipped_fun(
             n_outputs = 1 + int(bool(second_moment)) + int(return_aux or return_stats)
             out_dims = 0 if n_outputs == 1 else (0,) * n_outputs
             vmapped = _vmap(
-                per_example_fn,
+                _per_example_fn,
                 in_dims=(None, *in_dims),
                 out_dims=out_dims,
                 randomness="same",
@@ -728,9 +783,10 @@ def clipped_fun(
                 else None
             )
         else:
-            chunk_kernel = chunk_kernels.get(in_dims)
+            kernel_key = (in_dims, stream)
+            chunk_kernel = chunk_kernels.get(kernel_key)
             if chunk_kernel is None:
-                eager_chunk_kernel = _make_chunk_kernel(in_dims)
+                eager_chunk_kernel = _make_chunk_kernel(in_dims, stream)
                 if _chunk_compiler is None:
                     chunk_kernel = eager_chunk_kernel
                 else:
@@ -739,7 +795,7 @@ def clipped_fun(
                     # recompilation by ``microbatch_size`` rather than by every
                     # realized Poisson batch size.
                     chunk_kernel = _chunk_compiler(eager_chunk_kernel)
-                chunk_kernels[in_dims] = chunk_kernel
+                chunk_kernels[kernel_key] = chunk_kernel
             result, squared_result, aux, stats = _microbatch_accumulate_reduced(
                 chunk_fn=chunk_kernel,
                 kernel_clipping_norm=kernel_clipping_norm,
