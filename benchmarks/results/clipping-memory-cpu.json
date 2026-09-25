@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "description": "Bounded CPU clipping diagnostic: sampled live-storage bytes, not allocator peaks or RSS.",
+  "layout": {
+    "shared_result_fields": "Exact fields shared by every retained result record.",
+    "batch_result_fields": "Exact input hash, record count and numerical checks shared by every case of the given batch size.",
+    "checkpoint_result_fields": "Exact decoder body-entry counts shared by every case of the given checkpoint setting. Missing backward counts mean zero.",
+    "source_fingerprints": "Merge common_engine_source_sha256 with each run's additional_engine_source_sha256 to recover the complete measured clipping-source manifest. Filenames are relative to engine_source_directory.",
+    "derived_case_fields": "observed_live_storage_peak_bytes is max of phase peaks; third_chunk_forward_entry is forward_entries[2]; third_chunk_prior_live_bytes sums its prior_chunks_live_bytes_by_origin_phase.",
+    "sanitization": "Absolute engine paths, process IDs, unrelated git-status entries, labels, operation names, timings, and redundant start records are omitted. Raw file basenames and SHA-256 digests identify the source captures; no raw captures are needed to interpret this artifact. All runs used four distinct worker PIDs, verified before removing them."
+  },
+  "limitations": [
+    "One instrumented invocation per batch/checkpoint pair, with three chunks; not a sustained reliability test.",
+    "CPU synthetic workload only: no CUDA/H100 or target Qwen execution, batch-5 target-fit validation, or production Inductor CUDA-memory validation.",
+    "No throughput or publication-quality performance result. Instrumentation can affect lifetimes and misses some internal allocations.",
+    "Prior-live overlap includes the running sum and requested auxiliary values; it is not a leak measurement.",
+    "Finite sanitized pre-clipping norms do not establish finite unsanitized gradients; matching scalar checks are not a tensorwise equivalence proof."
+  ],
+  "shared_result_fields": {
+    "benchmark_sha256": "a66db9b54ff11fb1bc34f9debd0e0ba234972d142024988329dde20c30956fc4",
+    "target": "cpu",
+    "model": "synthetic-two-block-128-256-128-fp32",
+    "revision": null,
+    "trainable_parameters": 131072,
+    "chunks": 3,
+    "normalization": 256,
+    "clipping_norm": 1.0,
+    "seed": 20260925,
+    "versions": {"torch": "2.14.0", "transformers": "5.17.0", "peft": "0.20.0"},
+    "status": "ok",
+    "unobservable_storage_observations": 0,
+    "cuda_device": null,
+    "cuda_runtime": null,
+    "cuda_allocator_peak_bytes_by_phase": null,
+    "throughput": null
+  },
+  "unmeasured_metrics": {
+    "cuda_peak_allocated_bytes": null,
+    "cuda_peak_reserved_bytes": null,
+    "rss_bytes": null
+  },
+  "batch_result_fields": {
+    "4": {
+      "records": 12,
+      "input_sha256": "357e844d6233ed936c8f646ba2f0a87af9438006b05365e29df8444ab5d7326c",
+      "checks": {
+        "gradient_tensors": 4,
+        "gradient_elements": 131072,
+        "aux_elements": {"clipped_grad_norms": 12, "grad_norms": 12, "loss_aux": 12, "loss_values": 12},
+        "gradient_sum_float64": 0.0010266916231529422,
+        "mean_loss": 0.39454255998134613,
+        "pre_norm_warning": "Sanitized finite pre norms can conceal overflow; not an overflow test."
+      }
+    },
+    "5": {
+      "records": 15,
+      "input_sha256": "0c3314bede5f10485027b89103e60a2bce5050c1926db8370d12b36f65bf70ae",
+      "checks": {
+        "gradient_tensors": 4,
+        "gradient_elements": 131072,
+        "aux_elements": {"clipped_grad_norms": 15, "grad_norms": 15, "loss_aux": 15, "loss_values": 15},
+        "gradient_sum_float64": 0.002777587886725996,
+        "mean_loss": 0.39506381352742515,
+        "pre_norm_warning": "Sanitized finite pre norms can conceal overflow; not an overflow test."
+      }
+    }
+  },
+  "checkpoint_result_fields": {
+    "off": {"decoder_forward_body_entries": {"0": {"forward": 3}, "1": {"forward": 3}}},
+    "on": {"decoder_forward_body_entries": {"0": {"backward": 3, "forward": 3}, "1": {"backward": 3, "forward": 3}}}
+  },
+  "engine_source_directory": "packages/opake-engine/src/opake/api/engine/clipping",
+  "common_engine_source_sha256": {
+    "__init__.py": "5fe6fb1177bbd293ec0f34cb5b084e17dca76606123fd9507986cb1c4fef7e70",
+    "_auto.py": "47e4dc4cb3cffe2586e18363ffdda1bdac15609a091211873dd1b599736e0ab1",
+    "_clipped_grad.py": "7353592dd029b69c1be3ac4bf83e77b828bf979df0c3f883625d8682fcde8fcd",
+    "_distributed.py": "e5b89ec02095dee0c686265a63c9cad503861ee68997cba66dc2c9510b70e43e",
+    "_helpers.py": "f5f6fa6462656ee7d438ae62b22b0beb13b89b5617c01f256c96f010a34ae4cc",
+    "_per_group.py": "8703fa5ffbdd20613f12880db7605df59ee21f3026a35082c575f3f8cfb77b7f",
+    "_pytree.py": "6ea69fd078ece580373dc5028f327b357c563ba17352c749b41c11c4903280be",
+    "_types.py": "b3e4bd6b5944cebb5ab329877759ee0bc257b1c10b4adcfe50a494fe893bf431",
+    "fun.py": "5beb0da03cbba33c5841941396ccf7043f00a4b8a16c232dadc8ad2534b54da8",
+    "types.py": "aee1064328d16d8cdb4e2acdfd9692307fa6cedf5b34925dccbf4c8c76d678f5"
+  },
+  "runs": [
+    {
+      "id": "baseline",
+      "role": "canonical",
+      "raw_file": "clipping-memory-baseline-final.jsonl",
+      "raw_sha256": "a34194d9e410ff6ae51421784d77dd734d0c1c0b7551ae4aecff99a84ed31d5f",
+      "engine_git_head": "5c31065facb5c0115fd708ae731101629c274ce4",
+      "source_state": "Clean worktree at the recorded commit.",
+      "additional_engine_source_sha256": {
+        "_clipped_fun.py": "f32ea42c8f9bb706ba1a591e78bf46f79425e029c90c7d6fadeaf2d30c55d6d9"
+      },
+      "variant": "native",
+      "selector_present": false,
+      "clipping_function_calls": {"clip_pytree": 3, "global_norm": 3},
+      "cases": [
+        {"batch_size": 4, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3834004, "between_chunks": 622596, "clipping_and_reduction": 9273628, "forward": 1900676}, "observed_live_storage_peak_bytes": 9273628, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1671284, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 1048656, "forward": 32}}, "third_chunk_prior_live_bytes": 1048688},
+        {"batch_size": 4, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3834004, "between_chunks": 622596, "clipping_and_reduction": 9273628, "forward": 1835124}, "observed_live_storage_peak_bytes": 9273628, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1671284, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 1048656, "forward": 32}}, "third_chunk_prior_live_bytes": 1048688},
+        {"batch_size": 5, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 4399284, "between_chunks": 647172, "clipping_and_reduction": 11198812, "forward": 1982624}, "observed_live_storage_peak_bytes": 11198812, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1695884, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 1048672, "forward": 40}}, "third_chunk_prior_live_bytes": 1048712},
+        {"batch_size": 5, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 4399284, "between_chunks": 647172, "clipping_and_reduction": 11198812, "forward": 1900684}, "observed_live_storage_peak_bytes": 11198812, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1695884, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 1048672, "forward": 40}}, "third_chunk_prior_live_bytes": 1048712}
+      ]
+    },
+    {
+      "id": "lifetime-only",
+      "role": "canonical",
+      "raw_file": "clipping-memory-lifetime-ae2c6e.jsonl",
+      "raw_sha256": "920031fcf0263a6d0e7b36df4d5f6b1d9c7c0380c4b839394ff3bf31c746a67c",
+      "engine_git_head": "ae2c6e003599e2cc5ed1377dee021ce057f1b4d2",
+      "source_state": "Clean worktree at the recorded commit.",
+      "additional_engine_source_sha256": {
+        "_clipped_fun.py": "05cb53d7493d6c31f8e0db64792044de5d7bea235ca275700306d49d5b7767ac"
+      },
+      "variant": "native",
+      "selector_present": false,
+      "clipping_function_calls": {"clip_pytree": 3, "global_norm": 3},
+      "cases": [
+        {"batch_size": 4, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3309700, "between_chunks": 622596, "clipping_and_reduction": 8749324, "forward": 1376372}, "observed_live_storage_peak_bytes": 8749324, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1146980, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524352, "forward": 32}}, "third_chunk_prior_live_bytes": 524384},
+        {"batch_size": 4, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3309700, "between_chunks": 622596, "clipping_and_reduction": 8749324, "forward": 1310820}, "observed_live_storage_peak_bytes": 8749324, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1146980, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524352, "forward": 32}}, "third_chunk_prior_live_bytes": 524384},
+        {"batch_size": 5, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3874980, "between_chunks": 647172, "clipping_and_reduction": 10674508, "forward": 1458320}, "observed_live_storage_peak_bytes": 10674508, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1171580, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524368, "forward": 40}}, "third_chunk_prior_live_bytes": 524408},
+        {"batch_size": 5, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3874980, "between_chunks": 647172, "clipping_and_reduction": 10674508, "forward": 1376380}, "observed_live_storage_peak_bytes": 10674508, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1171580, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524368, "forward": 40}}, "third_chunk_prior_live_bytes": 524408}
+      ]
+    },
+    {
+      "id": "stream",
+      "role": "canonical",
+      "raw_file": "clipping-memory-stream-98e0eb64.jsonl",
+      "raw_sha256": "43546b08d9294597b14124f8c5d2d60354729fe219c977c08b7dc309b1958043",
+      "engine_git_head": "98e0eb64a08a1615e0c0b33d7b2cc2db635693f6",
+      "source_state": "Every measured clipping-source hash verified against this commit; only unrelated untracked files were present.",
+      "additional_engine_source_sha256": {
+        "_clipped_fun.py": "f60068daf50a0b3ba9d0e99e7d76925bba408265c3c01334be5cb6afdbbe4db2",
+        "_streaming.py": "ec8489f6cfba8517b81819adbcad8becb4e5689241cfcb7a4cf20f562b6e9ab0"
+      },
+      "variant": "native",
+      "selector_present": true,
+      "clipping_function_calls": {"_stream_clip_and_sum": 3},
+      "cases": [
+        {"batch_size": 4, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3309700, "between_chunks": 622596, "clipping_and_reduction": 5996824, "forward": 1376372}, "observed_live_storage_peak_bytes": 5996824, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1146980, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524352, "forward": 32}}, "third_chunk_prior_live_bytes": 524384},
+        {"batch_size": 4, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3309700, "between_chunks": 622596, "clipping_and_reduction": 5996824, "forward": 1310820}, "observed_live_storage_peak_bytes": 5996824, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1146980, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524352, "forward": 32}}, "third_chunk_prior_live_bytes": 524384},
+        {"batch_size": 5, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3874980, "between_chunks": 647172, "clipping_and_reduction": 7135576, "forward": 1458320}, "observed_live_storage_peak_bytes": 7135576, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1171580, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524368, "forward": 40}}, "third_chunk_prior_live_bytes": 524408},
+        {"batch_size": 5, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3874980, "between_chunks": 647172, "clipping_and_reduction": 7135576, "forward": 1376380}, "observed_live_storage_peak_bytes": 7135576, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1171580, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524368, "forward": 40}}, "third_chunk_prior_live_bytes": 524408}
+      ]
+    },
+    {
+      "id": "stream-disabled",
+      "role": "comparison",
+      "raw_file": "clipping-memory-original-working.jsonl",
+      "raw_sha256": "b7071cc829ce80b13d2044056b4a42b0ea41f24f2d26f69024e6e6391f969531",
+      "engine_git_head": "ae2c6e003599e2cc5ed1377dee021ce057f1b4d2",
+      "source_state": "Uncommitted streaming sources: modified _clipped_fun.py and untracked _streaming.py. Unrelated worktree changes omitted. This is not a clean lifetime-only checkout.",
+      "additional_engine_source_sha256": {
+        "_clipped_fun.py": "f60068daf50a0b3ba9d0e99e7d76925bba408265c3c01334be5cb6afdbbe4db2",
+        "_streaming.py": "ec8489f6cfba8517b81819adbcad8becb4e5689241cfcb7a4cf20f562b6e9ab0"
+      },
+      "variant": "original",
+      "selector_present": true,
+      "clipping_function_calls": {"clip_pytree": 3, "global_norm": 3},
+      "cases": [
+        {"batch_size": 4, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3309700, "between_chunks": 622596, "clipping_and_reduction": 8749324, "forward": 1376372}, "observed_live_storage_peak_bytes": 8749324, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1146980, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524352, "forward": 32}}, "third_chunk_prior_live_bytes": 524384},
+        {"batch_size": 4, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3309700, "between_chunks": 622596, "clipping_and_reduction": 8749324, "forward": 1310820}, "observed_live_storage_peak_bytes": 8749324, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1146980, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524352, "forward": 32}}, "third_chunk_prior_live_bytes": 524384},
+        {"batch_size": 5, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3874980, "between_chunks": 647172, "clipping_and_reduction": 10674508, "forward": 1458320}, "observed_live_storage_peak_bytes": 10674508, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1171580, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524368, "forward": 40}}, "third_chunk_prior_live_bytes": 524408},
+        {"batch_size": 5, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3874980, "between_chunks": 647172, "clipping_and_reduction": 10674508, "forward": 1376380}, "observed_live_storage_peak_bytes": 10674508, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1171580, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524368, "forward": 40}}, "third_chunk_prior_live_bytes": 524408}
+      ]
+    },
+    {
+      "id": "stream-working",
+      "role": "superseded",
+      "superseded_by": "stream",
+      "raw_file": "clipping-memory-stream-working.jsonl",
+      "raw_sha256": "8fdfe9f4a2d81d2dc94c58074a4d041357c3afeb2238e17e01ea22aa43b741a7",
+      "engine_git_head": "ae2c6e003599e2cc5ed1377dee021ce057f1b4d2",
+      "source_state": "Original uncommitted streaming measurement: modified _clipped_fun.py and untracked _streaming.py, fingerprinted at execution. Unrelated worktree changes omitted. Use the committed stream run as canonical evidence.",
+      "additional_engine_source_sha256": {
+        "_clipped_fun.py": "f60068daf50a0b3ba9d0e99e7d76925bba408265c3c01334be5cb6afdbbe4db2",
+        "_streaming.py": "ec8489f6cfba8517b81819adbcad8becb4e5689241cfcb7a4cf20f562b6e9ab0"
+      },
+      "variant": "native",
+      "selector_present": true,
+      "clipping_function_calls": {"_stream_clip_and_sum": 3},
+      "cases": [
+        {"batch_size": 4, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3309700, "between_chunks": 622596, "clipping_and_reduction": 5996824, "forward": 1376372}, "observed_live_storage_peak_bytes": 5996824, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1146980, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524352, "forward": 32}}, "third_chunk_prior_live_bytes": 524384},
+        {"batch_size": 4, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3309700, "between_chunks": 622596, "clipping_and_reduction": 5996824, "forward": 1310820}, "observed_live_storage_peak_bytes": 5996824, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1146980, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524352, "forward": 32}}, "third_chunk_prior_live_bytes": 524384},
+        {"batch_size": 5, "checkpoint": "off", "observed_live_storage_peak_bytes_by_phase": {"backward": 3874980, "between_chunks": 647172, "clipping_and_reduction": 7135576, "forward": 1458320}, "observed_live_storage_peak_bytes": 7135576, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1171580, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524368, "forward": 40}}, "third_chunk_prior_live_bytes": 524408},
+        {"batch_size": 5, "checkpoint": "on", "observed_live_storage_peak_bytes_by_phase": {"backward": 3874980, "between_chunks": 647172, "clipping_and_reduction": 7135576, "forward": 1376380}, "observed_live_storage_peak_bytes": 7135576, "third_chunk_forward_entry": {"chunk": 2, "observed_live_storage_bytes": 1171580, "prior_chunks_live_bytes_by_origin_phase": {"clipping_and_reduction": 524368, "forward": 40}}, "third_chunk_prior_live_bytes": 524408}
+      ]
+    }
+  ]
+}
