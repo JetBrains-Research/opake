@@ -99,12 +99,20 @@ when omitted; if it has no pad token, the EOS token is reused. Set
 
 ### Data formats and the loss
 
-`SFTTrainer` tokenizes the dataset for you, dispatching on format: a plain-text
-column (`dataset_text_field`, default `"text"`), a `prompt`/`completion` pair,
-or a chat-message column (`messages` / `conversations` / `chat`). Pass a
+`SFTTrainer` accepts both standard strings and conversational message lists:
+
+| | Standard | Conversational |
+|---|---|---|
+| Language modeling | `text: str` | `messages: list[message]` |
+| Prompt-completion | `prompt: str`, `completion: str` | `prompt: list[message]`, `completion: list[message]` |
+
+`dataset_text_field` selects the standard language-modeling column (default
+`"text"`); `conversations` and `chat` are aliases for `messages`. Conversational
+prompt-completion rows are rendered as one full conversation. Pass a
 `formatting_func(example) -> str` to render arbitrary rows into the text field
 first. Already-tokenized datasets (with an `input_ids` column) pass through
-untouched.
+untouched. For pre-tokenized masking, provide the final effective
+`completion_mask`; retained raw columns are not reinterpreted.
 
 `loss_type` selects `"nll"` (standard cross-entropy), `"dft"` (Dynamic
 Fine-Tuning), or `"chunked_nll"` (fused logits-free cross-entropy). All use a
@@ -117,15 +125,16 @@ reject a custom function.
 
 Set `completion_only_loss=True` to score only the completion tokens of
 prompt-completion data, or `assistant_only_loss=True` to score only assistant
-turns of chat data (the trainer installs the `{% generation %}`-marked training
-chat template and recovers the assistant-token mask). Left as the default
-`None`, `completion_only_loss` auto-detects: `True` for prompt-completion data
-and `False` for language-modeling data, including chat. Ordinary chat therefore
-scores the full rendered conversation; enable `assistant_only_loss` to mask its
-non-assistant tokens. Use `chat_template_path` to clone a chat template (and its
-special tokens) from another tokenizer/Jinja file onto the processing class
-before tokenizing — this resizes the model's embeddings, and under PEFT the new
-token rows are marked trainable.
+turns of conversational data (the trainer installs the `{% generation %}`-marked
+training template and recovers the assistant-token mask). When both apply, only
+assistant tokens in the completion are scored. Left as the default `None`,
+`completion_only_loss` auto-detects: `True` for raw prompt-completion data and
+`False` for language-modeling data. Ordinary chat therefore scores the full
+rendered conversation; enable `assistant_only_loss` to mask its non-assistant
+tokens. Use `chat_template_path` to clone a chat template (and its special
+tokens) from another tokenizer/Jinja file onto the processing class before
+tokenizing — this resizes the model's embeddings, and under PEFT the new token
+rows are marked trainable.
 
 ### Telemetry and memory
 

@@ -103,6 +103,18 @@ def _chat_dataset() -> Dataset:
     return Dataset.from_list([{"messages": messages} for _ in range(4)])
 
 
+def _conversational_prompt_completion_dataset() -> Dataset:
+    prompt = [
+        {"role": "user", "content": "First question"},
+        {"role": "assistant", "content": "First answer"},
+        {"role": "user", "content": "Follow-up"},
+    ]
+    completion = [{"role": "assistant", "content": "Final answer"}]
+    return Dataset.from_list(
+        [{"prompt": prompt, "completion": completion} for _ in range(4)]
+    )
+
+
 class _ChatTokenizer:
     pad_token_id = 0
     pad_token = "<pad>"
@@ -139,6 +151,31 @@ class _ChatTokenizer:
         result = {"input_ids": input_ids, "attention_mask": [1] * len(input_ids)}
         if return_assistant_tokens_mask:
             result["assistant_masks"] = [0, 0, 1, 1]
+        return result
+
+
+class _PromptCompletionChatTokenizer(_ChatTokenizer):
+    prompt_ids: ClassVar[list[int]] = [10, 11, 12]
+    full_ids: ClassVar[list[int]] = [10, 11, 12, 13, 14, 15]
+    assistant_mask: ClassVar[list[int]] = [0, 1, 0, 0, 1, 1]
+
+    def apply_chat_template(
+        self,
+        conversation,
+        *,
+        tokenize,
+        return_dict,
+        return_assistant_tokens_mask=False,
+        add_generation_prompt=False,
+        **kwargs,
+    ):
+        assert tokenize is True
+        assert return_dict is True
+        assert len(conversation) == (3 if add_generation_prompt else 4)
+        input_ids = self.prompt_ids if add_generation_prompt else self.full_ids
+        result = {"input_ids": list(input_ids), "attention_mask": [1] * len(input_ids)}
+        if return_assistant_tokens_mask:
+            result["assistant_masks"] = list(self.assistant_mask)
         return result
 
 
@@ -312,7 +349,146 @@ def test_sft_assistant_only_loss_masks_chat_prompt(tmp_path):
     assert batch["labels"].tolist() == [[-100, -100, 21, 22]]
 
 
-def test_sft_assistant_only_loss_requires_chat_dataset(tmp_path):
+@pytest.mark.parametrize(
+    ("completion_only_loss", "assistant_only_loss", "expected_labels"),
+    [
+        (False, False, [10, 11, 12, 13, 14, 15]),
+        (None, False, [-100, -100, -100, 13, 14, 15]),
+        (False, True, [-100, 11, -100, -100, 14, 15]),
+        (None, True, [-100, -100, -100, -100, 14, 15]),
+    ],
+)
+def test_sft_conversational_prompt_completion_masks(
+    tmp_path, completion_only_loss, assistant_only_loss, expected_labels
+):
+    trainer = SFTTrainer(
+        model=_tiny_model(),
+        args=_args(
+            SFTConfig,
+            tmp_path,
+            max_length=8,
+            loss_type="nll",
+            completion_only_loss=completion_only_loss,
+            assistant_only_loss=assistant_only_loss,
+        ),
+        train_dataset=_conversational_prompt_completion_dataset(),
+        processing_class=_PromptCompletionChatTokenizer(),
+    )
+
+    batch = trainer.data_collator([trainer.train_dataset[0]])
+    assert batch["input_ids"].tolist() == [[10, 11, 12, 13, 14, 15]]
+    assert batch["labels"].tolist() == [expected_labels]
+
+
+def test_sft_standard_prompt_completion_is_unchanged(tmp_path):
+    class _Tokenizer:
+        def __call__(self, text, *, add_special_tokens):
+            if text == "Question":
+                assert add_special_tokens is True
+                return {"input_ids": [1, 2]}
+            assert text == "Answer"
+            assert add_special_tokens is False
+            return {"input_ids": [3, 4]}
+
+    args = _args(SFTConfig, tmp_path, max_length=8, loss_type="nll")
+    encoded = SFTTrainer.tokenize_row(
+        {"prompt": "Question", "completion": "Answer"},
+        _Tokenizer(),
+        args,
+        chat_col=None,
+        completion_only=True,
+    )
+
+    assert encoded == {
+        "input_ids": [1, 2, 3, 4],
+        "completion_mask": [0, 0, 1, 1],
+    }
+
+
+def test_sft_conversational_prompt_completion_truncates_mask_with_ids(tmp_path):
+    trainer = SFTTrainer(
+        model=_tiny_model(),
+        args=_args(
+            SFTConfig,
+            tmp_path,
+            max_length=4,
+            loss_type="nll",
+            assistant_only_loss=True,
+        ),
+        train_dataset=_conversational_prompt_completion_dataset(),
+        processing_class=_PromptCompletionChatTokenizer(),
+    )
+
+    assert len(trainer.train_dataset) == 4
+    assert trainer.train_dataset[0] == {
+        "input_ids": [10, 11, 12, 13],
+        "completion_mask": [0, 0, 0, 0],
+    }
+    batch = trainer.data_collator([trainer.train_dataset[0]])
+    assert batch["labels"].tolist() == [[-100, -100, -100, -100]]
+
+
+def test_sft_conversational_prompt_completion_warns_on_prefix_mismatch(tmp_path):
+    class _NonPrefixTokenizer(_PromptCompletionChatTokenizer):
+        prompt_ids: ClassVar[list[int]] = [10, 99, 12]
+
+    args = _args(SFTConfig, tmp_path, max_length=8, loss_type="nll")
+    example = _conversational_prompt_completion_dataset()[0]
+
+    with pytest.warns(UserWarning, match="not a prefix"):
+        encoded = SFTTrainer.tokenize_row(
+            example,
+            _NonPrefixTokenizer(),
+            args,
+            chat_col=None,
+            completion_only=True,
+        )
+
+    assert encoded["completion_mask"] == [0, 0, 0, 1, 1, 1]
+
+
+def test_sft_conversational_prompt_completion_rejects_longer_prompt(tmp_path):
+    class _LongPromptTokenizer(_PromptCompletionChatTokenizer):
+        prompt_ids: ClassVar[list[int]] = [10, 11, 12, 13, 14, 15, 16]
+
+    args = _args(SFTConfig, tmp_path, max_length=8, loss_type="nll")
+    example = _conversational_prompt_completion_dataset()[0]
+
+    with pytest.raises(ConfigurationError, match="prompt is longer"):
+        SFTTrainer.tokenize_row(
+            example,
+            _LongPromptTokenizer(),
+            args,
+            chat_col=None,
+            completion_only=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("prompt", "completion"),
+    [
+        ([{"role": "user", "content": "Question"}], "Answer"),
+        ("Question", [{"role": "assistant", "content": "Answer"}]),
+    ],
+)
+def test_sft_prompt_completion_requires_matching_representations(
+    tmp_path, prompt, completion
+):
+    args = _args(SFTConfig, tmp_path, max_length=8, loss_type="nll")
+
+    with pytest.raises(ConfigurationError, match="both be strings or both be"):
+        SFTTrainer.tokenize_row(
+            {"prompt": prompt, "completion": completion},
+            _PromptCompletionChatTokenizer(),
+            args,
+            chat_col=None,
+            completion_only=True,
+        )
+
+
+def test_sft_assistant_only_loss_requires_conversational_dataset(tmp_path):
+    dataset = Dataset.from_list([{"text": "hello"} for _ in range(4)])
+
     with pytest.raises(ConfigurationError, match="requires a conversational dataset"):
         SFTTrainer(
             model=_tiny_model(),
@@ -323,7 +499,7 @@ def test_sft_assistant_only_loss_requires_chat_dataset(tmp_path):
                 loss_type="nll",
                 assistant_only_loss=True,
             ),
-            train_dataset=_sft_dataset(),
+            train_dataset=dataset,
             processing_class=_stub_tokenizer(),
         )
 
@@ -347,11 +523,15 @@ def test_sft_completion_only_loss_requires_prompt_completion_dataset(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("completion_only_loss", "expected_labels"),
-    [(None, [1, 2, 3, 4]), (True, [-100, -100, 3, 4])],
+    ("completion_only_loss", "assistant_only_loss", "expected_labels"),
+    [
+        (None, False, [1, 2, 3, 4]),
+        (True, False, [-100, -100, 3, 4]),
+        (None, True, [-100, -100, 3, 4]),
+    ],
 )
 def test_sft_pretokenized_completion_mask_requires_explicit_option(
-    tmp_path, completion_only_loss, expected_labels
+    tmp_path, completion_only_loss, assistant_only_loss, expected_labels
 ):
     dataset = Dataset.from_list(
         [
@@ -370,6 +550,7 @@ def test_sft_pretokenized_completion_mask_requires_explicit_option(
             max_length=8,
             loss_type="nll",
             completion_only_loss=completion_only_loss,
+            assistant_only_loss=assistant_only_loss,
         ),
         train_dataset=dataset,
         processing_class=_stub_tokenizer(),
@@ -377,6 +558,33 @@ def test_sft_pretokenized_completion_mask_requires_explicit_option(
 
     batch = trainer.data_collator([trainer.train_dataset[0]])
     assert batch["labels"].tolist() == [expected_labels]
+
+
+@pytest.mark.parametrize(
+    "masking_option",
+    [{"completion_only_loss": True}, {"assistant_only_loss": True}],
+)
+def test_sft_pretokenized_masking_requires_mask(tmp_path, masking_option):
+    row = {
+        "input_ids": [1, 2, 3, 4],
+        "prompt": [{"role": "user", "content": "Question"}],
+        "completion": [{"role": "assistant", "content": "Answer"}],
+    }
+    dataset = Dataset.from_list([row for _ in range(4)])
+
+    with pytest.raises(ConfigurationError, match="requires a completion_mask"):
+        SFTTrainer(
+            model=_tiny_model(),
+            args=_args(
+                SFTConfig,
+                tmp_path,
+                max_length=8,
+                loss_type="nll",
+                **masking_option,
+            ),
+            train_dataset=dataset,
+            processing_class=_stub_tokenizer(),
+        )
 
 
 @pytest.mark.slow
