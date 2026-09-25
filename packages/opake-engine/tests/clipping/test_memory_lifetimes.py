@@ -67,7 +67,10 @@ class _SanitizedStorageTracker(TorchDispatchMode):
 
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         result = func(*args, **(kwargs or {}))
-        if func == torch.ops.aten.nan_to_num.default and result.numel() == self.leaf_numel:
+        if (
+            func == torch.ops.aten.nan_to_num.default
+            and result.numel() == self.leaf_numel
+        ):
             self.calls += 1
             self.refs.append(weakref.ref(result))
             self.peak = max(self.peak, sum(ref() is not None for ref in self.refs))
