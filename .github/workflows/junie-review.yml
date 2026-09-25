@@ -32,7 +32,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Run Junie code review
-        uses: JetBrains/junie-github-action@8c442773960f53c76920978f485e0e25a66ef0fb # v1.7.10
+        uses: JetBrains/junie-github-action@c49dfcdf95b75650b75a64b504673f05c89a9819 # v1.7.12
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           junie_guidelines_filename: review-guidelines.md
