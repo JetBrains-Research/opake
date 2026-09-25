@@ -9,6 +9,7 @@ patch fixture in ``conftest.py`` installs the vmap-safety runtime patches.
 
 from __future__ import annotations
 
+import importlib
 import types
 from operator import attrgetter
 
@@ -29,6 +30,7 @@ from transformers import (
 )
 
 from opake.alignment.dpo.loss import sequence_logp
+from opake.api.transformers.trl._logits import _has_family_logit_transform
 from opake.exceptions import ConfigurationError
 from opake.transformers.trl import (
     DPOConfig,
@@ -64,6 +66,56 @@ def _tiny_qwen2() -> Qwen2ForCausalLM:
         max_position_embeddings=128,
     )
     return Qwen2ForCausalLM(cfg)
+
+
+def _tiny_transformed_model(family):
+    extras = {
+        "cohere": {"logit_scale": 0.25},
+        "cohere2": {"logit_scale": 0.25},
+        "granite": {"logits_scaling": 8.0},
+        "gemma2": {"head_dim": 16, "final_logit_softcapping": 0.5},
+        "gemma3": {
+            "head_dim": 16,
+            "num_hidden_layers": 2,
+            "sliding_window": 8,
+            "sliding_window_pattern": 2,
+            "final_logit_softcapping": 0.5,
+        },
+    }
+    name = family.capitalize()
+    config_module = importlib.import_module(
+        f"transformers.models.{family}.configuration_{family}"
+    )
+    model_module = importlib.import_module(
+        f"transformers.models.{family}.modeling_{family}"
+    )
+    config_cls = getattr(
+        config_module, "Gemma3TextConfig" if family == "gemma3" else f"{name}Config"
+    )
+    model_cls = getattr(model_module, f"{name}ForCausalLM")
+    config_kwargs = {
+        "vocab_size": 64,
+        "hidden_size": 32,
+        "intermediate_size": 64,
+        "num_hidden_layers": 1,
+        "num_attention_heads": 4,
+        "num_key_value_heads": 2,
+        "max_position_embeddings": 128,
+        "pad_token_id": 0,
+    }
+    config_kwargs.update(extras[family])
+    config = config_cls(**config_kwargs)
+    config._attn_implementation = "eager"
+    return model_cls(config)
+
+
+def test_family_logit_transform_gate_covers_subclasses():
+    model = _tiny_transformed_model("granite")
+
+    class CustomGranite(type(model)):
+        pass
+
+    assert _has_family_logit_transform(CustomGranite(model.config))
 
 
 def _stub_tokenizer() -> types.SimpleNamespace:
@@ -1423,6 +1475,68 @@ def test_sft_dft_fused_eligible_resolves_lm_head(tmp_path):
     assert trainer._lm_head_param_name == "lm_head.weight"
 
 
+@pytest.mark.parametrize("family", ["cohere", "cohere2", "gemma2", "gemma3"])
+def test_sft_other_transformed_families_gate_dft(tmp_path, family):
+    trainer = SFTTrainer(
+        model=_tiny_transformed_model(family),
+        args=_args(
+            SFTConfig,
+            tmp_path,
+            max_length=8,
+            loss_type="dft",
+            log_completion_metrics=False,
+        ),
+        train_dataset=_sft_dataset(),
+        processing_class=_stub_tokenizer(),
+    )
+    assert trainer._fused_loss_eligible
+    assert trainer._lm_head_param_name is not None
+    assert not trainer._fused_dft
+    assert not trainer._fused_dft_loss_only
+
+
+@pytest.mark.parametrize("use_peft", [False, True])
+def test_sft_scaled_dft_uses_native_logits(tmp_path, use_peft):
+    from opake.alignment.sft.loss import dft_loss
+
+    torch.manual_seed(0)
+    trainer = SFTTrainer(
+        model=_tiny_transformed_model("granite"),
+        args=_args(
+            SFTConfig,
+            tmp_path,
+            max_length=8,
+            loss_type="dft",
+            log_completion_metrics=False,
+        ),
+        train_dataset=_sft_dataset(),
+        eval_dataset=_sft_dataset(),
+        processing_class=_stub_tokenizer(),
+        peft_config=_maybe_lora(use_peft),
+    )
+    assert trainer._fused_loss_eligible
+    assert trainer._lm_head_param_name is not None
+    assert not trainer._fused_dft
+    assert not trainer._fused_dft_loss_only
+
+    trainer.model.eval()
+    rows = [trainer.train_dataset[i] for i in range(2)]
+    batch = _to_device(trainer, trainer.data_collator(rows))
+    losses, _ = _per_example_losses(trainer, batch)
+    with torch.no_grad():
+        native = trainer.model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+        ).logits
+        expected = dft_loss(native, batch["labels"])
+    torch.testing.assert_close(losses, expected, atol=1e-4, rtol=1e-4)
+
+    eval_losses, _, _ = trainer.prediction_step(
+        trainer.model, batch, prediction_loss_only=True
+    )
+    torch.testing.assert_close(eval_losses, expected, atol=1e-3, rtol=1e-3)
+
+
 @pytest.mark.parametrize("loss_type", ["nll", "dft"])
 def test_sft_telemetry_on_keeps_eager(tmp_path, loss_type):
     # Telemetry on (the default) is logits-consuming → no fused path.
@@ -1629,6 +1743,53 @@ def test_dpo_fused_eligible_resolves_handles(tmp_path):
     assert trainer._use_fused_logp is True
     assert trainer._backbone_prefix == "model"
     assert trainer._lm_head_param_name == "lm_head.weight"
+
+
+def test_dpo_scaled_policy_logps_match_native_reference(tmp_path):
+    from opake.functional import make_functional
+
+    torch.manual_seed(0)
+    policy = _tiny_transformed_model("granite")
+    reference = _tiny_transformed_model("granite")
+    reference.load_state_dict(policy.state_dict())
+    trainer = DPOTrainer(
+        model=policy,
+        ref_model=reference,
+        args=_args(
+            DPOConfig,
+            tmp_path,
+            max_length=8,
+            loss_type="sigmoid",
+            log_completion_metrics=False,
+        ),
+        train_dataset=_pref_dataset(),
+        processing_class=_stub_tokenizer(),
+    )
+    assert trainer._fused_logp_eligible
+    assert trainer._lm_head_param_name is not None
+    assert not trainer._use_fused_logp
+
+    trainer.model.eval()
+    reference.eval()
+    batch = _to_device(trainer, trainer.data_collator([trainer.train_dataset[0]]))
+    inputs = {name: value[0] for name, value in batch.items()}
+    fmodel, trainable, frozen = make_functional(trainer.model, partition_trainable=True)
+    _, aux = trainer.compute_per_example_loss_and_metrics(
+        fmodel, {**frozen, **trainable}, inputs
+    )
+
+    with torch.no_grad():
+        for side in ("chosen", "rejected"):
+            ids = batch[f"{side}_input_ids"]
+            mask = batch[f"{side}_attention_mask"]
+            completion = batch[f"{side}_completion_mask"][0]
+            policy_logits = trainer.model(input_ids=ids, attention_mask=mask).logits[0]
+            reference_logits = reference(input_ids=ids, attention_mask=mask).logits[0]
+            native_policy = sequence_logp(policy_logits, ids[0], completion)
+            native_reference = sequence_logp(reference_logits, ids[0], completion)
+            torch.testing.assert_close(aux[f"logps/{side}"], native_policy)
+            torch.testing.assert_close(batch[f"ref_{side}_logps"][0], native_reference)
+            torch.testing.assert_close(native_policy, native_reference)
 
 
 def test_dpo_ld_public_length_is_shorter_completion():

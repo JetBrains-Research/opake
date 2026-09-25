@@ -173,14 +173,7 @@ def _fused_linear_ce_loss_is_supported(
 
 
 def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = False):
-    """ForCausalLM forward with fused linear + cross-entropy loss.
-
-    When a loss-only caller sets ``loss_only=True`` and labels are
-    provided, skips ``lm_head`` and computes loss from
-    ``hidden_states @ lm_head.weight.T`` (CCE), unless ``loss_function`` would
-    need unsupported options — then defers to the original forward (e.g.
-    non-zero ``logits_to_keep``, ``shift_labels``, class ``weight``).
-    """
+    """Use fused linear CE for supported loss-only causal-LM calls."""
 
     def forward(
         self,
@@ -199,33 +192,20 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
         loss_only: bool = False,
         **kwargs,
     ):
-        # The wrapper is inert unless this call explicitly permits a loss-only
-        # result. Inference and logits-consuming labeled calls stay model-native.
-        if labels is None or not loss_only:
-            return original(
-                self,
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                past_key_values=past_key_values,
-                inputs_embeds=inputs_embeds,
-                labels=labels,
-                use_cache=use_cache,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-                cache_position=cache_position,
-                logits_to_keep=logits_to_keep,
-                **kwargs,
-            )
-
-        output_router_logits = kwargs.get("output_router_logits")
-        if output_router_logits is None:
-            output_router_logits = getattr(self.config, "output_router_logits", False)
-        if output_router_logits:
-            # MoE router auxiliary loss is batch-coupled, not a separable
-            # per-example objective. Preserve the upstream model's loss/output
-            # contract instead of silently dropping it in the fused CE path.
+        use_original = (
+            labels is None
+            or not loss_only
+            or not _fused_linear_ce_loss_is_supported(logits_to_keep, kwargs)
+        )
+        if not use_original:
+            output_router_logits = kwargs.get("output_router_logits")
+            if output_router_logits is None:
+                output_router_logits = getattr(
+                    self.config, "output_router_logits", False
+                )
+            # Router auxiliary loss is not separable per example.
+            use_original = output_router_logits
+        if use_original:
             return original(
                 self,
                 input_ids=input_ids,
@@ -279,17 +259,22 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
         # log-sum-exp over bounded token/vocabulary tiles. The wrapper is
         # installed with the performance patch bucket, but only
         # an explicit loss-only call may return ``logits=None``.
-        use_fused_ce = (
-            loss_only
-            and _fused_linear_ce_loss_is_supported(logits_to_keep, kwargs)
-            and (
-                (
-                    hidden_states.is_cuda
-                    and hidden_states.dtype in (torch.bfloat16, torch.float16)
-                )
-                or not hidden_states.is_cuda
-            )
+        use_fused_ce = not hidden_states.is_cuda or hidden_states.dtype in (
+            torch.bfloat16,
+            torch.float16,
         )
+
+        configured_logit_scale = getattr(self, "logit_scale", None)
+        if configured_logit_scale is None:
+            configured_logit_scale = getattr(self.config, "logit_scale", None)
+        configured_logits_scaling = getattr(self.config, "logits_scaling", None)
+        logit_scale = float(
+            1.0 if configured_logit_scale is None else configured_logit_scale
+        )
+        logits_scaling = float(
+            1.0 if configured_logits_scaling is None else configured_logits_scaling
+        )
+        softcap = getattr(self.config, "final_logit_softcapping", None)
 
         if use_fused_ce:
             use_chunked_ce = not hidden_states.is_cuda or bool(force_chunked)
@@ -306,22 +291,6 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
 
             weight = self.lm_head.weight
 
-            # Keep family scaling scalar so a large transformed head is never
-            # materialized. The kernels apply it to each logits tile and include
-            # it in the hidden/head gradient chain rule.
-            configured_logit_scale = getattr(self.config, "logit_scale", None)
-            configured_logits_scaling = getattr(self.config, "logits_scaling", None)
-            logit_scale = float(
-                1.0 if configured_logit_scale is None else configured_logit_scale
-            )
-            logits_scaling = float(
-                1.0 if configured_logits_scaling is None else configured_logits_scaling
-            )
-            logit_scale /= logits_scaling
-
-            # Gemma2 softcapping: softcap * tanh(logits / softcap)
-            softcap = getattr(self.config, "final_logit_softcapping", 0) or 0
-
             ignore_index = int(kwargs.get("ignore_index", -100))
             label_smoothing = float(kwargs.get("label_smoothing") or 0.0)
 
@@ -330,10 +299,10 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
                 weight,
                 labels,
                 ignore_index,
-                softcap,
+                softcap or 0,
                 label_smoothing,
                 False,  # use_token_scaling: plain CE for the LM-head loss
-                logit_scale,
+                logit_scale / logits_scaling,
             )
             if use_chunked_ce:
                 chunk_vocab = (
@@ -361,6 +330,12 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
                 else logits_to_keep
             )
             logits = self.lm_head(hidden_states[:, slice_indices, :])
+            if logit_scale != 1.0:
+                logits = logits * logit_scale
+            if logits_scaling != 1.0:
+                logits = logits / logits_scaling
+            if softcap is not None:
+                logits = torch.tanh(logits / softcap) * softcap
             loss = self.loss_function(logits, labels, self.vocab_size, **kwargs)
 
         if not return_dict:
