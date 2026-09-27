@@ -21,9 +21,13 @@ False}``.
 without key translation. Supported keys mirror the opake-patches surface:
 ``rope``, ``rms_norm``, ``activation``, ``cross_entropy``,
 ``fused_linear_cross_entropy``, ``chunked_linear_cross_entropy``, ``kv_cache``,
-``eager_attention``, ``batchify``. The chunked setting accepts a positive
+``eager_attention``, ``batchify``, ``attention_checkpointing``,
+``lora_mlp_recompute``. The chunked setting accepts a positive
 maximum vocabulary tile width while token tiling remains automatic; ``False``
-or ``0`` disables it.
+or ``0`` disables it. ``attention_checkpointing=True`` checkpoints only each
+decoder layer's attention block (incompatible with ``torch_compile``), and
+``lora_mlp_recompute=False`` makes the fused LoRA MLP save its ``gate`` /
+``up`` activations instead of recomputing them in backward.
 """
 
 from __future__ import annotations
