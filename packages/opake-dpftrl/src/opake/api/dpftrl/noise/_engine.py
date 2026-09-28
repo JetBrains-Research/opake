@@ -18,8 +18,10 @@ References:
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import TYPE_CHECKING, Any
 
+import optree
 import torch
 
 from opake.exceptions import ConfigurationError, InputTypeError
@@ -113,29 +115,9 @@ def _iid_normal_noise(
     preserved by the caller (which casts back to the input dtype).
     """
 
-    def _randn_on_device(
-        shape: tuple[int, ...],
-        *,
-        noise_dtype: torch.dtype,
-        device: torch.device,
-        generator: torch.Generator | None,
-    ) -> torch.Tensor:
-        try:
-            return torch.randn(
-                shape, dtype=noise_dtype, device=device, generator=generator
-            )
-        except RuntimeError as exc:
-            if "device type for generator" in str(exc):
-                return torch.randn(shape, dtype=noise_dtype, generator=generator).to(
-                    device=device
-                )
-            raise
+    from opake.api.engine.pytree import tree_flatten_with_paths
 
     if isinstance(stddev, PerGroup):
-        import optree
-
-        from opake.api.engine.pytree import tree_flatten_with_paths
-
         paths, leaves, treedef = tree_flatten_with_paths(target_tree)
         out_leaves: list[Any] = []
         for path, tensor in zip(paths, leaves, strict=True):
@@ -147,25 +129,51 @@ def _iid_normal_noise(
                     )
                 )
             leaf_std = stddev.for_path(path)
-            noise = _randn_on_device(
-                tensor.shape,
-                noise_dtype=compute_dtype,
-                device=tensor.device,
-                generator=generator,
-            )
+            noise = torch.randn(
+                tensor.shape, dtype=compute_dtype, generator=generator
+            ).to(device=tensor.device)
             out_leaves.append(noise * leaf_std)
         return optree.tree_unflatten(treedef, out_leaves)
 
-    def make_noise(t):
-        noise = _randn_on_device(
-            t.shape,
-            noise_dtype=compute_dtype,
-            device=t.device,
-            generator=generator,
+    # Non-PerGroup: single flat randn per device + reshape.
+    # All leaves on the same device share one draw (deterministic with
+    # respect to the passed generator), then the flat tensor is split
+    # back into per-leaf shapes.  Replaces per-leaf tree_map(randn) which
+    # issued 200+ separate kernel launches.
+    flat_leaves = optree.tree_leaves(target_tree)
+    tensor_indices = [
+        i for i, t in enumerate(flat_leaves) if isinstance(t, torch.Tensor)
+    ]
+    if len(tensor_indices) <= 1:
+        return tree_map(
+            lambda t: (
+                torch.randn(t.shape, dtype=compute_dtype, generator=generator).to(
+                    device=t.device
+                )
+                * stddev
+            ),
+            target_tree,
         )
-        return noise * stddev
 
-    return tree_map(make_noise, target_tree)
+    # Group by device, draw one flat tensor per device
+    by_device: dict[torch.device, list[tuple[int, tuple[int, ...]]]] = {}
+    for i in tensor_indices:
+        t = flat_leaves[i]
+        by_device.setdefault(t.device, []).append((i, t.shape))
+
+    result = list(flat_leaves)
+    for device, idxs in by_device.items():
+        total = sum(math.prod(s) for _, s in idxs)
+        flat = torch.randn((total,), dtype=compute_dtype, generator=generator).to(
+            device=device
+        )
+        offset = 0
+        for i, shape in idxs:
+            n = math.prod(shape)
+            result[i] = flat[offset : offset + n].reshape(shape) * stddev
+            offset += n
+
+    return optree.tree_unflatten(optree.tree_structure(target_tree), result)
 
 
 def _gaussian_linear_combination(

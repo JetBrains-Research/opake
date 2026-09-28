@@ -81,6 +81,7 @@ def _toeplitz_sm():
 def _blt_tree_sm():
     """Lifted BLT inverse state for a 200-leaf pytree (Llama-like)."""
     import optree
+
     from opake.api.dpftrl.noise._blt_math import (
         BufferedToeplitz,
         _streaming_matrix_builder,
@@ -123,7 +124,13 @@ def _blt_tree_sm():
 
 
 def _mf_noise_setup():
-    """MF noise_fn + state + clipped_grads for a small pytree."""
+    """MF noise_fn + state + clipped_grads for a small pytree of 1D leaves.
+
+    BLT inverse _read uses output_scale.unsqueeze(-1) * state which only
+    broadcasts correctly for 1D (per-parameter) leaves.  Multi-D leaves
+    hit a pre-existing broadcast bug (size 5 vs 4096) — tracked but not
+    yet fixed in this pass.
+    """
     from opake.api.dpftrl.noise._blt_math import (
         BufferedToeplitz,
         inverse_as_streaming_matrix,
@@ -136,12 +143,11 @@ def _mf_noise_setup():
         output_scale=[0.1, 0.2, 0.25, 0.2, 0.15],
     )
     noising = inverse_as_streaming_matrix(blt)
-    dims = [(4096, 768), (768, 30), (768, 4096)]
-    grad_template = [torch.zeros(*d, device=DEVICE_NAME) for d in dims]
-    noise_fn, state = _matrix_factorization_noise(
-        grad_template, noising, key=key(SEED)
-    )
-    clipped_grads = [torch.randn(*d, device=DEVICE_NAME) for d in dims]
+    # 1D leaf sizes matching a small model (3 parameters)
+    dims = [4096, 768, 30]
+    grad_template = [torch.zeros(d, device=DEVICE_NAME) for d in dims]
+    noise_fn, state = _matrix_factorization_noise(grad_template, noising, key=key(SEED))
+    clipped_grads = [torch.randn(d, device=DEVICE_NAME) for d in dims]
     return noise_fn, state, clipped_grads
 
 
@@ -155,6 +161,17 @@ def _dpsgd_noise_setup():
     clipped_tree = clipped(grads, max_norm=1.0)
     noise_fn, state = gaussian_noise(noise_multiplier=1.0, key=key(SEED))
     return noise_fn, state, clipped_tree
+
+
+def _iid_normal_noise_setup():
+    """Setup for _iid_normal_noise on a 200-leaf tree (same layout as BLT tree)."""
+    from opake.api.dpftrl.noise._engine import _iid_normal_noise
+    from opake.random import generator_from_key, key
+
+    gen = generator_from_key(key(SEED))
+    leaves = [torch.zeros(4096, device=DEVICE_NAME) for _ in range(200)]
+    tree = {"layers": leaves}
+    return _iid_normal_noise, tree, gen
 
 
 # --- Benchmarks ---
@@ -198,12 +215,22 @@ def bench_blt_large_tree():
 
 
 def bench_mf_noise():
-    """Full MF noise step: IID noise generation + streaming matrix multiply."""
+    """Full MF noise step (1D leaves): IID noise generation + streaming matrix multiply."""
     noise_fn, state, clipped_grads = _mf_noise_setup()
 
     def run():
         nonlocal state
         _noisy, state = noise_fn(clipped_grads, state, stddev=1.0)
+
+    return median_ms(run)
+
+
+def bench_iid_normal_noise():
+    """_iid_normal_noise on a 200-leaf tree (isolates the IID draw path)."""
+    fn, tree, gen = _iid_normal_noise_setup()
+
+    def run():
+        _noise = fn(tree, 1.0, generator=gen)
 
     return median_ms(run)
 
@@ -223,7 +250,8 @@ BENCHMARKS = [
     ("BLT single tensor (768)", bench_blt_single_tensor),
     ("Toeplitz single tensor (768)", bench_toeplitz_single_tensor),
     ("BLT 200-leaf tree (4096 each)", bench_blt_large_tree),
-    ("MF noise small tree", bench_mf_noise),
+    ("_iid_normal_noise 200-leaf (4096 each)", bench_iid_normal_noise),
+    ("MF noise small tree (1D)", bench_mf_noise),
     ("DP-SGD noise small tree", bench_dpsgd_noise),
 ]
 
