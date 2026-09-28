@@ -96,13 +96,17 @@ class _StreamingMatrixBuilder:
 
     def _read(self, state: torch.Tensor) -> torch.Tensor:
         output_scale = self._device_coeffs[state.device][0]
-        return (output_scale.unsqueeze(-1) * state).sum(dim=0)
+        scale = output_scale.view(-1, *([1] * (state.ndim - 1)))
+        return (scale * state).sum(dim=0)
 
-    def _update(self, state: torch.Tensor, next_rhs_value: torch.Tensor) -> torch.Tensor:
+    def _update(
+        self, state: torch.Tensor, next_rhs_value: torch.Tensor
+    ) -> torch.Tensor:
         buf_decay = self._device_coeffs[state.device][1]
         if buf_decay.numel() == 0:
             return state
-        return state * buf_decay.unsqueeze(-1) + next_rhs_value
+        decay = buf_decay.view(-1, *([1] * (state.ndim - 1)))
+        return state * decay + next_rhs_value
 
     def build(self) -> streaming_matrix.StreamingMatrix:
         """Returns a StreamingMatrix representing C.

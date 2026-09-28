@@ -267,7 +267,8 @@ def inverse_as_streaming_matrix(
         coef_local = _device_coeffs[(state.device, state.dtype)]
         if bands == 1:
             return yi.to(state.dtype) / coef_local[0], state
-        inner = (coef_local[1:].unsqueeze(-1) * state).sum(dim=0)
+        c = coef_local[1:].view(-1, *([1] * (state.ndim - 1)))
+        inner = (c * state).sum(dim=0)
         xi = (yi.to(state.dtype) - inner) / coef_local[0]
         new_state = torch.roll(state, 1, dims=0)
         new_state[0] = xi

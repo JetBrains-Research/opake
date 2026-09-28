@@ -124,13 +124,7 @@ def _blt_tree_sm():
 
 
 def _mf_noise_setup():
-    """MF noise_fn + state + clipped_grads for a small pytree of 1D leaves.
-
-    BLT inverse _read uses output_scale.unsqueeze(-1) * state which only
-    broadcasts correctly for 1D (per-parameter) leaves.  Multi-D leaves
-    hit a pre-existing broadcast bug (size 5 vs 4096) — tracked but not
-    yet fixed in this pass.
-    """
+    """MF noise_fn + state + clipped_grads for a small pytree (2D leaves)."""
     from opake.api.dpftrl.noise._blt_math import (
         BufferedToeplitz,
         inverse_as_streaming_matrix,
@@ -143,11 +137,11 @@ def _mf_noise_setup():
         output_scale=[0.1, 0.2, 0.25, 0.2, 0.15],
     )
     noising = inverse_as_streaming_matrix(blt)
-    # 1D leaf sizes matching a small model (3 parameters)
-    dims = [4096, 768, 30]
-    grad_template = [torch.zeros(d, device=DEVICE_NAME) for d in dims]
+    # 2D leaf shapes matching a small model (3 parameters)
+    dims = [(4096, 768), (768, 30), (768, 4096)]
+    grad_template = [torch.zeros(*d, device=DEVICE_NAME) for d in dims]
     noise_fn, state = _matrix_factorization_noise(grad_template, noising, key=key(SEED))
-    clipped_grads = [torch.randn(d, device=DEVICE_NAME) for d in dims]
+    clipped_grads = [torch.randn(*d, device=DEVICE_NAME) for d in dims]
     return noise_fn, state, clipped_grads
 
 
@@ -215,7 +209,7 @@ def bench_blt_large_tree():
 
 
 def bench_mf_noise():
-    """Full MF noise step (1D leaves): IID noise generation + streaming matrix multiply."""
+    """Full MF noise step (2D leaves): IID noise generation + streaming matrix multiply."""
     noise_fn, state, clipped_grads = _mf_noise_setup()
 
     def run():
@@ -251,7 +245,7 @@ BENCHMARKS = [
     ("Toeplitz single tensor (768)", bench_toeplitz_single_tensor),
     ("BLT 200-leaf tree (4096 each)", bench_blt_large_tree),
     ("_iid_normal_noise 200-leaf (4096 each)", bench_iid_normal_noise),
-    ("MF noise small tree (1D)", bench_mf_noise),
+    ("MF noise small tree (2D)", bench_mf_noise),
     ("DP-SGD noise small tree", bench_dpsgd_noise),
 ]
 
