@@ -71,6 +71,11 @@ class _StreamingMatrixBuilder:
     buf_decay: np.ndarray
     output_scale: np.ndarray
 
+    def __post_init__(self) -> None:
+        # Cache device-local coefficient tensors to avoid per-step torch.tensor()
+        # allocations. Keyed by device; lazily populated per-device.
+        self._device_coeffs: dict[torch.device, tuple[torch.Tensor, torch.Tensor]] = {}
+
     @property
     def dtype(self) -> np.dtype:
         assert self.output_scale.dtype == self.buf_decay.dtype
@@ -79,30 +84,25 @@ class _StreamingMatrixBuilder:
     def _init(self, abstract_value: torch.Tensor) -> torch.Tensor:
         num_buffers = self.buf_decay.shape[0]
         dtype = _internal_compute_dtype(abstract_value.dtype)
+        device = abstract_value.device
+        # Cache device-local coefficients so _read/_update don't allocate every step
+        if device not in self._device_coeffs:
+            self._device_coeffs[device] = (
+                torch.tensor(self.output_scale, dtype=dtype, device=device),
+                torch.tensor(self.buf_decay, dtype=dtype, device=device),
+            )
         zero = torch.zeros_like(abstract_value, dtype=dtype)
         return zero.unsqueeze(0).expand(num_buffers, *zero.shape).clone()
 
     def _read(self, state: torch.Tensor) -> torch.Tensor:
-        output_scale = torch.tensor(
-            self.output_scale,
-            dtype=state.dtype,
-            device=state.device,
-        )
-        return torch.tensordot(output_scale, state, dims=([0], [0]))
+        output_scale = self._device_coeffs[state.device][0]
+        return (output_scale.unsqueeze(-1) * state).sum(dim=0)
 
-    def _update(
-        self, state: torch.Tensor, next_rhs_value: torch.Tensor
-    ) -> torch.Tensor:
-        buf_decay = torch.tensor(
-            self.buf_decay,
-            dtype=state.dtype,
-            device=state.device,
-        )
-        if len(buf_decay) == 0:
+    def _update(self, state: torch.Tensor, next_rhs_value: torch.Tensor) -> torch.Tensor:
+        buf_decay = self._device_coeffs[state.device][1]
+        if buf_decay.numel() == 0:
             return state
-        bufs = torch.diag(buf_decay) @ state.reshape(len(buf_decay), -1)
-        bufs = bufs.reshape(state.shape) + next_rhs_value
-        return bufs
+        return state * buf_decay.unsqueeze(-1) + next_rhs_value
 
     def build(self) -> streaming_matrix.StreamingMatrix:
         """Returns a StreamingMatrix representing C.
