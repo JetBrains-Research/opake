@@ -131,10 +131,21 @@ def split(rng_key: RngKey, num: int = 2) -> tuple[RngKey, ...]:
     return tuple(fold_in(rng_key, i) for i in range(num))
 
 
-def generator_from_key(rng_key: RngKey) -> torch.Generator:
-    """Create a deterministic ``torch.Generator`` from a key."""
-    seed = rng_key.seed % _MAX_TORCH_SEED
-    return torch.Generator().manual_seed(seed)
+def generator_from_key(
+    rng_key: RngKey,
+    device: torch.device | None = None,
+) -> torch.Generator:
+    """Create a deterministic ``torch.Generator`` from a key.
 
+    Args:
+        rng_key: The source key.
+        device: Target device.  Defaults to ``None`` (CPU).  Passing the
+            target device (e.g. ``"cuda"``) lets ``torch.randn`` sample
+            directly on GPU, avoiding a CPU→device copy.
+    """
+    seed = rng_key.seed % _MAX_TORCH_SEED
+    g = torch.Generator(device=device)
+    g.manual_seed(seed)
+    return g
 
 __all__ = ["RngKey", "fold_in", "generator_from_key", "key", "split"]

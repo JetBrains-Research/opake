@@ -248,19 +248,25 @@ def inverse_as_streaming_matrix(
                 )
             )
 
+    # Cache device/dtype-local coefficients to avoid per-step .to() transfers.
+    _device_coeffs: dict[tuple[torch.device, torch.dtype], torch.Tensor] = {}
+
     def init(abstract_yi):
         dtype = abstract_yi.dtype
         if dtype in (torch.float16, torch.bfloat16):
             dtype = torch.float32
         device = abstract_yi.device
+        # Hoist coef onto device once, keyed by (device, dtype).
+        key = (device, dtype)
+        if key not in _device_coeffs:
+            _device_coeffs[key] = coef.to(device=device, dtype=dtype)
         zero = torch.zeros_like(abstract_yi, dtype=dtype, device=device)
         return zero.unsqueeze(0).expand(bands - 1, *zero.shape).clone()
 
     def _next(yi, state):
+        coef_local = _device_coeffs[(state.device, state.dtype)]
         if bands == 1:
-            coef_local = coef.to(device=state.device, dtype=state.dtype)
             return yi.to(state.dtype) / coef_local[0], state
-        coef_local = coef.to(device=state.device, dtype=state.dtype)
         inner = (coef_local[1:].unsqueeze(-1) * state).sum(dim=0)
         xi = (yi.to(state.dtype) - inner) / coef_local[0]
         new_state = torch.roll(state, 1, dims=0)
