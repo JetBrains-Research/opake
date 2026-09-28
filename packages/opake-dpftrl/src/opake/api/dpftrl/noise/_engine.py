@@ -144,16 +144,8 @@ def _iid_normal_noise(
     tensor_indices = [
         i for i, t in enumerate(flat_leaves) if isinstance(t, torch.Tensor)
     ]
-    if len(tensor_indices) <= 1:
-        return tree_map(
-            lambda t: (
-                torch.randn(t.shape, dtype=compute_dtype, generator=generator).to(
-                    device=t.device
-                )
-                * stddev
-            ),
-            target_tree,
-        )
+    if not tensor_indices:
+        return target_tree
 
     # Group by device, draw one flat tensor per device
     by_device: dict[torch.device, list[tuple[int, tuple[int, ...]]]] = {}
