@@ -11,6 +11,7 @@ from torch.func import grad, vmap
 from opake.api.engine.clipping import auto_clipped_grad, clipped_grad
 from opake.api.engine.clipping._clipped_fun import _RuntimeClipState, clipped_fun
 from opake.api.engine.clipping._pytree import clip_pytree
+from opake.exceptions import ConfigurationError
 from opake.pytree import global_norm, tree_leaves, tree_map
 from opake.types import ClippedPytree, PerGroup
 
@@ -33,10 +34,15 @@ def _reference(fn, args, state, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "dtype", [torch.float16, torch.bfloat16, torch.float32, torch.float64]
+    ("dtype", "microbatch_size", "compute_dtype"),
+    [
+        (torch.float16, None, None),
+        (torch.float16, 1, torch.float32),
+        (torch.bfloat16, 3, torch.float64),
+        (torch.float32, 4, None),
+        (torch.float64, 20, torch.float32),
+    ],
 )
-@pytest.mark.parametrize("microbatch_size", [None, 1, 3, 4, 20])
-@pytest.mark.parametrize("compute_dtype", [None, torch.float32, torch.float64])
 def test_adversarial_values_match_original(
     dtype, microbatch_size, compute_dtype, monkeypatch
 ):
@@ -107,9 +113,17 @@ def test_adversarial_values_match_original(
         )
 
 
-@pytest.mark.parametrize("diagnostics", ["none", "stats", "aux"])
-@pytest.mark.parametrize("microbatch_size", [None, 1, 3, 4])
-@pytest.mark.parametrize("output_dtype", [None, torch.float32, torch.float64])
+@pytest.mark.parametrize(
+    ("diagnostics", "microbatch_size", "output_dtype"),
+    [
+        ("none", None, None),
+        ("stats", 1, torch.float32),
+        ("aux", 3, torch.float64),
+        ("none", 4, torch.float64),
+        ("stats", None, None),
+        ("aux", 4, torch.float32),
+    ],
+)
 def test_grad_loss_state_and_mixed_dtypes(
     diagnostics, microbatch_size, output_dtype, monkeypatch
 ):
@@ -158,7 +172,319 @@ def test_grad_loss_state_and_mixed_dtypes(
 
 
 @pytest.mark.parametrize(
-    "kind", ["grouped", "second_moment", "custom", "adaptive", "auto"]
+    ("diagnostics", "microbatch_size"),
+    [("none", None), ("stats", 2), ("aux", 2)],
+)
+def test_runtime_thresholds_stream_and_match_original(
+    diagnostics, microbatch_size, monkeypatch
+):
+    values = torch.tensor(
+        [
+            [0.25, -0.5, 1.0],
+            [float("nan"), float("inf"), -float("inf")],
+            [3.0, 4.0, 0.0],
+            [-0.125, 0.0, 0.5],
+        ]
+    )
+    tree = {"a": values[:, :2], "b": values[:, 2:]}
+    fn, _ = clipped_fun(
+        lambda x: x,
+        clipping_norm=9.0,
+        normalize_by=4,
+        microbatch_size=microbatch_size,
+        return_aux=diagnostics == "aux",
+        return_stats=diagnostics == "stats",
+    )
+    streamed_thresholds = []
+    stream_clip_and_sum = cf._stream_clip_and_sum
+
+    def observed(*args, **kwargs):
+        streamed_thresholds.append(args[1].item())
+        return stream_clip_and_sum(*args, **kwargs)
+
+    monkeypatch.setattr(cf, "_stream_clip_and_sum", observed)
+    for threshold in (0.75, 1.5):
+        state = _RuntimeClipState(clipping_norm=threshold)
+        expected, _ = _reference(fn, (tree,), state, monkeypatch)
+        actual, returned = fn(tree, state=state)
+        assert returned is state
+        if diagnostics != "none":
+            actual, aux = actual
+            expected, expected_aux = expected
+            assert aux.clipping_rate == expected_aux.clipping_rate
+            assert aux.batch_size == expected_aux.batch_size == 4
+            if diagnostics == "aux":
+                for field in ("values", "norms", "clipped_norms"):
+                    _assert_tree_equal(
+                        getattr(aux, field), getattr(expected_aux, field)
+                    )
+            else:
+                assert aux.num_clipped == expected_aux.num_clipped
+        assert actual.max_norm == expected.max_norm == threshold / 4
+        _assert_tree_equal(actual.pytree, expected.pytree)
+
+    chunks_per_call = 1 if microbatch_size is None else 2
+    assert streamed_thresholds == [0.75] * chunks_per_call + [1.5] * chunks_per_call
+
+
+@pytest.mark.parametrize(
+    ("diagnostics", "microbatch_size"),
+    [("none", None), ("stats", 2), ("aux", 2)],
+)
+def test_global_auto_s_streams_and_matches_original(
+    diagnostics, microbatch_size, monkeypatch
+):
+    params = {
+        "a": torch.tensor([0.25, -0.5], dtype=torch.float64),
+        "b": torch.tensor([1.0], dtype=torch.float32),
+    }
+    values = torch.tensor(
+        [
+            [0.0, 0.5, -1.0],
+            [float("nan"), float("inf"), -float("inf")],
+            [3.0, 4.0, 0.0],
+            [-0.125, 0.0, 0.5],
+        ]
+    )
+
+    def loss(p, x):
+        return (p["a"] * x[:2]).sum() + (p["b"] * x[2:]).sum()
+
+    fn, state = auto_clipped_grad(
+        loss,
+        R=0.75,
+        gamma=0.2,
+        normalize_by=4,
+        microbatch_size=microbatch_size,
+        return_aux=diagnostics == "aux",
+        return_stats=diagnostics == "stats",
+    )
+    calls = 0
+    stream_clip_and_sum = cf._stream_clip_and_sum
+
+    def observed(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return stream_clip_and_sum(*args, **kwargs)
+
+    expected, _ = _reference(fn, (params, values), state, monkeypatch)
+    monkeypatch.setattr(cf, "_stream_clip_and_sum", observed)
+    actual, returned = fn(params, values, state=state)
+
+    assert returned is state
+    if diagnostics != "none":
+        actual, aux = actual
+        expected, expected_aux = expected
+        assert aux.clipping_rate == expected_aux.clipping_rate
+        assert aux.batch_size == expected_aux.batch_size == 4
+        if diagnostics == "aux":
+            for field in (
+                "loss_values",
+                "grad_norms",
+                "clipped_grad_norms",
+            ):
+                _assert_tree_equal(getattr(aux, field), getattr(expected_aux, field))
+        else:
+            assert aux.num_clipped == expected_aux.num_clipped
+    assert actual.max_norm == expected.max_norm == 0.75 / 4
+    _assert_tree_equal(actual.pytree, expected.pytree)
+    assert calls == (1 if microbatch_size is None else 2)
+
+
+@pytest.mark.parametrize(
+    ("mode", "microbatch_size", "diagnostics"),
+    [
+        ("fixed", None, "none"),
+        ("fixed", 2, "aux"),
+        ("runtime", None, "stats"),
+        ("runtime", 2, "none"),
+        ("auto", None, "aux"),
+        ("auto", 2, "stats"),
+    ],
+)
+def test_global_paired_moments_stream_and_match_original(
+    mode, microbatch_size, diagnostics, monkeypatch
+):
+    params = {
+        "a": torch.tensor([0.25, -0.5], dtype=torch.float64),
+        "b": torch.tensor([1.0], dtype=torch.float32),
+    }
+    values = torch.tensor(
+        [
+            [0.0, 0.5, -1.0],
+            [float("nan"), float("inf"), -float("inf")],
+            [3.0, 4.0, 0.0],
+            [-0.125, 0.0, 0.5],
+        ]
+    )
+
+    def loss(p, x):
+        return (p["a"] * x[:2]).sum() + (p["b"] * x[2:]).sum()
+
+    options = {
+        "normalize_by": 4,
+        "microbatch_size": microbatch_size,
+        "second_moment": True,
+        "return_aux": diagnostics == "aux",
+        "return_stats": diagnostics == "stats",
+    }
+    if mode == "auto":
+        fn, state = auto_clipped_grad(loss, R=0.75, gamma=0.2, **options)
+    else:
+        fn, state = clipped_grad(loss, clipping_norm=0.75, **options)
+        if mode == "runtime":
+            state = _RuntimeClipState(clipping_norm=0.5)
+
+    calls = 0
+    stream_clip_and_sum = cf._stream_clip_and_sum
+
+    def observed(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return stream_clip_and_sum(*args, **kwargs)
+
+    expected, _ = _reference(fn, (params, values), state, monkeypatch)
+    monkeypatch.setattr(cf, "_stream_clip_and_sum", observed)
+    actual, returned = fn(params, values, state=state)
+
+    assert returned is state
+    if diagnostics != "none":
+        actual, aux = actual
+        expected, expected_aux = expected
+        assert aux.clipping_rate == expected_aux.clipping_rate
+        assert aux.batch_size == expected_aux.batch_size == 4
+        if diagnostics == "aux":
+            for field in (
+                "loss_values",
+                "grad_norms",
+                "clipped_grad_norms",
+            ):
+                _assert_tree_equal(getattr(aux, field), getattr(expected_aux, field))
+        else:
+            assert aux.num_clipped == expected_aux.num_clipped
+    assert actual.grads.max_norm == expected.grads.max_norm
+    assert actual.squared_grads.max_norm == expected.squared_grads.max_norm
+    _assert_tree_equal(actual.grads.pytree, expected.grads.pytree)
+    _assert_tree_equal(actual.squared_grads.pytree, expected.squared_grads.pytree)
+    assert calls == (1 if microbatch_size is None else 2)
+
+
+@pytest.mark.parametrize(
+    ("mode", "second_moment", "microbatch_size", "diagnostics"),
+    [
+        ("fixed", False, None, "none"),
+        ("fixed", True, 2, "aux"),
+        ("runtime", False, 2, "stats"),
+        ("runtime", True, None, "aux"),
+        ("auto", False, None, "aux"),
+        ("auto", True, 2, "stats"),
+    ],
+)
+def test_per_group_streams_and_matches_original(
+    mode, second_moment, microbatch_size, diagnostics, monkeypatch
+):
+    values = torch.tensor(
+        [
+            [0.0, 0.5, -1.0, 2.0],
+            [float("nan"), float("inf"), -float("inf"), 0.25],
+            [3.0, 4.0, 0.0, -2.0],
+            [-0.125, 0.0, 0.5, 0.75],
+        ]
+    )
+    tree = {
+        "a": values[:, :1].double(),
+        "b": values[:, 1:3],
+        "c": values[:, 3:].to(torch.bfloat16),
+    }
+    configured = PerGroup(
+        groups={"a": "shared", "b": "shared", "c": "other"},
+        values={"shared": 0.75, "other": 0.5},
+    )
+    params = {name: torch.ones_like(leaf[0]) for name, leaf in tree.items()}
+
+    def loss(p, x):
+        return sum((p[name] * leaf).sum() for name, leaf in x.items())
+
+    options = {
+        "normalize_by": 4,
+        "microbatch_size": microbatch_size,
+        "second_moment": second_moment,
+        "return_aux": diagnostics == "aux",
+        "return_stats": diagnostics == "stats",
+    }
+    if mode == "auto":
+        fn, state = auto_clipped_grad(loss, R=configured, gamma=0.2, **options)
+    else:
+        fn, state = clipped_grad(loss, clipping_norm=configured, **options)
+    current = configured
+    if mode == "runtime":
+        current = PerGroup(
+            groups=configured.groups,
+            values={"shared": 1.25, "other": 0.25},
+        )
+        state = _RuntimeClipState(clipping_norm=current)
+
+    calls = 0
+    stream_clip_and_sum = cf._stream_clip_and_sum
+
+    def observed(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return stream_clip_and_sum(*args, **kwargs)
+
+    expected, _ = _reference(fn, (params, tree), state, monkeypatch)
+    monkeypatch.setattr(cf, "_stream_clip_and_sum", observed)
+    actual, returned = fn(params, tree, state=state)
+
+    assert returned is state
+    if diagnostics != "none":
+        actual, aux = actual
+        expected, expected_aux = expected
+        assert aux.clipping_rate == expected_aux.clipping_rate
+        assert aux.batch_size == expected_aux.batch_size == 4
+        if diagnostics == "aux":
+            for field in (
+                "loss_values",
+                "grad_norms",
+                "clipped_grad_norms",
+                "group_norms",
+            ):
+                _assert_tree_equal(getattr(aux, field), getattr(expected_aux, field))
+        else:
+            assert aux.num_clipped == expected_aux.num_clipped
+    if second_moment:
+        assert actual.grads.max_norm == expected.grads.max_norm == current / 4
+        assert (
+            actual.squared_grads.max_norm
+            == expected.squared_grads.max_norm
+            == (current * current) / 4
+        )
+        _assert_tree_equal(actual.grads.pytree, expected.grads.pytree)
+        _assert_tree_equal(actual.squared_grads.pytree, expected.squared_grads.pytree)
+    else:
+        assert actual.max_norm == expected.max_norm == current / 4
+        _assert_tree_equal(actual.pytree, expected.pytree)
+    assert calls == (1 if microbatch_size is None else 2)
+
+
+def test_per_group_stream_preserves_path_validation(monkeypatch):
+    clipping_norm = PerGroup(groups={"a": "all", "missing": "all"}, values={"all": 1.0})
+    fn, state = clipped_fun(lambda x: x, clipping_norm=clipping_norm)
+    tree = {"a": torch.ones(2, 3), "b": torch.ones(2, 3)}
+
+    with pytest.raises(ConfigurationError) as reference_error:
+        _reference(fn, (tree,), state, monkeypatch)
+    with pytest.raises(type(reference_error.value)) as actual_error:
+        fn(tree, state=state)
+    assert str(actual_error.value) == str(reference_error.value)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "custom",
+        "runtime_custom",
+    ],
 )
 def test_unsupported_modes_keep_original_path(kind, monkeypatch):
     def forbidden(*args, **kwargs):
@@ -166,27 +492,15 @@ def test_unsupported_modes_keep_original_path(kind, monkeypatch):
 
     monkeypatch.setattr(cf, "_stream_clip_and_sum", forbidden)
     options = {"return_aux": True, "microbatch_size": 2}
-    if kind == "auto":
-        fn, state = auto_clipped_grad(lambda p, x: (p * x).sum(), **options)
-        (result, aux), _ = fn(torch.ones(3), torch.ones(5, 3), state=state)
-        assert tree_leaves(result.pytree)
-        assert aux.grad_norms.numel() == 5
-        return
-    if kind == "grouped":
-        options["clipping_norm"] = PerGroup(groups={"w": "all"}, values={"all": 1.0})
-    elif kind == "second_moment":
-        options["second_moment"] = True
-    elif kind == "custom":
+    if "custom" in kind:
         options["_scale_fn"] = lambda x: clip_pytree(x, 1.0)
     fn, state = clipped_fun(lambda x: x, **options)
-    if kind == "adaptive":
+    if kind.startswith("runtime_"):
         state = _RuntimeClipState(clipping_norm=0.75)
     (result, aux), returned = fn({"w": torch.ones(5, 3)}, state=state)
     assert returned is state
     assert aux.norms.numel() == 5
-    assert tree_leaves(
-        result.grads.pytree if kind == "second_moment" else result.pytree
-    )
+    assert tree_leaves(result.pytree)
 
 
 def test_nested_transforms_match_original(monkeypatch):

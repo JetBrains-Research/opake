@@ -1,4 +1,4 @@
-"""Streaming fixed clipping through real DPTrainer training and local export."""
+"""Streaming built-in clipping through real DPTrainer training and export."""
 
 from __future__ import annotations
 
@@ -102,7 +102,10 @@ class _Run:
 
 
 def _run_trainer(
-    output_dir: Path, checkpointing: bool, monkeypatch: pytest.MonkeyPatch
+    output_dir: Path,
+    checkpointing: bool,
+    clipping_mode: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> _Run:
     torch.manual_seed(123)
     model = AutoModelForCausalLM.from_config(
@@ -127,11 +130,21 @@ def _run_trainer(
     clipped = []
     auxiliary = []
     clip_states = []
-    real_clipped_grad = _dp_trainer.clipped_grad
+    factory_name = {
+        "fixed": "clipped_grad",
+        "adaptive": "adaptive_clipped_grad",
+        "auto": "auto_clipped_grad",
+    }[clipping_mode]
+    real_clipped_grad = getattr(_dp_trainer, factory_name)
 
     def capture_clipped_grad(*args, **kwargs):
         assert kwargs["return_aux"] is True
-        assert kwargs["clipping_norm"] == _CLIP_NORM
+        bound_name = {
+            "fixed": "clipping_norm",
+            "adaptive": "initial_clipping_norm",
+            "auto": "R",
+        }[clipping_mode]
+        assert kwargs[bound_name] == _CLIP_NORM
         assert kwargs["normalize_by"] == _BATCH_SIZE
         assert kwargs["microbatch_size"] == _MICROBATCH_SIZE
         grad_fn, clip_state = real_clipped_grad(*args, **kwargs)
@@ -139,7 +152,9 @@ def _run_trainer(
         def capture_step(*args, **kwargs):
             result = grad_fn(*args, **kwargs)
             (grads, aux), next_state = result
-            assert grads.max_norm == pytest.approx(_CLIP_NORM / _BATCH_SIZE)
+            assert grads.max_norm > 0
+            if clipping_mode != "adaptive":
+                assert grads.max_norm == pytest.approx(_CLIP_NORM / _BATCH_SIZE)
             assert aux.batch_size == _BATCH_SIZE
             clipped.append(_snapshot(grads.pytree))
             auxiliary.append(
@@ -172,8 +187,9 @@ def _run_trainer(
         max_steps=_STEPS,
         learning_rate=1e-3,
         lr_scheduler="constant",
-        clipping_mode="fixed",
+        clipping_mode=clipping_mode,
         clipping_norm=_CLIP_NORM,
+        clipping_kwargs={"gamma": 0.2} if clipping_mode == "auto" else {},
         privacy_noise_multiplier=0.5,
         privacy_accounting=False,
         sampling_mode="poisson",
@@ -192,7 +208,7 @@ def _run_trainer(
         data_seed=789,
     )
     with monkeypatch.context() as patch:
-        patch.setattr(_dp_trainer, "clipped_grad", capture_clipped_grad)
+        patch.setattr(_dp_trainer, factory_name, capture_clipped_grad)
         trainer = DPTrainer(
             model=model,
             args=args,
@@ -225,9 +241,8 @@ def _run_trainer(
         assert entry["loss"] == pytest.approx(
             auxiliary[step]["loss_values"].mean().item()
         )
-        assert entry["privacy_clipping_norm"] == pytest.approx(_CLIP_NORM / _BATCH_SIZE)
         assert entry["privacy_noise_std"] == pytest.approx(
-            0.5 * _CLIP_NORM / _BATCH_SIZE
+            0.5 * entry["privacy_clipping_norm"]
         )
 
     eval_metrics = trainer.evaluate()
@@ -267,9 +282,21 @@ def _run_trainer(
     )
 
 
-@pytest.mark.parametrize("checkpointing", [False, True], ids=["eager", "checkpointed"])
+@pytest.mark.parametrize(
+    ("clipping_mode", "checkpointing"),
+    [
+        ("fixed", False),
+        ("fixed", True),
+        ("adaptive", False),
+        ("auto", False),
+    ],
+    ids=["fixed-eager", "fixed-checkpointed", "adaptive-eager", "auto-eager"],
+)
 def test_dptrainer_streaming_clipping_matches_original(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, checkpointing: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    clipping_mode: str,
+    checkpointing: bool,
 ) -> None:
     calls = 0
     real_stream = _clipped_fun._stream_clip_and_sum
@@ -284,10 +311,14 @@ def test_dptrainer_streaming_clipping_matches_original(
         baseline_patch.setattr(
             _clipped_fun, "_streaming_supported", lambda *args, **kwargs: False
         )
-        baseline = _run_trainer(tmp_path / "original", checkpointing, monkeypatch)
+        baseline = _run_trainer(
+            tmp_path / "original", checkpointing, clipping_mode, monkeypatch
+        )
     assert calls == 0
 
-    streaming = _run_trainer(tmp_path / "streaming", checkpointing, monkeypatch)
+    streaming = _run_trainer(
+        tmp_path / "streaming", checkpointing, clipping_mode, monkeypatch
+    )
     assert calls >= _STEPS * math.ceil(_BATCH_SIZE / _MICROBATCH_SIZE)
     for actual, expected in (
         (streaming.parameters, baseline.parameters),

@@ -10,7 +10,11 @@ from torch.func import vmap as _vmap
 
 from opake.api.engine.clipping._helpers import batch_size_from_args, normalize_to_tuple
 from opake.api.engine.clipping._pytree import clip_pytree
-from opake.api.engine.clipping._streaming import _stream_clip_and_sum
+from opake.api.engine.clipping._streaming import (
+    _FIXED_SCALE,
+    _BuiltinScale,
+    _stream_clip_and_sum,
+)
 from opake.api.engine.functional._transform_stack import under_differentiating_transform
 from opake.api.engine.pytree import global_norm, tree_leaves, tree_map
 from opake.api.engine.types import (
@@ -425,12 +429,10 @@ def _attach_value_aux(diagnostics, value, aux, has_aux):
             diagnostics["value_aux"] = aux
 
 
-def _streaming_supported(clipping_norm, second_moment, scale_fn) -> bool:
-    return (
-        not isinstance(clipping_norm, PerGroup)
-        and not second_moment
-        and scale_fn is None
-    )
+def _streaming_supported(clipping_norm, scale_fn, builtin_scale) -> bool:
+    if scale_fn is None:
+        return True
+    return builtin_scale is not None
 
 
 def clipped_fun(
@@ -447,6 +449,7 @@ def clipped_fun(
     dtype: torch.dtype | None = None,
     compute_dtype: torch.dtype | None = None,
     _scale_fn: Callable | None = None,
+    _builtin_scale: _BuiltinScale | None = None,
     _chunk_compiler: Callable | None = None,
 ) -> tuple[Callable, FixedClipState]:
     """Transform a function to clip its output and sum across a batch.
@@ -612,18 +615,22 @@ def clipped_fun(
         values, value_aux = _vmap(
             fun_with_aux, in_dims=in_dims, out_dims=(0, 0), randomness="same"
         )(*args, **kwargs)
-        reduced, markers, diagnostics = _stream_clip_and_sum(
-            values,
-            kernel_clipping_norm,
-            batch_size=batch_size_from_args(args, batch_argnums),
-            reduce_leaf=reduce_leaf,
-            compute_dtype=compute_dtype,
-            return_aux=return_aux,
-            return_stats=return_stats,
+        reduced, markers, squared_reduced, squared_markers, diagnostics = (
+            _stream_clip_and_sum(
+                values,
+                kernel_clipping_norm,
+                scale=_FIXED_SCALE if _scale_fn is None else _builtin_scale,
+                batch_size=batch_size_from_args(args, batch_argnums),
+                reduce_leaf=reduce_leaf,
+                compute_dtype=compute_dtype,
+                second_moment=second_moment,
+                return_aux=return_aux,
+                return_stats=return_stats,
+            )
         )
         if return_aux:
             _attach_value_aux(diagnostics, values, value_aux, has_aux)
-        return reduced, markers, (), (), diagnostics
+        return reduced, markers, squared_reduced, squared_markers, diagnostics
 
     def _make_chunk_kernel(in_dims, stream):
         # Fixed and AUTO-S scaling are construction-time constants.  A
@@ -717,16 +724,14 @@ def clipped_fun(
             current_clipping_norm, args, batch_argnums
         )
         in_dims = tuple(0 if i in batch_argnums else None for i in range(len(args)))
-        stream = (
-            runtime_clipping_norm is None
-            and not under_differentiating_transform(when_compiling=True)
-            and _streaming_supported(current_clipping_norm, second_moment, _scale_fn)
-        )
+        stream = not under_differentiating_transform(
+            when_compiling=True
+        ) and _streaming_supported(current_clipping_norm, _scale_fn, _builtin_scale)
 
         # Choose execution path based on microbatch_size
         stats = None
         if microbatch_size is None and stream:
-            result, _, _, _, aux = _streaming_kernel(
+            result, _, squared_result, _, aux = _streaming_kernel(
                 in_dims,
                 kernel_clipping_norm,
                 args,
@@ -735,7 +740,6 @@ def clipped_fun(
                     x, dim=0, output_dtype=dtype, compute_dtype=compute_dtype
                 ),
             )
-            squared_result = None
         elif microbatch_size is None:
             # Fast path: vmap entire batch at once.  Output shape depends
             # on the (second_moment, return_aux) flags — see the per_example_fn

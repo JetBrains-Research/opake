@@ -8,9 +8,10 @@ import pytest
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
-from opake.api.engine.clipping import clipped_grad
-from opake.api.engine.clipping._clipped_fun import clipped_fun
+from opake.api.engine.clipping import auto_clipped_grad, clipped_grad
+from opake.api.engine.clipping._clipped_fun import _RuntimeClipState, clipped_fun
 from opake.pytree import tree_leaves
+from opake.types import PerGroup
 
 
 @pytest.mark.parametrize("second_moment", [False, True])
@@ -77,14 +78,60 @@ class _SanitizedStorageTracker(TorchDispatchMode):
         return result
 
 
-def test_clipped_grad_does_not_retain_complete_sanitized_tree():
-    def loss(params, x):
-        return sum((param * x).sum() for param in params)
+class _SquaredStorageTracker(TorchDispatchMode):
+    def __init__(self, leaf_numel):
+        super().__init__()
+        self.leaf_numel = leaf_numel
+        self.refs = []
+        self.peak = 0
+        self.calls = 0
 
-    params = [torch.ones(1024) for _ in range(8)]
-    fn, state = clipped_grad(
-        loss, clipping_norm=1.0, return_aux=True, microbatch_size=4
-    )
+    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        result = func(*args, **(kwargs or {}))
+        if (
+            func == torch.ops.aten.pow.Tensor_Scalar
+            and args[1] == 2
+            and result.numel() == self.leaf_numel
+        ):
+            self.calls += 1
+            self.refs.append(weakref.ref(result))
+            self.peak = max(self.peak, sum(ref() is not None for ref in self.refs))
+        return result
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["fixed", "runtime", "auto", "grouped", "runtime_grouped", "auto_grouped"],
+)
+def test_clipped_grad_does_not_retain_complete_sanitized_tree(mode):
+    def loss(params, x):
+        return sum((param * x).sum() for param in params.values())
+
+    params = {f"p{i}": torch.ones(1024) for i in range(8)}
+    clipping_norm = 1.0
+    if "grouped" in mode:
+        clipping_norm = PerGroup(
+            groups=dict.fromkeys(params, "all"), values={"all": 1.0}
+        )
+    if mode.startswith("auto"):
+        fn, state = auto_clipped_grad(
+            loss,
+            R=clipping_norm,
+            gamma=0.1,
+            return_aux=True,
+            microbatch_size=4,
+        )
+    else:
+        fn, state = clipped_grad(
+            loss,
+            clipping_norm=clipping_norm,
+            return_aux=True,
+            microbatch_size=4,
+        )
+        if mode == "runtime":
+            state = _RuntimeClipState(clipping_norm=0.75)
+        elif mode == "runtime_grouped":
+            state = _RuntimeClipState(clipping_norm=0.75 * clipping_norm)
     tracker = _SanitizedStorageTracker(4 * 1024)
     with tracker:
         (result, aux), _ = fn(params, torch.ones(4, 1024), state=state)
@@ -94,3 +141,36 @@ def test_clipped_grad_does_not_retain_complete_sanitized_tree():
     assert aux.grad_norms.numel() == 4
     assert tracker.calls >= 8  # A vacuous tracker must never pass this regression.
     assert tracker.peak <= 1, f"simultaneous sanitized leaves: {tracker.peak}"
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["fixed", "runtime", "auto", "grouped", "runtime_grouped", "auto_grouped"],
+)
+def test_paired_clipped_grad_does_not_retain_complete_squared_tree(mode):
+    def loss(params, x):
+        return sum((param * x).sum() for param in params.values())
+
+    params = {f"p{i}": torch.ones(1024) for i in range(8)}
+    options = {"return_aux": True, "microbatch_size": 4, "second_moment": True}
+    clipping_norm = 1.0
+    if "grouped" in mode:
+        clipping_norm = PerGroup(
+            groups=dict.fromkeys(params, "all"), values={"all": 1.0}
+        )
+    if mode.startswith("auto"):
+        fn, state = auto_clipped_grad(loss, R=clipping_norm, gamma=0.1, **options)
+    else:
+        fn, state = clipped_grad(loss, clipping_norm=clipping_norm, **options)
+        if mode == "runtime":
+            state = _RuntimeClipState(clipping_norm=0.75)
+        elif mode == "runtime_grouped":
+            state = _RuntimeClipState(clipping_norm=0.75 * clipping_norm)
+    tracker = _SquaredStorageTracker(4 * 1024)
+    with tracker:
+        (result, aux), _ = fn(params, torch.ones(4, 1024), state=state)
+    assert len(tree_leaves(result.grads.pytree)) == 8
+    assert len(tree_leaves(result.squared_grads.pytree)) == 8
+    assert aux.grad_norms.numel() == 4
+    assert tracker.calls >= 8
+    assert tracker.peak <= 1, f"simultaneous squared leaves: {tracker.peak}"
