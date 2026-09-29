@@ -2,7 +2,7 @@
 
 ## Status
 
-**Draft (r2, 2026-09-29)** — reviewed against the FlashDP reference implementation, arXiv records for every cited source, and Opake's noise/accounting code. One **blocking correctness issue** was found in r1 and is now specified as a hard constraint (§2.6): the reference implementation's noise scale and RNG handling must NOT be ported verbatim.
+**Draft (r3, 2026-09-29)** — r2's blocking correctness constraints (§2.6) stand. r3 adds measured baseline evidence + the oracle rig (new §4) and re-scopes v1's *first deliverable* accordingly. Benchmark scripts/results: `experiments/clip_breakdown/`, `experiments/clip_oracle/` (all synthetic, single Apple-silicon host, MPS — ratios are triage, not paper numbers).
 
 **Branch:** `feat/dp-fused-per-layer-clipping` (branched from `main` at `5657d6ce`)
 
@@ -189,11 +189,66 @@ The fused path does **not** use Opake's `clipped_grad()` pipeline, so accounting
 
 **Open question:** How to reconcile per-layer noise addition with Opake's existing noise allocation (per-group/structured noise)? In v1, we use simple per-layer isotropic Gaussian noise. Structured noise allocation is a v2 feature.
 
+## Baseline & measurement rig (r3, 2026-09-29)
+
+### What was measured
+
+`experiments/clip_breakdown/bench_clip_breakdown.py` splits a step into
+non-DP fwd+bwd (`t_nodp`) → vmap(grad) without clipping (`t_grad`) → clipped_grad
+(streaming / pre-#1108 legacy / microbatched). Key results (median ms, MPS, synthetic):
+
+| config | t_nodp | t_grad | clip (stream) | clip (legacy) | clip (mb) |
+|---|---|---|---|---|---|
+| 12×Linear128, B=128 | 4.5 | 4.1 | 9.9 | 8.9 | **131.3** |
+| 2×Linear4096, B=16 | 14.2 | 20.0 | **126.9** | 120.6 | 128.8 |
+| 2×Linear4096, B=64 | 67.2 | 87.2 | **502.3** | 3488.7 | 503.0 |
+
+And on the real stack (`benchmarks/bench_e2e.py`, SmolLM2-135M LoRA, DP-FTRL/BLT):
+`clip=158ms / step=213ms median ≈ 74%` — where the "clip" bucket is the **whole
+`clipped_grad` call, i.e. vmap(grad) materialization *plus* clipping**, not clipping alone.
+
+### What this says
+
+1. **The ~87% premise reproduces in order of magnitude** (74–89% across configs, synthetic), but it is dominated by the clip machinery, not by per-example grad materialization: at B=64-large, materializing the `[B, ...]` grad stack costs only ~+30% over non-DP (67→87ms), while the clip pipeline adds **415ms** on top of that.
+2. **#1108 already harvested the tree-level memory win** — the legacy path is 7× slower than streaming at B=64-large (3489 vs 502ms). The remaining overhead is per-leaf two-pass elementwise+reduction work with per-leaf kernel launches and Python traversal, which is exactly what report §4.1/§4.4 (fused in-vmap norm+scale) targets — without any mechanism change.
+3. **Microbatching as a knob is not a win here** (mb is 250% slower at 128 small examples, parity otherwise on MPS); vmap `chunk_size` would inherit the same shape of cost. CUDA re-measurement required before concluding.
+4. Consequence for scope: a design that only removes the *grad-materialization* overhead (Ghost/FlashDP-class) attacks the +30% term; a fused clip kernel attacks the +415ms term. On this hardware the second is ~14× the first. FlashDP's 90%-of-non-DP was measured against its own stack's non-DP baseline — where per-sample materialization WAS the bottleneck, unlike post-#1108 Opake.
+
+### Oracle rig (`experiments/clip_oracle/run_oracle.py`)
+
+fp64-oracle parity + stored-value bound invariant + noise-convention probe, run against
+today's clip path across {stream, legacy, mb} × {fp32, bf16} × {cpu, mps}, with
+clipping-active data regimes (per-sample norms straddling C):
+- All parity and bound checks pass on CPU; on MPS, 3 parity checks marginally exceed the
+  strict 1e-4 tolerance in one config, with **all three paths bit-identical to each other**
+  (verified) — the deviation is the backend's deliberate fp32 sq-norm accumulator
+  (MPS has no fp64), not a path bug. The rig therefore needs a same-backend
+  reference for regression detection; fp64 stays as the absolute sanity check.
+- Bound invariant `‖clipped‖ ≤ C` holds on stored values everywhere (bf16 clipped norms
+  land slightly *below* C via `_guard_scale`); noise probes confirm Opake's convention:
+  `std = σ·max_norm` on the aggregate, `max_norm = C/B` under mean aggregation.
+  Any fused kernel must reproduce both, per §2.6.
+
+### Re-scoped v1 (proposal, pending CUDA confirmation)
+
+- **v1 = fused *in-vmap* clip path**: single-pass per-leaf norm+scale in the existing
+  `vmap(grad()) + clip` pipeline (report §4.1/§4.4 + Tier-1 #2/#4 micro-items), measured
+  against the rig; no privacy-mechanism change, keeps max_norm/guard contract, DP-FTRL
+  still compatible, no §2.6 blockers.
+- **v2 = per-layer fused backward (FlashDP-style)**: keep on the table; only fund it if
+  a CUDA/A100-class baseline shows the materialization term dominant (e.g. large B,
+  long sequences, or memory-bandwidth-bound configs), since on this rig it addresses
+  the minority term. §2.6 constraints re-apply at that point.
+- Before any of this: one CUDA profiling run (same breakdown script) to confirm the
+  two-term split holds on the target hardware.
+
 ## Milestones
 
 ### Phase 1: Foundation (Week 1–2)
 
-- [ ] **1.1** Port Triton kernels from FlashDP (`mm_clip.py`, `bmtm_clip.py`, `clip_fn.py`, `utils.py`)
+- [ ] **1.0 (new, r3)** CUDA-baseline gate: rerun `experiments/clip_breakdown/` breakdown on target CUDA hardware; confirm whether the "clip machinery ≫ materialization" split holds there. Only then pick v1 = fused in-vmap clip vs per-layer FlashDP (see Re-scoped v1).
+
+- [ ] **1.1** Port Triton kernels from FlashDP (`mm_clip.py`, `bmtm_clip.py`, `clip_fn.py`, `utils.py`) — *r3: only if 1.0 shows materialization dominance; v1-first alternative is the fused in-vmap norm+scale kernel, prototyped in `experiments/` behind the oracle rig*
   - Adapt to Opake's Triton kernel patterns (existing kernels in `opake-patches/src/opake/api/patches/kernels/`)
   - Add dtype support: fp32, bf16 (defer fp16)
   - Add `autograd.Function` compatibility checks
@@ -273,7 +328,7 @@ The fused path does **not** use Opake's `clipped_grad()` pipeline, so accounting
 
 ## Open Questions
 
-1. **Per-layer vs. flat clipping:** FlashDP uses per-layer clipping. Opake currently supports both. Should the fused path support flat clipping (requires cross-layer norm accumulation)? **Decision: v1 = per-layer only. Flat clipping deferred.**
+1. **Per-layer vs. flat clipping:** FlashDP uses per-layer clipping. Opake currently supports both. Should the fused path support flat clipping (requires cross-layer norm accumulation)? **Decision updated in r3: the v1 candidate is a fused CLIP kernel inside the existing flat/per-group vmap path (mechanism unchanged); per-layer clipping is deferred to v2 behind the CUDA evidence gate (Phase 1.0). Flat/per-group contract stays authoritative.**
 
 2. **Noise addition timing and scale:** FlashDP adds noise during backward at `σ/√B` on the mean with global RNG; Opake adds `σ × max_norm` on the aggregate from an explicit `RngKey`. **Decision (revised in r2): v1 follows Opake's convention (§2.6.1/2.6.3, blocking), not the reference's. Per-layer channel accounting must be settled per §2.6.2 before any release; the r1 decision to copy FlashDP's noise path is withdrawn.**
 
