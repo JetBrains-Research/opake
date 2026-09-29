@@ -320,6 +320,27 @@ def test_global_auto_s_streams_and_matches_original(
     assert calls == (1 if microbatch_size is None else 2)
 
 
+@pytest.mark.parametrize("mode", ["fixed", "auto"])
+@pytest.mark.parametrize("microbatch_size", [None, 1])
+def test_float64_radius_preserves_advertised_bound(mode, microbatch_size):
+    def loss(p, x):
+        return (p * x).sum()
+
+    options = {"clipping_norm": 0.1}
+    factory = clipped_grad
+    if mode == "auto":
+        factory = auto_clipped_grad
+        options = {"R": 0.1, "gamma": 0.01}
+    fn, state = factory(loss, microbatch_size=microbatch_size, **options)
+
+    params = torch.ones(1, dtype=torch.float64)
+    values = torch.tensor([[1e8]], dtype=torch.float64)
+    actual, _ = fn(params, values, state=state)
+
+    assert actual.max_norm == 0.1
+    assert global_norm(actual.pytree, compute_dtype=torch.float64) <= actual.max_norm
+
+
 @pytest.mark.parametrize(
     ("mode", "microbatch_size", "diagnostics"),
     [
@@ -589,8 +610,8 @@ def test_empty_value_tree_preserves_diagnostics(microbatch_size, monkeypatch):
 def test_large_leaves_preserve_blocked_norm_reduction(monkeypatch):
     generator = torch.Generator().manual_seed(772)
     x = {
-        "a": torch.randn(5, 1025, generator=generator),
-        "b": torch.randn(5, 2049, generator=generator),
+        "a": torch.randn(5, 4097, generator=generator),
+        "b": torch.randn(5, 8193, generator=generator),
     }
     fn, state = clipped_fun(
         lambda x: x, return_aux=True, microbatch_size=2, clipping_norm=1.0

@@ -210,8 +210,10 @@ def _prepare_kernel_clipping_norm(
     clipping_norm: float | PerGroup,
     args: tuple[Any, ...],
     batch_argnums: tuple[int, ...],
-) -> torch.Tensor | PerGroup:
-    """Require a non-empty batch and place its clipping norm on the batch device."""
+    *,
+    tensorize: bool,
+) -> float | torch.Tensor | PerGroup:
+    """Require a non-empty batch and tensorize a changing runtime norm."""
     batch_leaves = tree_leaves(args[batch_argnums[0]])
     tensor = next(
         (leaf for leaf in batch_leaves if isinstance(leaf, torch.Tensor)), None
@@ -228,6 +230,8 @@ def _prepare_kernel_clipping_norm(
             )
         )
 
+    if not tensorize:
+        return clipping_norm
     if isinstance(clipping_norm, PerGroup):
         return PerGroup(
             clipping_norm.groups,
@@ -737,7 +741,10 @@ def clipped_fun(
             )
         )
         kernel_clipping_norm = _prepare_kernel_clipping_norm(
-            current_clipping_norm, args, batch_argnums
+            current_clipping_norm,
+            args,
+            batch_argnums,
+            tensorize=runtime_clipping_norm is not None,
         )
         in_dims = tuple(0 if i in batch_argnums else None for i in range(len(args)))
         stream = not under_differentiating_transform(
