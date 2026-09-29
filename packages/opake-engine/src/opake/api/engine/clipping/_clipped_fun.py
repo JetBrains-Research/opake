@@ -435,6 +435,22 @@ def _streaming_supported(clipping_norm, scale_fn, builtin_scale) -> bool:
     return builtin_scale is not None
 
 
+def _vmap_values(fun_with_aux, in_dims, args, kwargs, return_aux):
+    if return_aux:
+        return _vmap(fun_with_aux, in_dims=in_dims, out_dims=(0, 0), randomness="same")(
+            *args, **kwargs
+        )
+
+    def value_only(*single_args, **single_kwargs):
+        value, _ = fun_with_aux(*single_args, **single_kwargs)
+        return value
+
+    values = _vmap(value_only, in_dims=in_dims, out_dims=0, randomness="same")(
+        *args, **kwargs
+    )
+    return values, None
+
+
 def clipped_fun(
     fun: Callable[..., Any],
     has_aux: bool = False,
@@ -612,9 +628,9 @@ def clipped_fun(
         )
 
     def _streaming_kernel(in_dims, kernel_clipping_norm, args, kwargs, reduce_leaf):
-        values, value_aux = _vmap(
-            fun_with_aux, in_dims=in_dims, out_dims=(0, 0), randomness="same"
-        )(*args, **kwargs)
+        values, value_aux = _vmap_values(
+            fun_with_aux, in_dims, args, kwargs, return_aux
+        )
         reduced, markers, squared_reduced, squared_markers, diagnostics = (
             _stream_clip_and_sum(
                 values,

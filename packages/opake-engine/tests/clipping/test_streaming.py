@@ -113,6 +113,35 @@ def test_adversarial_values_match_original(
         )
 
 
+@pytest.mark.parametrize("microbatch_size", [None, 2])
+@pytest.mark.parametrize("return_stats", [False, True])
+def test_discarded_non_tensor_aux_is_not_batched(
+    microbatch_size, return_stats, monkeypatch
+):
+    def with_metadata(x):
+        return x, "discarded metadata"
+
+    fn, state = clipped_fun(
+        with_metadata,
+        has_aux=True,
+        return_aux=False,
+        return_stats=return_stats,
+        microbatch_size=microbatch_size,
+        clipping_norm=1.0,
+    )
+    x = torch.tensor([[0.25, 0.5], [3.0, 4.0], [-0.5, 0.0]])
+
+    expected, old_state = _reference(fn, (x,), state, monkeypatch)
+    actual, new_state = fn(x, state=state)
+
+    assert new_state is old_state is state
+    if return_stats:
+        actual, actual_stats = actual
+        expected, expected_stats = expected
+        assert actual_stats == expected_stats
+    _assert_tree_equal(actual.pytree, expected.pytree)
+
+
 @pytest.mark.parametrize(
     ("diagnostics", "microbatch_size", "output_dtype"),
     [
