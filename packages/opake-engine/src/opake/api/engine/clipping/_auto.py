@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 from opake.api.engine.clipping._clipped_fun import ClippedFunAux, clipped_fun
 from opake.api.engine.clipping._clipped_grad import ClippedGradAux, clipped_grad
 from opake.api.engine.clipping._pytree import auto_scale_pytree
+from opake.api.engine.clipping._streaming import _BuiltinScale
 from opake.api.engine.types import ClipState, PerGroup
 from opake.exceptions import ConfigurationError
 
@@ -165,6 +166,7 @@ def auto_clipped_fun(
     _validate_auto_params(R, gamma)
 
     scale_fn = _make_auto_scale_fn(R, gamma)
+    builtin_scale = _BuiltinScale(kind="auto_s", gamma=gamma)
     inner_fn, _ = clipped_fun(
         fun,
         has_aux=has_aux,
@@ -176,6 +178,7 @@ def auto_clipped_fun(
         microbatch_size=microbatch_size,
         dtype=dtype,
         _scale_fn=scale_fn,
+        _builtin_scale=builtin_scale,
         _chunk_compiler=_chunk_compiler,
     )
 
@@ -318,6 +321,7 @@ def auto_clipped_grad(
     _validate_auto_params(R, gamma)
 
     scale_fn = _make_auto_scale_fn(R, gamma)
+    builtin_scale = _BuiltinScale(kind="auto_s", gamma=gamma)
     inner_fn, _ = clipped_grad(
         loss_fn,
         argnums=argnums,
@@ -332,6 +336,7 @@ def auto_clipped_grad(
         dtype=dtype,
         second_moment=second_moment,
         _scale_fn=scale_fn,
+        _builtin_scale=builtin_scale,
         _chunk_compiler=_chunk_compiler,
     )
 

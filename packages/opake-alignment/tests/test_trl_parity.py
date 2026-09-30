@@ -128,6 +128,7 @@ def _dpo_trainer(
     trainer.accelerator = _NoopAccelerator()
     trainer.model = types.SimpleNamespace(training=False)
     trainer.aux_loss_enabled = False
+    trainer.use_liger_kernel = False
     trainer.precompute_ref_logps = True
     trainer.ld_alpha = ld_alpha
     trainer.f_divergence_type = f_divergence_type

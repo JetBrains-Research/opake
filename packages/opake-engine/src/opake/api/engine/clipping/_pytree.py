@@ -338,11 +338,18 @@ def _accumulate_group_sq_norms(
     for path, tensor in zip(paths, leaves, strict=True):
         group_name = pg.groups[path]
         sq = _leaf_sq_sum(tensor, acc_dtype, sq_dtype)
-        if group_name in group_sq_norms:
-            group_sq_norms[group_name] = group_sq_norms[group_name] + sq
-        else:
-            group_sq_norms[group_name] = sq
+        _accumulate_group_value(group_sq_norms, group_name, sq)
     return group_sq_norms
+
+
+def _accumulate_group_value(
+    group_values: dict[str, torch.Tensor], group_name: str, value: torch.Tensor
+) -> None:
+    """Accumulate one leaf contribution in stable path traversal order."""
+    if group_name in group_values:
+        group_values[group_name] = group_values[group_name] + value
+    else:
+        group_values[group_name] = value
 
 
 def _scale_leaves_by_group(

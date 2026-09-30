@@ -176,3 +176,23 @@ def test_pld_cache_does_not_retain_composed_process_trees() -> None:
     gc.collect()
 
     assert all(process_ref() is None for process_ref in process_refs)
+
+
+def test_cached_process_retains_entry_after_shared_lru_eviction() -> None:
+    process = acc.cached(acc.eps_delta(0.11))
+    first = process.pld(discretization=0.2)
+    for i in range(17):
+        acc.cached(acc.eps_delta(0.2 + i / 100)).pld(discretization=0.2)
+
+    assert process.pld(discretization=0.2) is first
+
+
+def test_per_instance_cache_does_not_retain_cached_process() -> None:
+    process = acc.cached(acc.eps_delta(0.11))
+    process.pld(discretization=0.2)
+    process_ref = weakref.ref(process)
+
+    del process
+    gc.collect()
+
+    assert process_ref() is None
