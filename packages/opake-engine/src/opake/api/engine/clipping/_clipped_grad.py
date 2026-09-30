@@ -27,6 +27,7 @@ from opake.exceptions import ConfigurationError
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from opake.api.engine.clipping._streaming import _BuiltinScale
     from opake.api.engine.clipping._types import ClippedGradFn
 
 
@@ -98,6 +99,7 @@ def clipped_grad(
     dtype: torch.dtype | None = None,
     compute_dtype: torch.dtype | None = None,
     _scale_fn: Callable | None = None,
+    _builtin_scale: _BuiltinScale | None = None,
     _chunk_compiler: Callable | None = None,
 ) -> tuple[ClippedGradFn, FixedClipState]:
     """Create a function to compute the sum of clipped gradients of loss_fn.
@@ -306,6 +308,7 @@ def clipped_grad(
         dtype=dtype,
         compute_dtype=compute_dtype,
         _scale_fn=_scale_fn,
+        _builtin_scale=_builtin_scale,
         _chunk_compiler=_chunk_compiler,
     )
 
