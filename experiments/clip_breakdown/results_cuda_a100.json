@@ -1,0 +1,73 @@
+{
+  "meta": {
+    "when": "2026-09-30T13:50:38.119892+00:00",
+    "torch": "2.14.0+cu130",
+    "note": "SYNTHETIC data; single host; ratios for triage only, not paper numbers."
+  },
+  "cases": [
+    {
+      "model": "many-small",
+      "batch": 32,
+      "n_leaves": 48,
+      "t_nodp_ms": 4.646,
+      "t_grad_ms": 10.307,
+      "t_clip_stream_ms": 51.443,
+      "t_clip_stream_ms_peak_mb": 79.4,
+      "t_clip_nostream_ms": 41.92,
+      "t_clip_nostream_ms_peak_mb": 97.5,
+      "t_clip_mb8_ms": 205.51,
+      "t_clip_mb8_ms_peak_mb": 34.7,
+      "materialization_over_t_nodp": 2.22,
+      "clip_overhead_ms": 41.136,
+      "clip_overhead_share_of_dp": 0.91
+    },
+    {
+      "model": "many-small",
+      "batch": 128,
+      "n_leaves": 48,
+      "t_nodp_ms": 4.489,
+      "t_grad_ms": 10.133,
+      "t_clip_stream_ms": 50.668,
+      "t_clip_stream_ms_peak_mb": 264.4,
+      "t_clip_nostream_ms": 33.839,
+      "t_clip_nostream_ms_peak_mb": 336.5,
+      "t_clip_mb8_ms": 797.024,
+      "t_clip_mb8_ms_peak_mb": 37.7,
+      "materialization_over_t_nodp": 2.26,
+      "clip_overhead_ms": 40.535,
+      "clip_overhead_share_of_dp": 0.911
+    },
+    {
+      "model": "few-large",
+      "batch": 16,
+      "n_leaves": 8,
+      "t_nodp_ms": 12.852,
+      "t_grad_ms": 12.597,
+      "t_clip_stream_ms": 56.264,
+      "t_clip_stream_ms_peak_mb": 7026.0,
+      "t_clip_nostream_ms": 53.769,
+      "t_clip_nostream_ms_peak_mb": 9012.4,
+      "t_clip_mb8_ms": 57.879,
+      "t_clip_mb8_ms_peak_mb": 3825.3,
+      "materialization_over_t_nodp": 0.98,
+      "clip_overhead_ms": 43.667,
+      "clip_overhead_share_of_dp": 0.772
+    },
+    {
+      "model": "few-large",
+      "batch": 64,
+      "n_leaves": 8,
+      "t_nodp_ms": 38.412,
+      "t_grad_ms": 47.88,
+      "t_clip_stream_ms": 219.363,
+      "t_clip_stream_ms_peak_mb": 27094.5,
+      "t_clip_nostream_ms": 208.007,
+      "t_clip_nostream_ms_peak_mb": 35232.4,
+      "t_clip_mb8_ms": 230.053,
+      "t_clip_mb8_ms_peak_mb": 3921.3,
+      "materialization_over_t_nodp": 1.25,
+      "clip_overhead_ms": 171.482,
+      "clip_overhead_share_of_dp": 0.825
+    }
+  ]
+}

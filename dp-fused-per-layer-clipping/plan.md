@@ -2,7 +2,7 @@
 
 ## Status
 
-**Draft (r3, 2026-09-29)** — r2's blocking correctness constraints (§2.6) stand. r3 adds measured baseline evidence + the oracle rig (new §4) and re-scopes v1's *first deliverable* accordingly. Benchmark scripts/results: `experiments/clip_breakdown/`, `experiments/clip_oracle/` (all synthetic, single Apple-silicon host, MPS — ratios are triage, not paper numbers).
+**Draft (r3, 2026-09-29)** — r2's blocking correctness constraints (§2.6) stand. r3 adds measured baseline evidence + the oracle rig (new §4) and re-scopes v1's *first deliverable* accordingly. Benchmark scripts/results: `experiments/clip_breakdown/` (MPS + CUDA A100 results JSONs), `experiments/clip_oracle/` (all synthetic, two hosts: Apple-silicon MPS + A100 40GB CUDA — ratios are triage, not paper numbers).
 
 **Branch:** `feat/dp-fused-per-layer-clipping` (branched from `main` at `5657d6ce`)
 
@@ -207,38 +207,61 @@ And on the real stack (`benchmarks/bench_e2e.py`, SmolLM2-135M LoRA, DP-FTRL/BLT
 `clip=158ms / step=213ms median ≈ 74%` — where the "clip" bucket is the **whole
 `clipped_grad` call, i.e. vmap(grad) materialization *plus* clipping**, not clipping alone.
 
-### What this says
+### CUDA baseline (A100 40GB, PyTorch 2.14.0, Triton 3.8.0)
 
-1. **The ~87% premise reproduces in order of magnitude** (74–89% across configs, synthetic), but it is dominated by the clip machinery, not by per-example grad materialization: at B=64-large, materializing the `[B, ...]` grad stack costs only ~+30% over non-DP (67→87ms), while the clip pipeline adds **415ms** on top of that.
-2. **#1108 already harvested the tree-level memory win** — the legacy path is 7× slower than streaming at B=64-large (3489 vs 502ms). The remaining overhead is per-leaf two-pass elementwise+reduction work with per-leaf kernel launches and Python traversal, which is exactly what report §4.1/§4.4 (fused in-vmap norm+scale) targets — without any mechanism change.
-3. **Microbatching as a knob is not a win here** (mb is 250% slower at 128 small examples, parity otherwise on MPS); vmap `chunk_size` would inherit the same shape of cost. CUDA re-measurement required before concluding.
-4. Consequence for scope: a design that only removes the *grad-materialization* overhead (Ghost/FlashDP-class) attacks the +30% term; a fused clip kernel attacks the +415ms term. On this hardware the second is ~14× the first. FlashDP's 90%-of-non-DP was measured against its own stack's non-DP baseline — where per-sample materialization WAS the bottleneck, unlike post-#1108 Opake.
+Same rig on the target hardware (`results_cuda_a100.json`). Process note: the *first*
+CUDA run was discarded — the harness synced only MPS, so CUDA timings measured kernel
+enqueue, not execution (`t_nodp` looked batch-invariant at 1.1 ms). `cuda.synchronize()`
+was added (commit `7a1fa0e8`); the table below is post-fix, device-synced per iteration,
+plus per-path peak memory:
+
+| config | t_nodp | t_grad | stream | nostream | mb8 | peak stream / nostream |
+|---|---|---|---|---|---|---|
+| many-small B=32 | 4.6 | 10.3 | 51.4 | 41.9 | 205.5 | 79 / 98 MB |
+| many-small B=128 | 4.5 | 10.1 | 50.7 | **33.8** | 797.0 | 264 / 337 MB |
+| few-large B=16 | 12.9 | 12.6 | 56.3 | 53.8 | 57.9 | 7.0 / 9.0 GB |
+| few-large B=64 | 38.4 | 47.9 | 219.4 | **208.0** | 230.1 | **26.5 / 34.4 GiB** |
+
+### What this says (both backends)
+
+1. **The ~87% premise reproduces in order of magnitude everywhere it was measured** (74% real-harness, 77–91% synced CUDA, 86–91% MPS large-leaf), but it is dominated by the clip machinery, not by per-example grad materialization. MPS few-large B=64: materializing the `[B, ...]` grad stack costs ~+20 ms over non-DP while the clip pipeline adds **+415 ms**. CUDA (synced) few-large B=64: materialization **+9.5 ms** (47.9 vs 38.4) vs clip machinery **+171.5 ms** — ratio ~18×. At few-large B=16 on CUDA, `t_grad ≈ t_nodp` (12.6 vs 12.9 ms): the vmap per-example backward already matches batched autograd wall-time.
+2. **Memory tells the opposite story from time.** Few-large B=64 on a 40 GB card peaks at **26.5 GiB (stream) / 34.4 GiB (nostream)** at seq=64 synthetic data; the pre-fix run logged an 8 GB allocation failure during the B=64 case. So per-example materialization is time-cheap but memory-dense on CUDA: Ghost/FlashDP-class no-materialize designs remain relevant as a *memory* lever and for longer sequences, not as the primary time lever at tested shapes.
+3. **Legacy (nostream) is faster than streaming on CUDA in all four configs** (e.g. 33.8 vs 50.7 ms at many-small B=128; 208 vs 219 ms at few-large B=64) — the reverse of MPS few-large, where legacy was 7× slower (3489 vs 502 ms) because memory, not compute, was the wall there. The legacy path also uses ~1.3× stream's peak memory. Consequence: the fused-kernel bar on CUDA is *min(stream, nostream)* — beat ~34 ms (many-small) and ~208 ms (few-large B=64) at ≤ stream-path memory. Per-leaf two-pass elementwise + reduction with per-leaf launches and Python traversal is the shared shape of the cost on both backends — exactly what report §4.1/§4.4 (fused in-vmap norm+scale) targets, without mechanism change.
+4. **Microbatching is a loser on both backends** (mb8: 250% slower at 128 small examples on MPS, 1500% on CUDA; parity elsewhere, no config where it wins on time; it only reduces memory — 3.8 GiB at few-large B=64). vmap `chunk_size` would inherit the same shape of cost.
+5. Consequence for scope: a design that only removes the *grad-materialization* overhead (Ghost/FlashDP-class) attacks the minority time term on this hardware; a fused clip kernel attacks the majority term. FlashDP's 90%-of-non-DP was measured against its own stack's non-DP baseline — where per-sample materialization WAS the bottleneck, unlike post-#1108 Opake.
 
 ### Oracle rig (`experiments/clip_oracle/run_oracle.py`)
 
 fp64-oracle parity + stored-value bound invariant + noise-convention probe, run against
-today's clip path across {stream, legacy, mb} × {fp32, bf16} × {cpu, mps}, with
+today's clip path across {stream, legacy, mb} × {fp32, bf16} × {cpu, mps, cuda}, with
 clipping-active data regimes (per-sample norms straddling C):
-- All parity and bound checks pass on CPU; on MPS, 3 parity checks marginally exceed the
-  strict 1e-4 tolerance in one config, with **all three paths bit-identical to each other**
-  (verified) — the deviation is the backend's deliberate fp32 sq-norm accumulator
-  (MPS has no fp64), not a path bug. The rig therefore needs a same-backend
-  reference for regression detection; fp64 stays as the absolute sanity check.
+- All parity and bound checks pass on CPU and CUDA (strict fp32 1e-4 tolerance included,
+  the near-C configs pass clean on CUDA where the sq-norm accumulator is fp64). On MPS,
+  the same near-C fp32 config marginally exceeds tolerance, with **all three paths
+  bit-identical to each other** (verified) — the deviation is MPS's deliberate fp32
+  accumulator (no fp64 backend support), not a path bug. The rig therefore needs a
+  same-backend reference for regression detection; fp64 stays the absolute sanity check.
 - Bound invariant `‖clipped‖ ≤ C` holds on stored values everywhere (bf16 clipped norms
   land slightly *below* C via `_guard_scale`); noise probes confirm Opake's convention:
   `std = σ·max_norm` on the aggregate, `max_norm = C/B` under mean aggregation.
   Any fused kernel must reproduce both, per §2.6.
 
-### Re-scoped v1 (proposal, pending CUDA confirmation)
+### Re-scoped v1 (CUDA gate passed — see baselines above)
 
 - **v1 = fused *in-vmap* clip path**: single-pass per-leaf norm+scale in the existing
   `vmap(grad()) + clip` pipeline (report §4.1/§4.4 + Tier-1 #2/#4 micro-items), measured
   against the rig; no privacy-mechanism change, keeps max_norm/guard contract, DP-FTRL
   still compatible, no §2.6 blockers.
-- **v2 = per-layer fused backward (FlashDP-style)**: keep on the table; only fund it if
-  a CUDA/A100-class baseline shows the materialization term dominant (e.g. large B,
-  long sequences, or memory-bandwidth-bound configs), since on this rig it addresses
-  the minority term. §2.6 constraints re-apply at that point.
+  Perf targets until a first prototype exists (set from baseline, revise after):
+  beat **2× of the faster current path** per rig config (many-small: <~17 ms vs 33.8;
+  few-large B=64: <~104 ms vs 208) at ≤ stream-path peak memory. The CUDA bar is the
+  *nostream* path, not stream — unlike MPS where the fused design can only target stream.
+- **v2 = per-layer fused backward (FlashDP-style)**: demoted from "pending evidence" to
+  *memory-lever candidate*: on tested CUDA shapes its time prize is the minority term
+  (~4% of step at B=64; ~0% at B=16, where vmap-grad already ties batched backward).
+  Revisit when (a) peak memory (26.5–34.4 GiB measured at synthetic B=64/seq=64) blocks real
+  configs, or (b) long-sequence/large-B profiles shift dominance to materialization.
+  §2.6 constraints re-apply at that point.
 - Before any of this: one CUDA profiling run (same breakdown script) to confirm the
   two-term split holds on the target hardware.
 
@@ -246,9 +269,9 @@ clipping-active data regimes (per-sample norms straddling C):
 
 ### Phase 1: Foundation (Week 1–2)
 
-- [ ] **1.0 (new, r3)** CUDA-baseline gate: rerun `experiments/clip_breakdown/` breakdown on target CUDA hardware; confirm whether the "clip machinery ≫ materialization" split holds there. Only then pick v1 = fused in-vmap clip vs per-layer FlashDP (see Re-scoped v1).
+- [x] **1.0 ✅ DONE (A100 40GB, synced timing)** CUDA-baseline gate on target hardware (`results_cuda_a100.json`). **Result:** clip share 77–91%; clip machinery ≫ materialization in time (7–18×) but materialization dominates *memory* (26.5–34.4 GiB peaks at B=64); nostream is the faster CUDA baseline (fused kernel must beat it, ≤ stream memory); microbatching never wins on time. **Gate passed: v1 = fused in-vmap clip, confirmed.**
 
-- [ ] **1.1** Port Triton kernels from FlashDP (`mm_clip.py`, `bmtm_clip.py`, `clip_fn.py`, `utils.py`) — *r3: only if 1.0 shows materialization dominance; v1-first alternative is the fused in-vmap norm+scale kernel, prototyped in `experiments/` behind the oracle rig*
+- [ ] **1.1** Port Triton kernels from FlashDP (`mm_clip.py`, `bmtm_clip.py`, `clip_fn.py`, `utils.py`) — *r3 update: the 1.0 gate condition (materialization dominance) did NOT hold on A100; per-layer port deferred. Default v1 work is the fused in-vmap norm+scale kernel, prototyped in `experiments/` behind the oracle rig*
   - Adapt to Opake's Triton kernel patterns (existing kernels in `opake-patches/src/opake/api/patches/kernels/`)
   - Add dtype support: fp32, bf16 (defer fp16)
   - Add `autograd.Function` compatibility checks
@@ -324,7 +347,7 @@ clipping-active data regimes (per-sample norms straddling C):
 | FlashDP's Triton kernels have bugs for bf16 | MEDIUM | Test against reference path; defer bf16 if needed |
 | Porting the reference noise scale (σ/√B on the mean, global RNG) breaks the privacy mechanism — can **under-noise** when `C > √B` | CRITICAL | §2.6 constraints are blocking; parity tests: realized noise stddev == σ×sensitivity per Opake convention, RNG determinism, accounting model matches executed mechanism |
 | Uninitialized norm accumulator in reference kernels (`torch.empty` + `tl.atomic_add`) | HIGH | Zero accumulator per launch; nondeterminism parity test |
-| GPU memory regression for very large batches | LOW | Per-block processing limits SRAM usage; HBM pressure is bounded by output shape |
+| GPU memory at large batch/long sequences | MEDIUM (was LOW — now measured) | 26.5 GiB (stream) / 34.4 GiB (nostream) peak at synthetic B=64, seq=64 on 40 GB card; 8 GB allocation failure logged pre-fix. Keep memory probes in the bench; fused path gated at ≤ stream-path peak; v2 memory-lever remains the fallback |
 
 ## Open Questions
 
