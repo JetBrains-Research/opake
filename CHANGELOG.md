@@ -49,3 +49,31 @@ verification results for the DP-clipping optimization workstream. Newest last.
   correctness-gated by `run_oracle.py` before any perf claim.
 - Longer-sequence / larger-B CUDA configs to test whether the materialization
   time share ever becomes dominant (v2 gate).
+## 2026-09-29 — fused clip prototype v0: 8/8 correctness, 7–25× op-level (A100)
+
+- `experiments/clip_fused/fused_clip.py`: 3-launch deterministic replacement
+  of the per-leaf clip+sum chain (K1 partial sq-sums, C1 tiny combine+scale
+  in fp64, K2 column-slab fused sanitize+scale+sum with b-ascending order,
+  no atomics, no clipped-copy or sanitized-copy materialization).
+- All 8 matrix cases PASS on A100: fp64-oracle parity, chain-parity, stored
+  bound ‖clipped‖ ≤ C (bf16 lands 0.995–0.997, i.e. under), bitwise
+  determinism. bf16 fused-vs-oracle deviation is IDENTICAL to the current
+  chain's (shared bf16 storage rounding, not kernel error).
+- Speed vs reconstructed chain: big fp32 leaf x7.2, big bf16 leaf x25.4
+  (chain was launch-bound), total matrix x12.5. Near roofline: 4.3GB leaf,
+  2-pass streaming ≈ 84–85% of A100 HBM bandwidth.
+- Peak memory per big leaf: 4.2GB fused vs 20.5GB chain (no materialization).
+- Infra note: Coder SSH ProxyCommand became flaky mid-session; working path
+  is `coder ssh mihajlolinic/kernel -- "cmd"` (direct CLI, bypass ssh config),
+  file transfer via base64 inline with md5 verify.
+- NOT yet done: integration through the real `clipped_grad`/pipeline seam
+  (needs a chosen override point), e2e step benchmark, per-tree roundoff
+  constant, small-leaf launch diet.
+
+## Task ledger (current)
+
+- [x] baseline MPS + CUDA breakdowns (synced), oracle rig (cpu/mps/cuda)
+- [x] fused clip prototype v0 — correctness gates green, op-level speedup
+- [ ] pipeline-seam integration + e2e step benchmark (A100)
+- [ ] small-leaf launch diet (fold C1; maybe CUDA graphs for 48-leaf trees)
+- [ ] long-sequence configs to test v2 (per-layer) dominance gate
