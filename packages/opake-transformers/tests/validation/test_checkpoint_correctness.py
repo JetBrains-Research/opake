@@ -318,6 +318,10 @@ class TestModelRestore:
         with pytest.raises(CheckpointError, match="lora_alpha"):
             trainer._restore_checkpoint_model(str(folder))
 
+    @pytest.mark.skipif(
+        "trainable_token_indices" not in LoraConfig.__dataclass_fields__,
+        reason="PEFT does not expose trainable_token_indices",
+    )
     def test_restores_trainable_tokens(
         self, small_model_and_tokenizer, tiny_dataset, tmp_path
     ):
