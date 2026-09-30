@@ -77,3 +77,23 @@ verification results for the DP-clipping optimization workstream. Newest last.
 - [ ] pipeline-seam integration + e2e step benchmark (A100)
 - [ ] small-leaf launch diet (fold C1; maybe CUDA graphs for 48-leaf trees)
 - [ ] long-sequence configs to test v2 (per-layer) dominance gate
+
+## 2026-09-29 — fused engine via real clipped_grad seam: 5/5 e2e PASS (A100)
+
+- Architecture decision (user): kernel engine lives in opake-engine
+  ("custom triton kernel engine", algorithm-agnostic), the mechanism CHOICE
+  lives in opake-dpsgd. Partition-policy compliant; DP-FTRL can consume the
+  same seam later.
+- experiments/clip_fused/fused_engine.py: drop-in replacement for
+  _stream_clip_and_sum (tree-level per-example norm, fp64 scalar chain with
+  tree-level roundoff + conservative guard shrink, fp32 accumulation,
+  no value division; PerGroup/AUTO-S/second_moment/aux/complex -> original).
+  Monkeypatched at the module-global seam in bench_fused_e2e.py.
+- e2e (real clipped_grad, synced): few-large B=16 56.3->15.0ms (x3.75);
+  few-large B=64 fp32 219.5->55.4ms (x3.96), peak 27.6->9.8GB;
+  few-large B=64 bf16 176.1->16.3ms (x10.8), peak 23->4.9GB; many-small
+  fp32/bf16 x2.7/x2.8. maxrel dev 3e-7 (fp32) / 1e-3 (bf16); drift=0 all.
+- Known gaps before packaging: aux/second-moment fallback, per-leaf scale
+  for mixed-dtype trees (currently conservative), many-small still
+  launch-bound (2.7x only), small remaining B=64 peak dominated by the
+  input [B,...] stack (removable only by v2 per-layer fusion).
