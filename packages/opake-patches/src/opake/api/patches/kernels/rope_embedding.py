@@ -288,8 +288,10 @@ class _RoPEBackward(torch.autograd.Function):
         seq_len = grad_Q.shape[-3]
 
         # Merge all leading dims into rows — works for both 4D and 5D input
-        grad_Q = grad_Q.reshape(-1, n_heads * head_dim).contiguous()
-        dQ = grad_Q if _allow_in_place_backward() else torch.empty_like(grad_Q)
+        grad_Q_flat = grad_Q.reshape(-1, n_heads * head_dim).contiguous()
+        dQ = (
+            grad_Q_flat if _allow_in_place_backward() else torch.empty_like(grad_Q_flat)
+        )
         n_rows = dQ.shape[0]
 
         BLOCK_SIZE, num_warps = calculate_settings(head_dim // 2)
@@ -298,8 +300,8 @@ class _RoPEBackward(torch.autograd.Function):
 
         with torch_gpu_device(dQ.device):
             _rope_embedding_kernel_heuristics[(n_rows, n_groups)](
-                grad_Q,
-                grad_Q.stride(0),
+                grad_Q_flat,
+                grad_Q_flat.stride(0),
                 dQ,
                 dQ.stride(0),
                 cos,
@@ -529,11 +531,15 @@ class _RoPE_QK_Backward(torch.autograd.Function):
 
         # Collapse all leading dims — works for both 4D and 5D input
         total_batch = grad_Q[..., 0, 0, 0].numel()
-        grad_Q = grad_Q.reshape(total_batch, n_heads_Q, seq_len, head_dim).contiguous()
-        grad_K = grad_K.reshape(total_batch, n_heads_K, seq_len, head_dim).contiguous()
+        grad_Q_flat = grad_Q.reshape(
+            total_batch, n_heads_Q, seq_len, head_dim
+        ).contiguous()
+        grad_K_flat = grad_K.reshape(
+            total_batch, n_heads_K, seq_len, head_dim
+        ).contiguous()
         in_place = _allow_in_place_backward()
-        dQ = grad_Q if in_place else torch.empty_like(grad_Q)
-        dK = grad_K if in_place else torch.empty_like(grad_K)
+        dQ = grad_Q_flat if in_place else torch.empty_like(grad_Q_flat)
+        dK = grad_K_flat if in_place else torch.empty_like(grad_K_flat)
 
         if not has_indices:
             rope_ptr_local = cos.new_empty(1, dtype=torch.int32)
@@ -546,18 +552,18 @@ class _RoPE_QK_Backward(torch.autograd.Function):
 
         with torch_gpu_device(dQ.device):
             _rope_embedding_qk_kernel_heuristics[(total_batch * seq_len, n_heads_Q)](
-                grad_Q,
-                grad_Q.stride(0),
-                grad_Q.stride(1),
-                grad_Q.stride(2),
+                grad_Q_flat,
+                grad_Q_flat.stride(0),
+                grad_Q_flat.stride(1),
+                grad_Q_flat.stride(2),
                 dQ,
                 dQ.stride(0),
                 dQ.stride(1),
                 dQ.stride(2),
-                grad_K,
-                grad_K.stride(0),
-                grad_K.stride(1),
-                grad_K.stride(2),
+                grad_K_flat,
+                grad_K_flat.stride(0),
+                grad_K_flat.stride(1),
+                grad_K_flat.stride(2),
                 dK,
                 dK.stride(0),
                 dK.stride(1),
