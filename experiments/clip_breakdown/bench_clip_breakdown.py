@@ -160,7 +160,7 @@ def run_case(device: str, kind: str, batch: int, iters: int):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--device", default="mps", choices=["cpu", "mps"])
+    ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
     ap.add_argument("--smoke", action="store_true", help="one tiny CPU config")
     ap.add_argument("--iters", type=int, default=8)
     args = ap.parse_args()
@@ -169,19 +169,21 @@ def main() -> None:
         cases = [("cpu", "many-small", 4)]
         args.iters = 2
     else:
+        dev = args.device
+        if dev == "auto":
+            dev = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
         cases = [
-            (args.device, "many-small", 32),
-            (args.device, "many-small", 128),
-            (args.device, "few-large", 16),
-            (args.device, "few-large", 64),
+            (dev, "many-small", 32),
+            (dev, "many-small", 128),
+            (dev, "few-large", 16),
+            (dev, "few-large", 64),
         ]
 
     results = {
         "meta": {
             "when": datetime.now(timezone.utc).isoformat(),
             "torch": torch.__version__,
-            "note": "SYNTHETIC data; single host (Apple-silicon Mac); "
-                    "MPS if device=mps. Ratios for triage only, not paper numbers.",
+            "note": "SYNTHETIC data; single host; ratios for triage only, not paper numbers.",
         },
         "cases": [],
     }
