@@ -43,7 +43,9 @@ RESULTS_PATH = Path(__file__).parent / "results.json"
 
 
 def sync(device: str) -> None:
-    if device == "mps" and hasattr(torch, "mps"):
+    if device == "cuda":
+        torch.cuda.synchronize()
+    elif device == "mps" and hasattr(torch, "mps"):
         torch.mps.synchronize()
 
 
@@ -66,12 +68,13 @@ def build_model(kind: str, device: str):
 def timed(fn, device: str, warmup: int = 3, iters: int = 8) -> float:
     for _ in range(warmup):
         fn()
-    sync(device)
+    sync(device)  # drain warmup queue before measuring
     ts = []
     for _ in range(iters):
+        sync(device)  # each measurement starts with an empty queue
         t0 = time.perf_counter()
         fn()
-        sync(device)
+        sync(device)  # and ends only when the device is idle
         ts.append((time.perf_counter() - t0) * 1000.0)
     ts.sort()
     return ts[len(ts) // 2]  # median ms
@@ -140,11 +143,14 @@ def run_case(device: str, kind: str, batch: int, iters: int):
         out[name] = timed(call, device, iters=iters)
         # memory (approximate, single run, peak-reset where supported)
         try:
-            if device == "mps":
-                torch.mps.reset_peak_memory_stats()
+            if device in ("mps", "cuda"):
+                dev_mod = torch.cuda if device == "cuda" else torch.mps
+                if device == "cuda":
+                    torch.cuda.empty_cache()
+                dev_mod.reset_peak_memory_stats()
                 call()
                 sync(device)
-                out[name + "_peak_mb"] = round(torch.mps.max_memory_allocated() / 2**20, 1)
+                out[name + "_peak_mb"] = round(dev_mod.max_memory_allocated() / 2**20, 1)
         except Exception as exc:  # memory stats are best-effort
             out[name + "_peak_mb"] = f"unavailable: {type(exc).__name__}"
 
