@@ -1770,7 +1770,7 @@ def test_dpo_scaled_policy_logps_match_native_reference(tmp_path):
     assert not trainer._use_fused_logp
 
     trainer.model.eval()
-    reference.eval()
+    reference.to(next(trainer.model.parameters()).device).eval()
     batch = _to_device(trainer, trainer.data_collator([trainer.train_dataset[0]]))
     inputs = {name: value[0] for name, value in batch.items()}
     fmodel, trainable, frozen = make_functional(trainer.model, partition_trainable=True)
