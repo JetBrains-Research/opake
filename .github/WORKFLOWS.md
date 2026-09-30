@@ -11,7 +11,7 @@ private callable workflows described below.
 | `pr.yml` | Pull requests to `main`, manual dispatch | Required Linux amd64, dependency-boundary, macOS arm64, Linux arm64, and CUDA checks plus preview-wheel artifacts. |
 | `ci.yml` | Pushes to `main` | Linux amd64, dependency-boundary, macOS arm64, Linux arm64, and CUDA validation plus development-wheel publication. |
 | `prepare-release.yml` | Manual dispatch from `main` or `release/X.Y` | Resolves a release line, reuses a successful `CI (main)` run for its exact SHA when available (otherwise runs the complete release test matrix), builds and validates its exact SHA, and either stops as a non-mutating dry run or creates the maintenance branch and complete draft Release. |
-| `release.yml` | Published GitHub Release, manual tag recovery | Verifies attached Release assets, publishes them idempotently to JetBrains Packages, and deploys immutable documentation. |
+| `release.yml` | Published GitHub Release, manual tag recovery | Verifies attached Release assets, publishes them idempotently to JetBrains Packages and to PyPI, and deploys immutable documentation. |
 | `docs.yml` | Pushes to `main`, manual dispatch, callable workflow | Builds rolling documentation or deploys a caller-selected immutable release version. |
 | `autoformat.yml` | Pull requests to `main` | Checks and, for trusted PRs, applies Python and Rust formatting fixes. |
 | `junie-review.yml` | Pull requests to `main` | Runs Junie as a repository reviewer using the branch's Junie guidance and architecture contracts. |
@@ -137,6 +137,15 @@ workflow; its selected source SHA remains immutable and is the only code tested
 or packaged. Entry-point workflows default to read-only permissions and
 elevate permissions only for trusted preparation or publishing jobs. Registry
 credentials exist only in `release.yml` after a maintainer publishes the draft.
+The PyPI publish job stores no long-lived PyPI secret: it exchanges the
+runner's OIDC token for a short-lived PyPI token through PyPI trusted
+publishing. Every distribution needs its own trusted-publisher entry on PyPI
+with owner `JetBrains-Research`, repository `opake`, workflow filename
+`release.yml`, and environment `release` before its first PyPI release, and
+the published names must stay unique to this project: an existing project of
+the same name either needs its ownership settled or a different distribution
+name. Both publishing jobs stay under the `release` environment so approval
+rules and OIDC access remain scoped to publishing runs.
 Fork pull requests do not run untrusted code on the self-hosted GPU runner and
 never receive repository, package, or cloud credentials.
 

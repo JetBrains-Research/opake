@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from opake.api.accounting.core._base import DpProcess, Pld
 from opake.api.accounting.core._pld_cache import pld_cache
-from opake.api.accounting.core.discretization import get_discretization
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -57,36 +55,17 @@ class Composed(DpProcess):
         mc_resolution: float | None = None,
         mc_failure_probability: float | None = None,
     ) -> Pld:
-        # Walk the left spine iteratively (mirrors __hash__) to avoid
-        # O(depth) Python call stack on left-skewed trees.
-        rights: list[DpProcess] = []
-        node: DpProcess = self
-        while isinstance(node, Composed):
-            rights.append(node.right)
-            node = node.left
-        # The configured probability is an overall bound for this composed
-        # PLD, not a fresh allowance for every Monte Carlo leaf. Split it over
-        # the top-level groups; nested composed groups recursively split their
-        # share. Analytic leaves report zero and merely leave slack unused.
-        resolved = get_discretization(
-            mc_resolution=mc_resolution,
-            mc_failure_probability=mc_failure_probability,
+        from ._iter_pld import iter_pld
+
+        return iter_pld(
+            self,
+            {
+                "discretization": discretization,
+                "log_x_mass_truncation_bound": log_x_mass_truncation_bound,
+                "max_grid_size": max_grid_size,
+                "max_conv_grid": max_conv_grid,
+                "seed": seed,
+                "mc_resolution": mc_resolution,
+                "mc_failure_probability": mc_failure_probability,
+            },
         )
-        group_count = len(rights) + 1
-        group_failure = resolved.mc_failure_probability / group_count
-        group_resolution = -math.expm1(
-            math.log1p(-resolved.mc_resolution) / group_count
-        )
-        kw = {
-            "discretization": discretization,
-            "log_x_mass_truncation_bound": log_x_mass_truncation_bound,
-            "max_grid_size": max_grid_size,
-            "max_conv_grid": max_conv_grid,
-            "seed": seed,
-            "mc_resolution": group_resolution,
-            "mc_failure_probability": group_failure,
-        }
-        result = node.pld(**kw)
-        for right in reversed(rights):
-            result = result.compose(right.pld(**kw))
-        return result

@@ -98,7 +98,7 @@ jobs:
           fi
 
       - name: Generate git-cliff section
-        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
         with:
           config: .release-tooling/cliff.toml
           args: ${{ steps.plan.outputs.commit_range }} --tag ${{ steps.plan.outputs.tag }} --strip header

@@ -68,13 +68,17 @@ class Repeated(DpProcess):
         mc_resolution: float | None = None,
         mc_failure_probability: float | None = None,
     ) -> Pld:
-        return self.inner.repeated_pld(
-            self.count,
-            discretization=discretization,
-            log_x_mass_truncation_bound=log_x_mass_truncation_bound,
-            max_grid_size=max_grid_size,
-            max_conv_grid=max_conv_grid,
-            seed=seed,
-            mc_resolution=mc_resolution,
-            mc_failure_probability=mc_failure_probability,
+        from ._iter_pld import iter_pld
+
+        return iter_pld(
+            self,
+            {
+                "discretization": discretization,
+                "log_x_mass_truncation_bound": log_x_mass_truncation_bound,
+                "max_grid_size": max_grid_size,
+                "max_conv_grid": max_conv_grid,
+                "seed": seed,
+                "mc_resolution": mc_resolution,
+                "mc_failure_probability": mc_failure_probability,
+            },
         )
