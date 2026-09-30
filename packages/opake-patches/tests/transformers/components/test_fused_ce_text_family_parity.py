@@ -216,7 +216,7 @@ def test_fused_ce_passes_family_scaling_without_copy(
         config = types.SimpleNamespace(
             output_attentions=False,
             output_hidden_states=False,
-            use_return_dict=False,
+            return_dict=False,
             final_logit_softcapping=0.0,
             **config_values,
         )
@@ -282,7 +282,7 @@ def test_scaled_fused_ce_preserves_tied_weight_chain_rule():
             self.config = types.SimpleNamespace(
                 output_attentions=False,
                 output_hidden_states=False,
-                use_return_dict=False,
+                return_dict=False,
                 final_logit_softcapping=0.0,
                 logit_scale=0.25,
                 logits_scaling=1.0,

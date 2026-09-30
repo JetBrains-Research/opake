@@ -33,7 +33,7 @@ class _DummyForCausalLM:
         self.config = types.SimpleNamespace(
             output_attentions=False,
             output_hidden_states=False,
-            use_return_dict=False,
+            return_dict=False,
             final_logit_softcapping=0.0,
             logit_scale=1.0,
             logits_scaling=1.0,
