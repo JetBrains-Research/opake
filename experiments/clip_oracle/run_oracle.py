@@ -183,6 +183,7 @@ def test_noise_convention(device: str) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mps", action="store_true")
+    ap.add_argument("--cuda", action="store_true")
     args = ap.parse_args()
     paths = ["stream", "nostream", "mb4"]
 
@@ -198,8 +199,13 @@ def main() -> None:
             test_parity_and_invariant("mps", torch.bfloat16, paths)
         else:
             NOTES.append("MPS unavailable; skipped")
+    if args.cuda and torch.cuda.is_available():
+        print("== CUDA / float32 ==")
+        test_parity_and_invariant("cuda", torch.float32, paths)
+        print("== CUDA / bfloat16 ==")
+        test_parity_and_invariant("cuda", torch.bfloat16, paths)
     print("== noise convention ==")
-    test_noise_convention("cpu")
+    test_noise_convention("cuda" if args.cuda and torch.cuda.is_available() else "cpu")
 
     print("\n==== SUMMARY ====")
     print(f"failures: {len(FAILURES)}")
