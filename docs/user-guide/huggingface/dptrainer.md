@@ -152,6 +152,10 @@ multi-billion-parameter scale).  Fused LoRA Triton kernels engage
 automatically when adapters have `bias="none"` — see
 [Model patches — Fused LoRA operations](model-patches.md#fused-lora-operations).
 
+To resume a PEFT run, reconstruct the same base model and active adapter setup.
+LoRA adapter weights are restored from the checkpoint. PEFT formats that omit
+trainable state, including P-Tuning, cannot resume and raise `CheckpointError`.
+
 ## Non-private baseline
 
 To measure the utility cost of differential privacy, run the trainer with

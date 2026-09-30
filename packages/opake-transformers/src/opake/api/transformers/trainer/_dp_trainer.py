@@ -1221,7 +1221,7 @@ class DPTrainer:
         runtime_payload: ckpt.RuntimeCheckpoint | None = None
         trainer_state_json: dict[str, Any] | None = None
         if resume_path is not None:
-            self._load_model_weights(resume_path)
+            self._restore_checkpoint_model(resume_path)
             runtime_payload, prefix_accountant = self._read_runtime_for_resume(
                 resume_path
             )
@@ -4974,28 +4974,7 @@ class DPTrainer:
         return True
 
     def _load_best_model(self, ctx: _TrainingContext) -> None:
-        """Restore best-checkpoint weights into the underlying ``nn.Module``.
-
-        Ordering contract (HF parity):
-
-        1. Read the saved state dict from ``state.best_model_checkpoint``.
-        2. Mutate ``self._model`` via ``load_state_dict(...)`` — the
-           caller verified the model's parameter set matches what was
-           saved.
-        3. Rebuild ``ctx.trainable_params`` from the freshly mutated
-           module so the functional path picks up the loaded weights.
-
-        Mutating the module first means a ``save_model()`` call between
-        ``_load_best_model`` and the ``train()`` ``finally`` block sees
-        the loaded weights even before ``_restore_params`` runs.
-
-        Raises ``RuntimeError`` when ``load_best_model_at_end=True`` was
-        requested but the best-checkpoint contract can't be honored —
-        no best checkpoint was recorded (eval never improved) or the
-        recorded directory has no weights file.  Soft-failing here
-        leaves the user with the last-trained weights silently masquerading
-        as "best", which is exactly what the flag is meant to prevent.
-        """
+        """Restore the selected checkpoint into the model and functional view."""
         ckpt_dir = self.state.best_model_checkpoint
         if ckpt_dir is None:
             raise OperationError(
@@ -5008,27 +4987,7 @@ class DPTrainer:
                 )
             )
         log.info("Loading best model from %s", ckpt_dir)
-        new_state, mutated = self._read_weights_file(ckpt_dir)
-        if not new_state and not mutated:
-            raise OperationError(
-                *(
-                    f"load_best_model_at_end=True: best checkpoint recorded at "
-                    f"{ckpt_dir!r} but no weights file (model.safetensors / "
-                    "pytorch_model.bin / sharded index) was found there.  The "
-                    "directory may have been pruned or moved between save and "
-                    "end-of-train load.",
-                )
-            )
-
-        # Mutate the underlying module so ``save_model()`` and any callback
-        # firing on ``on_train_end`` observe the best weights immediately.
-        # Sharded loads have already mutated the model in place — skip
-        # the redundant ``load_state_dict`` call.  PEFT detection drives
-        # ``strict``: adapter dirs ship only adapter weights, full-model
-        # dirs ship the full state dict.
-        if not mutated:
-            strict = not self._is_peft
-            self._model.load_state_dict(new_state, strict=strict)
+        self._restore_checkpoint_model(ckpt_dir)
 
         # Rebuild the functional view from the (now-mutated) module.  Keep
         # ``ctx.trainable_params`` keyed by the same names as before — i.e.
@@ -5045,86 +5004,159 @@ class DPTrainer:
                 },
             )
 
-    def _read_weights_file(
-        self,
-        ckpt_dir: str,
-    ) -> tuple[dict[str, torch.Tensor], bool]:
-        """Load weights from a checkpoint directory.
+    def _restore_checkpoint_model(self, ckpt_dir: str) -> None:
+        """Restore model weights from a trainer checkpoint."""
+        directory = Path(ckpt_dir)
+        try:
+            if self._is_peft:
+                self._restore_peft_checkpoint(directory)
+            else:
+                self._restore_full_checkpoint(directory)
+        except CheckpointError:
+            raise
+        except Exception as exc:
+            CheckpointError.raise_(
+                f"Could not restore model weights from {directory}: {exc}", cause=exc
+            )
 
-        Supports four on-disk shapes:
+    def _restore_peft_checkpoint(self, directory: Path) -> None:
+        from peft import (
+            PeftConfig,
+            get_peft_model_state_dict,
+            set_peft_model_state_dict,
+        )
+        from peft.utils import SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME
+        from peft.utils.save_and_load import load_peft_weights
 
-        - Single-file safetensors: ``model.safetensors`` (full model) or
-          ``adapter_model.safetensors`` (PEFT adapter).
-        - Single-file pickle: ``pytorch_model.bin`` /
-          ``adapter_model.bin``.
-        - Sharded safetensors with index ``model.safetensors.index.json``.
-        - Sharded pickle with index ``pytorch_model.bin.index.json``.
+        adapter_dirs = {
+            child.name: child
+            for child in directory.iterdir()
+            if child.is_dir() and (child / "adapter_config.json").is_file()
+        }
+        if (directory / "adapter_config.json").is_file():
+            adapter_dirs["default"] = directory
+        expected_names = set(self._model.peft_config)
+        if set(adapter_dirs) != expected_names:
+            CheckpointError.raise_(
+                f"PEFT adapters in {directory} differ from the model: "
+                f"saved={sorted(adapter_dirs)}, expected={sorted(expected_names)}"
+            )
 
-        Returns ``(state_dict, model_already_mutated)``.  In the
-        single-file cases ``state_dict`` carries the loaded tensors and
-        ``model_already_mutated`` is ``False`` (the caller must call
-        ``self._model.load_state_dict(state_dict, ...)`` itself).  In
-        the sharded case ``load_sharded_checkpoint`` has already
-        mutated ``self._model`` in place, so the state dict comes back
-        empty and ``model_already_mutated`` is ``True`` to signal "no
-        further ``load_state_dict`` needed".  Returns ``({}, False)``
-        when no checkpoint files were found.
-        """
+        metadata = {
+            "auto_mapping",
+            "base_model_name_or_path",
+            "inference_mode",
+            "peft_version",
+        }
+        for name in sorted(expected_names):
+            adapter_dir = adapter_dirs[name]
+            if not any(
+                (adapter_dir / filename).is_file()
+                for filename in (SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME)
+            ):
+                CheckpointError.raise_(f"Missing PEFT weights in {adapter_dir}")
+
+            raw_config = json.loads((adapter_dir / "adapter_config.json").read_text())
+            saved_config = PeftConfig.from_pretrained(str(adapter_dir))
+            unknown = set(raw_config) - set(saved_config.to_dict()) - {"peft_version"}
+            if unknown:
+                CheckpointError.raise_(
+                    f"Unsupported PEFT config fields in {adapter_dir}: {sorted(unknown)}"
+                )
+            live_config = self._model.peft_config[name]
+            saved_values = {
+                key: value
+                for key, value in saved_config.to_dict().items()
+                if key not in metadata
+            }
+            live_values = {
+                key: value
+                for key, value in live_config.to_dict().items()
+                if key not in metadata
+            }
+            if saved_values != live_values:
+                changed = sorted(
+                    key
+                    for key in saved_values.keys() | live_values.keys()
+                    if key not in saved_values
+                    or key not in live_values
+                    or saved_values[key] != live_values[key]
+                )
+                CheckpointError.raise_(
+                    f"PEFT config mismatch for {name!r} in {adapter_dir}: {changed}"
+                )
+
+            saved = load_peft_weights(str(adapter_dir), device="cpu")
+            set_peft_model_state_dict(self._model, dict(saved), adapter_name=name)
+            restored = get_peft_model_state_dict(
+                self._model, adapter_name=name, save_embedding_layers=False
+            )
+            if set(saved) - set(restored):
+                restored = get_peft_model_state_dict(
+                    self._model, adapter_name=name, save_embedding_layers=True
+                )
+            if set(saved) != set(restored):
+                CheckpointError.raise_(
+                    f"Incomplete PEFT adapter {name!r} in {adapter_dir}: "
+                    f"missing={sorted(set(restored) - set(saved))[:5]}, "
+                    f"unexpected={sorted(set(saved) - set(restored))[:5]}"
+                )
+            for weight_name, value in saved.items():
+                actual = restored[weight_name]
+                if isinstance(value, Tensor) and isinstance(actual, Tensor):
+                    matches = value.shape == actual.shape and torch.equal(
+                        value.to(device=actual.device, dtype=actual.dtype), actual
+                    )
+                else:
+                    matches = value == actual
+                if not matches:
+                    CheckpointError.raise_(
+                        f"PEFT tensor {weight_name!r} was not restored from {adapter_dir}"
+                    )
+
+    def _restore_full_checkpoint(self, directory: Path) -> None:
         from safetensors.torch import load_file as load_safetensors
 
-        from transformers.utils import (
-            SAFE_WEIGHTS_INDEX_NAME,
-            WEIGHTS_INDEX_NAME,
-        )
+        from transformers.trainer_utils import load_sharded_checkpoint
+        from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, WEIGHTS_INDEX_NAME
 
-        # ``load_sharded_checkpoint`` relocated across our supported range:
-        # ``transformers.modeling_utils`` in v4, ``transformers.trainer_utils``
-        # in v5.  Import from wherever it lives rather than pinning a module.
-        try:
-            from transformers.modeling_utils import load_sharded_checkpoint
-        except ImportError:  # transformers >= 5
-            from transformers.trainer_utils import load_sharded_checkpoint
-
-        # Single-file shapes win over sharded indices (HF parity:
-        # ``save_pretrained`` writes a single file when the model fits
-        # under ``max_shard_size``).
-        candidates = [
-            Path(ckpt_dir) / ckpt.SAFE_WEIGHTS_NAME,
-            Path(ckpt_dir) / "adapter_model.safetensors",
-            Path(ckpt_dir) / ckpt.WEIGHTS_NAME,
-            Path(ckpt_dir) / "adapter_model.bin",
-        ]
-        for path in candidates:
-            if not path.exists():
-                continue
-            if path.suffix == ".safetensors":
-                return load_safetensors(str(path), device=str(self._device)), False
-            # ``weights_only=False``: ``pytorch_model.bin`` is a pickled
-            # state-dict that may carry ``torch.dtype`` / ``torch.device``
-            # markers (HF historically stamps these into checkpoints) —
-            # PyTorch 2.6's safe-load default rejects them.  Pinning the
-            # explicit ``False`` keeps the behaviour we tested against.
-            return (
-                torch.load(str(path), map_location=self._device, weights_only=False),
-                False,
+        safe_path = directory / ckpt.SAFE_WEIGHTS_NAME
+        binary_path = directory / ckpt.WEIGHTS_NAME
+        if safe_path.is_file():
+            weights = load_safetensors(str(safe_path), device=str(self._device))
+            result = self._model.load_state_dict(weights, strict=False)
+        elif binary_path.is_file():
+            weights = torch.load(
+                str(binary_path), map_location=self._device, weights_only=False
             )
-
-        # Sharded checkpoints: ``load_sharded_checkpoint`` mutates the
-        # model in place.  ``strict=False`` mirrors the PEFT-friendly
-        # single-file path so partial-key checkpoints still load.
-        sharded_indices = (
-            Path(ckpt_dir) / SAFE_WEIGHTS_INDEX_NAME,
-            Path(ckpt_dir) / WEIGHTS_INDEX_NAME,
-        )
-        if any(p.exists() for p in sharded_indices):
-            load_sharded_checkpoint(
-                self._model,
-                ckpt_dir,
-                strict=False,
-                prefer_safe=True,
+            result = self._model.load_state_dict(weights, strict=False)
+        elif any(
+            (directory / name).is_file()
+            for name in (SAFE_WEIGHTS_INDEX_NAME, WEIGHTS_INDEX_NAME)
+        ):
+            result = load_sharded_checkpoint(
+                self._model, str(directory), strict=False, prefer_safe=True
             )
-            return {}, True
-        return {}, False
+        else:
+            CheckpointError.raise_(f"Missing model weights in {directory}")
+
+        missing = set(result.missing_keys)
+        unexpected = set(result.unexpected_keys)
+        tying = getattr(self._model, "tie_weights", None)
+        get_ties = getattr(self._model, "get_expanded_tied_weights_keys", None)
+        tied = get_ties(all_submodels=True) if callable(get_ties) else {}
+        loaded = set(self._model.state_dict()) - missing
+        invalid_missing = {
+            key for key in missing if not callable(tying) or tied.get(key) not in loaded
+        }
+        if unexpected or invalid_missing:
+            CheckpointError.raise_(
+                f"Model weights in {directory} do not match the model: "
+                f"missing={sorted(invalid_missing)[:5]}, "
+                f"unexpected={sorted(unexpected)[:5]}"
+            )
+        if missing:
+            tying(missing_keys=missing)
 
     def save_model(
         self,
@@ -5585,21 +5617,6 @@ class DPTrainer:
                 *(f"resume_from_checkpoint directory does not exist: {value}",)
             )
         return value
-
-    def _load_model_weights(self, ckpt_dir: str) -> None:
-        """Load saved weights into ``self._model`` so make_functional starts from them."""
-        new_state, mutated = self._read_weights_file(ckpt_dir)
-        if not new_state and not mutated:
-            log.warning("No weights file in %s; model untouched", ckpt_dir)
-            return
-        # Sharded loads already mutated ``self._model`` in place — skip
-        # the redundant ``load_state_dict`` call.  ``strict`` follows
-        # PEFT detection: adapter checkpoints store only adapter
-        # parameters (subset → ``strict=False``); full-model checkpoints
-        # surface mismatched keys as errors (``strict=True``).
-        if not mutated:
-            strict = not self._is_peft
-            self._model.load_state_dict(new_state, strict=strict)
 
     def _read_runtime_for_resume(
         self, ckpt_dir: str
