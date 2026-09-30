@@ -271,7 +271,8 @@ clipping-active data regimes (per-sample norms straddling C):
 
 - [x] **1.0 ✅ DONE (A100 40GB, synced timing)** CUDA-baseline gate on target hardware (`results_cuda_a100.json`). **Result:** clip share 77–91%; clip machinery ≫ materialization in time (7–18×) but materialization dominates *memory* (26.5–34.4 GiB peaks at B=64); nostream is the faster CUDA baseline (fused kernel must beat it, ≤ stream memory); microbatching never wins on time. **Gate passed: v1 = fused in-vmap clip, confirmed.**
 
-- [ ] **1.1** Port Triton kernels from FlashDP (`mm_clip.py`, `bmtm_clip.py`, `clip_fn.py`, `utils.py`) — *r3 update: the 1.0 gate condition (materialization dominance) did NOT hold on A100; per-layer port deferred. Default v1 work is the fused in-vmap norm+scale kernel, prototyped in `experiments/` behind the oracle rig*
+- [x] **1.1a ✅ Prototype v0 landed** (`experiments/clip_fused/fused_clip.py`, A100): 3-launch deterministic fused clip+sum; 8/8 correctness gates green (fp64-oracle parity, chain parity, stored-bound ≤ C in fp32+bf16, bitwise determinism); op-level speedup x7.2 (fp32 big leaf) / x25.4 (bf16 big leaf) / x1.7–3.4 (small leaves) vs the reconstructed stream chain; peak memory 4.2 GB vs 20.5 GB per big leaf; ~84–85% of HBM roofline. Baseline bar §4-baselines was met and exceeded at op level.
+- [ ] **1.1b** Pipeline-seam integration: route the real `clipped_fun`/`clipped_grad` stream path through the fused kernel behind a flag; e2e step benchmark vs the synced CUDA baselines (33.8–208 ms clip buckets); per-tree `norm_roundoff` constant; small-leaf launch diet (fold C1 combine+scale into K2 prologue or one extra fused kernel; then consider CUDA graphs for 48-leaf trees).
   - Adapt to Opake's Triton kernel patterns (existing kernels in `opake-patches/src/opake/api/patches/kernels/`)
   - Add dtype support: fp32, bf16 (defer fp16)
   - Add `autograd.Function` compatibility checks
