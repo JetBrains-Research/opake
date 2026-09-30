@@ -288,18 +288,27 @@ jobs:
       - name: Build documentation
         run: uv run mkdocs build --strict
 
-      - name: Execute accounting documentation
+      - name: Execute tutorials and verify published privacy values
         run: |
           uv run python examples/quickstart.py
           uv run python -m doctest packages/opake-accounting/src/opake/accounting/__init__.py
           for notebook in \
             accounting_and_calibration.ipynb \
             dp_sgd_training.ipynb \
-            dp_ftrl_training.ipynb
+            dp_ftrl_training.ipynb \
+            sampling_and_microbatching.ipynb \
+            privacy_auditing.ipynb \
+            llm_finetuning.ipynb
           do
             cp "docs/tutorials/$notebook" "$RUNNER_TEMP/$notebook"
             uv run jupyter execute "$RUNNER_TEMP/$notebook" --inplace
+            uv run python .github/scripts/check_notebook_epsilons.py \
+              "docs/tutorials/$notebook" "$RUNNER_TEMP/$notebook"
           done
+          uv run jupyter nbconvert --to python docs/tutorials/distributed_training.ipynb \
+            --output distributed_training --output-dir "$RUNNER_TEMP"
+          uv run torchrun --nnodes=1 --nproc_per_node=2 \
+            --master_addr=127.0.0.1 --master_port=29521 "$RUNNER_TEMP/distributed_training.py"
 
   # ---------------------------------------------------------------------------
   # Preview wheels. Builds every wheel at a version like

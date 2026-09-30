@@ -58,6 +58,7 @@ class TestAdaptivePerGroupBasic:
             initial_clipping_norm=pg,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         assert isinstance(clip_state._current_clipping_norm, PerGroup)
@@ -76,6 +77,7 @@ class TestAdaptivePerGroupBasic:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
 
         batch_x = torch.randn(8, 10)
@@ -99,6 +101,7 @@ class TestAdaptivePerGroupBasic:
             initial_clipping_norm=pg,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         batch_x = torch.randn(8, 10)
@@ -161,6 +164,7 @@ class TestAdaptivePerGroupConvergence:
             key=key(42),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
 
         batch_x = torch.randn(16, 5)
@@ -193,6 +197,7 @@ class TestAdaptivePerGroupConvergence:
             learning_rate=0.3,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         initial_a = pg.values["a"]
@@ -228,6 +233,7 @@ class TestAdaptivePerGroupDeterministic:
                 initial_clipping_norm=pg,
                 key=key(42),
                 batch_argnums=(1, 2),
+                expected_batch_size=1.0,
             )
             _, clip_state = grad_fn(params, batch_x, batch_y, state=clip_state)
             results.append(clip_state._next_clipping_norm)
@@ -239,8 +245,8 @@ class TestAdaptivePerGroupDeterministic:
 class TestAdaptivePerGroupEmptyBatch:
     """Tests for empty batch handling with per-group adaptive clipping."""
 
-    def test_empty_batch_preserves_per_group_thresholds(self):
-        """Test that empty batch preserves per-group thresholds."""
+    def test_empty_batch_noises_per_group_thresholds(self):
+        """An empty draw still spends one adaptive clipping step."""
         loss_fn = _make_per_group_loss_fn()
         params = {"a": torch.randn(10), "b": torch.randn(5)}
         pg = _make_per_group(params, a_norm=1.5, b_norm=3.0)
@@ -250,6 +256,7 @@ class TestAdaptivePerGroupEmptyBatch:
             initial_clipping_norm=pg,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Empty batch
@@ -258,9 +265,8 @@ class TestAdaptivePerGroupEmptyBatch:
 
         _, clip_state = grad_fn(params, batch_x, batch_y, state=clip_state)
 
-        # Thresholds should be unchanged
-        assert clip_state._next_clipping_norm.values["a"] == 1.5
-        assert clip_state._next_clipping_norm.values["b"] == 3.0
+        assert clip_state._next_clipping_norm.values["a"] != 1.5
+        assert clip_state._next_clipping_norm.values["b"] != 3.0
         assert clip_state._step == 1
 
     def test_empty_batch_num_clipped_is_dict(self):
@@ -274,6 +280,7 @@ class TestAdaptivePerGroupEmptyBatch:
             initial_clipping_norm=pg,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         batch_x = torch.randn(0, 10)
@@ -300,6 +307,7 @@ class TestAdaptivePerGroupAux:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
 
         batch_x = torch.randn(8, 10)
@@ -329,6 +337,7 @@ class TestAdaptivePerGroupAux:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=False,
+            expected_batch_size=1.0,
         )
 
         batch_x = torch.randn(8, 10)
@@ -358,6 +367,7 @@ class TestAdaptivePerGroupValidation:
                 initial_clipping_norm=pg,
                 key=key(0),
                 batch_argnums=(1, 2),
+                expected_batch_size=1.0,
             )
 
     def test_state_validation_rejects_negative_next_clipping_norm(self):
@@ -374,6 +384,7 @@ class TestAdaptivePerGroupValidation:
                 _step=0,
                 _rng_key=key(0),
                 _fraction_noise_std=0.05,
+                _expected_batch_size=1.0,
                 _learning_rate=0.2,
                 _target_quantile=0.5,
                 _clipping_norm_min=0.01,
@@ -398,6 +409,7 @@ class TestAdaptivePerGroupMicrobatch:
             key=key(0),
             batch_argnums=(1, 2),
             microbatch_size=4,
+            expected_batch_size=1.0,
         )
 
         batch_x = torch.randn(8, 10)
@@ -434,6 +446,7 @@ class TestAdaptivePerGroupMicrobatch:
             batch_argnums=(1, 2),
             microbatch_size=4,
             return_aux=False,
+            expected_batch_size=1.0,
         )
 
         batch_x = torch.randn(8, 10)
@@ -461,6 +474,7 @@ class TestAdaptivePerGroupMicrobatch:
             microbatch_size=4,
             return_aux=True,
             _chunk_compiler=compiler,
+            expected_batch_size=1.0,
         )
         batch_x = torch.randn(8, 10)
         batch_y = torch.randn(8)

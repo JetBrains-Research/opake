@@ -2,7 +2,7 @@
 
 Verifies that clipped_grad, adaptive_clipped_grad, and their distributed sync
 functions handle batch_size=0 correctly — producing zero grads, empty aux
-tensors, preserving adaptive clipping_norm, and avoiding DDP deadlocks.
+tensors, advancing adaptive clipping noise, and avoiding DDP deadlocks.
 """
 
 import pytest
@@ -172,6 +172,7 @@ class TestAdaptiveClippedGradEmptyBatch:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
         initial_cn = clip_state._current_clipping_norm
         grads, new_state = grad_fn(params, *empty_batch, state=clip_state)
@@ -189,6 +190,7 @@ class TestAdaptiveClippedGradEmptyBatch:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
         assert clip_state._step == 0
         _, new_state = grad_fn(params, *empty_batch, state=clip_state)
@@ -201,6 +203,7 @@ class TestAdaptiveClippedGradEmptyBatch:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
         initial_cn = clip_state._current_clipping_norm
 
@@ -220,6 +223,7 @@ class TestAdaptiveClippedGradEmptyBatch:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
         (_grads, aux), _new_state = grad_fn(params, *empty_batch, state=clip_state)
 
@@ -231,20 +235,21 @@ class TestAdaptiveClippedGradEmptyBatch:
         assert aux.loss_aux is None
 
     def test_consecutive_empty_batches(self, params, empty_batch):
-        """Multiple empty batches don't drift clipping_norm."""
+        """Empty draws advance the noisy clipping process."""
         grad_fn, clip_state = adaptive_clipped_grad(
             _simple_loss_fn,
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
         initial_cn = clip_state._current_clipping_norm
 
         for _ in range(10):
             _, clip_state = grad_fn(params, *empty_batch, state=clip_state)
 
-        assert clip_state._current_clipping_norm == initial_cn
-        assert clip_state._next_clipping_norm == initial_cn
+        assert clip_state._current_clipping_norm != initial_cn
+        assert clip_state._next_clipping_norm != initial_cn
         assert clip_state._step == 10
 
 
@@ -269,6 +274,7 @@ class TestAdaptiveClippedGradEmptyBatchSecondMoment:
             key=key(0),
             batch_argnums=(1, 2),
             second_moment=True,
+            expected_batch_size=1.0,
         )
         grads, _ = grad_fn(params, *empty_batch, state=clip_state)
         assert isinstance(grads, SecondMomentClippingOutput)
@@ -314,6 +320,7 @@ class TestAdaptiveClippedGradEmptyBatchSecondMoment:
             key=key(0),
             batch_argnums=(1, 2),
             second_moment=True,
+            expected_batch_size=1.0,
         )
         _, clip_state = grad_fn(params, *normal_batch, state=clip_state)
         next_cn = clip_state._next_clipping_norm
@@ -336,6 +343,7 @@ class TestAdaptiveClippedGradEmptyBatchSecondMoment:
             key=key(0),
             batch_argnums=(1, 2),
             second_moment=True,
+            expected_batch_size=1.0,
         )
         for batch in (empty_batch, normal_batch, empty_batch):
             grads, clip_state = grad_fn(params, *batch, state=clip_state)
@@ -356,6 +364,7 @@ class TestAdaptiveClippedGradEmptyBatchSecondMoment:
             key=key(0),
             batch_argnums=(1, 2),
             second_moment=True,
+            expected_batch_size=1.0,
         )
         noise_fn, noise_state = gaussian_noise(noise_multiplier=1.1, key=key(99))
 
@@ -433,6 +442,7 @@ class TestAdaptiveClippedGradEmptyBatchSecondMoment:
             batch_argnums=(1, 2),
             return_aux=True,
             second_moment=True,
+            expected_batch_size=1.0,
         )
         (grads, aux), _ = grad_fn(params, *empty_batch, state=clip_state)
         assert isinstance(grads, SecondMomentClippingOutput)
@@ -487,6 +497,7 @@ class TestPerGroupEmptyBatchAuxSchema:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
         (_, aux), _ = grad_fn(params, *empty_batch, state=clip_state)
         assert aux.clipping_rate is None
@@ -501,6 +512,7 @@ class TestPerGroupEmptyBatchAuxSchema:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
         (_, empty_aux), state = grad_fn(params, *empty_batch, state=clip_state)
         (_, full_aux), _ = grad_fn(params, *normal_batch, state=state)
@@ -516,6 +528,7 @@ class TestPerGroupEmptyBatchAuxSchema:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
         (_, empty_aux), state = grad_fn(params, *empty_batch, state=clip_state)
         (_, full_aux), _ = grad_fn(params, *normal_batch, state=state)
@@ -540,6 +553,7 @@ class TestSyncAdaptiveClipStateAllEmpty:
             _step=5,
             _rng_key=key(0),
             _fraction_noise_std=0.05,
+            _expected_batch_size=1.0,
             _learning_rate=0.2,
             _target_quantile=0.5,
             _clipping_norm_min=0.01,
@@ -603,6 +617,7 @@ class TestAdaptiveEmptyBatchStructureAndDtypeParity:
             batch_argnums=(1, 2),
             key=key(0),
             dtype=torch.float32,
+            expected_batch_size=1.0,
         )
         full, _ = grad_fn(params, x, y, state=clip_state)
         empty, _ = grad_fn(params, empty_x, empty_y, state=clip_state)
@@ -622,6 +637,7 @@ class TestAdaptiveEmptyBatchStructureAndDtypeParity:
             key=key(0),
             pre_clipping_transform=transform,
             dtype=torch.float32,
+            expected_batch_size=1.0,
         )
         full, _ = grad_fn(params, x, y, state=clip_state)
         empty, _ = grad_fn(params, empty_x, empty_y, state=clip_state)
@@ -643,6 +659,7 @@ class TestAdaptiveEmptyBatchStructureAndDtypeParity:
             pre_clipping_transform=transform,
             dtype=torch.float32,
             second_moment=True,
+            expected_batch_size=1.0,
         )
         full, _ = grad_fn(params, x, y, state=clip_state)
         empty, _ = grad_fn(params, empty_x, empty_y, state=clip_state)

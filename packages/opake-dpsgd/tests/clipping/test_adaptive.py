@@ -30,6 +30,7 @@ class TestAdaptiveClippedGrad:
                 batch_argnums=1,
                 return_aux=True,
                 return_stats=True,
+                expected_batch_size=1.0,
             )
 
     def test_basic_usage(self):
@@ -46,6 +47,7 @@ class TestAdaptiveClippedGrad:
             target_quantile=0.5,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Check initial state
@@ -73,6 +75,7 @@ class TestAdaptiveClippedGrad:
             key=key(0),
             batch_argnums=1,
             return_stats=True,
+            expected_batch_size=1.0,
         )
 
         (grads, stats), _ = grad_fn(
@@ -100,6 +103,7 @@ class TestAdaptiveClippedGrad:
             learning_rate=0.2,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -129,6 +133,7 @@ class TestAdaptiveClippedGrad:
             learning_rate=0.2,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -237,6 +242,7 @@ class TestAdaptiveClippedGrad:
             clipping_norm_max=clipping_norm_max,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -262,6 +268,7 @@ class TestAdaptiveClippedGrad:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -288,6 +295,7 @@ class TestAdaptiveClippedGrad:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=True,  # Need to explicitly request aux outputs
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -322,6 +330,7 @@ class TestAdaptiveClippedGrad:
             target_quantile=0.1,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # High target quantile (aim to clip more gradients)
@@ -331,6 +340,7 @@ class TestAdaptiveClippedGrad:
             target_quantile=0.9,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Run 20 steps for more reliable convergence
@@ -375,6 +385,7 @@ class TestAdaptiveClippedGrad:
             clipping_norm_max=100.0,
             key=key(0),
             batch_argnums=(1,),
+            normalize_by=100,
         )
 
         for _ in range(200):
@@ -405,6 +416,7 @@ class TestAdaptiveClippedGrad:
             learning_rate=0.05,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Fast adaptation
@@ -414,6 +426,7 @@ class TestAdaptiveClippedGrad:
             learning_rate=0.5,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Run 5 steps
@@ -444,6 +457,7 @@ class TestAdaptiveClippedGrad:
             key=key(0),
             batch_argnums=(1, 2),
             return_aux=True,  # Should be passed to clipped_grad
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -472,6 +486,7 @@ class TestAdaptiveClippedGrad:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -506,6 +521,7 @@ class TestAdaptiveClippedGrad:
             key=key(0),
             batch_argnums=(1, 2),
             microbatch_size=None,  # No microbatching
+            expected_batch_size=1.0,
         )
 
         grad_fn_mb, state_mb = adaptive_clipped_grad(
@@ -516,6 +532,7 @@ class TestAdaptiveClippedGrad:
             key=key(0),
             batch_argnums=(1, 2),
             microbatch_size=8,  # Process in microbatches of 8
+            expected_batch_size=1.0,
         )
 
         # Test over multiple steps to verify state updates match
@@ -570,6 +587,7 @@ class TestAdaptiveClippedGrad:
             batch_argnums=(1, 2),
             microbatch_size=4,
             return_aux=False,
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -595,7 +613,9 @@ class TestInputValidation:
         with pytest.raises(
             ConfigurationError, match="initial_clipping_norm must be positive"
         ):
-            adaptive_clipped_grad(loss_fn, initial_clipping_norm=-1.0, key=key(0))
+            adaptive_clipped_grad(
+                loss_fn, initial_clipping_norm=-1.0, key=key(0), expected_batch_size=1.0
+            )
 
     def test_invalid_target_quantile(self):
         """Test that target_quantile outside (0, 1) raises error."""
@@ -604,10 +624,14 @@ class TestInputValidation:
             return params.sum()
 
         with pytest.raises(ValueError, match="target_quantile must be in"):
-            adaptive_clipped_grad(loss_fn, target_quantile=0.0, key=key(0))
+            adaptive_clipped_grad(
+                loss_fn, target_quantile=0.0, key=key(0), expected_batch_size=1.0
+            )
 
         with pytest.raises(ValueError, match="target_quantile must be in"):
-            adaptive_clipped_grad(loss_fn, target_quantile=1.0, key=key(0))
+            adaptive_clipped_grad(
+                loss_fn, target_quantile=1.0, key=key(0), expected_batch_size=1.0
+            )
 
     def test_invalid_learning_rate(self):
         """Test that negative learning_rate raises error."""
@@ -616,7 +640,9 @@ class TestInputValidation:
             return params.sum()
 
         with pytest.raises(ValueError, match="learning_rate must be positive"):
-            adaptive_clipped_grad(loss_fn, learning_rate=-0.1, key=key(0))
+            adaptive_clipped_grad(
+                loss_fn, learning_rate=-0.1, key=key(0), expected_batch_size=1.0
+            )
 
     def test_invalid_clipping_norm_min(self):
         """Test that negative clipping_norm_min raises error."""
@@ -627,7 +653,9 @@ class TestInputValidation:
         with pytest.raises(
             ConfigurationError, match="clipping_norm_min must be positive"
         ):
-            adaptive_clipped_grad(loss_fn, clipping_norm_min=-0.1, key=key(0))
+            adaptive_clipped_grad(
+                loss_fn, clipping_norm_min=-0.1, key=key(0), expected_batch_size=1.0
+            )
 
     def test_invalid_clipping_norm_max(self):
         """Test that clipping_norm_max <= clipping_norm_min raises error."""
@@ -639,7 +667,11 @@ class TestInputValidation:
             ValueError, match=r"clipping_norm_max.*must be.*clipping_norm_min"
         ):
             adaptive_clipped_grad(
-                loss_fn, clipping_norm_min=10.0, clipping_norm_max=5.0, key=key(0)
+                loss_fn,
+                clipping_norm_min=10.0,
+                clipping_norm_max=5.0,
+                key=key(0),
+                expected_batch_size=1.0,
             )
 
 
@@ -658,6 +690,7 @@ class TestEdgeCases:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -680,6 +713,7 @@ class TestEdgeCases:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -702,6 +736,7 @@ class TestEdgeCases:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
         assert clip_state._batch_size == 0
 
@@ -756,6 +791,7 @@ class TestEdgeCases:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)

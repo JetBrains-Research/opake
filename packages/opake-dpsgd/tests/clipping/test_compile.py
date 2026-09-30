@@ -90,7 +90,10 @@ def test_adaptive_chunk_compiles_once_across_threshold_updates():
         "microbatch_size": 4,
     }
     eager_fn, eager_state = adaptive_clipped_grad(
-        _loss, initial_clipping_norm=1.0, key=key(0), **common
+        _loss,
+        initial_clipping_norm=1.0,
+        key=key(0),
+        **common,
     )
     compiled_fn, compiled_state = adaptive_clipped_grad(
         _loss,

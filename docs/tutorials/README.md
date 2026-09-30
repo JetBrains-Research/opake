@@ -39,7 +39,7 @@ Concerns that apply to either stack.
 | Tutorial | Task |
 | -------- | ---- |
 | [Privacy Auditing](privacy_auditing.ipynb) | Validate privacy guarantees empirically with one-run / coin-flip auditing. |
-| [Distributed Training](distributed_training.ipynb) | Multi-GPU DP training under DDP — synchronized noise, sharded sampling. |
+| [Distributed Training](distributed_training.ipynb) | Multi-process DP training on CPU or GPU — synchronized noise, sharded sampling. |
 
 ## Running the tutorials
 

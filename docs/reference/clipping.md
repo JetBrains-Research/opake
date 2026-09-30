@@ -65,7 +65,7 @@ Use `sync()` from `opake.distributed` to synchronize any clipping state or aux
 object. It auto-dispatches to the right function based on type:
 
 - **`sync(FixedClipState | AutoClipState)`** → marker-state passthrough.
-- **`sync(AdaptiveClipState)`** → sums local clipped counts and batch sizes across ranks, recomputes the global clipping rate, and updates the internal next adaptive threshold identically on every rank.
+- **`sync(AdaptiveClipState)`** → sums local clipped counts and batch sizes across ranks, uses the centered statistic with the public expected batch size, and updates the internal next adaptive threshold identically on every rank.
 - **`sync(ClippedFunAux | ClippedGradAux | AutoClippedFunAux | AutoClippedGradAux | AdaptiveClippedGradAux)`** → gathers aux across ranks.
 
 Dispatch resolves by exact type and then by `__mro__`, so any subclass of a

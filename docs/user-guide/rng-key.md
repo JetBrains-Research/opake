@@ -182,7 +182,7 @@ from opake.dpsgd.clipping import adaptive_clipped_grad
 from opake.random import key
 
 grad_fn, clip_state = adaptive_clipped_grad(
-    loss_fn, initial_clipping_norm=1.0, key=key(7),
+    loss_fn, initial_clipping_norm=1.0, normalize_by=32, key=key(7),
 )
 ```
 

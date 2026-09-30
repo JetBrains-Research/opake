@@ -151,6 +151,7 @@ def _worker_sync_adaptive_clip_state(rank: int, world_size: int, port: int) -> N
             _step=100,
             _rng_key=key(42),
             _fraction_noise_std=0.05,
+            _expected_batch_size=16.0,
             _learning_rate=0.2,
             _target_quantile=0.5,
             _clipping_norm_min=0.01,
@@ -181,6 +182,7 @@ def _worker_adaptive_clipping(rank: int, world_size: int, port: int) -> None:
             batch_argnums=(1, 2),
             initial_clipping_norm=0.1,
             key=key(0),
+            expected_batch_size=1.0,
         )
 
         batch_size = 8
@@ -221,6 +223,7 @@ def _worker_adaptive_clipping_uneven_batches(
             batch_argnums=(1, 2),
             initial_clipping_norm=0.1,
             key=key(0),
+            expected_batch_size=1.0,
         )
 
         local_batch_size = 4 if rank == 0 else 7
@@ -256,6 +259,7 @@ def _worker_sync_aux_adaptive_clipping(rank: int, world_size: int, port: int) ->
             initial_clipping_norm=0.1,
             key=key(0),
             return_aux=True,
+            expected_batch_size=1.0,
         )
 
         local_batch_size = 3 if rank == 0 else 5
@@ -299,6 +303,7 @@ def _worker_cpu_gloo_training_contract(rank: int, world_size: int, port: int) ->
             batch_argnums=(1, 2),
             initial_clipping_norm=0.1,
             key=key(17),
+            expected_batch_size=1.0,
         )
         local_batch_size = 3 if rank == 0 else 5
         x = torch.randn(local_batch_size, 10)
@@ -324,6 +329,7 @@ def _worker_cpu_gloo_training_contract(rank: int, world_size: int, port: int) ->
             initial_clipping_norm=0.1,
             key=key(31),
             return_aux=True,
+            expected_batch_size=1.0,
         )
         empty_batch_size = 0 if rank == 0 else 2
         empty_x = torch.randn(empty_batch_size, 10)
@@ -376,6 +382,7 @@ def _worker_per_group_adaptive_state_gloo(
             _step=1,
             _rng_key=key(41),
             _fraction_noise_std=1e-12,
+            _expected_batch_size=9.0,
             _learning_rate=0.2,
             _target_quantile=0.5,
             _clipping_norm_min=0.01,
@@ -438,6 +445,7 @@ def _worker_per_group_adaptive_training_gloo(
             key=key(71),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
         local_batch_size = 2 if rank == 0 else 3
         x = (
@@ -608,6 +616,7 @@ def _worker_per_group_adaptive_one_rank_empty_gloo(
             key=key(97),
             batch_argnums=(1, 2),
             return_aux=True,
+            expected_batch_size=1.0,
         )
         local_batch_size = 0 if rank == 0 else 2
         x = torch.tensor([[100.0, 0.0], [100.0, 0.0]])[:local_batch_size]
