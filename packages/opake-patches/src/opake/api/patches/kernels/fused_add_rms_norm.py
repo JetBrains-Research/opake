@@ -21,6 +21,7 @@ from opake.exceptions import ConfigurationError, OperationError
 from ._utils import (
     _MAX_PER_ROW_KERNEL_BLOCK_SIZE,
     _MIN_ROWS_FOR_BLOCK_KERNEL,
+    _allow_in_place_backward,
     calculate_settings,
     follow_autocast,
     torch_gpu_device,
@@ -319,7 +320,7 @@ def _fused_add_rms_norm_backward_triton(
     rows_per_program = math.ceil(n_rows / sm_count)
     grid = (sm_count,)
 
-    dX = dY if in_place else torch.empty_like(dY)
+    dX = dY if _allow_in_place_backward(in_place) else torch.empty_like(dY)
     W_contig = W.contiguous()
     dW_ptr = _dW if _dW is not None else dY
     x_dtype_triton = _TORCH_TO_TRITON_DTYPES[S.dtype]
@@ -500,6 +501,12 @@ class Opake_FusedAddRMSNorm(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_Y, grad_S, _grad_RSTD):
+        if _allow_in_place_backward(ctx.in_place):
+            if getattr(ctx, "_opake_backward_done", False):
+                raise NotImplementedError(
+                    "Repeated backward not supported for in-place FusedAddRMSNorm"
+                )
+            ctx._opake_backward_done = True
         S_s, W, RSTD = ctx.saved_tensors
         if grad_Y is None:
             grad_Y = torch.zeros(ctx.original_shape, device=W.device, dtype=S_s.dtype)
