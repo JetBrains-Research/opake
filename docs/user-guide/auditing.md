@@ -10,7 +10,7 @@ there is likely a bug in the implementation.
 Opake implements one-run auditing
 ([Steinke, Nasr, Jagielski 2023](https://arxiv.org/abs/2305.08846))
 with the tight order-statistics tests from
-[Xiang et al. (2025)](https://arxiv.org/abs/2509.08704):
+[Xiang et al. (2025, v1)](https://arxiv.org/abs/2509.08704v1):
 
 1. **Designate canaries.** Select `m` examples as canaries. By default they
    are uniformly sampled natural rows; a caller-supplied pool can contain
@@ -327,7 +327,7 @@ a weak attack as evidence of privacy.
 
 ## References
 
-- Xiang et al. (2025). [Tight Privacy Audit in One Run](https://arxiv.org/abs/2509.08704).
+- Xiang et al. (2025). [Tight Privacy Audit in One Run (v1)](https://arxiv.org/abs/2509.08704v1).
 - Steinke, Nasr, Jagielski (2023). [Privacy Auditing with One (1) Training Run](https://arxiv.org/abs/2305.08846). NeurIPS 2023.
 - Dagréou, Bellet (2026). [Detectability in Diversity: Improved Canary Crafting for Privacy Auditing in One Run](https://arxiv.org/abs/2605.27292).
 - Carlini et al. (2022). [Membership Inference Attacks From First Principles](https://arxiv.org/abs/2112.03570).

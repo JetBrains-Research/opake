@@ -25,7 +25,8 @@ __all__ = ["clone_chat_template", "get_training_chat_template"]
 
 import logging
 import re
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel, PreTrainedTokenizerBase
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Sentinel strings used by Jinja2 chat-template generation markers.
 _GEN_START = "{% generation %}"
-_GEN_END = "{% endgeneration %}"
+_GEN_END = "{% endgeneration +%}"
 _GENERATION_TAG_PATTERN = re.compile(r"\{%-?\s*generation\s*-?%\}")
 
 
@@ -233,7 +234,9 @@ def get_training_chat_template(tokenizer: PreTrainedTokenizerBase) -> str:
             f"{_GEN_START}{_GENERATION_TOKEN_EXPR}{_GEN_END}",
             1,
         )
-        if _generation_block_marks_only_assistant(candidate, tokenizer):
+        if _generation_block_marks_only_assistant(
+            candidate, tokenizer, original_template=template
+        ):
             return candidate
 
     # Strategy 2: wrap the assistant content expression inside the assistant
@@ -241,7 +244,7 @@ def get_training_chat_template(tokenizer: PreTrainedTokenizerBase) -> str:
     # branches, such as ChatML.
     template_out = _wrap_assistant_content(template)
     if template_out is not None and _generation_block_marks_only_assistant(
-        template_out, tokenizer
+        template_out, tokenizer, original_template=template
     ):
         return template_out
 
@@ -249,7 +252,7 @@ def get_training_chat_template(tokenizer: PreTrainedTokenizerBase) -> str:
     # and renders it outside a role branch.
     template_out = _wrap_shared_content_expression(template)
     if template_out is not None and _generation_block_marks_only_assistant(
-        template_out, tokenizer
+        template_out, tokenizer, original_template=template
     ):
         return template_out
 
@@ -257,7 +260,7 @@ def get_training_chat_template(tokenizer: PreTrainedTokenizerBase) -> str:
     # every role through one expression outside the role-selection branch.
     template_out = _wrap_gemma_shared_expression(template)
     if template_out is not None and _generation_block_marks_only_assistant(
-        template_out, tokenizer
+        template_out, tokenizer, original_template=template
     ):
         return template_out
 
@@ -269,7 +272,7 @@ def get_training_chat_template(tokenizer: PreTrainedTokenizerBase) -> str:
     # role-guard so only the assistant case renders inside the mask.
     template_out = _wrap_shared_or_clause(template)
     if template_out is not None and _generation_block_marks_only_assistant(
-        template_out, tokenizer
+        template_out, tokenizer, original_template=template
     ):
         return template_out
 
@@ -467,57 +470,177 @@ def _wrap_gemma_shared_expression(template: str) -> str | None:
 
 
 def _generation_block_marks_only_assistant(
-    template: str, tokenizer: PreTrainedTokenizerBase | None = None
+    template: str,
+    tokenizer: PreTrainedTokenizerBase | None = None,
+    *,
+    original_template: str | None = None,
 ) -> bool:
-    """Return whether generation spans contain assistant text and no prompt text."""
+    """Validate assistant spans without changing the rendered conversation."""
     from transformers.utils.chat_template_utils import (
         _compile_jinja_template,
         _render_with_assistant_indices,
     )
 
+    render_kwargs = {
+        **(tokenizer.special_tokens_map if tokenizer is not None else {}),
+        "strftime_now": datetime(2000, 1, 1).strftime,
+    }
+
+    def render(
+        compiled_template: Any,
+        probe_messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        documents: list[dict[str, Any]] | None = None,
+        add_generation_prompt: bool = False,
+    ) -> tuple[str, list[tuple[int, int]]]:
+        return _render_with_assistant_indices(
+            compiled_template,
+            probe_messages,
+            tools,
+            documents,
+            add_generation_prompt,
+            **render_kwargs,
+        )
+
     try:
         compiled = _compile_jinja_template(template)
-        user_probe = "opake_user_probe"
-        assistant_probe = "opake_assistant_probe"
-        messages = [
-            {"role": "user", "content": user_probe},
-            {"role": "assistant", "content": assistant_probe},
-        ]
-        rendered, indices = _render_with_assistant_indices(
-            compiled,
-            messages,
-            None,
-            None,
-            False,
-            **(tokenizer.special_tokens_map if tokenizer is not None else {}),
+        original = (
+            _compile_jinja_template(original_template) if original_template else None
         )
     except Exception:
-        # Template won't compile or render — treat as failure of this strategy.
         return False
 
-    generated = "".join(rendered[start:end] for start, end in indices)
-    if assistant_probe not in generated or user_probe in generated:
+    def validates(
+        messages: list[dict[str, Any]],
+        *,
+        assistant_probes: tuple[str, ...],
+        nonassistant_probes: tuple[str, ...],
+        tools: list[dict[str, Any]] | None = None,
+        documents: list[dict[str, Any]] | None = None,
+        add_generation_prompt: bool = False,
+        required: bool = False,
+    ) -> bool:
+        original_rendered: str | None = None
+        if original is not None:
+            try:
+                original_rendered, _ = render(
+                    original,
+                    messages,
+                    tools=tools,
+                    documents=documents,
+                    add_generation_prompt=add_generation_prompt,
+                )
+            except Exception:
+                return not required
+        try:
+            rendered, indices = render(
+                compiled,
+                messages,
+                tools=tools,
+                documents=documents,
+                add_generation_prompt=add_generation_prompt,
+            )
+        except Exception:
+            return not required and original_rendered is None
+        if original_rendered is not None and rendered != original_rendered:
+            return False
+        generated = "".join(rendered[start:end] for start, end in indices)
+        return all(probe in generated for probe in assistant_probes) and not any(
+            probe in generated for probe in nonassistant_probes
+        )
+
+    user_probe = "opake_user_probe"
+    assistant_probe = "opake_assistant_probe"
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": user_probe},
+        {"role": "assistant", "content": assistant_probe},
+    ]
+    if not validates(
+        messages,
+        assistant_probes=(assistant_probe,),
+        nonassistant_probes=(user_probe,),
+        required=True,
+    ):
+        return False
+
+    first_user_probe = "opake_first_user_probe"
+    first_assistant_probe = "opake_first_assistant_probe"
+    if not validates(
+        [
+            {"role": "user", "content": first_user_probe},
+            {"role": "assistant", "content": first_assistant_probe},
+            *messages,
+        ],
+        assistant_probes=(first_assistant_probe, assistant_probe),
+        nonassistant_probes=(first_user_probe, user_probe),
+    ):
         return False
 
     system_probe = "opake_system_probe"
-    try:
-        rendered, indices = _render_with_assistant_indices(
-            compiled,
-            [
-                {"role": "system", "content": system_probe},
-                *messages,
-            ],
-            None,
-            None,
-            False,
-            **(tokenizer.special_tokens_map if tokenizer is not None else {}),
-        )
-    except Exception:
-        # Some templates intentionally reject a system role. The primary
-        # user/assistant probe already establishes their supported behavior.
-        return True
-    generated = "".join(rendered[start:end] for start, end in indices)
-    return system_probe not in generated
+    if not validates(
+        [{"role": "system", "content": system_probe}, *messages],
+        assistant_probes=(assistant_probe,),
+        nonassistant_probes=(system_probe, user_probe),
+    ):
+        return False
+
+    if not validates(
+        messages,
+        assistant_probes=(assistant_probe,),
+        nonassistant_probes=(user_probe,),
+        add_generation_prompt=True,
+    ):
+        return False
+
+    tool_name = "opake_probe_tool"
+    tool_result_probe = "opake_tool_result_probe"
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": tool_name,
+                "description": "Validation probe",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+    ]
+    if not validates(
+        [
+            {"role": "user", "content": user_probe},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": {}},
+                    }
+                ],
+            },
+            {"role": "tool", "name": tool_name, "content": tool_result_probe},
+            {"role": "assistant", "content": assistant_probe},
+        ],
+        assistant_probes=(assistant_probe,),
+        nonassistant_probes=(user_probe, tool_result_probe),
+        tools=tools,
+    ):
+        return False
+
+    document_title_probe = "opake_document_title_probe"
+    document_text_probe = "opake_document_text_probe"
+    return validates(
+        messages,
+        assistant_probes=(assistant_probe,),
+        nonassistant_probes=(
+            user_probe,
+            document_title_probe,
+            document_text_probe,
+        ),
+        documents=[
+            {"title": document_title_probe, "text": document_text_probe},
+        ],
+    )
 
 
 def _has_generation_marker(template: str) -> bool:

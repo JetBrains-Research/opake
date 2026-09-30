@@ -341,6 +341,18 @@ class TestCoinFlip:
         assert cf.dataset_size == len(dataset)
         assert cf.train_indices() == cf.train_indices(len(dataset))
 
+    def test_train_indices_rejects_recorded_size_mismatch(self):
+        cf = auditing.coin_flip(list(range(30)), num_canaries=10, key=key(42))
+
+        with pytest.raises(ValueError, match="does not match the dataset size"):
+            cf.train_indices(29)
+
+    def test_train_subset_rejects_recorded_size_mismatch(self):
+        cf = auditing.coin_flip(list(range(30)), num_canaries=10, key=key(42))
+
+        with pytest.raises(ValueError, match="does not match the dataset size"):
+            cf.train_subset(list(range(29)))
+
     def test_split_scores(self):
         canary_idx = np.arange(100)
         cf = _flip(canary_idx, key=key(42))
@@ -437,6 +449,33 @@ class TestCoinFlipFunction:
         assert isinstance(cf, CoinFlip)
         assert cf.num_canaries == 100
         assert len(cf.in_indices) + len(cf.out_indices) == 100
+
+    def test_coin_flip_rejects_unknown_dataset_without_reading_rows(self):
+        class TransformDataset:
+            def __init__(self):
+                self.reads = 0
+
+            def __len__(self):
+                return 10
+
+            def __getitem__(self, index):
+                self.reads += 1
+                return index
+
+        dataset = TransformDataset()
+        with pytest.raises(ConfigurationError, match="deterministic `_fingerprint`"):
+            auditing.coin_flip(dataset, num_canaries=5, key=key(42))
+        assert dataset.reads == 0
+
+    @pytest.mark.parametrize("fingerprint", ["", 7])
+    def test_coin_flip_rejects_invalid_native_fingerprint(self, fingerprint):
+        class FingerprintedDataset(list):
+            pass
+
+        dataset = FingerprintedDataset(range(10))
+        dataset._fingerprint = fingerprint
+        with pytest.raises(ConfigurationError, match="non-empty string"):
+            auditing.coin_flip(dataset, num_canaries=5, key=key(42))
 
     def test_coin_flip_too_many_canaries(self):
         dataset = list(range(10))

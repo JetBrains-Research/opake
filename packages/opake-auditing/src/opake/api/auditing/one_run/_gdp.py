@@ -5,7 +5,7 @@ Mirrors :class:`opake.accounting.Pld`'s metric surface: ``epsilon_at``,
 inferred μ̂ via :meth:`GdpMethod._mu_at`.  Constructed via
 :meth:`OneRunEstimate.gdp`.
 
-Reference: Xiang et al. (2025), https://arxiv.org/abs/2509.08704
+Reference: Xiang et al. (2025), https://arxiv.org/abs/2509.08704v1
 """
 
 from __future__ import annotations
@@ -344,7 +344,7 @@ def _compute_v_k(n: int, r_prime: int, grid: _BaseGrid) -> np.ndarray:
 
     v_k = E[sigmoid(−|L(Y_{(k)})|)] where Y_{(k)} is the k-th order
     statistic of n i.i.d. draws from the mixture density f_Y
-    (Xiang et al. 2025, Eq. 12).  Returns shape ``(r_prime,)`` in [0, 0.5].
+    (Xiang et al. 2025, v1 Eq. 25). Returns shape ``(r_prime,)`` in [0, 0.5].
     """
     k_vals = np.arange(n - r_prime + 1, n + 1, dtype=np.float64)
 

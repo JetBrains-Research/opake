@@ -145,13 +145,13 @@ class TestGdpBasePairGrid:
             _gdp_base_pair_grid(0.0, 100)
 
 
-# ---- v_k grid convergence (Eq. 12 identity) ----------------------------------
+# ---- v_k grid convergence (v1 Eq. 25) ----------------------------------------
 
 
 class TestVKGridConvergence:
     """At accepted grid sizes the discretised v_k must match closed form.
 
-    For n = 1, Eq. 12 of Xiang et al. (2025) reduces to the Bayes error
+    For n = 1, v1 Eq. 25 of Xiang et al. (2025) reduces to the Bayes error
     of the shift test, v_1 = Phi(-mu/2).  The grid floor accepted by
     ``OneRunEstimate.gdp`` is validated against this identity.
     """

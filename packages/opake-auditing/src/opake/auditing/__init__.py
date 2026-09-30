@@ -28,7 +28,7 @@ Result data classes (``CanaryScores``, ``CoinFlip``, ``OneRunEstimate``)
 live in :mod:`opake.auditing.types`.
 
 References:
-    - Xiang et al. (2025), https://arxiv.org/abs/2509.08704
+    - Xiang et al. (2025), https://arxiv.org/abs/2509.08704v1
     - Steinke, Nasr, Jagielski (2023), https://arxiv.org/abs/2305.08846
     - Carlini et al. (2022), https://arxiv.org/abs/2112.03570
 """
