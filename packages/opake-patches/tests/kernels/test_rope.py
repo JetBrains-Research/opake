@@ -157,6 +157,40 @@ class TestRoPEBackward:
         )
 
 
+class TestRoPERepeatedBackward:
+    def test_single_rope_rejects_second_traversal(self):
+        torch.manual_seed(3)
+        batch, seq_len, n_heads, head_dim = 2, 8, 4, 32
+        q = torch.randn(
+            batch,
+            seq_len,
+            n_heads,
+            head_dim,
+            device="cuda",
+            requires_grad=True,
+        )
+        cos, sin = generate_cos_sin(seq_len, head_dim, dtype=torch.float32)
+        out = Opake_RoPE.apply(q, cos, sin)
+        grad_out = torch.randn_like(out)
+
+        torch.autograd.grad(out, q, grad_out, retain_graph=True)
+        with pytest.raises(NotImplementedError, match="Repeated backward"):
+            torch.autograd.grad(out, q, grad_out, retain_graph=True)
+
+    def test_qk_rope_rejects_second_traversal(self):
+        torch.manual_seed(4)
+        batch, seq_len, head_dim = 2, 8, 32
+        q = torch.randn(batch, 4, seq_len, head_dim, device="cuda", requires_grad=True)
+        k = torch.randn(batch, 2, seq_len, head_dim, device="cuda", requires_grad=True)
+        cos, sin = generate_cos_sin(seq_len, head_dim, dtype=torch.float32)
+        out = Opake_RoPE_QK.apply(q, k, cos, sin, None)
+        grad_out = tuple(torch.randn_like(value) for value in out)
+
+        torch.autograd.grad(out, (q, k), grad_out, retain_graph=True)
+        with pytest.raises(NotImplementedError, match="Repeated backward"):
+            torch.autograd.grad(out, (q, k), grad_out, retain_graph=True)
+
+
 class TestRoPEQK:
     """Test fused Q/K RoPE with grouped-query attention layouts."""
 

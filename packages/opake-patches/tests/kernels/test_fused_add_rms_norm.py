@@ -159,6 +159,45 @@ class TestFusedAddRMSNormBackward:
         torch.testing.assert_close(r.grad, r_ref.grad, rtol=RTOL_B, atol=ATOL_B)
 
 
+class TestFusedAddRMSNormRepeatedBackward:
+    def test_in_place_backward_rejects_second_traversal(self):
+        torch.manual_seed(7)
+        x = torch.randn(
+            2, 4, 64, device="cuda", dtype=torch.float32, requires_grad=True
+        )
+        residual = torch.randn_like(x, requires_grad=True)
+        weight = torch.randn(64, device="cuda")
+        y, _, _ = Opake_FusedAddRMSNorm.apply(
+            x, residual, weight, 1e-5, 0.0, "llama", True
+        )
+        grad_out = torch.randn_like(y)
+
+        torch.autograd.grad(y, (x, residual), grad_out, retain_graph=True)
+        with pytest.raises(NotImplementedError, match="Repeated backward"):
+            torch.autograd.grad(y, (x, residual), grad_out, retain_graph=True)
+
+    def test_allocating_backward_is_replayable(self):
+        torch.manual_seed(8)
+        x = torch.randn(
+            2, 4, 64, device="cuda", dtype=torch.float32, requires_grad=True
+        )
+        residual = torch.randn_like(x, requires_grad=True)
+        weight = torch.randn(64, device="cuda")
+        y, _, _ = Opake_FusedAddRMSNorm.apply(
+            x, residual, weight, 1e-5, 0.0, "llama", False
+        )
+        grad_out = torch.randn_like(y)
+        grad_out_before = grad_out.clone()
+
+        first = torch.autograd.grad(y, (x, residual), grad_out, retain_graph=True)
+        first_before = tuple(value.clone() for value in first)
+        second = torch.autograd.grad(y, (x, residual), grad_out, retain_graph=True)
+
+        torch.testing.assert_close(grad_out, grad_out_before, rtol=0, atol=0)
+        for actual, expected in zip(first + second, first_before * 2, strict=True):
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
 class TestFusedAddRMSNormVmapForward:
     def test_vmap_forward_precision(self, assert_precision, mellum_config):
         torch.manual_seed(42)

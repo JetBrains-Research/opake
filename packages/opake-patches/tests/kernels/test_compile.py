@@ -103,13 +103,14 @@ def test_kernels_under_compile_cuda(backend: str):
 
 
 def test_rmsnorm_vmap_grad_compiles_fullgraph_cuda():
-    """Static backward metadata keeps the transformed RMSNorm graph capturable."""
+    """Compiled RMSNorm promotes guarded in-place backward to allocation."""
     torch.manual_seed(1)
     x = torch.randn(4, 8, 64, device="cuda", dtype=torch.bfloat16)
     w = torch.randn(64, device="cuda", dtype=torch.bfloat16)
 
     def loss_fn(inp, weight):
-        return opake_rms_norm(inp, weight).float().square().mean()
+        normalized = opake_rms_norm(inp, weight, in_place_backward=True)
+        return normalized.float().square().mean()
 
     grad_fn = vmap(grad(loss_fn, argnums=(0, 1)), in_dims=(0, None))
     eager = grad_fn(x, w)

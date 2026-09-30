@@ -30,6 +30,7 @@ import triton.language as tl
 from opake.exceptions import ConfigurationError
 
 from ._utils import (
+    _allow_in_place_backward,
     calculate_settings,
     ensure_cuda_tensors,
     follow_autocast,
@@ -234,8 +235,8 @@ class _RoPEBackward(torch.autograd.Function):
     @staticmethod
     def forward(grad_Q, cos, sin):
         batch, seq_len, n_heads, head_dim = grad_Q.shape
-        # In-place: overwrite grad_Q buffer (internal gradient, safe to mutate)
-        dQ = grad_Q.reshape(batch * seq_len, n_heads * head_dim).contiguous()
+        grad_Q = grad_Q.reshape(batch * seq_len, n_heads * head_dim).contiguous()
+        dQ = grad_Q if _allow_in_place_backward() else torch.empty_like(grad_Q)
         n_rows = dQ.shape[0]
 
         BLOCK_SIZE, num_warps = calculate_settings(head_dim // 2)
@@ -244,8 +245,8 @@ class _RoPEBackward(torch.autograd.Function):
 
         with torch_gpu_device(dQ.device):
             _rope_embedding_kernel_heuristics[(n_rows, n_groups)](
-                dQ,
-                dQ.stride(0),
+                grad_Q,
+                grad_Q.stride(0),
                 dQ,
                 dQ.stride(0),
                 cos,
@@ -287,7 +288,8 @@ class _RoPEBackward(torch.autograd.Function):
         seq_len = grad_Q.shape[-3]
 
         # Merge all leading dims into rows — works for both 4D and 5D input
-        dQ = grad_Q.reshape(-1, n_heads * head_dim).contiguous()
+        grad_Q = grad_Q.reshape(-1, n_heads * head_dim).contiguous()
+        dQ = grad_Q if _allow_in_place_backward() else torch.empty_like(grad_Q)
         n_rows = dQ.shape[0]
 
         BLOCK_SIZE, num_warps = calculate_settings(head_dim // 2)
@@ -296,8 +298,8 @@ class _RoPEBackward(torch.autograd.Function):
 
         with torch_gpu_device(dQ.device):
             _rope_embedding_kernel_heuristics[(n_rows, n_groups)](
-                dQ,
-                dQ.stride(0),
+                grad_Q,
+                grad_Q.stride(0),
                 dQ,
                 dQ.stride(0),
                 cos,
@@ -385,6 +387,10 @@ class Opake_RoPE(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_Q):
+        if _allow_in_place_backward():
+            if getattr(ctx, "_opake_backward_done", False):
+                raise NotImplementedError("Repeated backward not supported for RoPE")
+            ctx._opake_backward_done = True
         cos, sin = ctx.saved_tensors
         dQ = _RoPEBackward.apply(grad_Q, cos, sin)
         return dQ, None, None
@@ -453,26 +459,28 @@ class _RoPE_QK_Backward(torch.autograd.Function):
         if not has_indices:
             rope_ptr = cos.new_empty(1, dtype=torch.int32)
 
-        # In-place: overwrite grad buffers (internal gradients, safe to mutate)
-        dQ_out = grad_Q.contiguous()
-        dK_out = grad_K.contiguous()
+        grad_Q = grad_Q.contiguous()
+        grad_K = grad_K.contiguous()
+        in_place = _allow_in_place_backward()
+        dQ_out = grad_Q if in_place else torch.empty_like(grad_Q)
+        dK_out = grad_K if in_place else torch.empty_like(grad_K)
 
         BLOCK_SIZE, num_warps = calculate_settings(head_dim)
 
         with torch_gpu_device(dQ_out.device):
             _rope_embedding_qk_kernel_heuristics[(batch * seq_len, n_heads_Q)](
+                grad_Q,
+                grad_Q.stride(0),
+                grad_Q.stride(1),
+                grad_Q.stride(2),
                 dQ_out,
                 dQ_out.stride(0),
                 dQ_out.stride(1),
                 dQ_out.stride(2),
-                dQ_out,
-                dQ_out.stride(0),
-                dQ_out.stride(1),
-                dQ_out.stride(2),
-                dK_out,
-                dK_out.stride(0),
-                dK_out.stride(1),
-                dK_out.stride(2),
+                grad_K,
+                grad_K.stride(0),
+                grad_K.stride(1),
+                grad_K.stride(2),
                 dK_out,
                 dK_out.stride(0),
                 dK_out.stride(1),
@@ -521,8 +529,11 @@ class _RoPE_QK_Backward(torch.autograd.Function):
 
         # Collapse all leading dims — works for both 4D and 5D input
         total_batch = grad_Q[..., 0, 0, 0].numel()
-        dQ = grad_Q.reshape(total_batch, n_heads_Q, seq_len, head_dim).contiguous()
-        dK = grad_K.reshape(total_batch, n_heads_K, seq_len, head_dim).contiguous()
+        grad_Q = grad_Q.reshape(total_batch, n_heads_Q, seq_len, head_dim).contiguous()
+        grad_K = grad_K.reshape(total_batch, n_heads_K, seq_len, head_dim).contiguous()
+        in_place = _allow_in_place_backward()
+        dQ = grad_Q if in_place else torch.empty_like(grad_Q)
+        dK = grad_K if in_place else torch.empty_like(grad_K)
 
         if not has_indices:
             rope_ptr_local = cos.new_empty(1, dtype=torch.int32)
@@ -535,18 +546,18 @@ class _RoPE_QK_Backward(torch.autograd.Function):
 
         with torch_gpu_device(dQ.device):
             _rope_embedding_qk_kernel_heuristics[(total_batch * seq_len, n_heads_Q)](
+                grad_Q,
+                grad_Q.stride(0),
+                grad_Q.stride(1),
+                grad_Q.stride(2),
                 dQ,
                 dQ.stride(0),
                 dQ.stride(1),
                 dQ.stride(2),
-                dQ,
-                dQ.stride(0),
-                dQ.stride(1),
-                dQ.stride(2),
-                dK,
-                dK.stride(0),
-                dK.stride(1),
-                dK.stride(2),
+                grad_K,
+                grad_K.stride(0),
+                grad_K.stride(1),
+                grad_K.stride(2),
                 dK,
                 dK.stride(0),
                 dK.stride(1),
@@ -671,6 +682,10 @@ class Opake_RoPE_QK(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_Q, grad_K):
+        if _allow_in_place_backward():
+            if getattr(ctx, "_opake_backward_done", False):
+                raise NotImplementedError("Repeated backward not supported for RoPE_QK")
+            ctx._opake_backward_done = True
         cos, sin, rope_ptr = ctx.saved_tensors
         dQ, dK = _RoPE_QK_Backward.apply(
             grad_Q, grad_K, cos, sin, rope_ptr, ctx.has_indices, ctx.seq_len

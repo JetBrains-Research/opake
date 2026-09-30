@@ -284,6 +284,36 @@ def test_chunked_backward_reuses_forward_statistics(
     assert calls == 1
 
 
+@pytest.mark.parametrize("use_token_scaling", [False, True], ids=["plain", "scaled"])
+def test_chunked_backward_is_replayable(use_token_scaling):
+    torch.manual_seed(9)
+    hidden = torch.randn(2, 6, 8, requires_grad=True)
+    weight = torch.randn(32, 8, requires_grad=True)
+    labels = torch.randint(0, 32, (2, 6))
+    loss = linear_cross_entropy_chunked(
+        hidden, weight, labels, use_token_scaling=use_token_scaling
+    )
+
+    first = torch.autograd.grad(loss, (hidden, weight), retain_graph=True)
+    first_before = tuple(value.clone() for value in first)
+    second = torch.autograd.grad(loss, (hidden, weight), retain_graph=True)
+
+    for actual, expected in zip(first + second, first_before * 2, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+def test_chunked_double_backward_is_rejected():
+    hidden = torch.randn(2, 6, 8, requires_grad=True)
+    weight = torch.randn(32, 8)
+    labels = torch.randint(0, 32, (2, 6))
+    loss = linear_cross_entropy_chunked(hidden, weight, labels)
+    grad_loss = torch.ones_like(loss, requires_grad=True)
+
+    first = torch.autograd.grad(loss, hidden, grad_loss, create_graph=True)[0]
+    with pytest.raises(RuntimeError, match="once_differentiable"):
+        first.sum().backward()
+
+
 def test_chunked_backward_reuses_exact_forward_tile_plan(monkeypatch):
     hidden = torch.randn(1, 9, 8, requires_grad=True)
     weight = torch.randn(32, 8)
