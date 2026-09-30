@@ -15,7 +15,50 @@ from opake.api.patches.transformers.components.cross_entropy import (
     _make_fused_ce_causal_lm_forward,
 )
 
+_TRANSFORM_FAMILIES = ("cohere", "cohere2", "granite", "gemma2", "gemma3")
+
 _FAMILY_SPECS = {
+    "cohere": {
+        "module": "transformers.models.cohere.modeling_cohere",
+        "config_module": "transformers.models.cohere.configuration_cohere",
+        "config_cls": "CohereConfig",
+        "model_cls": "CohereForCausalLM",
+        "extra": {"logit_scale": 0.25},
+    },
+    "cohere2": {
+        "module": "transformers.models.cohere2.modeling_cohere2",
+        "config_module": "transformers.models.cohere2.configuration_cohere2",
+        "config_cls": "Cohere2Config",
+        "model_cls": "Cohere2ForCausalLM",
+        "extra": {"logit_scale": 0.25},
+    },
+    "granite": {
+        "module": "transformers.models.granite.modeling_granite",
+        "config_module": "transformers.models.granite.configuration_granite",
+        "config_cls": "GraniteConfig",
+        "model_cls": "GraniteForCausalLM",
+        "extra": {"logits_scaling": 8.0},
+    },
+    "gemma2": {
+        "module": "transformers.models.gemma2.modeling_gemma2",
+        "config_module": "transformers.models.gemma2.configuration_gemma2",
+        "config_cls": "Gemma2Config",
+        "model_cls": "Gemma2ForCausalLM",
+        "extra": {"head_dim": 16, "final_logit_softcapping": 0.5},
+    },
+    "gemma3": {
+        "module": "transformers.models.gemma3.modeling_gemma3",
+        "config_module": "transformers.models.gemma3.configuration_gemma3",
+        "config_cls": "Gemma3TextConfig",
+        "model_cls": "Gemma3ForCausalLM",
+        "extra": {
+            "head_dim": 16,
+            "num_hidden_layers": 2,
+            "sliding_window": 8,
+            "sliding_window_pattern": 2,
+            "final_logit_softcapping": 0.5,
+        },
+    },
     "olmo2": {
         "module": "transformers.models.olmo2.modeling_olmo2",
         "config_module": "transformers.models.olmo2.configuration_olmo2",
@@ -53,6 +96,11 @@ _FAMILY_SPECS = {
     },
 }
 
+_UPSTREAM_FORWARDS = {
+    family: getattr(importlib.import_module(spec["module"]), spec["model_cls"]).forward
+    for family, spec in _FAMILY_SPECS.items()
+}
+
 
 def _tiny_model(family: str):
     spec = _FAMILY_SPECS[family]
@@ -79,23 +127,34 @@ def _tiny_model(family: str):
     return model_cls(cfg)
 
 
-def _bind_fused_forward(model):
-    original = type(model).forward
-    fused = _make_fused_ce_causal_lm_forward(original)
+def _bind_upstream_forward(model, family):
+    model.forward = types.MethodType(_UPSTREAM_FORWARDS[family], model)
+
+
+def _bind_fused_forward(model, family):
+    fused = _make_fused_ce_causal_lm_forward(_UPSTREAM_FORWARDS[family])
     model.forward = types.MethodType(fused, model)
+
+
+def _assert_matching_gradients(base, wrapped):
+    for (name, left), (wrapped_name, right) in zip(
+        base.named_parameters(), wrapped.named_parameters(), strict=True
+    ):
+        assert name == wrapped_name
+        if left.grad is None:
+            assert right.grad is None
+        else:
+            torch.testing.assert_close(left.grad, right.grad, atol=1e-4, rtol=1e-4)
 
 
 @pytest.mark.parametrize("family", sorted(_FAMILY_SPECS))
 def test_fused_ce_wrapper_matches_hf_loss_on_cpu(family):
-    """T1: with labels, the fused-CE wrapper matches stock HF *loss* and skips
-    logits. Off-CUDA the chunked kernel powers the fused path (it streams the LSE
-    in fp32, so the loss matches HF's fp32 CE); ``logits`` is ``None`` because the
-    fast path never materializes ``lm_head`` — the opt-in ``logits=None`` contract.
-    The fallback-with-logits path is covered by ``preserves_logits_to_keep``."""
+    """The fused path matches upstream loss without materializing logits."""
     torch.manual_seed(0)
     base = _tiny_model(family)
     wrapped = copy.deepcopy(base)
-    _bind_fused_forward(wrapped)
+    _bind_upstream_forward(base, family)
+    _bind_fused_forward(wrapped, family)
 
     input_ids = torch.randint(0, base.config.vocab_size, (2, 9))
     attention_mask = torch.ones_like(input_ids)
@@ -120,10 +179,94 @@ def test_fused_ce_wrapper_matches_hf_loss_on_cpu(family):
     assert torch.allclose(out_base.loss, out_wrapped.loss, atol=1e-4, rtol=1e-4)
 
 
+@pytest.mark.parametrize("family", _TRANSFORM_FAMILIES)
+@pytest.mark.parametrize("fallback", [False, True])
+def test_transformed_family_loss_and_gradients_match_upstream(family, fallback):
+    torch.manual_seed(0)
+    base = _tiny_model(family)
+    wrapped = copy.deepcopy(base)
+    _bind_upstream_forward(base, family)
+    _bind_fused_forward(wrapped, family)
+
+    if family in ("cohere", "cohere2"):
+        base.logit_scale = wrapped.logit_scale = 0.5
+
+    input_ids = torch.randint(3, base.config.vocab_size, (2, 9))
+    attention_mask = torch.ones_like(input_ids)
+    labels = input_ids.clone()
+    kwargs = {"logits_to_keep": input_ids.shape[-1]} if fallback else {}
+
+    out_base = base(
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+        labels=labels,
+        use_cache=False,
+        **kwargs,
+    )
+    backbone_calls = []
+    handle = wrapped.model.register_forward_hook(lambda *_: backbone_calls.append(None))
+    try:
+        out_wrapped = wrapped(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            use_cache=False,
+            loss_only=True,
+            **kwargs,
+        )
+    finally:
+        handle.remove()
+
+    assert len(backbone_calls) == 1
+    if fallback:
+        torch.testing.assert_close(out_wrapped.logits, out_base.logits)
+    else:
+        assert out_wrapped.logits is None
+    torch.testing.assert_close(out_wrapped.loss, out_base.loss, atol=1e-4, rtol=1e-4)
+
+    out_base.loss.backward()
+    out_wrapped.loss.backward()
+    _assert_matching_gradients(base, wrapped)
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("family", _TRANSFORM_FAMILIES)
+def test_transformed_family_cuda_float_fallback_matches_upstream(family):
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
+
+    torch.manual_seed(0)
+    base = _tiny_model(family).cuda()
+    wrapped = copy.deepcopy(base)
+    _bind_upstream_forward(base, family)
+    _bind_fused_forward(wrapped, family)
+    if family in ("cohere", "cohere2"):
+        base.logit_scale = wrapped.logit_scale = 0.5
+
+    input_ids = torch.randint(3, base.config.vocab_size, (2, 9), device="cuda")
+    labels = input_ids.clone()
+    out_base = base(input_ids=input_ids, labels=labels, use_cache=False)
+    backbone_calls = []
+    handle = wrapped.model.register_forward_hook(lambda *_: backbone_calls.append(None))
+    try:
+        out_wrapped = wrapped(
+            input_ids=input_ids, labels=labels, use_cache=False, loss_only=True
+        )
+    finally:
+        handle.remove()
+
+    assert len(backbone_calls) == 1
+    torch.testing.assert_close(out_wrapped.logits, out_base.logits)
+    torch.testing.assert_close(out_wrapped.loss, out_base.loss)
+    out_base.loss.backward()
+    out_wrapped.loss.backward()
+    _assert_matching_gradients(base, wrapped)
+
+
 def test_fused_ce_explicitly_preserves_logits_for_metrics():
     """The SFT metrics path can opt out without changing legacy callers."""
     model = _tiny_model("olmo2")
-    _bind_fused_forward(model)
+    _bind_fused_forward(model, "olmo2")
     input_ids = torch.randint(0, model.config.vocab_size, (2, 9))
 
     with torch.no_grad():
@@ -331,7 +474,8 @@ def test_fused_ce_wrapper_preserves_logits_to_keep(family):
     torch.manual_seed(0)
     base = _tiny_model(family)
     wrapped = copy.deepcopy(base)
-    _bind_fused_forward(wrapped)
+    _bind_upstream_forward(base, family)
+    _bind_fused_forward(wrapped, family)
 
     input_ids = torch.randint(0, base.config.vocab_size, (2, 9))
     attention_mask = torch.ones_like(input_ids)
