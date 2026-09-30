@@ -16,6 +16,7 @@ Opake's per-example :meth:`DPTrainer.compute_per_example_loss` hook.
 from __future__ import annotations
 
 import inspect
+import warnings
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any
 
@@ -47,19 +48,36 @@ _SFT_LOSSES: dict[str, Callable] = {"nll": nll_loss, "dft": dft_loss}
 _CHAT_COLUMNS = ("messages", "conversations", "chat")
 
 
+def _is_message_list(value: Any) -> bool:
+    """Return whether *value* has conversational message shape."""
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and isinstance(value[0], dict)
+        and "role" in value[0]
+        and "content" in value[0]
+    )
+
+
 def _detect_chat_column(row: dict) -> str | None:
     """Return the chat-message column in *row*, or ``None`` for plain text."""
     for col in _CHAT_COLUMNS:
-        value = row.get(col)
-        if (
-            isinstance(value, list)
-            and value
-            and isinstance(value[0], dict)
-            and "role" in value[0]
-            and "content" in value[0]
-        ):
+        if _is_message_list(row.get(col)):
             return col
     return None
+
+
+def _is_conversational_prompt_completion(row: dict) -> bool:
+    """Return whether *row* contains conversational prompt-completion data."""
+    if "prompt" not in row or "completion" not in row:
+        return False
+    prompt_is_messages = _is_message_list(row["prompt"])
+    completion_is_messages = _is_message_list(row["completion"])
+    if prompt_is_messages != completion_is_messages:
+        ConfigurationError.raise_(
+            "prompt and completion must both be strings or both be message lists."
+        )
+    return prompt_is_messages
 
 
 def _resolve_fused_handles(model: Any, eligible: bool) -> tuple[str | None, str | None]:
@@ -253,11 +271,19 @@ class SFTTrainer(DPTrainer):
         mask_labels = completion_only or args.assistant_only_loss
 
         train_dataset = self._prepare_dataset(
-            train_dataset, processing_class, args, "train"
+            train_dataset,
+            processing_class,
+            args,
+            "train",
+            completion_only=completion_only,
         )
         if eval_dataset is not None and not isinstance(eval_dataset, dict):
             eval_dataset = self._prepare_dataset(
-                eval_dataset, processing_class, args, "eval"
+                eval_dataset,
+                processing_class,
+                args,
+                "eval",
+                completion_only=completion_only,
             )
 
         # ---- collator ------------------------------------------------------
@@ -313,8 +339,6 @@ class SFTTrainer(DPTrainer):
 
         mts = getattr(peft_config, "modules_to_save", None)
         if mts is None or "lm_head" not in mts:
-            import warnings
-
             warnings.warn(
                 "New tokens were added to the chat template but 'lm_head' is not "
                 "in the PEFT config's modules_to_save; adding it so the model can "
@@ -358,19 +382,33 @@ class SFTTrainer(DPTrainer):
     def _resolve_completion_only(self, dataset: Any, args: SFTConfig) -> bool:
         """Auto-detect completion-only loss when ``args`` leaves it ``None``.
 
-        ``True`` for prompt-completion datasets and ``False`` for language-
-        modeling datasets, including conversational data, matching TRL.
+        ``True`` for raw prompt-completion datasets and ``False`` for raw
+        language-modeling datasets, regardless of representation, matching TRL.
+        Pre-tokenized datasets use only explicitly enabled masks.
         """
         if dataset is None or len(dataset) == 0:
             return bool(args.completion_only_loss)
         row = dataset[0]
-        is_chat = _detect_chat_column(row) is not None
-        is_prompt_completion = "prompt" in row and "completion" in row
         has_completion_mask = "completion_mask" in row
-        if args.assistant_only_loss and not is_chat:
+        column_names = list(getattr(dataset, "column_names", []) or [])
+        if "input_ids" in column_names:
+            if (
+                args.completion_only_loss or args.assistant_only_loss
+            ) and not has_completion_mask:
+                ConfigurationError.raise_(
+                    "Pre-tokenized data requires a completion_mask when "
+                    "completion-only or assistant-only loss is enabled."
+                )
+            return bool(args.completion_only_loss)
+
+        chat_col = _detect_chat_column(row)
+        is_conversational = (
+            chat_col is not None or _is_conversational_prompt_completion(row)
+        )
+        is_prompt_completion = "prompt" in row and "completion" in row
+        if args.assistant_only_loss and not is_conversational:
             ConfigurationError.raise_(
-                "assistant_only_loss=True requires a conversational dataset "
-                "with a messages, conversations, or chat column."
+                "assistant_only_loss=True requires a conversational dataset."
             )
         if (
             args.completion_only_loss
@@ -391,7 +429,13 @@ class SFTTrainer(DPTrainer):
     # Dataset preparation (TRL-shaped)
     # ------------------------------------------------------------------
     def _prepare_dataset(
-        self, dataset: Any, processing_class: Any, args: SFTConfig, dataset_name: str
+        self,
+        dataset: Any,
+        processing_class: Any,
+        args: SFTConfig,
+        dataset_name: str,
+        *,
+        completion_only: bool,
     ) -> Any:
         """Tokenize *dataset* into ``input_ids`` (+ ``completion_mask``).
 
@@ -419,10 +463,13 @@ class SFTTrainer(DPTrainer):
 
         row = dataset[0]
         chat_col = _detect_chat_column(row)
+        is_conversational = (
+            chat_col is not None or _is_conversational_prompt_completion(row)
+        )
 
-        # Assistant-only chat data needs generation markers so
+        # Assistant-only conversational data needs generation markers so
         # ``apply_chat_template_with_mask`` can recover its token mask.
-        if chat_col is not None and args.assistant_only_loss:
+        if is_conversational and args.assistant_only_loss:
             processing_class.chat_template = get_training_chat_template(
                 processing_class
             )
@@ -430,7 +477,13 @@ class SFTTrainer(DPTrainer):
         tokenize_fn = self.tokenize_row
 
         def tokenize_row(example: dict) -> dict:
-            return tokenize_fn(example, processing_class, args, chat_col=chat_col)
+            return tokenize_fn(
+                example,
+                processing_class,
+                args,
+                chat_col=chat_col,
+                completion_only=completion_only,
+            )
 
         return dataset.map(
             tokenize_row,
@@ -446,6 +499,7 @@ class SFTTrainer(DPTrainer):
         args: SFTConfig,
         *,
         chat_col: str | None,
+        completion_only: bool,
     ) -> dict:
         """Tokenize one SFT example into model-ready columns."""
         max_length = args.max_length
@@ -478,6 +532,60 @@ class SFTTrainer(DPTrainer):
             return result
 
         if "prompt" in example and "completion" in example:
+            if _is_conversational_prompt_completion(example):
+                prompt_ids = processing_class.apply_chat_template(
+                    example["prompt"],
+                    tokenize=True,
+                    return_dict=True,
+                    add_generation_prompt=True,
+                )["input_ids"]
+                conversation = example["prompt"] + example["completion"]
+                if args.assistant_only_loss:
+                    encoded = apply_chat_template_with_mask(
+                        processing_class,
+                        conversation,
+                        add_generation_prompt=False,
+                    )
+                else:
+                    encoded = processing_class.apply_chat_template(
+                        conversation,
+                        tokenize=True,
+                        return_dict=True,
+                        add_generation_prompt=False,
+                    )
+                full_ids = encoded["input_ids"]
+                if len(prompt_ids) > len(full_ids):
+                    ConfigurationError.raise_(
+                        "The tokenized prompt is longer than the full conversation."
+                    )
+                if prompt_ids != full_ids[: len(prompt_ids)]:
+                    warnings.warn(
+                        "The tokenized prompt is not a prefix of the full "
+                        "conversation; using its length as the completion boundary.",
+                        stacklevel=2,
+                    )
+
+                boundary_mask = [0] * len(prompt_ids) + [1] * (
+                    len(full_ids) - len(prompt_ids)
+                )
+                if args.assistant_only_loss:
+                    assistant_mask = encoded["completion_mask"]
+                    cmask = (
+                        [
+                            int(boundary and assistant)
+                            for boundary, assistant in zip(
+                                boundary_mask, assistant_mask, strict=True
+                            )
+                        ]
+                        if completion_only
+                        else assistant_mask
+                    )
+                else:
+                    cmask = boundary_mask
+                if max_length is not None:
+                    full_ids, cmask = full_ids[:max_length], cmask[:max_length]
+                return {"input_ids": full_ids, "completion_mask": cmask}
+
             prompt_ids = processing_class(example["prompt"], add_special_tokens=True)[
                 "input_ids"
             ]
