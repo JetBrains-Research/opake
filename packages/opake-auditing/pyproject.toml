@@ -7,7 +7,7 @@ name = "opake-auditing"
 dynamic = ["version"]
 description = "Opake empirical privacy auditing: one-run estimator, coin-flip, membership inference"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "Opake Contributors" }]
 requires-python = ">=3.11,<3.14"
 keywords = ["differential-privacy", "privacy-auditing", "pytorch"]
@@ -15,7 +15,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
