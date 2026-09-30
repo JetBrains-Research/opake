@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
+
+import pytest
 import torch
 from torch._dynamo.backends.common import aot_autograd
 from torch._dynamo.testing import CompileCounterWithBackend
@@ -9,6 +12,9 @@ from torch._dynamo.testing import CompileCounterWithBackend
 from opake.api.engine.clipping import auto_clipped_grad, clipped_grad
 from opake.api.engine.clipping._clipped_fun import clipped_fun
 from opake.pytree import tree_leaves
+from opake.types import PerGroup
+
+cf = importlib.import_module("opake.api.engine.clipping._clipped_fun")
 
 
 class _InstrumentedAotEagerCompiler:
@@ -108,29 +114,46 @@ def test_fixed_chunk_kernel_reuses_dynamic_graph_across_chunk_sizes_with_aux():
     )
 
 
-def test_auto_clipped_grad_threads_and_reuses_chunk_compiler():
-    """AUTO-S uses the same private chunk seam without rebuilding it per step."""
+@pytest.mark.parametrize("grouped", [False, True])
+def test_auto_clipped_grad_threads_and_reuses_chunk_compiler(monkeypatch, grouped):
+    """AUTO-S streams through the compiled chunk seam without rebuilding it."""
     calls = 0
+    streamed = 0
+    stream_clip_and_sum = cf._stream_clip_and_sum
+
+    def observed(*args, **kwargs):
+        nonlocal streamed
+        streamed += 1
+        return stream_clip_and_sum(*args, **kwargs)
+
+    monkeypatch.setattr(cf, "_stream_clip_and_sum", observed)
 
     def compiler(fn):
         nonlocal calls
         calls += 1
         return fn
 
+    def loss(params, x):
+        return sum((leaf * x).sum() for leaf in tree_leaves(params))
+
+    params = {"a": torch.randn(2), "b": torch.randn(2)}
+    bound = 0.5
+    if grouped:
+        bound = PerGroup(groups={"a": "a", "b": "b"}, values={"a": 0.5, "b": 0.25})
     grad_fn, state = auto_clipped_grad(
-        lambda params, x: (params * x).sum(),
+        loss,
         argnums=0,
         batch_argnums=1,
-        R=0.5,
+        R=bound,
         microbatch_size=3,
         _chunk_compiler=compiler,
     )
-    params = torch.randn(4)
     for batch_size in (5, 8):
-        grads, _ = grad_fn(params, torch.randn(batch_size, 4), state=state)
-        assert grads.pytree.shape == params.shape
+        grads, _ = grad_fn(params, torch.randn(batch_size, 2), state=state)
+        assert len(tree_leaves(grads.pytree)) == 2
 
     assert calls == 1
+    assert streamed == 5
 
 
 def test_second_moment_stats_match_eager_with_strict_chunks():

@@ -7,7 +7,7 @@ name = "opake"
 dynamic = ["version"]
 description = "Functional Differential Privacy for PyTorch"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "Opake Contributors" }]
 requires-python = ">=3.11,<3.14"
 keywords = [
@@ -23,7 +23,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
