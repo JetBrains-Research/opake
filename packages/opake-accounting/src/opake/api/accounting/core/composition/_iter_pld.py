@@ -34,11 +34,20 @@ def iter_pld(process: DpProcess, kwargs: dict[str, Any]) -> Pld:
         if action == "repeat":
             results.append(results.pop().self_compose(int(value)))
             continue
+        if action == "cache":
+            node, token = value
+            results.append(node.pld.cache_put(node, token, results.pop()))
+            continue
 
         node = value
         assert current_kwargs is not None
         if isinstance(node, CachedProcess):
-            tasks.append(("eval", node.inner, current_kwargs))
+            found, cached, token = node.pld.cache_get(node, **current_kwargs)
+            if found:
+                results.append(cached)
+            else:
+                tasks.append(("cache", (node, token), None))
+                tasks.append(("eval", node.inner, current_kwargs))
             continue
         if isinstance(node, Composed):
             rights: list[DpProcess] = []
@@ -65,9 +74,12 @@ def iter_pld(process: DpProcess, kwargs: dict[str, Any]) -> Pld:
             continue
         if isinstance(node, Repeated):
             inner = node.inner
-            while isinstance(inner, CachedProcess):
-                inner = inner.inner
-            if isinstance(inner, (Composed, Repeated)):
+            iterative_inner = inner
+            if isinstance(inner, CachedProcess) and not isinstance(
+                inner.inner, (CachedProcess, Composed, Repeated)
+            ):
+                iterative_inner = None
+            if isinstance(iterative_inner, (CachedProcess, Composed, Repeated)):
                 resolved = get_discretization(
                     mc_resolution=current_kwargs["mc_resolution"]
                 )
@@ -76,7 +88,7 @@ def iter_pld(process: DpProcess, kwargs: dict[str, Any]) -> Pld:
                     math.log1p(-resolved.mc_resolution) / node.count
                 )
                 tasks.append(("repeat", node.count, None))
-                tasks.append(("eval", inner, child_kwargs))
+                tasks.append(("eval", iterative_inner, child_kwargs))
             else:
                 results.append(inner.repeated_pld(node.count, **current_kwargs))
             continue

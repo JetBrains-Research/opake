@@ -11,11 +11,13 @@ from __future__ import annotations
 import dataclasses
 import gc
 import tracemalloc
+from typing import ClassVar
 
 import pytest
 
 import opake.accounting as acc
 from opake.api.accounting.core._accountant import Accountant
+from opake.api.accounting.core._base import DpProcess
 from opake.api.accounting.core._process_codec import (
     _load_dp_process,
     _serialize_dp_process,
@@ -29,6 +31,16 @@ from opake.exceptions import CheckpointError
 from opake.serialization import from_state_dict, state_dict
 
 DEPTH = 10_000
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _CountingProcess(DpProcess):
+    epsilon: float
+    calls: ClassVar[int] = 0
+
+    def pld(self, **kwargs):
+        type(self).calls += 1
+        return acc.eps_delta(self.epsilon, 1e-9).pld(**kwargs)
 
 
 def _hetero_chain(depth: int):
@@ -68,6 +80,17 @@ def test_deep_cached_composition_evaluates_pld_without_recursion():
         p = CachedProcess(Composed(p, step))
 
     assert p.epsilon_at(1e-5) > 0.0
+
+
+def test_nested_cached_prefix_reuses_populated_pld():
+    _CountingProcess.calls = 0
+    prefix = CachedProcess(Composed(_CountingProcess(0.01), _CountingProcess(0.02)))
+    prefix.pld()
+    assert _CountingProcess.calls == 2
+
+    CachedProcess(Composed(prefix, acc.eps_delta(0.03, 1e-9))).pld()
+
+    assert _CountingProcess.calls == 2
 
 
 def test_wire_format_matches_recursive_reference_on_small_trees():

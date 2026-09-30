@@ -6,6 +6,7 @@ import functools
 import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Hashable
+from dataclasses import replace
 from threading import RLock
 from typing import TYPE_CHECKING
 
@@ -62,7 +63,26 @@ class _WeakIdentityPldCache:
         cached = entry[1].get(key, _MISSING)
         if cached is not _MISSING:
             entry[1].move_to_end(key)
-        return cached
+            return cached
+
+        config, repeat_count = key
+        non_mc_config = replace(config, mc_resolution=0.0, mc_failure_probability=0.0)
+        for candidate_key, candidate in reversed(entry[1].items()):
+            candidate_config, candidate_repeat_count = candidate_key
+            if (
+                candidate_repeat_count == repeat_count
+                and candidate.mc_resolution == 0.0
+                and candidate.mc_failure_probability == 0.0
+                and replace(
+                    candidate_config,
+                    mc_resolution=0.0,
+                    mc_failure_probability=0.0,
+                )
+                == non_mc_config
+            ):
+                entry[1].move_to_end(candidate_key)
+                return candidate
+        return _MISSING
 
     def _remove_identity(
         self, process_id: int, process_ref: weakref.ReferenceType[object]
@@ -88,6 +108,44 @@ class _WeakIdentityPldCache:
             entries = entry[1]
         self._store(entries, key, value)
 
+    def get(
+        self,
+        process: object,
+        identity_key: _IdentityKey,
+        shared_key: Callable[[], _CacheKey],
+    ) -> tuple[Pld | object, _CacheKey | None]:
+        with self._lock:
+            if self._retain_per_instance:
+                cached = self._get_identity(process, identity_key)
+                if cached is not _MISSING:
+                    self._hits += 1
+                    return cached, None
+            key = shared_key()
+            cached = self._get_shared(key)
+            if cached is not _MISSING:
+                if self._retain_per_instance:
+                    self._store_identity(process, identity_key, cached)
+                self._hits += 1
+                return cached, key
+            self._misses += 1
+            return _MISSING, key
+
+    def put(
+        self,
+        process: object,
+        identity_key: _IdentityKey,
+        shared_key: _CacheKey,
+        result: Pld,
+    ) -> Pld:
+        with self._lock:
+            cached = self._get_shared(shared_key)
+            if cached is _MISSING:
+                self._store(self._shared_entries, shared_key, result)
+                cached = result
+            if self._retain_per_instance:
+                self._store_identity(process, identity_key, cached)
+            return cached
+
     def get_or_compute(
         self,
         process: object,
@@ -95,31 +153,11 @@ class _WeakIdentityPldCache:
         shared_key: Callable[[], _CacheKey],
         compute: Callable[[], Pld],
     ) -> Pld:
-        with self._lock:
-            if self._retain_per_instance:
-                cached = self._get_identity(process, identity_key)
-                if cached is not _MISSING:
-                    self._hits += 1
-                    return cached
-            key = shared_key()
-            cached = self._get_shared(key)
-            if cached is not _MISSING:
-                if self._retain_per_instance:
-                    self._store_identity(process, identity_key, cached)
-                self._hits += 1
-                return cached
-            self._misses += 1
-
-        result = compute()
-
-        with self._lock:
-            cached = self._get_shared(key)
-            if cached is _MISSING:
-                self._store(self._shared_entries, key, result)
-                cached = result
-            if self._retain_per_instance:
-                self._store_identity(process, identity_key, cached)
+        cached, key = self.get(process, identity_key, shared_key)
+        if cached is not _MISSING:
             return cached
+        assert key is not None
+        return self.put(process, identity_key, key, compute())
 
     def cache_clear(self) -> None:
         with self._lock:
@@ -198,8 +236,25 @@ def pld_cache(*, maxsize: int | None, retain_per_instance: bool = False):
                 lambda: _compute_pld(method, self, config),
             )
 
+        def cache_get(self, **kwargs):
+            config = _resolve_config(**kwargs)
+            identity_key = (config, None)
+            cached, shared_key = cache.get(
+                self,
+                identity_key,
+                lambda: (config, self._pld_cache_key(), None),
+            )
+            return cached is not _MISSING, cached, (identity_key, shared_key)
+
+        def cache_put(self, token, result):
+            identity_key, shared_key = token
+            assert shared_key is not None
+            return cache.put(self, identity_key, shared_key, result)
+
         wrapper.cache_clear = cache.cache_clear
         wrapper.cache_info = cache.cache_info
+        wrapper.cache_get = cache_get
+        wrapper.cache_put = cache_put
         return wrapper
 
     return decorator
