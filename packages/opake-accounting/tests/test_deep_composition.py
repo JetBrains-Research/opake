@@ -61,6 +61,15 @@ def test_deep_wrappers_mixed():
     assert _load_dp_process(sd) == p
 
 
+def test_deep_cached_composition_evaluates_pld_without_recursion():
+    p = acc.eps_delta(0.01, 1e-9)
+    for i in range(200):
+        step = acc.eps_delta(0.011 + i * 1e-8, 1e-9)
+        p = CachedProcess(Composed(p, step))
+
+    assert p.epsilon_at(1e-5) > 0.0
+
+
 def test_wire_format_matches_recursive_reference_on_small_trees():
     def reference(p):
         """The pre-fix recursive codec, inlined as an oracle."""
