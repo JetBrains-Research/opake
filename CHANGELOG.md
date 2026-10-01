@@ -97,3 +97,35 @@ verification results for the DP-clipping optimization workstream. Newest last.
   for mixed-dtype trees (currently conservative), many-small still
   launch-bound (2.7x only), small remaining B=64 peak dominated by the
   input [B,...] stack (removable only by v2 per-layer fusion).
+
+## 2026-10-01 — correctness review of the fused engine + real 7B workload (A100-40GB)
+
+- Review found the v0 engine (d6be8dca) was bypassed by every trainer mode:
+  `train_dpsgd.py` passes `return_aux=True` (adaptive also forces inner
+  `return_stats`), which v0 treated as unsupported. The 3.96x was real but
+  only for fixed-mode clipped_grad without aux. Fixed: aux/stats supported.
+- Privacy-relevant: v0 accepted fp16 leaves with fp32 guard constants and no
+  fp16 subnormal nudge. New strict test (check_bound_strict.py: B=1 trick,
+  fp64 norm, zero tolerance) shows 297/1900 violations for v0, all fp16
+  (100/100 just above C: a ~0.9999 scale is below fp16 half-ulp, so the
+  example passes unclipped). Current engine: 0, production: 0. fp16 now
+  falls back. Latent: no prior result used fp16.
+- Also fixed: guard is now production `_finalize_scale` per storage dtype
+  (exact for mixed trees; v0 over-shrank mixed trees 14x), compute_dtype /
+  output-dtype / requires_grad / B>65535 fallbacks, microbatch reducer fp32
+  output, K1 grid axes. Independent reviewer subagent: 2 findings rejected
+  with evidence (adaptive != AUTO-S; bf16 ulp is 7.8e-3 not 1e-3), B>65535
+  guard accepted.
+- Doc corrections: MPS mb8 slowdown was 13.3x not "250%"; roofline ~90% fp32 /
+  ~84% bf16 (not 84-85%); memory figures were MiB mislabeled as GB; "step"
+  speedups were clipped_grad-call speedups.
+- e2e 12/12 PASS incl. adaptive+aux+mb8 (trainer path) with fused dispatch.
+- 7B LoRA (seq 512, mb=2, B=16, trainer as-is): seam 478 -> 78.5 ms/call;
+  step 11.35 -> 7.66 s; throughput 1.34 -> 1.98 samples/s; peak unchanged
+  22.43 GiB. Shadow A/B on real grads: norms bitwise equal. A step-4
+  GradNorm blip (0.228 vs 0.216) in one fused run was trajectory
+  nondeterminism (second fused run 0.217; shadow proves outputs equal).
+- Interpretation caveat (from the checkpointing investigation): the trainer
+  runs in eval mode, so every per-example forward builds a KV cache; both
+  arms pay it. Next bottleneck after the engine is the vmapped per-example
+  fwd/bwd (~6.5 of ~7.1 s fused clip phase), not clipping.

@@ -1,5 +1,12 @@
 """Prototype: fused in-vmap clip kernel (plan v1, Phase 1.1 alternative path).
 
+SUPERSEDED by fused_engine.py (tree-level norms, production guard chain,
+aux/stats support). Kept as the op-level record behind the 1.1a numbers.
+Known limitations NOT fixed here: K1 grid puts tiles on axis 1 (65535 cap,
+fails for >134M-element rows); single-leaf norms only; the bound audit uses
+a +1e-5 tolerance that cannot see fp32-scale violations (use
+check_bound_strict.py); fp16 not handled.
+
 Target op: clip+sum over a STACKED per-example leaf x of shape [B, *N] whose
 dim-0 is the per-example axis and whose norm is taken over ALL trailing dims
 (the per-example flat-L2 contract of the vmap clip pipeline).
