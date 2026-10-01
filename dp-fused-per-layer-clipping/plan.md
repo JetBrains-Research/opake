@@ -275,7 +275,28 @@ clipping-active data regimes (per-sample norms straddling C):
 - [x] **1.1b Prototype e2e (v0, 2026-09-29) — scope was overstated, corrected below.** 5/5 PASS through real `clipped_grad` in *fixed mode without aux*: x3.75–x3.96 per **clipped_grad call** (not a full step; that rig also timed construction), memory 26.96→9.52 GiB / 22.46→4.77 GiB. **But v0 fell back on `return_aux`/`return_stats`, and `examples/train_dpsgd.py` passes `return_aux=True` in every clipping mode** (adaptive's inner call also forces `return_stats`) — so v0 accelerated none of the trainer's paths. v0 also accepted fp16 with fp32 guard constants (stored-value bound violation, see 1.1b').
 - [x] **1.1b' ✅ Review fixes + re-validation (2026-10-01, A100)** — engine `fused_engine.py` md5 `818ecab7`: `return_aux`/`return_stats` supported (`norms` + `clipped_norms` from stored values); guard chain is production's `_finalize_scale` evaluated per storage dtype (exact for mixed fp32/bf16 trees); fp16/fp64, `compute_dtype`, `requires_grad` leaves, non-default output dtype (probed), B>65535 → fallback; microbatch-chunk reducer's fp32 output honored; K1 grid axes fixed. **Strict bound test** (`check_bound_strict.py`, B=1 trick, fp64 norm, zero tolerance, 1,900 trials/engine): production 0, fused 0, old v0 **297 violations (all fp16; 100/100 just above C, up to +1.1e-4)**. **e2e** (`bench_fused_e2e.py`, 12/12 PASS incl. `adaptive+aux+mb8` = trainer path, fused dispatch, 0 fallbacks, drift 0): fp32 x3.93–4.27, many-small x2.65–3.28, bf16 x5.05–12.5 per call.
 - [x] **1.1b'' ✅ Real workload (2026-10-01, A100-40GB)** — Qwen2.5-Coder-7B LoRA r16, seq 512, mb=2, B=16, `train_dpsgd.py` as-is (runs in eval mode → KV cache built each forward; affects both arms equally), via `run_train_with_engine.py`; artifacts in `experiments/clip_fused/results_7b/`. Seam: **478 → 78.5 ms/call (6.1×)**, 392 fp32 LoRA leaves, 40.4M elem/example, 47/47 calls fused. Memory-profile A/B (identical Poisson batches): step **11.35 → 7.66 s (1.48×)**, clip phase −3.68 s/step, noise/optimizer/peak (22.43 GiB) unchanged; throughput **1.34 → 1.98 samples/s (+48%)**. Clean runs 1.4 → 2.0 samples/s. **Shadow A/B** (both engines on identical real per-example grads, 47 calls): `norms` bitwise equal, `reduced` ≤1.2e-7, `clipped_norms` ≤8e-8. Remaining fused clip phase ≈ 0.6 s seam + ~6.5 s vmapped per-example fwd/bwd → next bottleneck is not clipping.
-- [ ] **1.1c Packaging (Stage 2)** — promote `experiments/clip_fused/fused_engine.py` into `opake-engine` and replace the monkeypatch with a real dispatch.
+- [x] **1.1c Packaging, implemented** (`da32352f`, `c1d44b48`). Decisions:
+  - **D1 = (a):** `clip_backend` on the engine's `clipped_fun` / `clipped_grad`. `adaptive_clipped_grad` forwards it; `DPTrainer` takes `clipping_kwargs["clip_backend"]` for fixed and adaptive. Not added to `auto_clipped_grad`, since AUTO-S is unsupported.
+  - **D2:** opt-in, default `"torch"`.
+  - **D3:** values `"torch"`, `"auto"`, `"triton"`. `"triton"` raises `ConfigurationError` for unsupported configurations or calls, `"auto"` falls back; ROCm builds are excluded.
+  - **D4:** left as is.
+
+  Kernels live in `opake.api.engine.kernels._clip_sum` (Triton imported on first use).
+
+  **Verified on A100:**
+  - `test_clip_backend.py`: engine 48 and dpsgd 2 tests (parity, dispatch, zero-tolerance bound incl. adversarial, determinism, end-to-end).
+  - Existing clipping tests: CUDA 42 and CPU 357.
+  - Public-API speedups 3.4–5.0×, matching the experiment.
+  - Combined branch CPU suites green.
+
+  **Remaining:**
+  - The `train_dpsgd.py` flag (that file is owned by another session's in-flight work).
+  - CI CUDA lanes, especially `cuda-minimum-dependencies` (Triton from torch 2.9).
+  - `mkdocs build --strict` (not run locally).
+  - DP review write-up in the PR, then the PR and Copilot loop.
+
+  The original Stage 2 breakdown follows.
+- [ ] *(original 1.1c breakdown, kept for reference)* — promote `experiments/clip_fused/fused_engine.py` into `opake-engine` and replace the monkeypatch with a real dispatch.
 
   **Repo facts that constrain it (verified 2026-10-01):**
   - `opake.dpsgd.clipping.clipped_grad` and `opake.dpftrl.clipping.clipped_grad` are the *same* engine function, re-exported by both façades, and the same holds for `auto_clipped_grad`. `adaptive_clipped_grad` (dpsgd) forwards `**clipped_grad_kwargs` to it.

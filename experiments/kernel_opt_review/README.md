@@ -14,7 +14,7 @@ CUDA numbers: A100-SXM4-40GB, 392-leaf / 40.4M-element LoRA-7B-like fp32 tree.
 | `2913e229` | Toeplitz cache by (device, dtype); `generator_from_key(device=)`; `benchmarks/bench.py` | Cache idea ported (fixed); `device=` kwarg **not ported**; bench not ported | see below |
 | `883a9e3f` + `617d1bfa` | `_iid_normal_noise`: one flat CPU draw per device | **Not ported** | `check_rng_stream.py`, `bench_noise_variants.py` |
 | `d1fbb21e` | Fix multi-D broadcast in BLT/Toeplitz | Folded into the port; the bug was introduced by `07a10621` (main passes 623/623; `07a10621` fails 28) | dpftrl suite at each commit |
-| `3a9bdcdc` | Fused LoRA MLP `save_intermediates` option, attention-only checkpointing, trainer flags, docs, notes | **Ported**, without the notes file and with a doc fix | `check_save_intermediates.py`, A/B test runs |
+| `3a9bdcdc` | Fused LoRA MLP `save_intermediates` option, attention-only checkpointing, trainer flags, docs, notes | **Ported** (`a05b0b8e`), without the notes file and with a doc fix. The attention-only checkpointing part was later removed in `a2ce1712`: once it fired, it saved 0.83 GiB for +27% step time, because SDPA never stores the attention matrix. `lora_mlp_recompute` remains. | `check_save_intermediates.py`, A/B test runs |
 
 ## Why each part was or wasn't taken
 
