@@ -69,6 +69,7 @@ noise.
 | `pre_clipping_transform` | `Callable` | identity | Transform applied to each per-example gradient before clipping. |
 | `dtype` | `torch.dtype \| None` | `None` | Accumulation dtype (e.g., float32 for float16 inputs). |
 | `return_aux` | `bool` | `False` | Return per-example diagnostics. |
+| `clip_backend` | `str` | `"torch"` | Clip-and-sum implementation: `"torch"`, `"triton"` or `"auto"`. See [Fused Triton backend](#fused-triton-backend). |
 
 ### State flow
 
@@ -173,6 +174,49 @@ for candidate_mb in [64, 32, 16, 8, 4, 2, 1]:
 ```
 
 See [Memory Optimizations](memory-optimizations.md) for details.
+
+## Fused Triton backend
+
+On CUDA, `clip_backend="triton"` replaces the per-leaf PyTorch operations of
+the clip-and-sum with two fused kernels per parameter tensor, and never
+materializes clipped copies of the per-example gradients. The mechanism is
+unchanged:
+
+- per-example norms, clipping scales and `norm(clipped) <= clipping_norm` on
+  the stored values are computed exactly as on the PyTorch path;
+- only the rounding of the batch sum can differ in the last bits, because the
+  examples are added in a different order.
+
+```python
+grad_fn, state = clipped_grad(
+    loss_fn,
+    clipping_norm=1.0,
+    normalize_by=batch_size,
+    clip_backend="triton",
+)
+```
+
+The backend is opt-in:
+
+| `clip_backend` | Behavior |
+|----------------|----------|
+| `"torch"` (default) | PyTorch operations. |
+| `"triton"` | Fused kernels. Raises `ConfigurationError` when they cannot serve the configuration or a call. |
+| `"auto"` | Fused kernels where supported, PyTorch otherwise. |
+
+The fused kernels need a CUDA device with Triton installed, and support:
+
+- fixed or adaptive clipping with a scalar threshold (`adaptive_clipped_grad`
+  forwards `clip_backend`);
+- float32 and bfloat16 gradients, with or without microbatching and diagnostics.
+
+Per-group thresholds, AUTO-S, `second_moment`, an explicit `compute_dtype`,
+float16 or float64 gradients, and compiled microbatch kernels use the PyTorch
+path (`"auto"`) or raise (`"triton"`). Under `torch.compile` or an enclosing
+`grad`/`jvp` transform, both settings use the vmapped PyTorch path.
+
+With `DPTrainer`, pass it as `clipping_kwargs={"clip_backend": "auto"}`
+(fixed and adaptive clipping modes).
 
 ## Adaptive clipping
 
