@@ -1097,9 +1097,7 @@ def main() -> int:
         torch_compile_mode=args.torch_compile_mode,
         use_performance_kernels=args.use_performance_kernels,
         performance_kernels_config=(
-            None
-            if args.lora_mlp_recompute
-            else {"lora_mlp_recompute": False}
+            None if args.lora_mlp_recompute else {"lora_mlp_recompute": False}
         ),
         remove_unused_columns=True,
         include_tokens_per_second=True,
