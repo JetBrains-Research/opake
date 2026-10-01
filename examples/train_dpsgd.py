@@ -641,14 +641,6 @@ def parse_args():
         help="Offload saved tensors to CPU via save_on_cpu (works with or without checkpointing)",
     )
     train_group.add_argument(
-        "--lora-mlp-recompute",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Fused LoRA MLP recomputes its gate/up projections in backward "
-        "(default). --no-lora-mlp-recompute saves them instead: more memory, "
-        "fewer backward matmuls. CUDA fused LoRA MLP only.",
-    )
-    train_group.add_argument(
         "--memory-profile",
         type=str,
         default=None,
@@ -1258,20 +1250,10 @@ def main():
     # ``vmap(grad)``-able and DP-SGD breaks without it — as do ``kv_cache`` and
     # the PEFT kernels. The global runtime patches above are untouched either way.
     if args.kernel_patches:
-        apply_model_patches(
-            model,
-            kernels=True,
-            fused_linear_cross_entropy=True,
-            lora_mlp_recompute=args.lora_mlp_recompute,
-        )
+        apply_model_patches(model, kernels=True, fused_linear_cross_entropy=True)
     else:
         print("Kernel patches: DISABLED (eager baseline; compat/MoE/PEFT stay on)")
-        apply_model_patches(
-            model,
-            kernels=False,
-            fused_linear_cross_entropy=False,
-            lora_mlp_recompute=args.lora_mlp_recompute,
-        )
+        apply_model_patches(model, kernels=False, fused_linear_cross_entropy=False)
     model.print_trainable_parameters()
     print_memory(device, "After LoRA")
 
