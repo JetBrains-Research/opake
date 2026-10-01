@@ -1448,6 +1448,14 @@ def main():
             f"CPU offload: enabled (save_on_cpu, works {'with' if args.gradient_checkpointing else 'without'} checkpointing)"
         )
 
+    # ``from_pretrained`` returns an eval-mode model and ``get_peft_model`` keeps
+    # the base submodules in eval (only the new PeftModel wrapper reports
+    # ``training=True``). Training-gated code then silently no-ops: e.g. the
+    # kv_cache patch leaves ``use_cache=True`` so a DynamicCache is built every
+    # forward. Dropout is already zeroed in the config above, so train mode
+    # changes no math.
+    model.train()
+
     # Convert to functional (only LoRA parameters)
     print("\nConverting to functional form (LoRA parameters only)...")
     print("  (This may take 1-2 minutes for large models...)")
