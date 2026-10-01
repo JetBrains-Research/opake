@@ -275,7 +275,44 @@ clipping-active data regimes (per-sample norms straddling C):
 - [x] **1.1b Prototype e2e (v0, 2026-09-29) — scope was overstated, corrected below.** 5/5 PASS through real `clipped_grad` in *fixed mode without aux*: x3.75–x3.96 per **clipped_grad call** (not a full step; that rig also timed construction), memory 26.96→9.52 GiB / 22.46→4.77 GiB. **But v0 fell back on `return_aux`/`return_stats`, and `examples/train_dpsgd.py` passes `return_aux=True` in every clipping mode** (adaptive's inner call also forces `return_stats`) — so v0 accelerated none of the trainer's paths. v0 also accepted fp16 with fp32 guard constants (stored-value bound violation, see 1.1b').
 - [x] **1.1b' ✅ Review fixes + re-validation (2026-10-01, A100)** — engine `fused_engine.py` md5 `818ecab7`: `return_aux`/`return_stats` supported (`norms` + `clipped_norms` from stored values); guard chain is production's `_finalize_scale` evaluated per storage dtype (exact for mixed fp32/bf16 trees); fp16/fp64, `compute_dtype`, `requires_grad` leaves, non-default output dtype (probed), B>65535 → fallback; microbatch-chunk reducer's fp32 output honored; K1 grid axes fixed. **Strict bound test** (`check_bound_strict.py`, B=1 trick, fp64 norm, zero tolerance, 1,900 trials/engine): production 0, fused 0, old v0 **297 violations (all fp16; 100/100 just above C, up to +1.1e-4)**. **e2e** (`bench_fused_e2e.py`, 12/12 PASS incl. `adaptive+aux+mb8` = trainer path, fused dispatch, 0 fallbacks, drift 0): fp32 x3.93–4.27, many-small x2.65–3.28, bf16 x5.05–12.5 per call.
 - [x] **1.1b'' ✅ Real workload (2026-10-01, A100-40GB)** — Qwen2.5-Coder-7B LoRA r16, seq 512, mb=2, B=16, `train_dpsgd.py` as-is (runs in eval mode → KV cache built each forward; affects both arms equally), via `run_train_with_engine.py`; artifacts in `experiments/clip_fused/results_7b/`. Seam: **478 → 78.5 ms/call (6.1×)**, 392 fp32 LoRA leaves, 40.4M elem/example, 47/47 calls fused. Memory-profile A/B (identical Poisson batches): step **11.35 → 7.66 s (1.48×)**, clip phase −3.68 s/step, noise/optimizer/peak (22.43 GiB) unchanged; throughput **1.34 → 1.98 samples/s (+48%)**. Clean runs 1.4 → 2.0 samples/s. **Shadow A/B** (both engines on identical real per-example grads, 47 calls): `norms` bitwise equal, `reduced` ≤1.2e-7, `clipped_norms` ≤8e-8. Remaining fused clip phase ≈ 0.6 s seam + ~6.5 s vmapped per-example fwd/bwd → next bottleneck is not clipping.
-- [ ] **1.1c Packaging (Stage 2)**: kernel engine promoted into `opake-engine` (e.g. `opake.api.engine.clipping._fused`, CPU/MPS fallback, `clip_impl` private knob on `clipped_fun`), mechanism selection exposed in `opake-dpsgd` (`clip_impl="triton"` on `clipped_grad`/`adaptive_clipped_grad`); remaining unsupported paths: PerGroup, AUTO-S (`--clipping-mode auto`), `second_moment`, fp16 (needs fp16 subnormal nudge + per-dtype SM_NORMAL), torch.compile; tests under `packages/opake-engine/tests/` incl. CUDA-gated parity vs streaming and the strict B=1 bound test (zero tolerance, all dtypes, mixed trees); ARC-005/ARC-002 + DP review before merge.
+- [ ] **1.1c Packaging (Stage 2)** — promote `experiments/clip_fused/fused_engine.py` into `opake-engine` and replace the monkeypatch with a real dispatch.
+
+  **Repo facts that constrain it (verified 2026-10-01):**
+  - `opake.dpsgd.clipping.clipped_grad` and `opake.dpftrl.clipping.clipped_grad` are the *same* engine function, re-exported by both façades, and the same holds for `auto_clipped_grad`. `adaptive_clipped_grad` (dpsgd) forwards `**clipped_grad_kwargs` to it.
+  - Neither `opake-engine` nor `opake-patches` declares Triton; on Linux CUDA it comes with torch, and it doesn't exist on macOS.
+  - `opake.api.engine.device.fused_kernels_available()` (CUDA + importable Triton, re-exported by `opake.device`) already exists.
+  - Callers to plumb: `DPTrainer` (`_dp_trainer.py`, 3 factory calls) and `examples/train_dpsgd.py` (3 calls; currently has another session's uncommitted edits).
+
+  **Decisions needed (owner):**
+  - **D1, where the switch lives.** (a) A parameter on the engine's `clipped_fun` / `clipped_grad` / `auto_clipped_grad`, so DP-SGD *and* DP-FTRL get it and adaptive gets it via kwargs. (b) DP-SGD-only: a private engine knob plus dpsgd wrapper functions, which forks `opake.dpsgd.clipping.clipped_grad` away from the engine/DP-FTRL object.
+  - **D2, default.** Opt-in first, or `"auto"` (fused whenever CUDA + Triton and the config is supported). Outputs differ from the torch path at reduction-order level (~1e-7 relative, fp32), so `"auto"` changes numerics, not semantics, for every CUDA user.
+  - **D3, values and failure mode.** For example `clip_backend: Literal["auto", "torch", "triton"]`, with `"triton"` raising `ConfigurationError` when unavailable or unsupported and `"auto"` falling back silently. Plus a way for tests and users to see which path ran.
+  - **D4, v1 coverage.** Currently AUTO-S, PerGroup, `second_moment` and fp16 fall back.
+
+  **Work items:**
+  1. **Module:** `opake.api.engine.kernels` (private), lazy Triton import (ARC-010), capability check through `fused_kernels_available()`; no new declared dependency, same as `opake-patches`.
+  2. **Dispatch:** an explicit choice in `_clipped_fun._streaming_kernel` (both the full-batch and microbatch-chunk call sites); keep the 5-tuple contract; the support predicate becomes the dispatcher.
+  3. **Plumbing:** engine factories (per D1); `DPTrainer` config passthrough; the example flag (coordinate with the other session).
+  4. **Coverage per D4:**
+     - AUTO-S: production `_finalize_scale(clamp_to_one=False)` plus gamma.
+     - `second_moment`: accumulate `stored**2` rounded to storage dtype in K2.
+     - PerGroup: group-wise partial sums and scales.
+     - fp16: per-dtype `SM_NORMAL` nudge; the guard is already production's.
+  5. **Tests in `packages/opake-engine/tests/clipping/`, CUDA-gated:**
+     - parity vs streaming across fixed / adaptive / auto × aux / stats × microbatch × fp32 / bf16 / mixed;
+     - zero-tolerance B=1 bound tests, random and adversarial (from `check_bound_strict.py` / `check_bound_adversarial.py`);
+     - run-to-run determinism;
+     - unsupported configs dispatch to streaming with bitwise-identical results.
+
+     CPU lanes: `"auto"` stays on the torch path bitwise, and `"triton"` raises as documented. Must also pass the `cuda-minimum-dependencies` lane (Triton from torch 2.9).
+  6. **Docs:** `clipping.md` / `precision.md` (backend, identical contract, reduction-order differences, determinism, fallbacks); API docstrings.
+  7. **Gates:**
+     - DP review per `.junie/differential-privacy-review.md`. The written argument: per-element operations identical to production; guard *is* production code; reduction error ≤ the bound `_reduction_terms` assumes; diagnostics from stored values; `normalize_by` / microbatching unchanged.
+     - ARC-005/007/010 review.
+     - PR `perf(clipping): …` plus the Copilot loop.
+     - CUDA CI. The A100 workspace shows 36 pre-existing failures on `main`; check whether CI does too, to avoid confusing them with regressions.
+
+  **Rough effort:** items 1–3 and 5–6 ≈ 3–4 days; D4 extras ≈ 0.5–2 days each; plus review.
   - Adapt to Opake's Triton kernel patterns (existing kernels in `opake-patches/src/opake/api/patches/kernels/`)
   - Add dtype support: fp32, bf16 (defer fp16)
   - Add `autograd.Function` compatibility checks
