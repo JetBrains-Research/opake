@@ -145,9 +145,7 @@ def start_snapshot(
     if device.type != "cuda" or not torch.cuda.is_available():
         return False
     torch.cuda.synchronize(device)
-    torch.cuda.memory._record_memory_history(
-        max_entries=max_entries, stacks="python"
-    )
+    torch.cuda.memory._record_memory_history(max_entries=max_entries, stacks="python")
     return True
 
 

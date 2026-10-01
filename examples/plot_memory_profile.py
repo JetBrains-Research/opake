@@ -90,9 +90,7 @@ def main() -> None:
         steps = _read_timeline(timeline_path)
         if args.steps:
             steps = {
-                step: samples
-                for step, samples in steps.items()
-                if step in args.steps
+                step: samples for step, samples in steps.items() if step in args.steps
             }
 
     ncols = max(1, len(steps))
