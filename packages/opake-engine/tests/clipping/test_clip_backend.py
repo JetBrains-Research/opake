@@ -102,6 +102,13 @@ def test_triton_requires_cuda_and_triton(monkeypatch):
         clipped_fun(lambda v: v, clip_backend="triton")
 
 
+def test_triton_rejects_rocm_builds(monkeypatch):
+    monkeypatch.setattr(cf, "fused_kernels_available", lambda: True)
+    monkeypatch.setattr(torch.version, "hip", "6.0")
+    with pytest.raises(ConfigurationError, match="ROCm"):
+        clipped_fun(lambda v: v, clip_backend="triton")
+
+
 def test_auto_without_fused_kernels_is_the_torch_path(monkeypatch):
     monkeypatch.setattr(cf, "fused_kernels_available", lambda: False)
     tree = _tree(6, FP32, seed=0, device="cpu")

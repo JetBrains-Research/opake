@@ -478,6 +478,8 @@ def _resolve_stream_impl(
         unsupported = "a compiled microbatch kernel"
     elif not fused_kernels_available():
         unsupported = "hosts without a CUDA device and an importable Triton"
+    elif torch.version.hip is not None:
+        unsupported = "ROCm builds, where the kernels are not validated"
     else:
         unsupported = None
     if unsupported is not None:
@@ -626,7 +628,8 @@ def clipped_fun(
             kernels need a CUDA device and an importable Triton, and support
             fixed scalar clipping of float32/bfloat16 values without
             ``second_moment``, ``compute_dtype`` or a compiled microbatch
-            kernel. Clipping norms, scales and the stored-value bound are the
+            kernel, on NVIDIA CUDA (ROCm builds are not supported). Clipping
+            norms, scales and the stored-value bound are the
             same for both implementations; the batch sums can differ in the
             last bits because the examples are added in a different order.
             Under ``torch.compile`` or an enclosing ``grad``/``jvp``, both use

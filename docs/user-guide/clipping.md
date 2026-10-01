@@ -204,7 +204,8 @@ The backend is opt-in:
 | `"triton"` | Fused kernels. Raises `ConfigurationError` when they cannot serve the configuration or a call. |
 | `"auto"` | Fused kernels where supported, PyTorch otherwise. |
 
-The fused kernels need a CUDA device with Triton installed, and support:
+The fused kernels need an NVIDIA CUDA device with Triton installed (ROCm builds
+use the PyTorch path), and support:
 
 - fixed or adaptive clipping with a scalar threshold (`adaptive_clipped_grad`
   forwards `clip_backend`);
