@@ -73,7 +73,8 @@ class TestPhaseMemory:
         del scratch
         out = finish_snapshot(tmp_path / "snap.pickle", "cuda")
         assert out is not None
-        assert out.exists() and out.stat().st_size > 0
+        assert out.exists()
+        assert out.stat().st_size > 0
 
 
 class TestSnapshotOffCuda:
