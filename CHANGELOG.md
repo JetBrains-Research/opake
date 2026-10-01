@@ -98,6 +98,46 @@ verification results for the DP-clipping optimization workstream. Newest last.
   launch-bound (2.7x only), small remaining B=64 peak dominated by the
   input [B,...] stack (removable only by v2 per-layer fusion).
 
+## 2026-09-30 — per-phase memory profiling added; checkpointing variants measured (A100-40GB)
+
+- Added per-phase memory instrumentation: `step_perf(..., phase_memory=True)`
+  records a peak per `.mark()` segment (high-water since the previous mark, not
+  a cumulative step peak), `perf_tracker` gained `phase_memory`, and
+  `start_snapshot`/`finish_snapshot` wrap CUDA `_record_memory_history` /
+  `_dump_snapshot`. All three are opt-in and no-ops off CUDA.
+- `train_dpsgd.py --memory-profile PREFIX` (CUDA-only, others skip with a
+  notice) records `--memory-profile-steps` steps after skipping
+  `--memory-profile-skip`, and writes a per-phase peak/time CSV, a 1 ms
+  live-memory timeline CSV, and the CUDA snapshot pickle for that window.
+  `examples/plot_memory_profile.py` and `examples/plot_memory_compare.py`
+  render them; both read CSVs only, so they run anywhere. Tests in
+  `packages/opake-engine/tests/profiling/test_phase_memory.py`.
+- Dropped the scratch `bench_memory.py` harness. The three claims it was built
+  on (autograd graph retained through microbatching worth 6.2 GB;
+  per-microbatch peak equal to full-batch peak divided by mb;
+  frozen-params-cast worth 14.2 GB) were assumptions, not measurements, and
+  none of them survived contact with the profiler. Nothing in the repo ever
+  imported `dpsgd_stages`, which that harness imported.
+- Four variants measured on Qwen2.5-Coder-7B LoRA, seq 512, mb=2, same
+  instrumentation (details in `notes/checkpointing-open-questions.md`):
+  no checkpointing 22.43 GiB / 10.19 s; attention-only checkpointing 22.43 GiB
+  / 10.17 s; full-layer checkpointing 16.39 GiB / 14.12 s; eager (no Triton
+  kernels) 24.40 GiB / 8.26 s. Static floor 15.0 GiB in all four.
+- Reading: the peak is **sawtooth, not cumulative** — one spike per microbatch
+  chunk returning to the floor, flat across steps, so activations are released
+  during backward and there is no retained-reference leak. Attention-only
+  checkpointing never fired: the model trains in eval mode (`from_pretrained`
+  returns eval, PEFT leaves base submodules in eval, `train_dpsgd.py` never calls
+  `.train()`), so the wrapper's `module.training` guard bypasses every call.
+  Full-layer checkpointing escapes this only because opake's
+  `gradient_checkpointing_enable` patch flips `.training` on the layers.
+  Confirmed on a CPU replica; see `notes/memory-profiling-report.md` §5.
+  (Fixed and re-measured in the next entry.) Full-layer checkpointing works but costs 38%
+  step time to save 6 GiB. The Triton kernels cost throughput at seq 512, the
+  opposite sign to the seq-4096 sweep. At this shape ~16 GiB sat unused while
+  GPU utilisation averaged 32.1% (50 one-second `nvidia-smi` samples, max 64%,
+  16 at the 11% floor), so memory was not the constraint.
+
 ## 2026-10-01 — correctness review of the fused engine + real 7B workload (A100-40GB)
 
 - Review found the v0 engine (d6be8dca) was bypassed by every trainer mode:
@@ -153,6 +193,28 @@ verification results for the DP-clipping optimization workstream. Newest last.
   With small C this deletes most of the signal (A3: an example 0.1% over C
   is stored at 3% of C). Private but utility-harsh.
 
+## 2026-10-01 — train-mode fix in `train_dpsgd.py`; attention-only checkpointing measured (A100-40GB)
+
+- Fix: `examples/train_dpsgd.py` now calls `model.train()` before
+  `make_functional`. Without it the base model trained in eval mode
+  (`from_pretrained` returns eval; PEFT keeps base submodules in eval), which
+  made training-gated code no-op: the attention-checkpoint probe bypassed every
+  call, and the `kv_cache` patch left `use_cache=True`. Safe because dropout is
+  already zeroed in the config and `clipped_grad` vmaps with
+  `randomness="same"`. Per-example grads are bitwise equal in eval and train mode.
+- `experiments/mem_profile/check_attn_ckpt_fires.py`: CPU self-check that
+  replicates the `train_dpsgd.py` model setup and asserts the probe is inert in
+  eval mode, fires on every layer in train mode, and leaves grads bitwise
+  unchanged. Passes locally and on the workspace.
+- Re-profiled all four variants in one session (Qwen2.5-Coder-7B LoRA, seq 512,
+  mb=2): no checkpointing 22.43 GiB / 11.67 s; attention-only checkpointing
+  **21.60 GiB / 14.80 s**; full-layer 16.39 GiB / 15.94 s; eager 24.40 GiB /
+  9.25 s. Attention-only saves 0.83 GiB for +27% step time, i.e. 14% of
+  full-layer's saving for 73% of its time cost, so it isn't worth it at this
+  shape. Peaks of the unchanged variants match the 09-30 batch to four decimals,
+  so train mode changed no memory. Times run ~12–15% slower across the board this
+  session, so compare within a batch only.
+
 ## 2026-10-01 — underflow note, issues #1119/#1120, kernel-optimizations review + port
 
 - Underflow: documented as a limitation (clip_pytree docstring, precision.md,
@@ -176,3 +238,42 @@ verification results for the DP-clipping optimization workstream. Newest last.
   The 36 failures in both arms also fail on main in that environment. The
   doc now states that attention checkpointing needs training mode and no KV
   cache. Stale sweep notes not ported.
+
+## 2026-10-01 — attention-only checkpointing removed
+
+- Removed the `attention_checkpointing` option ported in `a05b0b8e`: the
+  `apply_model_patches` kwarg, `transformers/components/attention_checkpoint.py`
+  and its tests, the `TrainingArguments` torch_compile guard and its two tests,
+  and the docs row. Also removed the `--attention-checkpointing` probe and
+  `experiments/mem_profile/`. `lora_mlp_recompute` and the `train_dpsgd.py`
+  `model.train()` fix stay.
+- Why: selective recomputation (Korthikanti et al., arXiv 2205.05198 §5)
+  recomputes only the s×s core-attention ops and stores the projections. Opake
+  runs `sdpa`, which dispatched to its fused flash kernel on our A100 runs.
+  That kernel already never stores the attention matrix, so wrapping the whole
+  attention block only re-ran the Q/K/V/O projections: −0.83 GiB for +27% step
+  time at seq 512, mb=2. The docs now say why no attention-only option exists.
+- Unreleased (in no tag, only on this branch), so no deprecation path. The
+  `opake-patches` + `opake-transformers` PR-marker suites pass: 1436 passed,
+  0 failed.
+
+## 2026-10-01 — `lora_mlp_recompute` measured; DPTrainer eval-mode and fused-LoRA dtype issues filed
+
+- DPTrainer path (`train_dpsgd_trainer.py`, bf16 autocast, Qwen2.5-Coder-7B
+  LoRA on all 7 projections, A100, seq 512, mb=2, identical Poisson batches):
+  `lora_mlp_recompute=False` gives **−9.9% step time (14.60 → 13.16 s) for
+  +2.08 GB step peak (17.02 → 19.10 GB)**, faster on all 6 steps. That matches
+  the 2 × 28 × 18944 × 2 B per token per example estimate. Worth enabling when
+  the extra memory fits. New flag `--lora-mlp-recompute` in
+  `train_dpsgd_trainer.py`.
+- The same knob is inert in `train_dpsgd.py` (identical peaks and times): bf16
+  base + PEFT's default fp32 adapters + no autocast fail the fused LoRA
+  MLP/Linear dtype gate, so those kernels never run there. The briefly added
+  `train_dpsgd.py` flag was removed again. The user guide now documents the
+  dtype condition and the memory cost. Issue #1122.
+- Confirmed that DPTrainer (and SFTTrainer) trains with the base model in eval
+  mode: a CPU repro via `from_pretrained` + PEFT shows
+  `self_attn.training=False` and a `DynamicCache` in the training forward. Test
+  fixtures construct models directly and hide it. Issue #1121, not fixed here.
+- Workspace synced to the branch via git bundle; its prior local state is
+  backed up in `~/opaque_backup_20261001`.
