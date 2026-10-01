@@ -157,9 +157,19 @@ args = TrainingArguments(
 ```
 
 `lora_mlp_recompute` applies to the fused LoRA MLP used when gate, up and down
-projections all carry dropout-free LoRA adapters on CUDA. It changes only what
-is stored versus recomputed; the per-example gradients are the same up to
-floating-point reduction order.
+projections all carry dropout-free LoRA adapters on CUDA. The fused path also
+requires the adapters to run in the compute dtype: either CUDA autocast is
+active (as in `DPTrainer` with `bf16=True`), or the adapters already have the
+hidden states' dtype. PEFT upcasts adapters to fp32 by default, so a bf16 base
+model without autocast falls back to the PEFT forward, and the option has no
+effect.
+
+`lora_mlp_recompute=False` keeps two intermediate-width tensors per decoder
+layer, which is about `2 x num_layers x intermediate_size x bytes` extra per
+token per example, in exchange for two fewer matmuls per layer in backward. It
+pays off when that fits in spare memory. It changes only what is stored versus
+recomputed; the per-example gradients are the same up to floating-point
+reduction order.
 
 There is no separate attention-only checkpointing option. When `sdpa`
 attention dispatches to a fused backend (flash, memory-efficient or cuDNN), it
