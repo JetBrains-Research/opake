@@ -56,15 +56,9 @@ def apply_model_patches(
     ``loss_only=True``, which permits the optimized branch to return
     ``logits=None``.
 
-    Two opt-in activation-memory controls trade saved tensors for backward
-    recomputation:
-
-    - ``attention_checkpointing`` (default ``False``) checkpoints each decoder
-      layer's ``self_attn`` block with non-reentrant checkpointing, keeping only
-      its inputs and recomputing projections and attention in backward.
-    - ``lora_mlp_recompute`` (default ``True``) makes the fused LoRA MLP
-      recompute its intermediate-width ``gate`` / ``up`` tensors in backward;
-      ``False`` saves them instead.
+    ``lora_mlp_recompute`` (default ``True``) makes the fused LoRA MLP
+    recompute its intermediate-width ``gate`` / ``up`` tensors in backward;
+    ``False`` saves them instead.
     """
     global _runtime_patches_applied
     if not _runtime_patches_applied:
@@ -94,14 +88,6 @@ def apply_model_patches(
             )
         except ImportError:
             pass
-
-    # Last, so the checkpointed region wraps every attention forward replacement.
-    if kwargs.get("attention_checkpointing", False):
-        from opake.api.patches.transformers.components.attention_checkpoint import (
-            apply_attention_checkpointing,
-        )
-
-        apply_attention_checkpointing(model)
 
 
 def apply_runtime_patches(

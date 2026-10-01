@@ -197,31 +197,6 @@ def test_torch_compile_with_gradient_checkpointing_rejected(tmp_path):
         _args(tmp_path, torch_compile=True, gradient_checkpointing=True)
 
 
-def test_torch_compile_with_attention_checkpointing_rejected(tmp_path):
-    with pytest.raises(
-        ConfigurationError, match=r"torch_compile.*attention_checkpointing"
-    ):
-        _args(
-            tmp_path,
-            torch_compile=True,
-            performance_kernels_config={"attention_checkpointing": True},
-        )
-
-
-def test_attention_checkpointing_accepted_without_torch_compile(tmp_path):
-    args = _args(
-        tmp_path,
-        performance_kernels_config={
-            "attention_checkpointing": True,
-            "lora_mlp_recompute": False,
-        },
-    )
-    assert args.performance_kernels_config == {
-        "attention_checkpointing": True,
-        "lora_mlp_recompute": False,
-    }
-
-
 def test_torch_compile_rejects_model_with_checkpointing_already_enabled(tmp_path):
     model = _TinyLM()
     model.is_gradient_checkpointing = True

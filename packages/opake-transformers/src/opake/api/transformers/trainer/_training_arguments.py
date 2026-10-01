@@ -953,22 +953,6 @@ class TrainingArguments:
                 )
             )
 
-        kernel_config = self.performance_kernels_config
-        if (
-            self.torch_compile
-            and isinstance(kernel_config, dict)
-            and kernel_config.get("attention_checkpointing", False)
-        ):
-            raise ConfigurationError(
-                *(
-                    "torch_compile=True is incompatible with "
-                    "performance_kernels_config['attention_checkpointing']: "
-                    "attention checkpointing uses the same saved-tensor-hook "
-                    "checkpoint path as gradient_checkpointing=True. Disable "
-                    "either attention checkpointing or torch compilation.",
-                )
-            )
-
         self._validate_privacy_fields()
 
         # --- 12. metric_for_best_model must be eval-side -------------------
