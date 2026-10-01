@@ -152,3 +152,27 @@ verification results for the DP-clipping optimization workstream. Newest last.
   rounded-up element rather than rounding it to the next lower subnormal.
   With small C this deletes most of the signal (A3: an example 0.1% over C
   is stored at 3% of C). Private but utility-harsh.
+
+## 2026-10-01 — underflow note, issues #1119/#1120, kernel-optimizations review + port
+
+- Underflow: documented as a limitation (clip_pytree docstring, precision.md,
+  notes/clip-norm-underflow.md); no behavior change.
+- Issues: #1119 (float16 subnormal guard zeroes instead of rounding down;
+  utility only) and #1120 (per-leaf clip-and-reduce overhead; links the
+  fused-engine evidence). None opened for the eval-mode trainer (owner's) or
+  the underflow (now a note).
+- mihajlo/kernel-optimizations review (experiments/kernel_opt_review/):
+  ported the BLT/Toeplitz coefficient cache (fixed: (device, dtype) keys,
+  lazy fill, version- and grad-aware) and elementwise BLT decay as 65fd7f28.
+  Bitwise-equal outputs; A100 BLT multiply_next ~112 -> ~38 ms. Not ported:
+  broadcast-sum (slower on CUDA), flat i.i.d. draw (slower, 2x memory,
+  changes the RNG stream for non-16-multiple leaves, a λ-CGD resume
+  hazard), unused generator_from_key(device=). Its "pre-existing" failures
+  were introduced on that branch (main 623/623). 18 regression tests fail on
+  the source branch, pass on main.
+- Ported 3a9bdcdc (attention-only checkpointing, lora_mlp_recompute) as
+  a05b0b8e: reviewer's CRITICAL claim refuted by instrumentation;
+  save_intermediates honored under vmap(grad()); no new failures in A/B.
+  The 36 failures in both arms also fail on main in that environment. The
+  doc now states that attention checkpointing needs training mode and no KV
+  cache. Stale sweep notes not ported.
