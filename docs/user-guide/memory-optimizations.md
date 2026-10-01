@@ -135,6 +135,42 @@ with functorch). No special kwargs needed.
   `vmap_checkpointing=False` to `apply_runtime_patches(...)` or
   `apply_model_patches(...)`.
 
+### Selective activation recomputation
+
+Full-layer checkpointing recomputes every projection of each decoder layer.
+Two narrower controls let long-sequence LoRA runs choose what to keep:
+
+| Option | Saved per decoder layer | Recomputed in backward |
+|--------|-------------------------|------------------------|
+| `attention_checkpointing=True` | Attention-block inputs only | Q/K/V projections, RoPE, attention, output projection |
+| `lora_mlp_recompute=True` (default) | Fused LoRA MLP input | Intermediate-width `gate` / `up` projections |
+| `lora_mlp_recompute=False` | Fused LoRA MLP input plus `gate` / `up` | Activation and gated product only |
+
+Pass them to `apply_model_patches(...)`, or through
+`performance_kernels_config` with `DPTrainer`:
+
+```python
+args = TrainingArguments(
+    gradient_checkpointing=False,
+    use_performance_kernels=True,
+    performance_kernels_config={
+        "attention_checkpointing": True,
+        "lora_mlp_recompute": False,
+    },
+)
+```
+
+`lora_mlp_recompute` applies to the fused LoRA MLP used when gate, up and down
+projections all carry dropout-free LoRA adapters on CUDA. Attention
+checkpointing uses the same non-reentrant path as gradient checkpointing, so it
+shares its limitations below, including the `torch_compile` restriction. It
+only checkpoints attention calls made in training mode, with gradients enabled
+and without a KV cache: call `model.train()` and run the forward with
+`use_cache=False`. Otherwise every call runs the regular attention forward and
+nothing is saved, without an error or warning. Both
+options change only what is stored versus recomputed; the per-example
+gradients are the same up to floating-point reduction order.
+
 ### CPU offloading of saved tensors
 
 `torch.autograd.graph.save_on_cpu` moves tensors saved for backward to

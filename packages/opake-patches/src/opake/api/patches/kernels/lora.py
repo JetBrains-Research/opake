@@ -64,6 +64,8 @@ _ACTIVATION_BACKWARD_FUSED = {
 }
 
 _LORA_MLP_GRAD_CHUNK_ROWS = 128
+# Opake_LoRA_MLP.apply arguments before the optional ``save_intermediates`` flag.
+_LORA_MLP_REQUIRED_ARGS = 14
 _LORA_MLP_GRAD_CHUNK_EXAMPLES = 128
 
 _ACTIVATION_NAMES = {
@@ -1071,10 +1073,33 @@ class Opake_LoRA_MLP(torch.autograd.Function):
         up = X @ Wu.T + X @ Au @ Bu * Su
         h = activation(gate) * up  # via Triton kernel
         out = h @ Wd.T + h @ Ad @ Bd * Sd
+
+    By default only the input ``X`` is saved and the intermediate-width
+    ``gate`` / ``up`` tensors are recomputed in backward. Passing
+    ``save_intermediates=True`` as the optional trailing argument saves
+    ``gate`` and ``up`` instead, trading ``2 * intermediate_size`` saved values
+    per token for skipping their recomputation; the activation and its product
+    are still recomputed from them.
     """
 
     @staticmethod
-    def forward(X, Wg, Ag, Bg, Sg, Wu, Au, Bu, Su, Wd, Ad, Bd, Sd, activation_type):
+    def forward(
+        X,
+        Wg,
+        Ag,
+        Bg,
+        Sg,
+        Wu,
+        Au,
+        Bu,
+        Su,
+        Wd,
+        Ad,
+        Bd,
+        Sd,
+        activation_type,
+        save_intermediates=False,
+    ):
         """Forward pass for MLP with configurable GLU activation."""
         X, Wg, Ag, Bg, Wu, Au, Bu, Wd, Ad, Bd = cast_to_dtype(
             active_cuda_dtype(X), X, Wg, Ag, Bg, Wu, Au, Bu, Wd, Ad, Bd
@@ -1102,12 +1127,22 @@ class Opake_LoRA_MLP(torch.autograd.Function):
 
     @staticmethod
     def setup_context(ctx, inputs, output):
-        X, Wg, Ag, Bg, Sg, Wu, Au, Bu, Su, Wd, Ad, Bd, Sd, activation_type = inputs
-        # Recompute the intermediate-width gate/up tensors in backward. Saving
-        # the much narrower input is essential for long-sequence DP vmap batches.
+        required = inputs[:_LORA_MLP_REQUIRED_ARGS]
+        X, Wg, Ag, Bg, Sg, Wu, Au, Bu, Su, Wd, Ad, Bd, Sd, activation_type = required
+        optional = inputs[_LORA_MLP_REQUIRED_ARGS:]
+        save_intermediates = bool(optional[0]) if optional else False
+        # By default, recompute the intermediate-width gate/up tensors in
+        # backward: saving the much narrower input is essential for
+        # long-sequence DP vmap batches. ``save_intermediates`` keeps them
+        # instead when activation memory is available.
         # Under vmap(grad()), grad() detaches captured LoRA weights (requires_grad=False).
         needs_weight_grads = _needs_lora_weight_grads((Ag, Bg), (Au, Bu), (Ad, Bd))
-        ctx.save_for_backward(X, Wg, Ag, Bg, Wu, Au, Bu, Wd, Ad, Bd)
+        if save_intermediates:
+            _, gate, up, _ = output
+            ctx.save_for_backward(X, Wg, Ag, Bg, Wu, Au, Bu, Wd, Ad, Bd, gate, up)
+        else:
+            ctx.save_for_backward(X, Wg, Ag, Bg, Wu, Au, Bu, Wd, Ad, Bd)
+        ctx.save_intermediates = save_intermediates
         ctx.needs_weight_grads = needs_weight_grads
         ctx.Sg = Sg
         ctx.Su = Su
@@ -1134,15 +1169,22 @@ class Opake_LoRA_MLP(torch.autograd.Function):
             )
         )
         X, Wg, Ag, Bg, Wu, Au, Bu, Wd, Ad, Bd = cast_to_dtype(
-            ctx.compute_dtype, *saved_tensors
+            ctx.compute_dtype, *saved_tensors[:10]
         )
-        X_flat = X.reshape(-1, X.shape[-1])
-        gate = F.linear(X, Wg)
-        if Ag is not None and Bg is not None:
-            gate.reshape(-1, gate.shape[-1]).addmm_(X_flat @ Ag, Bg, alpha=Sg, beta=1)
-        up = F.linear(X, Wu)
-        if Au is not None and Bu is not None:
-            up.reshape(-1, up.shape[-1]).addmm_(X_flat @ Au, Bu, alpha=Su, beta=1)
+        if ctx.save_intermediates:
+            gate, up = saved_tensors[10], saved_tensors[11]
+        else:
+            X_flat = X.reshape(-1, X.shape[-1])
+            gate = F.linear(X, Wg)
+            if Ag is not None and Bg is not None:
+                gate.reshape(-1, gate.shape[-1]).addmm_(
+                    X_flat @ Ag, Bg, alpha=Sg, beta=1
+                )
+            up = F.linear(X, Wu)
+            if Au is not None and Bu is not None:
+                up.reshape(-1, up.shape[-1]).addmm_(X_flat @ Au, Bu, alpha=Su, beta=1)
+            del X_flat
+        del saved_tensors
 
         if ctx.needs_weight_grads:
             dgate, dup, dAg, dBg, dAu, dBu, dAd, dBd = _LoRAMLPBackward.apply(
@@ -1169,14 +1211,14 @@ class Opake_LoRA_MLP(torch.autograd.Function):
                 )
             )
             ctx.maybe_clear_saved_tensors()
-            del X, X_flat, Wd, Ad, Bd, gate, up
+            del X, Wd, Ad, Bd, gate, up
             Wg, Ag, Bg, Wu, Au, Bu = cast_to_dtype(
                 ctx.compute_dtype, Wg, Ag, Bg, Wu, Au, Bu
             )
             dX = _LoRAMLPInputBackward.apply(dgate, dup, Wg, Ag, Bg, Sg, Wu, Au, Bu, Su)
         else:
             ctx.maybe_clear_saved_tensors()
-            del X, X_flat
+            del X
             dX = _LoRAMLPBackwardLite.apply(
                 grad_out,
                 Wg,
@@ -1212,6 +1254,7 @@ class Opake_LoRA_MLP(torch.autograd.Function):
             dBd,
             None,  # down
             None,  # activation_type
+            None,  # save_intermediates
         )
 
     @staticmethod
@@ -1232,6 +1275,7 @@ class Opake_LoRA_MLP(torch.autograd.Function):
         Bd,
         Sd,
         activation_type,
+        save_intermediates=False,
     ):
         """Efficient vmap rule: merge vmap batch into regular batch.
 
@@ -1349,7 +1393,21 @@ def opake_lora_qkv(
 
 
 def opake_lora_mlp(
-    X, Wg, Ag, Bg, Sg, Wu, Au, Bu, Su, Wd, Ad, Bd, Sd, activation="swiglu"
+    X,
+    Wg,
+    Ag,
+    Bg,
+    Sg,
+    Wu,
+    Au,
+    Bu,
+    Su,
+    Wd,
+    Ad,
+    Bd,
+    Sd,
+    activation="swiglu",
+    save_intermediates=False,
 ):
     """Apply LoRA MLP with configurable GLU activation and vmap support.
 
@@ -1368,6 +1426,8 @@ def opake_lora_mlp(
         Bd: Down-projection LoRA up-projection weight.
         Sd: Down-projection LoRA scaling factor.
         activation: Activation type - "swiglu" (default), "geglu_exact", or "geglu_approx".
+        save_intermediates: Save the intermediate-width ``gate`` / ``up``
+            tensors for backward instead of recomputing them.
 
     Returns:
         Output tensor (batch, seq_len, hidden_dim)
@@ -1391,6 +1451,20 @@ def opake_lora_mlp(
     else:
         activation_type = activation
     result = Opake_LoRA_MLP.apply(
-        X, Wg, Ag, Bg, Sg, Wu, Au, Bu, Su, Wd, Ad, Bd, Sd, activation_type
+        X,
+        Wg,
+        Ag,
+        Bg,
+        Sg,
+        Wu,
+        Au,
+        Bu,
+        Su,
+        Wd,
+        Ad,
+        Bd,
+        Sd,
+        activation_type,
+        bool(save_intermediates),
     )
     return result[0]  # Return only the output, not intermediate tensors
