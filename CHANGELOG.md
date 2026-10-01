@@ -129,3 +129,26 @@ verification results for the DP-clipping optimization workstream. Newest last.
   runs in eval mode, so every per-example forward builds a KV cache; both
   arms pay it. Next bottleneck after the engine is the vmapped per-example
   fwd/bwd (~6.5 of ~7.1 s fused clip phase), not clipping.
+
+## 2026-10-01 — adversarial bound review: v0 fp16 severity + production underflow corner
+
+- check_bound_adversarial.py (zero tolerance, B=1 trick): v0 fp16 violated
+  in every regime the guard exists for: normal-range round-back +4.4e-4
+  (deterministic, ~fp16 half-ulp), subnormal round-up +19% (1.19C passes
+  unclipped), and a realistic C=0.01 / 4M-element leaf +1.0e-3. The earlier
+  "+1.1e-4" came from a benign normal-range config and understated it.
+  Blast radius verified zero: no v0 commit touched packages/, no PR, no
+  v0-era rig or engine references fp16, every real run saw fp32 leaves only.
+- Production (and the current engine, which reuses production's guard)
+  also fail case A2 for bf16/fp32: per-example squares underflow in the
+  fp32 accumulator, computed norm = 0, example left unclipped
+  (probe_norm_underflow.py). Onset at per-element RMS ~1e-21 (fp32) /
+  ~1e-23 (bf16), i.e. C <~ 1e-18 / 1e-20 for N = 1M. Unreachable in
+  practice (lost squared mass <= N*1.2e-38, harmless while
+  C >> ~2.4e-16*sqrt(N); adaptive clipping floors C at 0.01), but it
+  contradicts clip_pytree's "holds for every input" docstring. Not changed:
+  production edits need owner sign-off + DP review.
+- Production utility note: for fp16 storage, the subnormal guard ZEROES a
+  rounded-up element rather than rounding it to the next lower subnormal.
+  With small C this deletes most of the signal (A3: an example 0.1% over C
+  is stored at 3% of C). Private but utility-harsh.
