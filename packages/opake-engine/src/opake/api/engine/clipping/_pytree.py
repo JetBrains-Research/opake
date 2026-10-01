@@ -578,6 +578,17 @@ def clip_pytree(
     roughly 0.4% of the output magnitude at bfloat16, 0.05% at float16, and a
     few ULPs at float32.
 
+    The guarantee assumes the squared entries are representable at the
+    reduction precision. Squares are formed in ``compute_dtype`` (float32 by
+    default for float32, bfloat16 and float16 leaves): entries below about
+    ``1e-19`` in magnitude square into the float32 subnormal range, and below
+    about ``2.6e-23`` they square to zero, so their contribution to the norm
+    can be under-measured. An input made only of such entries can be returned
+    unclipped while its true norm exceeds ``clipping_norm``; this requires
+    ``clipping_norm`` below roughly ``1e-19 * sqrt(numel)``. The under-measured
+    squared mass is at most ``numel * 2**-150``, for example under ``1e-21`` of
+    ``clipping_norm**2`` when ``clipping_norm >= 1e-6`` and ``numel <= 1e12``.
+
     Args:
         pytree: Tensor pytree to clip (flat or nested).
         clipping_norm: Maximum L2 norm (non-negative, or inf for no clipping).
