@@ -1,0 +1,136 @@
+[variant] multi_tensor=False vmap_chunk=0 old=False noforeach=False
+[variant] tf32=False no_peft=False
+[variant] cudagraph=True check=True
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+================================================================================
+DP-SGD LoRA Training for Causal Language Models
+================================================================================
+W&B initialized (mode: disabled)
+
+Using device: cuda (NVIDIA A100-SXM4-40GB)
+
+Loading model: Qwen/Qwen2.5-Coder-7B...
+
+Runtime mode:
+  Device: cuda (NVIDIA A100-SXM4-40GB)
+  Dtype: bfloat16 (torch.bfloat16)
+  Kernel optimizations: disabled (--no-kernel-patches)
+Attention: sdpa (backend=auto)
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights:  16%|█▌        | 55/339 [00:00<00:00, 541.76it/s]Loading weights:  37%|███▋      | 125/339 [00:00<00:00, 621.75it/s]Loading weights:  55%|█████▌    | 188/339 [00:00<00:00, 591.59it/s]Loading weights:  77%|███████▋  | 262/339 [00:00<00:00, 625.65it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 694.52it/s]
+[After model load] Memory: alloc=14.23GB, peak=14.23GB, free=25.14GB (36.0% used)
+Applying LoRA...
+Kernel patches: DISABLED (eager baseline; compat/MoE/PEFT stay on)
+trainable params: 40,370,176 || all params: 7,655,986,688 || trainable%: 0.5273
+[After LoRA] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Loading dataset: JetBrains/KStack...
+  Split: train
+  Text field: content
+  Streaming source dataset and materializing required subset...
+  Total examples in dataset: 2100
+
+  Sample data (first example):
+    Text length: 11169 chars
+    Preview: /*
+ * Copyright 2010-2015 JetBrains s.r.o.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a...
+
+Preparing 100 eval + 2000 train samples...
+
+Tokenizing (max_seq_len=512)...
+Tokenizing eval:   0%|          | 0/100 [00:00<?, ? examples/s]Tokenizing eval: 100%|██████████| 100/100 [00:00<00:00, 1263.44 examples/s]
+Tokenizing train:   0%|          | 0/2000 [00:00<?, ? examples/s]Tokenizing train:  50%|█████     | 1000/2000 [00:00<00:00, 1754.42 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2274.62 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2161.36 examples/s]
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+Prepared datasets: 2000 train samples, 100 eval samples
+
+Poisson sampling setup:
+  Sampler: poisson
+  Sample rate (per rank): 0.008000
+  Expected global batch size: 16
+  Expected steps per epoch: ~125
+Eval batches: 50
+
+Converting to functional form (LoRA parameters only)...
+  (This may take 1-2 minutes for large models...)
+Trainable parameters: 392 (took 0.0s)
+[After functional conversion] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Setting up DP-SGD training...
+  Optimizer: adafactor
+  Learning rate: 0.0005
+  Clip norm: 1.0
+  Microbatch size: 2
+  Clipping mode: adaptive
+  Eval steps: 100
+  Epochs: 2
+  Expected total steps: ~250
+
+Calibrating privacy parameters...
+  δ = 2.34e-04 (n=2000)
+  Total steps: 250
+  Sample rate: 0.008000
+  Target: ε=3.0, δ=2.34e-04
+  (This may take 1-3 minutes...)
+
+Calibrated privacy parameters (took 10.9s):
+  Target: ε=3.000, δ=2.3e-04 | Achieved ε≈2.998
+  Noise multiplier: 0.6279 (iterations=14, converged=True)
+
+================================================================================
+Starting training...
+================================================================================
+[Before training] Memory: alloc=14.41GB, peak=14.41GB, free=25.06GB (36.5% used)
+  → Step 0 eval: loss=0.7220, ε=0.000
+
+Epoch 1/2
+--------------------------------------------------------------------------------
+Creating poisson sampler...
+Creating DataLoader...
+[cudagraph] captured key #1 in 3.3s
+[cudagraph] check #1: bitwise=False max_abs_diff=1.816e-04
+[cudagraph] check #2: bitwise=False max_abs_diff=1.763e-04
+[cudagraph] check #3: bitwise=False max_abs_diff=5.046e-05
+Step    2 [E1 S  2/125] | BS: 14 | Loss: 0.8703 | Clip: norm=0.056, rate=0.0% | GradNorm: μ=0.246 | Noise: σ=0.0354 | Time: 3.02s | Mem: 15.7GB
+[cudagraph] check #4: bitwise=False max_abs_diff=3.179e-04
+[W1002 14:16:06.666917049 CUDACachingAllocator.cpp:3934] memory allocation failed with OOM on device 0 while trying to allocate 39845888 bytes (free: 17235968, total: 42404806656).
+[cudagraph] captured key #2 in 3.1s
+[cudagraph] check #5: bitwise=True max_abs_diff=0.000e+00
+Step    4 [E1 S  4/125] | BS: 14 | Loss: 0.8196 | Clip: norm=0.047, rate=0.0% | GradNorm: μ=0.216 | Noise: σ=0.0297 | Time: 3.03s | Mem: 16.0GB
+[cudagraph] check #6: bitwise=False max_abs_diff=3.765e-05
+[cudagraph] check #7: bitwise=True max_abs_diff=0.000e+00
+[cudagraph] check #8: bitwise=False max_abs_diff=7.989e-05
+Step    6 [E1 S  6/125] | BS: 15 | Loss: 0.9060 | Clip: norm=0.038, rate=6.7% | GradNorm: μ=0.293 | Noise: σ=0.0240 | Time: 5.22s | Mem: 25.3GB
+
+Reached --stop-at-step=6, stopping training.
+
+================================================================================
+Training Complete!
+================================================================================
+Model: Qwen/Qwen2.5-Coder-7B
+Dataset: JetBrains/KStack (2000 train samples)
+
+Training results:
+  Total steps: 6
+  Initial loss: 0.7042
+  Final loss: 0.9060
+  Loss reduction: -28.7%
+
+Adaptive clipping:
+  Initial output max_norm: 0.062
+  Final output max_norm: 0.038
+  Clip norm range: [0.038, 0.062]
+
+Privacy:
+  Target: ε=3.000, δ=2.34e-04 (n=2000)
+  Noise multiplier: 0.6279
+  Final ε (theoretical): 0.9518
+
+Performance:
+  Throughput: 3.1 samples/s
+  Steps/s: 0.20
+  Peak memory: 25.26 GB
+[cudagraph] report {'captures': 2, 'replays': 47, 'capture_s': 6.418158822000009, 'checks': 8, 'check_mismatch': 6, 'max_abs_diff': 0.0003178715705871582, 'keys': [(2, 512), (1, 512)]}

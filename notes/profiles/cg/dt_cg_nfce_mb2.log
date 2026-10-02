@@ -1,0 +1,215 @@
+[variant] multi_tensor=False vmap_chunk=0 old=False noforeach=False
+[variant] tf32=False no_peft=False no_fused_ce=True
+[variant] cudagraph=True check=False
+2026-10-02 15:01:14,467 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-10-02 15:01:14,468 WARNING huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-10-02 15:01:14,478 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/config.json "HTTP/1.1 200 OK"
+2026-10-02 15:01:14,603 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 15:01:14,614 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/config.json "HTTP/1.1 200 OK"
+================================================================================
+DP-SGD LoRA Training for Causal Language Models with DPTrainer
+================================================================================
+
+Runtime mode:
+  Device: cuda (NVIDIA A100-SXM4-40GB)
+  Dtype: bfloat16 (torch.bfloat16)
+  Kernel optimizations: enabled (applied by DPTrainer)
+
+Loading model: Qwen/Qwen2.5-Coder-7B...
+Attention: sdpa (backend=auto)
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 4745.61it/s]
+2026-10-02 15:01:14,973 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/generation_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 15:01:14,983 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/generation_config.json "HTTP/1.1 200 OK"
+2026-10-02 15:01:15,089 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-10-02 15:01:15,199 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 15:01:15,210 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/config.json "HTTP/1.1 200 OK"
+2026-10-02 15:01:15,318 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 15:01:15,328 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-10-02 15:01:15,444 INFO httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-7B/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-10-02 15:01:15,556 INFO httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-7B/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-10-02 15:01:16,139 INFO httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-7B "HTTP/1.1 200 OK"
+2026-10-02 15:01:16,926 INFO httpx: HTTP Request: HEAD https://huggingface.co/datasets/JetBrains/KStack/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 15:01:16,936 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/JetBrains/KStack/425774a783d87159d103d65b79ce37f58d0697bb/README.md "HTTP/1.1 200 OK"
+2026-10-02 15:01:17,039 INFO httpx: HTTP Request: HEAD https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/KStack.py "HTTP/1.1 404 Not Found"
+2026-10-02 15:01:17,323 INFO httpx: HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/JetBrains/KStack/JetBrains/KStack.py "HTTP/1.1 404 Not Found"
+2026-10-02 15:01:17,431 INFO httpx: HTTP Request: GET https://huggingface.co/api/datasets/JetBrains/KStack/revision/425774a783d87159d103d65b79ce37f58d0697bb "HTTP/1.1 200 OK"
+2026-10-02 15:01:17,533 INFO httpx: HTTP Request: HEAD https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-10-02 15:01:17,681 INFO httpx: HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=JetBrains/KStack "HTTP/1.1 200 OK"
+2026-10-02 15:01:17,794 INFO httpx: HTTP Request: GET https://huggingface.co/api/datasets/JetBrains/KStack/tree/425774a783d87159d103d65b79ce37f58d0697bb/data?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-10-02 15:01:17,906 INFO httpx: HTTP Request: GET https://huggingface.co/api/datasets/JetBrains/KStack/tree/425774a783d87159d103d65b79ce37f58d0697bb?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-10-02 15:01:18,014 INFO httpx: HTTP Request: HEAD https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-10-02 15:01:18,148 INFO httpx: HTTP Request: GET https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/data/train-00000-of-00033.parquet "HTTP/1.1 302 Found"
+2026-10-02 15:01:18,249 INFO httpx: HTTP Request: GET https://us.gcp.cdn.hf.co/xet-bridge-us/66420a902c4821bb5ca9faa6/62d7f0bd399588a9a0d4c776127e4533e1ae1e6b0a19d56ed5ff5c5a97ff341d?X-Xet-Cas-Uid=public&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00033.parquet%3B+filename%3D%22train-00000-of-00033.parquet%22%3B&xip=1TmmZl6lxkc&user_id=public&Expires=1790956878&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5nY3AuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjY0MjBhOTAyYzQ4MjFiYjVjYTlmYWE2LzYyZDdmMGJkMzk5NTg4YTlhMGQ0Yzc3NjEyN2U0NTMzZTFhZTFlNmIwYTE5ZDU2ZWQ1ZmY1YzVhOTdmZjM0MWRcXD9YLVhldC1DYXMtVWlkPXB1YmxpYyZyZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPSomeGlwPTFUbW1abDZseGtjJnVzZXJfaWQ9cHVibGljIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTA5NTY4Nzh9fX1dfQ__&Signature=MEUCIHuvj504M2tmdReStwof4i-xhLNQW0H%7EA9yhu9BN1bZPAiEAlHGLPO0lQeWDivMVGSR-WVsDvcE9QU3ncYGH35XwfUc_&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-02 15:01:18,613 INFO httpx: HTTP Request: GET https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/data/train-00000-of-00033.parquet "HTTP/1.1 302 Found"
+2026-10-02 15:01:18,708 INFO httpx: HTTP Request: GET https://us.gcp.cdn.hf.co/xet-bridge-us/66420a902c4821bb5ca9faa6/62d7f0bd399588a9a0d4c776127e4533e1ae1e6b0a19d56ed5ff5c5a97ff341d?response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00033.parquet%3B+filename%3D%22train-00000-of-00033.parquet%22%3B&user_id=public&X-Xet-Cas-Uid=public&xip=1TmmZl6lxkc&Expires=1790956878&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5nY3AuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjY0MjBhOTAyYzQ4MjFiYjVjYTlmYWE2LzYyZDdmMGJkMzk5NTg4YTlhMGQ0Yzc3NjEyN2U0NTMzZTFhZTFlNmIwYTE5ZDU2ZWQ1ZmY1YzVhOTdmZjM0MWRcXD9yZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPSomdXNlcl9pZD1wdWJsaWMmWC1YZXQtQ2FzLVVpZD1wdWJsaWMmeGlwPTFUbW1abDZseGtjIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTA5NTY4Nzh9fX1dfQ__&Signature=MEUCIAJJ%7EwvfHOywROIK8Csp52Gx-bSrrnGoNcefKCBWTMQAAiEAvDTyYPsIb3y6XMHE-t5wCYwwVlMcsGIT9RWfH9rvyeM_&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-02 15:01:19,157 INFO httpx: HTTP Request: GET https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/data/train-00000-of-00033.parquet "HTTP/1.1 302 Found"
+2026-10-02 15:01:19,251 INFO httpx: HTTP Request: GET https://us.gcp.cdn.hf.co/xet-bridge-us/66420a902c4821bb5ca9faa6/62d7f0bd399588a9a0d4c776127e4533e1ae1e6b0a19d56ed5ff5c5a97ff341d?X-Xet-Cas-Uid=public&xip=1TmmZl6lxkc&user_id=public&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00033.parquet%3B+filename%3D%22train-00000-of-00033.parquet%22%3B&Expires=1790956879&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5nY3AuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjY0MjBhOTAyYzQ4MjFiYjVjYTlmYWE2LzYyZDdmMGJkMzk5NTg4YTlhMGQ0Yzc3NjEyN2U0NTMzZTFhZTFlNmIwYTE5ZDU2ZWQ1ZmY1YzVhOTdmZjM0MWRcXD9YLVhldC1DYXMtVWlkPXB1YmxpYyZ4aXA9MVRtbVpsNmx4a2MmdXNlcl9pZD1wdWJsaWMmcmVzcG9uc2UtY29udGVudC1kaXNwb3NpdGlvbj0qIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTA5NTY4Nzl9fX1dfQ__&Signature=MEQCH2R2ApQoCEXWlJ-fbXnsRnc6S6-Oy8obfF2ue5zf-ZICIQCikfC7L83YwsAmg6PL9mviSfRWRyvgFeryPB8ByhGzEQ__&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+Model loaded in 0.6s
+Applying LoRA...
+trainable params: 40,370,176 || all params: 7,655,986,688 || trainable%: 0.5273
+
+Loading dataset: JetBrains/KStack...
+  Split: train
+  Text field: content
+  Streaming source dataset and materializing required subset...
+  Total examples in dataset: 2100
+
+  Sample data (first example):
+    Text length: 11169 chars
+    Preview: /*
+ * Copyright 2010-2015 JetBrains s.r.o.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a...
+
+Preparing 100 eval + 2000 train samples...
+
+Tokenizing (max_seq_len=512)...
+Tokenizing eval:   0%|          | 0/100 [00:00<?, ? examples/s]Tokenizing eval: 100%|██████████| 100/100 [00:00<00:00, 1453.42 examples/s]
+Tokenizing train:   0%|          | 0/2000 [00:00<?, ? examples/s]Tokenizing train:  50%|█████     | 1000/2000 [00:00<00:00, 1574.33 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2133.98 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2012.18 examples/s]
+2026-10-02 15:01:30,855 INFO opake.api.transformers.trainer._dp_trainer: Converting model to functional form...
+2026-10-02 15:01:30,867 INFO opake.api.transformers.trainer._dp_trainer: Trainable parameters: 392 tensors
+2026-10-02 15:01:30,870 INFO opake.api.transformers.trainer._dp_trainer: Calibrating privacy (target eps=3.00, delta=2.34e-04)...
+2026-10-02 15:01:43,801 INFO opake.api.transformers.trainer._dp_trainer: Calibrated: noise_multiplier=0.4596, achieved eps=2.999 (converged=True)
+2026-10-02 15:01:43,802 INFO opake.api.transformers.trainer._dp_trainer: Resolved privacy config: delta=2.34e-04, noise_multiplier=0.4596 (calibrated), sample_rate=0.008000, total_steps=6, truncated_batch_size=None
+Prepared datasets: 2000 train samples, 100 eval samples
+
+DPTrainer argument summary:
+  Output dir: /tmp/dt_cg_nfce_mb2
+  Optimizer: adafactor
+  Learning rate: 1e-05
+  Clipping mode: adaptive
+  Clip norm (clipping_norm): 1.0
+  Noise mechanism: gaussian
+  Sampling mode: poisson
+  Target epsilon: 3.0
+  Target delta: auto
+  Save strategy: no
+  torch_compile: False
+  bf16_full_eval: False
+  use_performance_kernels: True
+  Push to Hub: False
+
+================================================================================
+Starting DPTrainer training...
+  resume_from_checkpoint: None
+================================================================================
+  0%|          | 0/6 [00:00<?, ?it/s]                                       0%|          | 0/6 [00:00<?, ?it/s]2026-10-02 15:01:43,828 INFO opake.api.transformers.trainer._dp_trainer: Starting DP-SGD training: 1 epochs, ~125 steps/epoch, 6 total
+/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/kernels/lora.py:1142: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::addmm_. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  gate.reshape(-1, gate.shape[-1]).addmm_(X_flat @ Ag, Bg, alpha=Sg, beta=1)
+/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/kernels/lora.py:1145: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::addmm_. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  up.reshape(-1, up.shape[-1]).addmm_(X_flat @ Au, Bu, alpha=Su, beta=1)
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_efficient_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+{'privacy_calibration_source': 'calibrated', 'privacy_calibration_noise_multiplier': '0.4596', 'privacy_calibration_achieved_epsilon': '2.999', 'privacy_calibration_converged': True, 'converged_microbatch_size': 2, 'epoch': '0', 'num_input_tokens_seen': 0, 'step': 0}
+[cudagraph] captured key #1 in 5.7s
+ 17%|█▋        | 1/6 [00:08<00:42,  8.54s/it]                                              17%|█▋        | 1/6 [00:08<00:42,  8.54s/it] 33%|███▎      | 2/6 [00:12<00:22,  5.65s/it]                                              33%|███▎      | 2/6 [00:12<00:22,  5.65s/it] 50%|█████     | 3/6 [00:15<00:13,  4.61s/it]                                              50%|█████     | 3/6 [00:16<00:13,  4.61s/it]{'loss': '0.9532', 'batch_size': 16, 'grad_norm': '0.2963', 'learning_rate': '1e-05', 'privacy_clip_rate': '0.0625', 'privacy_clipping_norm': '0.0625', 'privacy_noise_std': '0.02872', 'privacy_noise_multiplier': '0.4596', 'privacy_epsilon': '1.541', 'privacy_delta': '0.0002338', 'privacy_clipped_grad_norm_mean': '0.2907', 'values': '0.9532', 'step_time_sec': '8.522', 'samples_per_second': '1.877', 'memory_peak_gb': '17.15', 'memory_allocated_gb': '15.2', 'memory_reserved_gb': '18.49', 'clip_sec': '7.923', 'noise_sec': '0.3361', 'optimizer_sec': '0.2631', 'epoch': '0.008', 'num_input_tokens_seen': 8192, 'train_runtime': '8.874', 'train_tokens_per_second': '923.1', 'step': 1}
+{'loss': '0.9266', 'batch_size': 20, 'grad_norm': '0.3676', 'learning_rate': '1e-05', 'privacy_clip_rate': '0.1', 'privacy_clipping_norm': '0.05707', 'privacy_noise_std': '0.02623', 'privacy_noise_multiplier': '0.4596', 'privacy_epsilon': '2.11', 'privacy_delta': '0.0002338', 'privacy_clipped_grad_norm_mean': '0.3532', 'values': '0.9266', 'step_time_sec': '3.277', 'samples_per_second': '6.104', 'memory_peak_gb': '15.36', 'memory_allocated_gb': '15.2', 'memory_reserved_gb': '18.49', 'clip_sec': '2.733', 'noise_sec': '0.3359', 'optimizer_sec': '0.2082', 'epoch': '0.016', 'num_input_tokens_seen': 18432, 'train_runtime': '12.79', 'train_tokens_per_second': '1441', 'step': 2}
+{'loss': '0.8351', 'batch_size': 16, 'grad_norm': '0.2031', 'learning_rate': '1e-05', 'privacy_clip_rate': '0', 'privacy_clipping_norm': '0.05285', 'privacy_noise_std': '0.02429', 'privacy_noise_multiplier': '0.4596', 'privacy_epsilon': '2.442', 'privacy_delta': '0.0002338', 'privacy_clipped_grad_norm_mean': '0.2031', 'values': '0.8351', 'step_time_sec': '2.736', 'samples_per_second': '5.848', 'memory_peak_gb': '15.36', 'memory_allocated_gb': '15.2', 'memory_reserved_gb': '18.49', 'clip_sec': '2.193', 'noise_sec': '0.3366', 'optimizer_sec': '0.206', 'epoch': '0.024', 'num_input_tokens_seen': 26624, 'train_runtime': '16.54', 'train_tokens_per_second': '1610', 'step': 3}
+[cudagraph] captured key #2 in 1.1s
+ 67%|██████▋   | 4/6 [00:20<00:09,  4.67s/it]                                              67%|██████▋   | 4/6 [00:21<00:09,  4.67s/it] 83%|████████▎ | 5/6 [00:24<00:04,  4.66s/it]                                              83%|████████▎ | 5/6 [00:26<00:04,  4.66s/it]100%|██████████| 6/6 [00:29<00:00,  4.51s/it]                                             100%|██████████| 6/6 [00:30<00:00,  4.51s/it]2026-10-02 15:02:14,303 INFO opake.api.transformers.trainer._dp_trainer: ***** Running Evaluation *****
+2026-10-02 15:02:14,303 INFO opake.api.transformers.trainer._dp_trainer:   Num examples = 100
+2026-10-02 15:02:14,303 INFO opake.api.transformers.trainer._dp_trainer:   Batch size = 2
+{'loss': '1.213', 'batch_size': 15, 'grad_norm': '0.4946', 'learning_rate': '1e-05', 'privacy_clip_rate': '0.2', 'privacy_clipping_norm': '0.04837', 'privacy_noise_std': '0.02223', 'privacy_noise_multiplier': '0.4596', 'privacy_epsilon': '2.674', 'privacy_delta': '0.0002338', 'privacy_clipped_grad_norm_mean': '0.3931', 'values': '1.213', 'step_time_sec': '3.749', 'samples_per_second': '4.001', 'memory_peak_gb': '16.33', 'memory_allocated_gb': '15.5', 'memory_reserved_gb': '18.64', 'clip_sec': '3.207', 'noise_sec': '0.3297', 'optimizer_sec': '0.2118', 'epoch': '0.032', 'num_input_tokens_seen': 34304, 'train_runtime': '21.38', 'train_tokens_per_second': '1604', 'step': 4}
+{'loss': '0.7953', 'batch_size': 22, 'grad_norm': '0.2535', 'learning_rate': '1e-05', 'privacy_clip_rate': '0.04545', 'privacy_clipping_norm': '0.045', 'privacy_noise_std': '0.02068', 'privacy_noise_multiplier': '0.4596', 'privacy_epsilon': '2.853', 'privacy_delta': '0.0002338', 'privacy_clipped_grad_norm_mean': '0.2306', 'values': '0.7953', 'step_time_sec': '3.557', 'samples_per_second': '6.186', 'memory_peak_gb': '15.66', 'memory_allocated_gb': '15.5', 'memory_reserved_gb': '18.64', 'clip_sec': '3.015', 'noise_sec': '0.3345', 'optimizer_sec': '0.2066', 'epoch': '0.04', 'num_input_tokens_seen': 45568, 'train_runtime': '26.11', 'train_tokens_per_second': '1745', 'step': 5}
+{'loss': '0.8898', 'batch_size': 18, 'grad_norm': '0.2912', 'learning_rate': '1e-05', 'privacy_clip_rate': '0', 'privacy_clipping_norm': '0.04055', 'privacy_noise_std': '0.01863', 'privacy_noise_multiplier': '0.4596', 'privacy_epsilon': '2.999', 'privacy_delta': '0.0002338', 'privacy_clipped_grad_norm_mean': '0.2912', 'values': '0.8898', 'step_time_sec': '3.047', 'samples_per_second': '5.908', 'memory_peak_gb': '15.66', 'memory_allocated_gb': '15.5', 'memory_reserved_gb': '18.64', 'clip_sec': '2.504', 'noise_sec': '0.3359', 'optimizer_sec': '0.2071', 'epoch': '0.048', 'num_input_tokens_seen': 54784, 'train_runtime': '30.47', 'train_tokens_per_second': '1798', 'step': 6}
+
+  0%|          | 0/50 [00:00<?, ?it/s][A
+  4%|▍         | 2/50 [00:00<00:04, 11.21it/s][A
+  8%|▊         | 4/50 [00:00<00:06,  7.45it/s][A
+ 10%|█         | 5/50 [00:00<00:06,  7.04it/s][A
+ 12%|█▏        | 6/50 [00:00<00:06,  6.70it/s][A
+ 14%|█▍        | 7/50 [00:00<00:06,  6.61it/s][A
+ 16%|█▌        | 8/50 [00:01<00:06,  6.65it/s][A
+ 18%|█▊        | 9/50 [00:01<00:06,  6.71it/s][A
+ 20%|██        | 10/50 [00:01<00:05,  6.73it/s][A
+ 22%|██▏       | 11/50 [00:01<00:05,  6.57it/s][A
+ 24%|██▍       | 12/50 [00:01<00:05,  6.52it/s][A
+ 26%|██▌       | 13/50 [00:01<00:05,  6.47it/s][A
+ 28%|██▊       | 14/50 [00:02<00:05,  6.44it/s][A
+ 30%|███       | 15/50 [00:02<00:05,  6.36it/s][A
+ 32%|███▏      | 16/50 [00:02<00:05,  6.52it/s][A
+ 34%|███▍      | 17/50 [00:02<00:05,  6.46it/s][A
+ 36%|███▌      | 18/50 [00:02<00:04,  6.59it/s][A
+ 38%|███▊      | 19/50 [00:02<00:04,  6.66it/s][A
+ 40%|████      | 20/50 [00:02<00:04,  6.70it/s][A
+ 42%|████▏     | 21/50 [00:03<00:04,  6.56it/s][A
+ 44%|████▍     | 22/50 [00:03<00:04,  6.50it/s][A
+ 46%|████▌     | 23/50 [00:03<00:04,  6.47it/s][A
+ 48%|████▊     | 24/50 [00:03<00:03,  6.58it/s][A
+ 50%|█████     | 25/50 [00:03<00:03,  6.44it/s][A
+ 52%|█████▏    | 26/50 [00:03<00:03,  6.40it/s][A
+ 54%|█████▍    | 27/50 [00:04<00:03,  6.39it/s][A
+ 56%|█████▌    | 28/50 [00:04<00:03,  6.26it/s][A
+ 58%|█████▊    | 29/50 [00:04<00:03,  6.24it/s][A
+ 60%|██████    | 30/50 [00:04<00:03,  6.25it/s][A
+ 62%|██████▏   | 31/50 [00:04<00:03,  6.29it/s][A
+ 64%|██████▍   | 32/50 [00:04<00:02,  6.33it/s][A
+ 66%|██████▌   | 33/50 [00:05<00:02,  6.36it/s][A
+ 68%|██████▊   | 34/50 [00:05<00:02,  6.38it/s][A
+ 70%|███████   | 35/50 [00:05<00:02,  6.39it/s][A
+ 72%|███████▏  | 36/50 [00:05<00:02,  6.39it/s][A
+ 74%|███████▍  | 37/50 [00:05<00:02,  6.40it/s][A
+ 76%|███████▌  | 38/50 [00:05<00:01,  6.39it/s][A
+ 78%|███████▊  | 39/50 [00:05<00:01,  6.36it/s][A
+ 80%|████████  | 40/50 [00:06<00:01,  6.54it/s][A
+ 82%|████████▏ | 41/50 [00:06<00:01,  6.24it/s][A
+ 84%|████████▍ | 42/50 [00:06<00:01,  6.29it/s][A
+ 86%|████████▌ | 43/50 [00:06<00:01,  6.46it/s][A
+ 88%|████████▊ | 44/50 [00:06<00:00,  6.37it/s][A
+ 90%|█████████ | 45/50 [00:06<00:00,  6.37it/s][A
+ 92%|█████████▏| 46/50 [00:07<00:00,  6.30it/s][A
+ 94%|█████████▍| 47/50 [00:07<00:00,  6.33it/s][A
+ 96%|█████████▌| 48/50 [00:07<00:00,  6.29it/s][A
+ 98%|█████████▊| 49/50 [00:07<00:00,  6.26it/s][A
+100%|██████████| 50/50 [00:07<00:00,  6.28it/s][A                                             
+                                               [A100%|██████████| 6/6 [00:38<00:00,  4.51s/it]
+100%|██████████| 50/50 [00:07<00:00,  6.28it/s][A
+                                               [A2026-10-02 15:02:22,222 INFO opake.api.transformers.trainer._dp_trainer: Training complete: 6 steps, final loss=0.9355, epsilon=2.999
+                                             100%|██████████| 6/6 [00:38<00:00,  4.51s/it]100%|██████████| 6/6 [00:38<00:00,  6.40s/it]
+2026-10-02 15:02:22,300 INFO opake.api.transformers.trainer._dp_trainer: ***** Running Evaluation *****
+2026-10-02 15:02:22,301 INFO opake.api.transformers.trainer._dp_trainer:   Num examples = 100
+2026-10-02 15:02:22,301 INFO opake.api.transformers.trainer._dp_trainer:   Batch size = 2
+{'eval_loss': '0.7523', 'eval_model_time_sec': '7.813', 'eval_gather_time_sec': '0', 'eval_transfer_time_sec': '0', 'eval_finalization_time_sec': '8.051e-06', 'eval_metric_time_sec': '0', 'eval_transfer_bytes': 0, 'eval_transfer_overlap_sec': '0', 'eval_transfer_overlap_ratio': '0', 'eval_step_time_sec': '7.906', 'eval_samples_per_second': '12.64', 'eval_memory_peak_gb': '15.99', 'eval_memory_allocated_gb': '15.05', 'eval_memory_reserved_gb': '19.77', 'eval_runtime': '7.911', 'eval_steps_per_second': '6.321', 'epoch': '0.048', 'num_input_tokens_seen': 54784, 'step': 6}
+{'train_runtime': '38.39', 'train_samples_per_second': '52.09', 'train_steps_per_second': '0.156', 'train_tokens_per_second': '1427', 'train_loss': '0.9355', 'train_steps': 6, 'privacy_noise_multiplier': '0.4596', 'privacy_epsilon': '2.999', 'privacy_delta': '0.0002338', 'num_input_tokens_seen': 54784, 'epoch': '1', 'step': 6}
+
+================================================================================
+Training Complete
+================================================================================
+Model: Qwen/Qwen2.5-Coder-7B
+Dataset: JetBrains/KStack (2000 train samples)
+
+Training metrics:
+  epoch: 1.0
+  num_input_tokens_seen: 54784
+  privacy_delta: 0.00023381211195565516
+  privacy_epsilon: 2.9986000177964223
+  privacy_noise_multiplier: 0.4595730590820313
+  train_loss: 0.9355461796124777
+  train_runtime: 38.3939
+  train_samples_per_second: 52.092
+  train_steps: 6
+  train_steps_per_second: 0.156
+  train_tokens_per_second: 1426.893
+
+Running final evaluation...
+  0%|          | 0/50 [00:00<?, ?it/s]  4%|▍         | 2/50 [00:00<00:03, 15.10it/s]  8%|▊         | 4/50 [00:00<00:04,  9.54it/s] 12%|█▏        | 6/50 [00:00<00:05,  8.48it/s] 14%|█▍        | 7/50 [00:00<00:05,  8.25it/s] 16%|█▌        | 8/50 [00:00<00:05,  8.25it/s] 18%|█▊        | 9/50 [00:01<00:05,  8.19it/s] 20%|██        | 10/50 [00:01<00:04,  8.15it/s] 22%|██▏       | 11/50 [00:01<00:05,  7.79it/s] 24%|██▍       | 12/50 [00:01<00:04,  7.76it/s] 26%|██▌       | 13/50 [00:01<00:04,  7.70it/s] 28%|██▊       | 14/50 [00:01<00:04,  7.67it/s] 30%|███       | 15/50 [00:01<00:04,  7.57it/s] 32%|███▏      | 16/50 [00:01<00:04,  7.77it/s] 34%|███▍      | 17/50 [00:02<00:04,  7.61it/s] 36%|███▌      | 18/50 [00:02<00:04,  7.81it/s] 38%|███▊      | 19/50 [00:02<00:03,  7.85it/s] 40%|████      | 20/50 [00:02<00:03,  7.83it/s] 42%|████▏     | 21/50 [00:02<00:03,  7.70it/s] 44%|████▍     | 22/50 [00:02<00:03,  7.64it/s] 46%|████▌     | 23/50 [00:02<00:03,  7.60it/s] 48%|████▊     | 24/50 [00:02<00:03,  7.79it/s] 50%|█████     | 25/50 [00:03<00:03,  7.55it/s] 52%|█████▏    | 26/50 [00:03<00:03,  7.55it/s] 54%|█████▍    | 27/50 [00:03<00:02,  7.75it/s] 56%|█████▌    | 28/50 [00:03<00:02,  7.62it/s] 58%|█████▊    | 29/50 [00:03<00:02,  7.52it/s] 60%|██████    | 30/50 [00:03<00:02,  7.45it/s] 62%|██████▏   | 31/50 [00:03<00:02,  7.46it/s] 64%|██████▍   | 32/50 [00:04<00:02,  7.47it/s] 66%|██████▌   | 33/50 [00:04<00:02,  7.49it/s] 68%|██████▊   | 34/50 [00:04<00:02,  7.48it/s] 70%|███████   | 35/50 [00:04<00:01,  7.51it/s] 72%|███████▏  | 36/50 [00:04<00:01,  7.53it/s] 74%|███████▍  | 37/50 [00:04<00:01,  7.53it/s] 76%|███████▌  | 38/50 [00:04<00:01,  7.54it/s] 78%|███████▊  | 39/50 [00:04<00:01,  7.49it/s] 80%|████████  | 40/50 [00:05<00:01,  7.70it/s] 82%|████████▏ | 41/50 [00:05<00:01,  7.51it/s] 84%|████████▍ | 42/50 [00:05<00:01,  7.53it/s] 86%|████████▌ | 43/50 [00:05<00:00,  7.72it/s] 88%|████████▊ | 44/50 [00:05<00:00,  7.55it/s] 90%|█████████ | 45/50 [00:05<00:00,  7.53it/s] 92%|█████████▏| 46/50 [00:05<00:00,  7.44it/s] 94%|█████████▍| 47/50 [00:06<00:00,  7.46it/s] 96%|█████████▌| 48/50 [00:06<00:00,  7.41it/s] 98%|█████████▊| 49/50 [00:06<00:00,  7.38it/s]100%|██████████| 50/50 [00:06<00:00,  7.43it/s]100%|██████████| 50/50 [00:06<00:00,  7.73it/s]
+  eval_finalization_time_sec: 9.177999800158432e-06
+  eval_gather_time_sec: 0.0
+  eval_loss: 0.7523205307126045
+  eval_memory_allocated_gb: 14.422412872314453
+  eval_memory_peak_gb: 15.355103492736816
+  eval_memory_reserved_gb: 19.767578125
+  eval_metric_time_sec: 0.0
+  eval_model_time_sec: 6.504999519348146
+  eval_runtime: 6.601
+  eval_samples_per_second: 15.149
+  eval_step_time_sec: 6.595926494000196
+  eval_steps_per_second: 7.575
+  eval_transfer_bytes: 0
+  eval_transfer_overlap_ratio: 0.0
+  eval_transfer_overlap_sec: 0.0
+  eval_transfer_time_sec: 0.0
+[cudagraph] report {'captures': 2, 'replays': 54, 'capture_s': 6.87249054699987, 'checks': 0, 'check_mismatch': 0, 'max_abs_diff': 0.0, 'keys': [(2, 512), (1, 512)]}

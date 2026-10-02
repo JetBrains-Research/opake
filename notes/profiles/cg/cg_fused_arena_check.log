@@ -1,0 +1,131 @@
+[variant] multi_tensor=False vmap_chunk=0 old=False noforeach=False
+[variant] tf32=False no_peft=False no_fused_ce=False
+[variant] cudagraph=True check=True
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+================================================================================
+DP-SGD LoRA Training for Causal Language Models
+================================================================================
+W&B initialized (mode: disabled)
+
+Using device: cuda (NVIDIA A100-SXM4-40GB)
+
+Loading model: Qwen/Qwen2.5-Coder-7B...
+
+Runtime mode:
+  Device: cuda (NVIDIA A100-SXM4-40GB)
+  Dtype: bfloat16 (torch.bfloat16)
+  Kernel optimizations: disabled (--no-kernel-patches)
+Attention: sdpa (backend=auto)
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 4750.11it/s]
+[After model load] Memory: alloc=14.23GB, peak=14.23GB, free=25.14GB (36.0% used)
+Applying LoRA...
+Kernel patches: DISABLED (eager baseline; compat/MoE/PEFT stay on)
+trainable params: 40,370,176 || all params: 7,655,986,688 || trainable%: 0.5273
+[After LoRA] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Loading dataset: JetBrains/KStack...
+  Split: train
+  Text field: content
+  Streaming source dataset and materializing required subset...
+  Total examples in dataset: 2100
+
+  Sample data (first example):
+    Text length: 11169 chars
+    Preview: /*
+ * Copyright 2010-2015 JetBrains s.r.o.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a...
+
+Preparing 100 eval + 2000 train samples...
+
+Tokenizing (max_seq_len=512)...
+Tokenizing eval:   0%|          | 0/100 [00:00<?, ? examples/s]Tokenizing eval: 100%|██████████| 100/100 [00:00<00:00, 1496.89 examples/s]
+Tokenizing train:   0%|          | 0/2000 [00:00<?, ? examples/s]Tokenizing train:  50%|█████     | 1000/2000 [00:00<00:00, 1511.85 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:01<00:00, 2115.89 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:01<00:00, 1982.21 examples/s]
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+Prepared datasets: 2000 train samples, 100 eval samples
+
+Poisson sampling setup:
+  Sampler: poisson
+  Sample rate (per rank): 0.008000
+  Expected global batch size: 16
+  Expected steps per epoch: ~125
+Eval batches: 50
+
+Converting to functional form (LoRA parameters only)...
+  (This may take 1-2 minutes for large models...)
+Trainable parameters: 392 (took 0.0s)
+[After functional conversion] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Setting up DP-SGD training...
+  Optimizer: adafactor
+  Learning rate: 0.0005
+  Clip norm: 1.0
+  Microbatch size: 2
+  Clipping mode: adaptive
+  Eval steps: 100
+  Epochs: 2
+  Expected total steps: ~250
+
+Calibrating privacy parameters...
+  δ = 2.34e-04 (n=2000)
+  Total steps: 250
+  Sample rate: 0.008000
+  Target: ε=3.0, δ=2.34e-04
+  (This may take 1-3 minutes...)
+
+Calibrated privacy parameters (took 10.9s):
+  Target: ε=3.000, δ=2.3e-04 | Achieved ε≈2.998
+  Noise multiplier: 0.6279 (iterations=14, converged=True)
+
+================================================================================
+Starting training...
+================================================================================
+[Before training] Memory: alloc=14.41GB, peak=14.41GB, free=25.06GB (36.5% used)
+  → Step 0 eval: loss=0.7220, ε=0.000
+
+Epoch 1/2
+--------------------------------------------------------------------------------
+Creating poisson sampler...
+Creating DataLoader...
+[cudagraph] captured key #1 in 1.8s
+[cudagraph] check #1: graph-vs-eager [reduced:1.0e-02 markers:= diagnostics:3.5e-05] | eager-vs-eager [reduced:1.0e-02 markers:= diagnostics:1.0e-04]
+[cudagraph] check #2: graph-vs-eager [reduced:5.4e-03 markers:= diagnostics:4.7e-05] | eager-vs-eager [reduced:5.7e-03 markers:= diagnostics:2.8e-05]
+[cudagraph] check #3: graph-vs-eager [reduced:1.8e-03 markers:= diagnostics:3.0e-05] | eager-vs-eager [reduced:1.7e-03 markers:= diagnostics:1.6e-05]
+Step    2 [E1 S  2/125] | BS: 14 | Loss: 0.8696 | Clip: norm=0.056, rate=0.0% | GradNorm: μ=0.246 | Noise: σ=0.0354 | Time: 2.81s | Mem: 15.7GB
+[cudagraph] check #4: graph-vs-eager [reduced:9.4e-03 markers:= diagnostics:4.8e-05] | eager-vs-eager [reduced:9.4e-03 markers:= diagnostics:9.4e-05]
+[cudagraph] captured key #2 in 0.5s
+[cudagraph] check #5: graph-vs-eager [reduced:= markers:= diagnostics:=] | eager-vs-eager [reduced:= markers:= diagnostics:=]
+Step    4 [E1 S  4/125] | BS: 14 | Loss: 0.8198 | Clip: norm=0.047, rate=0.0% | GradNorm: μ=0.217 | Noise: σ=0.0297 | Time: 2.84s | Mem: 16.0GB
+
+Reached --stop-at-step=4, stopping training.
+
+================================================================================
+Training Complete!
+================================================================================
+Model: Qwen/Qwen2.5-Coder-7B
+Dataset: JetBrains/KStack (2000 train samples)
+
+Training results:
+  Total steps: 4
+  Initial loss: 0.7042
+  Final loss: 0.8198
+  Loss reduction: -16.4%
+
+Adaptive clipping:
+  Initial output max_norm: 0.062
+  Final output max_norm: 0.047
+  Clip norm range: [0.047, 0.062]
+
+Privacy:
+  Target: ε=3.000, δ=2.34e-04 (n=2000)
+  Noise multiplier: 0.6279
+  Final ε (theoretical): 0.7991
+
+Performance:
+  Throughput: 3.8 samples/s
+  Steps/s: 0.24
+  Peak memory: 25.03 GB
+[cudagraph] report {'captures': 2, 'replays': 31, 'capture_s': 2.322841609000079, 'checks': 5, 'check_mismatch': 4, 'max_abs_diff': 0.0, 'keys': [(2, 512), (1, 512)], 'check_detail': [{'graph_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.010361035865605283}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 3.504150604045114e-05}}, 'eager_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.010089742905515668}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 0.00010105531922599457}}}, {'graph_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.0054026466882594396}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 4.6517100699725e-05}}, 'eager_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.005678661738407038}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 2.825813190416155e-05}}}, {'graph_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.0017954866305575727}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 2.9857661500782694e-05}}, 'eager_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.0017288244582870469}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 1.569410034947569e-05}}}, {'graph_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.009351328147954845}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 4.8191368546712354e-05}}, 'eager_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.009364792998570156}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 9.447876760984313e-05}}}, {'graph_vs_eager': {'reduced': {'bitwise': True, 'rel': 0.0}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': True, 'rel': 0.0}}, 'eager_vs_eager': {'reduced': {'bitwise': True, 'rel': 0.0}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': True, 'rel': 0.0}}}]}

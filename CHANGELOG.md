@@ -362,3 +362,27 @@ verification results for the DP-clipping optimization workstream. Newest last.
 - Hypothesis refuted: class generation is *not* the dominant part of the custom-Function overhead.
 - Blocked: the `pi-subagents` install is missing runner files, so no subagent delegation; the research was done directly.
 - Workspace stopped.
+
+## 2026-10-02: T3, CUDA-graph capture of the per-microbatch chunk (outputs/kernel-optimization-targets.md §8)
+
+- Prototype `experiments/cuda_graph/cudagraph_chunk.py`, passed as `_chunk_compiler`.
+  - Keyed on structure, tensor metadata and non-tensor values.
+  - Static input copy (including the clipping-norm tensor), output clones.
+  - Warm-up only before the first capture.
+- Production fixes needed for capture, each with a CUDA test that fails on the old code:
+  - `1af7ab04`: vmap causal mask without host-to-device copies.
+  - `846db2cd` + `876ac00b`: fused clip pointer table through a pinned arena. A first version tripped a PyTorch host-allocator assert when graphs were destroyed; fixed.
+- Measured on 7B, same session, identical batches:
+  - `train_dpsgd.py`: −40.6% at mb 2 (estimate was −40%).
+  - Best: graph + fused clip + model kernels + TF32 at mb 4, 2.26 s and 6.41 smp/s, ×2.21 vs eager mb 2 and ×1.27 vs the best eager configuration.
+  - Opake model kernels: +42% eager → −6.6% in the graph.
+  - `DPTrainer` (fused linear CE off): ×3.14 at mb 2, ×1.86 at mb 4.
+- Correctness:
+  - Small model bitwise equal (fixed and adaptive, partial microbatches, torch and fused clip).
+  - 7B: graph-vs-eager equals eager-vs-eager.
+  - New finding: the eager mb-2 kernel itself is nondeterministic at 0.2–1% relative L2.
+- Blockers / findings:
+  - Fused linear CE uses `nonzero()` (`_utils.py:138`), so it cannot be captured; `DPTrainer` needs a mask-based variant.
+  - Check mode runs out of memory at mb 4 (two extra eager runs).
+  - Mistake: my first summarizer missed the third capture row at mb 4; fixed with a predicted-and-asserted capture schedule.
+- Workspace stopped.

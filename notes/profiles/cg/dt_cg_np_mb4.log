@@ -1,0 +1,319 @@
+[variant] multi_tensor=False vmap_chunk=0 old=False noforeach=False
+[variant] tf32=False no_peft=True no_fused_ce=False
+[variant] cudagraph=True check=False
+2026-10-02 14:54:40,111 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-10-02 14:54:40,111 WARNING huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-10-02 14:54:40,121 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/config.json "HTTP/1.1 200 OK"
+2026-10-02 14:54:40,243 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 14:54:40,252 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/config.json "HTTP/1.1 200 OK"
+================================================================================
+DP-SGD LoRA Training for Causal Language Models with DPTrainer
+================================================================================
+
+Runtime mode:
+  Device: cuda (NVIDIA A100-SXM4-40GB)
+  Dtype: bfloat16 (torch.bfloat16)
+  Kernel optimizations: enabled (applied by DPTrainer)
+
+Loading model: Qwen/Qwen2.5-Coder-7B...
+Attention: sdpa (backend=auto)
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 5091.27it/s]
+2026-10-02 14:54:40,599 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/generation_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 14:54:40,609 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/generation_config.json "HTTP/1.1 200 OK"
+2026-10-02 14:54:40,713 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+2026-10-02 14:54:40,815 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 14:54:40,828 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/config.json "HTTP/1.1 200 OK"
+2026-10-02 14:54:40,936 INFO httpx: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 14:54:40,945 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/Qwen/Qwen2.5-Coder-7B/0396a76181e127dfc13e5c5ec48a8cee09938b02/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-10-02 14:54:41,055 INFO httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-7B/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-10-02 14:54:41,162 INFO httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-7B/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-10-02 14:54:41,738 INFO httpx: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-7B "HTTP/1.1 200 OK"
+2026-10-02 14:54:42,507 INFO httpx: HTTP Request: HEAD https://huggingface.co/datasets/JetBrains/KStack/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-10-02 14:54:42,516 INFO httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/JetBrains/KStack/425774a783d87159d103d65b79ce37f58d0697bb/README.md "HTTP/1.1 200 OK"
+2026-10-02 14:54:42,619 INFO httpx: HTTP Request: HEAD https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/KStack.py "HTTP/1.1 404 Not Found"
+2026-10-02 14:54:42,904 INFO httpx: HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/JetBrains/KStack/JetBrains/KStack.py "HTTP/1.1 404 Not Found"
+2026-10-02 14:54:43,015 INFO httpx: HTTP Request: GET https://huggingface.co/api/datasets/JetBrains/KStack/revision/425774a783d87159d103d65b79ce37f58d0697bb "HTTP/1.1 200 OK"
+2026-10-02 14:54:43,116 INFO httpx: HTTP Request: HEAD https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-10-02 14:54:43,259 INFO httpx: HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=JetBrains/KStack "HTTP/1.1 200 OK"
+2026-10-02 14:54:43,376 INFO httpx: HTTP Request: GET https://huggingface.co/api/datasets/JetBrains/KStack/tree/425774a783d87159d103d65b79ce37f58d0697bb/data?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-10-02 14:54:43,491 INFO httpx: HTTP Request: GET https://huggingface.co/api/datasets/JetBrains/KStack/tree/425774a783d87159d103d65b79ce37f58d0697bb?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-10-02 14:54:43,599 INFO httpx: HTTP Request: HEAD https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-10-02 14:54:43,735 INFO httpx: HTTP Request: GET https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/data/train-00000-of-00033.parquet "HTTP/1.1 302 Found"
+2026-10-02 14:54:43,836 INFO httpx: HTTP Request: GET https://us.gcp.cdn.hf.co/xet-bridge-us/66420a902c4821bb5ca9faa6/62d7f0bd399588a9a0d4c776127e4533e1ae1e6b0a19d56ed5ff5c5a97ff341d?xip=1TmmZl6lxkc&user_id=public&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00033.parquet%3B+filename%3D%22train-00000-of-00033.parquet%22%3B&X-Xet-Cas-Uid=public&Expires=1790956483&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5nY3AuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjY0MjBhOTAyYzQ4MjFiYjVjYTlmYWE2LzYyZDdmMGJkMzk5NTg4YTlhMGQ0Yzc3NjEyN2U0NTMzZTFhZTFlNmIwYTE5ZDU2ZWQ1ZmY1YzVhOTdmZjM0MWRcXD94aXA9MVRtbVpsNmx4a2MmdXNlcl9pZD1wdWJsaWMmcmVzcG9uc2UtY29udGVudC1kaXNwb3NpdGlvbj0qJlgtWGV0LUNhcy1VaWQ9cHVibGljIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTA5NTY0ODN9fX1dfQ__&Signature=MEYCIQCRvOh2vqxljAYExxQm-bC8qkfljc6jfp7z5eZSlb64BwIhAOx0nNN3bq786niDWooNFUcfFzmQx9ywV72NYeiGaDpX&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-02 14:54:44,222 INFO httpx: HTTP Request: GET https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/data/train-00000-of-00033.parquet "HTTP/1.1 302 Found"
+2026-10-02 14:54:44,320 INFO httpx: HTTP Request: GET https://us.gcp.cdn.hf.co/xet-bridge-us/66420a902c4821bb5ca9faa6/62d7f0bd399588a9a0d4c776127e4533e1ae1e6b0a19d56ed5ff5c5a97ff341d?user_id=public&X-Xet-Cas-Uid=public&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00033.parquet%3B+filename%3D%22train-00000-of-00033.parquet%22%3B&xip=1TmmZl6lxkc&Expires=1790956484&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5nY3AuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjY0MjBhOTAyYzQ4MjFiYjVjYTlmYWE2LzYyZDdmMGJkMzk5NTg4YTlhMGQ0Yzc3NjEyN2U0NTMzZTFhZTFlNmIwYTE5ZDU2ZWQ1ZmY1YzVhOTdmZjM0MWRcXD91c2VyX2lkPXB1YmxpYyZYLVhldC1DYXMtVWlkPXB1YmxpYyZyZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPSomeGlwPTFUbW1abDZseGtjIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTA5NTY0ODR9fX1dfQ__&Signature=MEQCIFpJEHVruJgkGFWtKdutVbuSf9fLHmQf-LsVZ8qqtQEWAiB%7ElBifPLHwr7Um6DlBvsZao21VW2MefhNZWz1GqMhHiQ__&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-02 14:54:44,709 INFO httpx: HTTP Request: GET https://huggingface.co/datasets/JetBrains/KStack/resolve/425774a783d87159d103d65b79ce37f58d0697bb/data/train-00000-of-00033.parquet "HTTP/1.1 302 Found"
+2026-10-02 14:54:44,801 INFO httpx: HTTP Request: GET https://us.gcp.cdn.hf.co/xet-bridge-us/66420a902c4821bb5ca9faa6/62d7f0bd399588a9a0d4c776127e4533e1ae1e6b0a19d56ed5ff5c5a97ff341d?xip=1TmmZl6lxkc&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00033.parquet%3B+filename%3D%22train-00000-of-00033.parquet%22%3B&X-Xet-Cas-Uid=public&user_id=public&Expires=1790956484&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5nY3AuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjY0MjBhOTAyYzQ4MjFiYjVjYTlmYWE2LzYyZDdmMGJkMzk5NTg4YTlhMGQ0Yzc3NjEyN2U0NTMzZTFhZTFlNmIwYTE5ZDU2ZWQ1ZmY1YzVhOTdmZjM0MWRcXD94aXA9MVRtbVpsNmx4a2MmcmVzcG9uc2UtY29udGVudC1kaXNwb3NpdGlvbj0qJlgtWGV0LUNhcy1VaWQ9cHVibGljJnVzZXJfaWQ9cHVibGljIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTA5NTY0ODR9fX1dfQ__&Signature=MEQCID13IbKy1AUM4N7NHCiq4yGFJCGPW8j1ciUV8m3S7N6sAiByHF0saB1UDtuokKfLvnRxcPqlq%7EPa9LjOCnVyl1S49g__&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+Model loaded in 0.6s
+Applying LoRA...
+trainable params: 40,370,176 || all params: 7,655,986,688 || trainable%: 0.5273
+
+Loading dataset: JetBrains/KStack...
+  Split: train
+  Text field: content
+  Streaming source dataset and materializing required subset...
+  Total examples in dataset: 2100
+
+  Sample data (first example):
+    Text length: 11169 chars
+    Preview: /*
+ * Copyright 2010-2015 JetBrains s.r.o.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a...
+
+Preparing 100 eval + 2000 train samples...
+
+Tokenizing (max_seq_len=512)...
+Tokenizing eval:   0%|          | 0/100 [00:00<?, ? examples/s]Tokenizing eval: 100%|██████████| 100/100 [00:00<00:00, 1390.77 examples/s]
+Tokenizing train:   0%|          | 0/2000 [00:00<?, ? examples/s]Tokenizing train:  50%|█████     | 1000/2000 [00:00<00:00, 1443.92 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:01<00:00, 2028.29 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:01<00:00, 1900.42 examples/s]
+2026-10-02 14:54:56,292 INFO opake.api.transformers.trainer._dp_trainer: Converting model to functional form...
+2026-10-02 14:54:56,304 INFO opake.api.transformers.trainer._dp_trainer: Trainable parameters: 392 tensors
+2026-10-02 14:54:56,307 INFO opake.api.transformers.trainer._dp_trainer: Calibrating privacy (target eps=3.00, delta=2.34e-04)...
+2026-10-02 14:55:09,254 INFO opake.api.transformers.trainer._dp_trainer: Calibrated: noise_multiplier=0.4596, achieved eps=2.999 (converged=True)
+2026-10-02 14:55:09,254 INFO opake.api.transformers.trainer._dp_trainer: Resolved privacy config: delta=2.34e-04, noise_multiplier=0.4596 (calibrated), sample_rate=0.008000, total_steps=6, truncated_batch_size=None
+Prepared datasets: 2000 train samples, 100 eval samples
+
+DPTrainer argument summary:
+  Output dir: /tmp/dt_cg_np_mb4
+  Optimizer: adafactor
+  Learning rate: 1e-05
+  Clipping mode: adaptive
+  Clip norm (clipping_norm): 1.0
+  Noise mechanism: gaussian
+  Sampling mode: poisson
+  Target epsilon: 3.0
+  Target delta: auto
+  Save strategy: no
+  torch_compile: False
+  bf16_full_eval: False
+  use_performance_kernels: True
+  Push to Hub: False
+
+================================================================================
+Starting DPTrainer training...
+  resume_from_checkpoint: None
+================================================================================
+  0%|          | 0/6 [00:00<?, ?it/s]                                       0%|          | 0/6 [00:00<?, ?it/s]2026-10-02 14:55:09,280 INFO opake.api.transformers.trainer._dp_trainer: Starting DP-SGD training: 1 epochs, ~125 steps/epoch, 6 total
+[transformers] `use_return_dict` is deprecated! Use `return_dict` instead!
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_efficient_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+{'privacy_calibration_source': 'calibrated', 'privacy_calibration_noise_multiplier': '0.4596', 'privacy_calibration_achieved_epsilon': '2.999', 'privacy_calibration_converged': True, 'converged_microbatch_size': 4, 'epoch': '0', 'num_input_tokens_seen': 0, 'step': 0}
+Traceback (most recent call last):
+  File "/home/mihajlolinic/opaque/experiments/cuda_graph/cudagraph_chunk.py", line 106, in _capture
+    static_out = self.fn(*s_args, **s_kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 753, in _chunk_kernel
+    return _streaming_kernel(
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 726, in _streaming_kernel
+    values, value_aux = _vmap_values(
+                        ^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 510, in _vmap_values
+    return _vmap(fun_with_aux, in_dims=in_dims, out_dims=(0, 0), randomness="same")(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/apis.py", line 246, in wrapped
+    return vmap_impl(
+           ^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/vmap.py", line 316, in vmap_impl
+    return _flat_vmap(
+           ^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/vmap.py", line 507, in _flat_vmap
+    batched_outputs = func(*batched_inputs, **kwargs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py", line 292, in grad_fn
+    grad, value_and_aux = grad_and_value_fn(*args, **kwargs)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/apis.py", line 503, in wrapper
+    return eager_transforms.grad_and_value_impl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/torch/checkpoint/saved_tensor_hooks_guard.py", line 61, in dispatch
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/eager_transforms.py", line 1492, in grad_and_value_impl
+    output = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_helpers.py", line 38, in <lambda>
+    return lambda *args, **kwargs: (fun(*args, **kwargs), ())
+                                    ^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 3821, in per_example_loss
+    return _call(merged, inputs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 3805, in _call
+    return self.compute_per_example_loss(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 2552, in compute_per_example_loss
+    output = fmodel(params, **inputs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 169, in fmodel_dict
+    return torch.func.functional_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/functional_call.py", line 154, in functional_call
+    return nn.utils.stateless._functional_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/utils/stateless.py", line 279, in _functional_call
+    return module(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 352, in wrapper
+    result = fn(*args_list, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/peft/peft_model.py", line 2120, in forward
+    return self.base_model(
+           ^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/peft/tuners/tuners_utils.py", line 359, in forward
+    return self.model(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/transformers/components/kv_cache.py", line 44, in wrapper
+    return forward_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 352, in wrapper
+    result = fn(*args_list, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/transformers/components/cross_entropy.py", line 347, in forward
+    nll_sum, _lse, _valids, _token_weight = ce_loss_fn(*ce_args)
+                                            ^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/function.py", line 671, in _call_custom_function_call
+    return custom_function_call(cls, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/autograd_function.py", line 66, in __call__
+    return super().__call__(autograd_function, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_ops.py", line 549, in __call__
+    return self.dispatch(dispatch_key_set.highestPriorityTypeId(), *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_ops.py", line 416, in dispatch
+    return dispatch_functorch(self, args, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/pyfunctorch.py", line 338, in dispatch_functorch
+    return interpreter.process(op, args, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/pyfunctorch.py", line 202, in process
+    return kernel(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/autograd_function.py", line 115, in custom_function_call_grad
+    flat_out = Generated.apply(*operands)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/autograd_function.py", line 133, in forward
+    unwrapped_output = custom_function_call(
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/autograd_function.py", line 66, in __call__
+    return super().__call__(autograd_function, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_ops.py", line 549, in __call__
+    return self.dispatch(dispatch_key_set.highestPriorityTypeId(), *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_ops.py", line 416, in dispatch
+    return dispatch_functorch(self, args, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/pyfunctorch.py", line 338, in dispatch_functorch
+    return interpreter.process(op, args, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/pyfunctorch.py", line 150, in process
+    return kernel(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/autograd_function.py", line 356, in custom_function_call_vmap
+    return custom_function_call_vmap_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/autograd_function.py", line 397, in custom_function_call_vmap_helper
+    result = vmap_function(info, in_dims, *unwrapped_operands, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/kernels/linear_cross_entropy.py", line 1155, in vmap
+    valids = _build_flat_valids(labels[..., 1:], ignore_index)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/kernels/_utils.py", line 138, in _build_flat_valids
+    valids = valid_mask.reshape(-1).nonzero().to(torch.int32)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.AcceleratorError: CUDA error: operation not permitted when stream is capturing
+Search for `cudaErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+The CUDA driver logged these messages, which may provide useful details:
+Returning 900 (CUDA_ERROR_STREAM_CAPTURE_UNSUPPORTED) from cuStreamSynchronize
+
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/mihajlolinic/opaque/experiments/clip_fused/run_train_variant.py", line 148, in <module>
+    runpy.run_path(script, run_name="__main__")
+  File "<frozen runpy>", line 291, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "examples/train_dpsgd_trainer.py", line 1231, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "examples/train_dpsgd_trainer.py", line 1210, in main
+    train_output = trainer.train(resume_from_checkpoint=resume_arg)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 1067, in train
+    return self._train_dispatch(resume_from_checkpoint, ignore_keys_for_eval)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 1095, in _train_dispatch
+    return self._train_once(
+           ^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 1343, in _train_once
+    return self._inner_training_loop(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 2017, in _inner_training_loop
+    step_result = self.training_step(self._model, batch)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 2320, in training_step
+    self._synchronize_grad_failure(local_grad_error)
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 1377, in _synchronize_grad_failure
+    raise error
+  File "/home/mihajlolinic/opaque/packages/opake-transformers/src/opake/api/transformers/trainer/_dp_trainer.py", line 2313, in training_step
+    (grads, aux), ctx.clip_state = ctx.grad_fn(
+                                   ^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 443, in grad_fn
+    return _grad_fn_impl(*args, state=state, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 505, in _grad_fn_impl
+    result, _ = inner_fn(
+                ^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py", line 357, in grad_fn_wrapper
+    (clipped_grads, aux), returned_state = clipped_grad_fn(
+                                           ^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 989, in stateful_clipped_fn
+    result = clipped_fn(runtime_clipping_norm, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 914, in clipped_fn
+    result, squared_result, aux, stats = _microbatch_accumulate_reduced(
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 288, in _microbatch_accumulate_reduced
+    reduced, markers, squared_reduced, squared_markers, diagnostics = chunk_fn(
+                                                                      ^^^^^^^^^
+  File "/home/mihajlolinic/opaque/experiments/cuda_graph/cudagraph_chunk.py", line 70, in __call__
+    entry = self.graphs[key] = self._capture(flat, spec)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/experiments/cuda_graph/cudagraph_chunk.py", line 105, in _capture
+    with torch.cuda.graph(graph, pool=CudaGraphChunk._pool):
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/cuda/graphs.py", line 1210, in __exit__
+    self.cuda_graph.capture_end()
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/cuda/graphs.py", line 649, in capture_end
+    self.capture_end_pre()
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/cuda/graphs.py", line 630, in capture_end_pre
+    super().capture_end_pre()
+torch.AcceleratorError: CUDA error: operation failed due to a previous error during capture
+Search for `cudaErrorStreamCaptureInvalidated' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+
+[cudagraph] report {'captures': 0, 'replays': 0, 'capture_s': 0.0, 'checks': 0, 'check_mismatch': 0, 'max_abs_diff': 0.0, 'keys': []}
+  0%|          | 0/6 [00:06<?, ?it/s]

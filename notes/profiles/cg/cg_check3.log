@@ -1,0 +1,132 @@
+[variant] multi_tensor=False vmap_chunk=0 old=False noforeach=False
+[variant] tf32=False no_peft=False
+[variant] cudagraph=True check=True
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+================================================================================
+DP-SGD LoRA Training for Causal Language Models
+================================================================================
+W&B initialized (mode: disabled)
+
+Using device: cuda (NVIDIA A100-SXM4-40GB)
+
+Loading model: Qwen/Qwen2.5-Coder-7B...
+
+Runtime mode:
+  Device: cuda (NVIDIA A100-SXM4-40GB)
+  Dtype: bfloat16 (torch.bfloat16)
+  Kernel optimizations: disabled (--no-kernel-patches)
+Attention: sdpa (backend=auto)
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 4601.79it/s]
+[After model load] Memory: alloc=14.23GB, peak=14.23GB, free=25.14GB (36.0% used)
+Applying LoRA...
+Kernel patches: DISABLED (eager baseline; compat/MoE/PEFT stay on)
+trainable params: 40,370,176 || all params: 7,655,986,688 || trainable%: 0.5273
+[After LoRA] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Loading dataset: JetBrains/KStack...
+  Split: train
+  Text field: content
+  Streaming source dataset and materializing required subset...
+  Total examples in dataset: 2100
+
+  Sample data (first example):
+    Text length: 11169 chars
+    Preview: /*
+ * Copyright 2010-2015 JetBrains s.r.o.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a...
+
+Preparing 100 eval + 2000 train samples...
+
+Tokenizing (max_seq_len=512)...
+Tokenizing eval:   0%|          | 0/100 [00:00<?, ? examples/s]Tokenizing eval: 100%|██████████| 100/100 [00:00<00:00, 1373.08 examples/s]
+Tokenizing train:   0%|          | 0/2000 [00:00<?, ? examples/s]Tokenizing train:  50%|█████     | 1000/2000 [00:00<00:00, 1488.21 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:01<00:00, 2054.83 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:01<00:00, 1931.07 examples/s]
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+Prepared datasets: 2000 train samples, 100 eval samples
+
+Poisson sampling setup:
+  Sampler: poisson
+  Sample rate (per rank): 0.008000
+  Expected global batch size: 16
+  Expected steps per epoch: ~125
+Eval batches: 50
+
+Converting to functional form (LoRA parameters only)...
+  (This may take 1-2 minutes for large models...)
+Trainable parameters: 392 (took 0.0s)
+[After functional conversion] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Setting up DP-SGD training...
+  Optimizer: adafactor
+  Learning rate: 0.0005
+  Clip norm: 1.0
+  Microbatch size: 2
+  Clipping mode: adaptive
+  Eval steps: 100
+  Epochs: 2
+  Expected total steps: ~250
+
+Calibrating privacy parameters...
+  δ = 2.34e-04 (n=2000)
+  Total steps: 250
+  Sample rate: 0.008000
+  Target: ε=3.0, δ=2.34e-04
+  (This may take 1-3 minutes...)
+
+Calibrated privacy parameters (took 10.9s):
+  Target: ε=3.000, δ=2.3e-04 | Achieved ε≈2.998
+  Noise multiplier: 0.6279 (iterations=14, converged=True)
+
+================================================================================
+Starting training...
+================================================================================
+[Before training] Memory: alloc=14.41GB, peak=14.41GB, free=25.06GB (36.5% used)
+  → Step 0 eval: loss=0.7220, ε=0.000
+
+Epoch 1/2
+--------------------------------------------------------------------------------
+Creating poisson sampler...
+Creating DataLoader...
+[cudagraph] captured key #1 in 3.2s
+[cudagraph] check #1: graph-vs-eager [reduced:9.7e-03 markers:= diagnostics:4.7e-05] | eager-vs-eager [reduced:9.8e-03 markers:= diagnostics:5.0e-05]
+[cudagraph] check #2: graph-vs-eager [reduced:5.4e-03 markers:= diagnostics:6.0e-05] | eager-vs-eager [reduced:5.3e-03 markers:= diagnostics:7.2e-05]
+[cudagraph] check #3: graph-vs-eager [reduced:1.8e-03 markers:= diagnostics:3.2e-05] | eager-vs-eager [reduced:1.7e-03 markers:= diagnostics:4.0e-05]
+Step    2 [E1 S  2/125] | BS: 14 | Loss: 0.8697 | Clip: norm=0.056, rate=0.0% | GradNorm: μ=0.247 | Noise: σ=0.0354 | Time: 3.01s | Mem: 15.7GB
+[cudagraph] check #4: graph-vs-eager [reduced:9.5e-03 markers:= diagnostics:7.6e-05] | eager-vs-eager [reduced:1.1e-02 markers:= diagnostics:1.3e-04]
+[W1002 14:20:35.551207599 CUDACachingAllocator.cpp:3934] memory allocation failed with OOM on device 0 while trying to allocate 39845888 bytes (free: 36110336, total: 42404806656).
+[cudagraph] captured key #2 in 3.1s
+[cudagraph] check #5: graph-vs-eager [reduced:= markers:= diagnostics:=] | eager-vs-eager [reduced:= markers:= diagnostics:=]
+Step    4 [E1 S  4/125] | BS: 14 | Loss: 0.8199 | Clip: norm=0.047, rate=0.0% | GradNorm: μ=0.217 | Noise: σ=0.0297 | Time: 3.05s | Mem: 16.0GB
+
+Reached --stop-at-step=4, stopping training.
+
+================================================================================
+Training Complete!
+================================================================================
+Model: Qwen/Qwen2.5-Coder-7B
+Dataset: JetBrains/KStack (2000 train samples)
+
+Training results:
+  Total steps: 4
+  Initial loss: 0.7042
+  Final loss: 0.8199
+  Loss reduction: -16.4%
+
+Adaptive clipping:
+  Initial output max_norm: 0.062
+  Final output max_norm: 0.047
+  Clip norm range: [0.047, 0.062]
+
+Privacy:
+  Target: ε=3.000, δ=2.34e-04 (n=2000)
+  Noise multiplier: 0.6279
+  Final ε (theoretical): 0.7991
+
+Performance:
+  Throughput: 2.7 samples/s
+  Steps/s: 0.17
+  Peak memory: 25.05 GB
+[cudagraph] report {'captures': 2, 'replays': 31, 'capture_s': 6.309753852999961, 'checks': 5, 'check_mismatch': 4, 'max_abs_diff': 0.0, 'keys': [(2, 512), (1, 512)], 'check_detail': [{'graph_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.009707522721635}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 4.7427985750522724e-05}}, 'eager_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.009826853026116602}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 5.043825171097183e-05}}}, {'graph_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.005415426533535547}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 6.0161879635363574e-05}}, 'eager_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.005329042686626673}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 7.18875129881447e-05}}}, {'graph_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.0017839282954237895}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 3.167380824787068e-05}}, 'eager_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.001710509344917257}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 3.980028073808151e-05}}}, {'graph_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.009541583501343553}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 7.643859495622929e-05}}, 'eager_vs_eager': {'reduced': {'bitwise': False, 'rel': 0.010508156479827826}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': False, 'rel': 0.00013440584209850945}}}, {'graph_vs_eager': {'reduced': {'bitwise': True, 'rel': 0.0}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': True, 'rel': 0.0}}, 'eager_vs_eager': {'reduced': {'bitwise': True, 'rel': 0.0}, 'markers': {'bitwise': True, 'rel': 0.0}, 'diagnostics': {'bitwise': True, 'rel': 0.0}}}]}

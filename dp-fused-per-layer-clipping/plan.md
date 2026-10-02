@@ -583,3 +583,10 @@ depends on it, and the fused kernel keeps it).
 - [ ] T5: GPU-side work after T3 (fp32 LoRA GEMMs, casts, elementwise).
 - [ ] T6: upstream reports (SDPA backward batching rules #176265; custom-Function overhead; `custom_op` under `torch.func.grad`).
 - `torch.compile`: blocked (in-place `addmm_` in the PEFT QKV backward, scalar graph break at `_clipped_fun.py:213`, Poisson-batch recompiles).
+
+### T3 measured (2026-10-02, report §8)
+
+- [x] CUDA-graph chunk prototype: `train_dpsgd.py` ×2.21 (best configuration vs eager mb 2); `DPTrainer` ×3.14 (mb 2). Correctness gates pass (§8.2).
+- [x] Capture-safety fixes in production: `1af7ab04` (masking), `846db2cd` + `876ac00b` (fused clip pointer arena).
+- [ ] Packaging: API decision (`cuda_graph=True` / `DPTrainer` mode / documented `_chunk_compiler`), `_resolve_stream_impl` gate, library wrapper plus tests, DP review (frozen-Python-state rule).
+- [ ] Capturable fused linear CE (mask instead of `nonzero`) for `DPTrainer`'s default kernels.
