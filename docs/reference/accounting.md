@@ -638,7 +638,8 @@ for i in range(num_steps):
 ```
 
 **Methods:** `epsilon_at(delta)`, `delta_at(epsilon)`, `advantage()`,
-`beta_at(alpha)`, `risk_at(prior)`, `budget_exceeded` (property).
+`beta_at(alpha)`, `risk_at(prior)`. **Properties:** `budget`,
+`budget_exceeded`.
 
 ### Seeding with a prior process
 
@@ -678,6 +679,16 @@ acct2 = from_state_dict(Accountant(), flat)
 
 `process.*` keys hold the composed tree; `budget.*` keys are present when
 the accountant was constructed with a budget.
+
+A template budget fills a checkpoint that has none. If both carry budgets,
+their checkpoint states must agree or restore raises `CheckpointError`. Use an
+empty template to keep the checkpoint budget; to choose a new budget, restore
+the process first:
+
+```python
+saved = from_state_dict(Accountant(), flat)
+acct2 = Accountant(budget=budget, prefix=saved.process)
+```
 
 ---
 

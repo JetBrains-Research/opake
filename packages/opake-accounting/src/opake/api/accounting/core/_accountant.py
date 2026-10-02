@@ -19,7 +19,6 @@ identical steps are collapsed using structural equality (``==``), so
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from opake.api.accounting.core._budgets import (
@@ -29,13 +28,12 @@ from opake.api.accounting.core._budgets import (
 )
 from opake.api.accounting.core._process_codec import _load_dp_process
 from opake.api.accounting.core.mechanisms.types import Identity
+from opake.exceptions import CheckpointError
 
 if TYPE_CHECKING:
     from opake.api.accounting.core._base import DpProcess
 
 __all__ = ["Accountant"]
-
-logger = logging.getLogger(__name__)
 
 
 class Accountant:
@@ -96,9 +94,9 @@ class Accountant:
         """Initialize an Accountant.
 
         Args:
-            budget: Optional privacy budget. If provided, enables
-                budget_exceeded checks. Should be a Budget from the
-                budgets module (e.g., epsilon_budget(3.0, delta=1e-5)).
+            budget: Optional privacy budget for ``budget_exceeded`` checks.
+                When this Accountant is a restore template, the budget fills
+                an omitted checkpoint value and must agree with a saved one.
             prefix: Optional already-executed process to seed the
                 accountant with, instead of the default zero-cost
                 :class:`Identity`. Subsequent compositions and all
@@ -205,6 +203,11 @@ class Accountant:
         return self.process.risk_at(prior)
 
     @property
+    def budget(self) -> Budget | None:
+        """Return the configured privacy budget, if any."""
+        return self._budget
+
+    @property
     def budget_exceeded(self) -> bool:
         """Check if accumulated privacy violates the budget.
 
@@ -236,17 +239,27 @@ def _accountant_state_dict(acct: Accountant) -> dict[str, Any]:
 def _accountant_from_state_dict(
     template: Accountant, state: dict[str, Any]
 ) -> Accountant:
-    """Restore the saved budget, or retain the template's when none was saved."""
-    budget = template._budget
-    if state.get("budget") is not None:
-        budget = budget_from_state_dict(dict(state["budget"]))
-        if template._budget is not None and budget != template._budget:
-            logger.warning(
-                "Restoring Accountant: checkpoint budget %r overrides the "
-                "template's budget %r; the template budget is discarded.",
-                budget,
-                template._budget,
-            )
+    """Restore state, rejecting conflicting template and checkpoint budgets."""
+    template_budget = template._budget
+    budget = template_budget
+    saved_budget_state = state.get("budget")
+    if saved_budget_state is not None:
+        budget = budget_from_state_dict(dict(saved_budget_state))
+        if template_budget is not None:
+            checkpoint_budget_state = budget_state_dict(budget)
+            template_budget_state = budget_state_dict(template_budget)
+            if checkpoint_budget_state != template_budget_state:
+                raise CheckpointError(
+                    *(
+                        f"Accountant checkpoint budget {budget.name!r} "
+                        f"(value={budget.value!r}) does not match template "
+                        f"budget {template_budget.name!r} "
+                        f"(value={template_budget.value!r}). Restore with "
+                        "Accountant() to use the checkpoint budget. To replace "
+                        "it, construct a new Accountant with the restored "
+                        "process as prefix.",
+                    )
+                )
     return Accountant(budget=budget, prefix=_load_dp_process(dict(state["process"])))
 
 
