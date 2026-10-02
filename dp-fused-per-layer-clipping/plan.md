@@ -537,3 +537,20 @@ Found by measurement, not in the report:
 Answered since the report: open Q5 (peak = activations; clipping is a time
 cost) and Q4 (the blocked reduction stays — the guard's roundoff bound
 depends on it, and the fused kernel keeps it).
+
+### Explored 2026-10-02 (report §12)
+
+- **Multi-tensor clip kernel: keep, package next.**
+  - Per call (392 leaves): 13.1 ms and 31 CUDA kernels, vs 93.6 ms and 2,767
+    for the packaged per-leaf kernel.
+  - Full step: −14.2% (eager), −8.8% (model kernels), −7.2% (DPTrainer), with
+    no memory change and output bitwise identical to the packaged kernel.
+  - Packaging: replace `fused_clip_sum` with the multi-tensor version and
+    share dtype markers in `fused_stream_clip_and_sum`. Same tests (parity,
+    zero-tolerance bound, determinism), plus a kernel-count regression check.
+- **`vmap(chunk_size)`: drop.** Alone it gives −10–13%, but +2.3 GiB (it
+  materializes the full per-example stack). On top of the multi-tensor kernel
+  it gives +1.7% (eager), −4.8% (kernels), −0.8% (DPTrainer).
+- **Follow-up:** a multi-tensor `torch._foreach_add_` in
+  `_MicrobatchAccumulator` (392 per-leaf adds per microbatch today). It is the
+  memory-free way to take what chunking still recovers with model kernels on.

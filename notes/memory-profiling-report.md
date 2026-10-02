@@ -1,7 +1,7 @@
 # Memory Profiling Report: DP-SGD step, Qwen2.5-Coder-7B LoRA, mb=2
 
 **Dates:** 2026-09-30 (first batch), 2026-10-01 (re-run after the train-mode fix),
-2026-10-02 (fused clip backend, §11)
+2026-10-02 (fused clip backend §11, multi-tensor kernel §12)
 **Branch:** `feat/dp-fused-per-layer-clipping`. Profiling tooling and the fix
 were uncommitted at time of writing (see §8).
 **Hardware:** A100-SXM4-40GB (Coder workspace `kernel`, repo at `~/opaque`)
@@ -18,7 +18,9 @@ for +2.08 GB** through DPTrainer before the fused clip, and only −1.5% with it
 The fused clip backend (`--clip-backend triton`) cuts the full step by **34%
 in `train_dpsgd.py` (×1.51) and 29% through DPTrainer (×1.42)**, with
 unchanged memory. Eager model kernels plus the fused clip halve the
-`train_dpsgd.py` step (×2.05, §11).
+`train_dpsgd.py` step (×2.05, §11). A multi-tensor version of the fused clip
+kernel (prototype, §12) takes another 9–14% off the step at no memory cost.
+`vmap(chunk_size)` adds little on top of it.
 Follow-ups are tracked in
 [#1121](https://github.com/JetBrains-Research/opake/issues/1121) (DPTrainer
 trains in eval mode) and
@@ -346,6 +348,10 @@ activations in place.
   performance target. `clip_backend` stays opt-in. Making `"auto"` the
   default in the examples or the library is a separate decision; it should
   wait for the CUDA CI lanes, including the minimum-dependencies one.
+- Package the multi-tensor clip kernel (§12): output bitwise identical to the
+  packaged kernel, −9–14% step. Share the dtype markers in
+  `fused_stream_clip_and_sum`. Try `torch._foreach_add_` in the microbatch
+  accumulator.
 - At seq 512 neither checkpointing variant pays off. The regime where
   activation memory binds (seq 4096) doesn't fit on 40 GB at mb=2 without
   checkpointing and has not been profiled here.
@@ -601,3 +607,118 @@ python examples/plot_memory_compare.py notes/profiles/cb \
     "eager, torch clip:cb_eager_torch" "eager, triton clip:cb_eager_triton" \
     --step 3 --out notes/profiles/compare_clip_backend.png
 ```
+
+## 12. Multi-tensor clip kernel and `vmap(chunk_size)` (2026-10-02)
+
+Two prototypes aimed at the per-call overhead that remained after §11. Both
+are installed into the unmodified examples by
+`experiments/clip_fused/run_train_variant.py` and are not packaged yet.
+
+- **Multi-tensor kernel** (`experiments/clip_fused/mt_engine.py`). The
+  packaged kernel launches two kernels per parameter tensor plus a few torch
+  ops. This version processes every leaf of one dtype in **one launch per
+  pass**, using a cached tile table and a per-call leaf-pointer table: the
+  "multi-tensor apply" pattern of apex's `clip_grad` and PyTorch's
+  `torch._foreach_*`. It also shares the 0-dim dtype markers (one per dtype
+  instead of one zero tensor per leaf; they are only read for `.dtype`).
+- **`vmap(chunk_size=2)`** with `--microbatch-size 0`. Microbatching happens
+  inside `vmap`, followed by one clip-and-sum over the whole batch instead of
+  one per microbatch (report Tier-2 #6).
+
+**Gates** (`experiments/clip_fused/bench_mt.py`, A100): 25/25 pass.
+- The multi-tensor output is **bitwise identical** to the packaged per-leaf
+  kernel for fp32/bf16/mixed trees, B = 1/2/16, with and without
+  microbatching.
+- Zero-tolerance stored-value bound (B=1 trick), including the adversarial
+  round-back case.
+- Deterministic.
+- `vmap(chunk_size)` + multi-tensor matches torch microbatching through
+  `adaptive_clipped_grad` to 2.2e-7.
+
+**Per call** (LoRA-7B-shaped tree: 392 leaves, 40.4M elements per example):
+
+| Implementation | ms per call (B=2 / B=16) | CUDA kernels per call |
+|---|---:|---:|
+| torch | 474 / 577 | 13,031 |
+| per-leaf triton (packaged) | 93.6 / 94.6 | 2,767 |
+| multi-tensor triton | 13.2 / 13.1 | 31 |
+
+Before marker sharing, the multi-tensor version issued 423 kernels per call,
+393 of them per-leaf `FillFunctor` launches for the markers. B=2 and B=16 cost
+the same, so the remaining 13 ms is host-side, not bandwidth.
+
+### 12.1 Full steps (same session, identical batches, strict triton)
+
+Ten `train_dpsgd.py` runs (§3 protocol, profiler on, batches
+`[14, 14, 19, 14, 15, 15]`) and three DPTrainer runs. Driver:
+`notes/profiles/mt/mt_driver.sh`. Baseline = the packaged per-leaf triton
+kernel with the microbatch loop, i.e. §11's best configuration.
+
+**`train_dpsgd.py`, eager (kernels off):**
+
+| Variant | Mean step | `clip` phase | Peak | Throughput | vs baseline | Per-step speedup |
+|---|---:|---:|---:|---:|---:|---:|
+| per-leaf, microbatch loop | 5.59 s | 5.02 s | 24.40 GiB | 2.71 smp/s | — | — |
+| **multi-tensor, microbatch loop** | **4.80 s** | 4.23 s | 24.39 GiB | **3.16 smp/s** | **−14.2% (×1.17)** | ×1.13–1.21, 6/6 |
+| per-leaf, `vmap(chunk_size)` | 5.01 s | 4.44 s | 26.68 GiB | 3.03 smp/s | −10.4% | ×1.09–1.14, 6/6 |
+| multi-tensor, `vmap(chunk_size)` | 4.88 s | 4.31 s | 26.67 GiB | 3.11 smp/s | −12.7% | ×1.10–1.20, 6/6 |
+
+**`train_dpsgd.py`, Triton model kernels:**
+
+| Variant | Mean step | `clip` phase | Peak | Throughput | vs baseline | Per-step speedup |
+|---|---:|---:|---:|---:|---:|---:|
+| per-leaf, microbatch loop | 7.59 s | 7.02 s | 22.43 GiB | 2.00 smp/s | — | — |
+| **multi-tensor, microbatch loop** | **6.93 s** | 6.35 s | 22.41 GiB | **2.19 smp/s** | **−8.8% (×1.10)** | ×1.08–1.13, 6/6 |
+| per-leaf, `vmap(chunk_size)` | 6.64 s | 6.06 s | 24.70 GiB | 2.29 smp/s | −12.6% | ×1.13–1.17, 6/6 |
+| multi-tensor, `vmap(chunk_size)` | 6.60 s | 6.03 s | 24.68 GiB | 2.30 smp/s | −13.0% | ×1.12–1.18, 6/6 |
+
+**Clean runs** (eager, 8 steps, no profiler):
+- per-leaf, microbatch loop: 3.10 smp/s, GPU util 54%.
+- **multi-tensor, microbatch loop: 3.60 smp/s (+16%), GPU util 64%.**
+- multi-tensor, `vmap(chunk_size)`: 3.40 smp/s (+10%).
+
+**DPTrainer** (batches `[16, 20, 16, 15, 22, 18]`):
+- per-leaf, microbatch loop: 10.60 s, 17.03 GB.
+- **multi-tensor, microbatch loop: 9.84 s (×1.08, per step ×1.07–1.09), 17.02 GB.**
+- multi-tensor, `vmap(chunk_size)`: 9.76 s (×1.09), 19.02 GB.
+
+Noise (0.34–0.35 s) and optimizer (0.22–0.23 s) are unchanged in every row.
+Losses agree within run-to-run variation (e.g. eager, steps 2/4/6:
+0.8696 0.8195 0.9057 baseline vs 0.8702 0.8191 0.9055 multi-tensor).
+
+### 12.2 Reading
+
+1. **The multi-tensor kernel is a clean win:** −14.2% (eager), −8.8%
+   (kernels) and −7.2% (DPTrainer) step time. It is faster on every step,
+   costs no memory, and its output is bitwise identical to the packaged
+   kernel's. It saves 0.79 / 0.66 / 0.76 s per step, slightly more than the
+   per-call estimate (7.6 calls × 80 ms ≈ 0.61 s). The best `train_dpsgd.py`
+   configuration becomes **eager + multi-tensor: 4.80 s/step, 3.60 smp/s
+   clean**. Against §11's kernels + torch baseline (11.10 s, a different
+   session) that is about ×2.3 overall.
+2. **`vmap(chunk_size)` is not worth it on top of the multi-tensor kernel.**
+   - Alone, it helps: −10.4% eager, −12.6% with kernels. It removes seven of
+     eight clip calls and the per-chunk accumulation.
+   - The cost is +2.3 GiB peak: it materializes the full per-example stack,
+     changing what microbatching guarantees.
+   - Added to the multi-tensor kernel: +1.7% step time in eager (clean
+     throughput −5.6%), −4.8% with model kernels on, −0.8% in DPTrainer.
+     Once the clip call is 13 ms there is little left to amortize.
+3. **What chunking still recovers with model kernels on is mostly the
+   microbatch loop's per-leaf work outside the clip** (*inferred, not
+   measured*). The accumulator adds `acc + new` per leaf per chunk: 392 adds ×
+   ~7 chunks per step, plus Python slicing. A multi-tensor
+   `torch._foreach_add_` in `_MicrobatchAccumulator` would target that
+   without the memory cost.
+
+**Limits.**
+- One run per configuration; the paired per-step ratios are tight.
+- Profiler on in §12.1; the clean runs agree on direction.
+- Both paths are prototypes installed by monkeypatching.
+- DPTrainer runs in eval mode (#1121), identically in every arm.
+
+**Artifacts:**
+- `notes/profiles/mt/`: CSVs, timelines, logs, `nvidia-smi` samples, driver.
+- `experiments/clip_fused/summarize_mt_runs.py`, which produces every number
+  above.
+- `experiments/clip_fused/bench_mt.py`: gates and per-call numbers.

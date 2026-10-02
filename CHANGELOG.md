@@ -306,3 +306,19 @@ verification results for the DP-clipping optimization workstream. Newest last.
   later `Kernel patches: DISABLED` line.
 - Report terminology: "eager" means `--no-kernel-patches`. Attention is
   `sdpa` in every run.
+
+## 2026-10-02 — multi-tensor clip kernel and vmap(chunk_size) explored (report §12)
+
+- Multi-tensor prototype (`experiments/clip_fused/mt_engine.py`): every leaf
+  of one dtype per launch via tile + pointer tables, plus shared dtype markers.
+  393 of the remaining 423 kernels per call were per-leaf marker fills.
+  Per call: 93.6 → 13.1 ms, 2,767 → 31 kernels. 25/25 gates; output bitwise
+  identical to the packaged kernel.
+- 7B full steps, same session, identical batches: eager 5.59 → 4.80 s
+  (−14.2%, 6/6 steps), kernels 7.59 → 6.93 s (−8.8%), DPTrainer 10.60 →
+  9.84 s (−7.2%). Peak memory unchanged. Clean eager throughput 3.10 →
+  3.60 smp/s.
+- `vmap(chunk_size=2)`: −10–13% alone, but +2.3 GiB peak, and it adds
+  nothing meaningful on top of the multi-tensor kernel (+1.7% eager, −4.8%
+  kernels). Not pursued.
+- Workspace stopped after the runs.
