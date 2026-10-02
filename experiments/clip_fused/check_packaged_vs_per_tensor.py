@@ -1,9 +1,10 @@
 """Bitwise check: packaged multi-tensor clip vs the previous per-tensor kernels.
 
 Runs ``clipped_fun(clip_backend="triton")`` twice per case: as packaged
-(multi-tensor kernels, shared markers, foreach accumulator), then with the
-c13e3007 per-tensor kernels, per-leaf markers and leafwise accumulator
-swapped in.
+(multi-tensor kernels, shared markers), then with the c13e3007 per-tensor
+kernels and per-leaf markers swapped in. (While the foreach microbatch
+accumulator existed, the script also swapped the accumulator; the committed
+log is from that version.)
 
 Blocking: clipped sums and per-example norms bitwise equal (they set the scale
 and the privacy bound). Diagnostic: the ``clipped_norms`` aux sums tile
@@ -25,13 +26,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 import _clip_sum_per_tensor as old  # noqa: E402
 
 from opake.api.engine.clipping._clipped_fun import clipped_fun  # noqa: E402
-from opake.api.engine.pytree import tree_map  # noqa: E402
 
 CS = importlib.import_module("opake.api.engine.kernels._clip_sum")
-CF = importlib.import_module("opake.api.engine.clipping._clipped_fun")
-NEW = (CS.fused_clip_sum, CS._dtype_marker, CF._add_trees)
-OLD = (old.fused_clip_sum, lambda leaf: leaf.new_zeros(()),
-       lambda t, n: tree_map(lambda a, b: a + b, t, n))
+NEW = (CS.fused_clip_sum, CS._dtype_marker)
+OLD = (old.fused_clip_sum, lambda leaf: leaf.new_zeros(()))
 
 LORA = [(16, 3584), (3584, 16), (16, 3584), (512, 16), (16, 3584), (512, 16),
         (16, 3584), (3584, 16), (16, 3584), (18944, 16), (16, 3584), (18944, 16),
@@ -56,7 +54,7 @@ def tree(kind, batch, seed):
 
 
 def run(impl, t, mb):
-    CS.fused_clip_sum, CS._dtype_marker, CF._add_trees = impl
+    CS.fused_clip_sum, CS._dtype_marker = impl
     fn, st = clipped_fun(lambda v: v, batch_argnums=0, clip_backend="triton",
                          clipping_norm=1.0, return_aux=True, microbatch_size=mb)
     (out, aux), _ = fn(t, state=st)
@@ -87,5 +85,5 @@ for kind in ("fp32", "bf16", "mixed", "lora"):
                   f"clipped_norms={cnorms} (max rel {rel(aa.clipped_norms, ba.clipped_norms):.1e})")
             if not same:
                 fails.append(tag)
-CS.fused_clip_sum, CS._dtype_marker, CF._add_trees = NEW
+CS.fused_clip_sum, CS._dtype_marker = NEW
 print(f"cases: {n} (values+norms bitwise, clipped_norms <= 1e-6 rel), failures: {len(fails)} {fails}")

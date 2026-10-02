@@ -17,13 +17,7 @@ from opake.api.engine.clipping._streaming import (
 )
 from opake.api.engine.device import fused_kernels_available
 from opake.api.engine.functional._transform_stack import under_differentiating_transform
-from opake.api.engine.pytree import (
-    global_norm,
-    tree_flatten,
-    tree_leaves,
-    tree_map,
-    tree_unflatten,
-)
+from opake.api.engine.pytree import global_norm, tree_leaves, tree_map
 from opake.api.engine.types import (
     ClippedPytree,
     PerGroup,
@@ -150,50 +144,6 @@ def _accumulation_dtype(
     return torch.promote_types(resolved, output_dtype)
 
 
-def _foreach_add_supported(total_leaves: list, new_leaves: list) -> bool:
-    """Whether one ``torch._foreach_add`` can replace the per-leaf adds.
-
-    Only for plain tensors of matching dtype and device, outside functorch
-    transforms and ``torch.compile`` traces, with nothing requiring grad.
-    """
-    if not total_leaves or len(total_leaves) != len(new_leaves):
-        return False
-    if torch.compiler.is_compiling():
-        return False
-    try:
-        from torch._C._functorch import get_interpreter_stack
-
-        if get_interpreter_stack():
-            return False
-    except Exception:  # pragma: no cover - API moved/unavailable
-        return False
-    grad_mode = torch.is_grad_enabled()
-    for acc, new in zip(total_leaves, new_leaves, strict=True):
-        if not (isinstance(acc, torch.Tensor) and isinstance(new, torch.Tensor)):
-            return False
-        if acc.dtype != new.dtype or acc.device != new.device:
-            return False
-        if grad_mode and (acc.requires_grad or new.requires_grad):
-            return False
-    return True
-
-
-def _add_trees(total: Any, new: Any) -> Any:
-    """Leafwise ``total + new``.
-
-    Uses one multi-tensor ``torch._foreach_add`` instead of one add per leaf
-    when that is equivalent (see ``_foreach_add_supported``). Both compute the
-    same IEEE sums.
-    """
-    total_leaves, treedef = tree_flatten(total)
-    new_leaves, new_treedef = tree_flatten(new)
-    if treedef == new_treedef and _foreach_add_supported(total_leaves, new_leaves):
-        return tree_unflatten(
-            treedef, list(torch._foreach_add(total_leaves, new_leaves))
-        )
-    return tree_map(lambda acc, value: acc + value, total, new)
-
-
 class _MicrobatchAccumulator:
     """Running sum over microbatches, held at the accumulation precision.
 
@@ -223,7 +173,11 @@ class _MicrobatchAccumulator:
                 ),
                 dtype_markers,
             )
-        self._total = values if self._total is None else _add_trees(self._total, values)
+        self._total = (
+            values
+            if self._total is None
+            else tree_map(lambda acc, new: acc + new, self._total, values)
+        )
 
     def result(self) -> Any:
         """The accumulated sum in the caller-visible dtype, or None if unused."""

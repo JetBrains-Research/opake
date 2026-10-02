@@ -40,8 +40,9 @@ if os.environ.get("CB_OLD") == "1":  # previous packaged behaviour (c13e3007)
 
     _CS.fused_clip_sum = _old.fused_clip_sum
     _CS._dtype_marker = lambda leaf: leaf.new_zeros(())
-    _CF._add_trees = _leafwise_add
-if os.environ.get("CB_NOFOREACH") == "1":
+    if hasattr(_CF, "_add_trees"):  # foreach accumulator (since reverted)
+        _CF._add_trees = _leafwise_add
+if os.environ.get("CB_NOFOREACH") == "1" and hasattr(_CF, "_add_trees"):
     _CF._add_trees = _leafwise_add
 chunk = int(os.environ.get("CB_VMAP_CHUNK", "0"))
 if chunk:
