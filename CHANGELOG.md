@@ -386,3 +386,24 @@ verification results for the DP-clipping optimization workstream. Newest last.
   - Check mode runs out of memory at mb 4 (two extra eager runs).
   - Mistake: my first summarizer missed the third capture row at mb 4; fixed with a predicted-and-asserted capture schedule.
 - Workspace stopped.
+
+## 2026-10-02: next-edit smoke comparison on the new opake (in progress)
+
+- Baseline found: 2026-09-25 ckpt-sweep `baseline` (ZenML `06ef7070`, W&B `ada8c57f`, image `…training@sha256:87fab1f2…`, opaque 0.15.6rc1).
+  - H100, seq ≤ 4096, LoRA rank 384, logical batch ~256 in microbatches of 2, checkpointing on, `chunked_nll`.
+  - Steps 208–229 s, batches `[265, 270, 249, 251, 272]`.
+  - Parameters saved to `notes/smoke-compare/baseline-zenml-config.json`. Its trainer args include `log_completion_metrics: false`, i.e. the uncommitted next-edit pass-through.
+- next-edit branch `mihajlo/opake-smoke-new` (`f1fc4ec4a`, a worktree off `9321ea13a`; the user's working tree is untouched).
+  - Migration: `opaque` → `opake`; clipping keys `target_quantile` / `clipping_norm_max`; `clipbound_learning_rate` accepted only at 0.2; Opake-only trainer-args pass-through; `privacy_accounting: true` (0.16 keeps no accountant for fixed-noise DP-SGD by default).
+  - Vendored opake `0.16.1.dev80+gef183f25` wheels (manylinux 2_28 x86_64 + macOS arm64 accounting + sdist). The lock diff is exactly the opaque → opake swap.
+  - Configs: `sft_opake_dp_cmp_{a,b,c}` (A = baseline replica, B = + fused clip, C = + CUDA graphs).
+  - Verified by composing the configs and diffing them against the baseline parameters.
+- Wheels validated on the next-edit stack (torch 2.9.0, Triton 3.5.0, transformers 5.11.0): 260 passed.
+- next-edit tests: 261 passed; 6 DPO/KTO failures are pre-existing on `9321ea13a`.
+- Image #1 (A/B): GitHub run 37054674512.
+- CUDA graphs packaged (`0159293d`, tests fixed in `6f7c3bf4`):
+  - `CudaGraphChunkCompiler`, a `DPTrainer` `cuda_graphs` option, a capture-safe fused-CE mask path, and checkpointing without RNG state, guarded by a dropout check.
+  - A100 `DPTrainer` with checkpointing and fused CE on: ×3.7 steady.
+  - Capture probe: checkpoint RNG saving is not capturable; `preserve_rng_state=False` is exact without dropout.
+  - Fused-CE gradients are not bitwise-reproducible even eager-vs-eager (atomics; max 3.8e-6).
+- The user confirmed speed is the target and bitwise equality is not required, as long as privacy holds.
