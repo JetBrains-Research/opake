@@ -130,9 +130,10 @@ def _compare(a_tree, b_tree):
         if not ta:
             continue
         bitwise = all(torch.equal(x, y) for x, y in zip(ta, tb))
-        rel = max(float((x.double() - y.double()).abs().max() / y.double().abs().max().clamp_min(1e-30))
-                  for x, y in zip(ta, tb))
-        res[name] = {"bitwise": bitwise, "rel": rel}
+        diff2 = sum(float(((x.double() - y.double()) ** 2).sum()) for x, y in zip(ta, tb))
+        ref2 = sum(float((y.double() ** 2).sum()) for y in tb)
+        rel = (diff2 / ref2) ** 0.5 if ref2 > 0 else (0.0 if diff2 == 0 else float("inf"))
+        res[name] = {"bitwise": bitwise, "rel": rel}  # global ||a-b|| / ||b|| over the field
     return res
 
 
