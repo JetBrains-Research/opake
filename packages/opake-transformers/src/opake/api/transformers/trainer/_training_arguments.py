@@ -506,6 +506,15 @@ class TrainingArguments:
     #: checkpointing the model must have no active dropout, because the
     #: checkpoint recompute then runs without saved RNG state.
     cuda_graphs: bool = False
+    #: EXPERIMENTAL, NOT YET DP-REVIEWED. Order each logical batch by real
+    #: sequence length and trim every microbatch's trailing all-padding
+    #: columns before the per-example kernel runs. The collator pads the whole
+    #: logical batch to its longest example, so without this every example is
+    #: computed at that length. Assumes a right-padded causal LM batch with
+    #: ``attention_mask`` and ``-100``-masked ``labels``; trimmed columns must
+    #: carry no attended token and no valid label in any row. Excludes
+    #: ``torch_compile`` and ``cuda_graphs`` (both need static shapes).
+    trim_microbatch_padding: bool = False
     # ``use_performance_kernels`` gates the CUDA + Triton kernel group
     # (``rope``, ``rms_norm``, ``activation``, ``cross_entropy``).  Default
     # ``False`` because the kernels need CUDA + Triton at runtime and the
@@ -947,6 +956,21 @@ class TrainingArguments:
                 *(
                     "cuda_graphs=True and torch_compile=True are mutually "
                     "exclusive: both replace the eager microbatch kernel.",
+                )
+            )
+        if not isinstance(self.trim_microbatch_padding, bool):
+            raise ConfigurationError(
+                *(
+                    "trim_microbatch_padding must be a bool; got "
+                    f"{self.trim_microbatch_padding!r}.",
+                )
+            )
+        if self.trim_microbatch_padding and (self.torch_compile or self.cuda_graphs):
+            raise ConfigurationError(
+                *(
+                    "trim_microbatch_padding=True is incompatible with "
+                    "torch_compile and cuda_graphs: trimming gives every "
+                    "microbatch its own sequence length.",
                 )
             )
         if self.cuda_graphs and self.auto_find_microbatch_size:

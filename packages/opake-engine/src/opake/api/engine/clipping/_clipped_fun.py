@@ -25,7 +25,7 @@ from opake.api.engine.types import (
     clipped,
 )
 from opake.api.engine.types import ClipState as _ClipState
-from opake.exceptions import ConfigurationError
+from opake.exceptions import ConfigurationError, OperationError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -248,6 +248,17 @@ def _prepare_kernel_clipping_norm(
     return _conservative_bound_tensor(clipping_norm, tensor.device)
 
 
+def _require_microbatches_for_hooks(
+    microbatch_size: int | None, **hooks: Callable | None
+) -> None:
+    """Per-microbatch hooks need the microbatch loop, i.e. a finite size."""
+    if microbatch_size is not None:
+        return
+    for name, hook in hooks.items():
+        if hook is not None:
+            raise ConfigurationError(*(f"{name} requires a finite microbatch_size",))
+
+
 def _microbatch_accumulate_reduced(
     chunk_fn: Callable,
     kernel_clipping_norm: torch.Tensor | PerGroup,
@@ -260,8 +271,15 @@ def _microbatch_accumulate_reduced(
     dtype: torch.dtype | None,
     clipping_norm: float | PerGroup,
     second_moment: bool,
+    microbatch_transform: Callable[[tuple[Any, ...]], tuple[Any, ...]] | None = None,
 ) -> tuple[Any, Any, Any, ClippingStats | None]:
-    """Run the tensor-only chunk kernel and combine its compact reductions eagerly."""
+    """Run the tensor-only chunk kernel and combine its compact reductions eagerly.
+
+    ``microbatch_transform`` (owner-supplied) maps each sliced microbatch's
+    positional args to new args before the kernel runs. It must keep every
+    example (the leading batch dimension) and leave per-example outputs
+    unchanged; the owner carries that proof, the engine only checks the size.
+    """
     batch_size = batch_size_from_args(args, batch_argnums)
     grad_acc = _MicrobatchAccumulator(output_dtype=dtype)
     squared_acc = _MicrobatchAccumulator(output_dtype=dtype)
@@ -284,6 +302,17 @@ def _microbatch_accumulate_reduced(
                 ),
                 args[i],
             )
+        if microbatch_transform is not None:
+            microbatch_args = list(microbatch_transform(tuple(microbatch_args)))
+            transformed_size = batch_size_from_args(microbatch_args, batch_argnums)
+            if transformed_size != end_idx - start_idx:
+                raise OperationError(
+                    *(
+                        "_microbatch_transform changed the microbatch size from "
+                        f"{end_idx - start_idx} to {transformed_size}; it must "
+                        "keep every example.",
+                    )
+                )
 
         reduced, markers, squared_reduced, squared_markers, diagnostics = chunk_fn(
             kernel_clipping_norm, *microbatch_args, **kwargs
@@ -540,6 +569,7 @@ def clipped_fun(
     _scale_fn: Callable | None = None,
     _builtin_scale: _BuiltinScale | None = None,
     _chunk_compiler: Callable | None = None,
+    _microbatch_transform: Callable[[tuple[Any, ...]], tuple[Any, ...]] | None = None,
 ) -> tuple[Callable, FixedClipState]:
     """Transform a function to clip its output and sum across a batch.
 
@@ -719,10 +749,11 @@ def clipped_fun(
             return clipped_value, squared_value
         return clipped_value
 
-    if _chunk_compiler is not None and microbatch_size is None:
-        raise ConfigurationError(
-            *("_chunk_compiler requires a finite microbatch_size",)
-        )
+    _require_microbatches_for_hooks(
+        microbatch_size,
+        _chunk_compiler=_chunk_compiler,
+        _microbatch_transform=_microbatch_transform,
+    )
 
     def _streaming_kernel(in_dims, kernel_clipping_norm, args, kwargs, reduce_leaf):
         values, value_aux = _vmap_values(
@@ -925,6 +956,7 @@ def clipped_fun(
                 dtype=dtype,
                 clipping_norm=current_clipping_norm,
                 second_moment=second_moment,
+                microbatch_transform=_microbatch_transform,
             )
 
         # Normalize

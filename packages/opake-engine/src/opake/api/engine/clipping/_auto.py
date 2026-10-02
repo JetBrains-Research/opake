@@ -122,6 +122,7 @@ def auto_clipped_fun(
     microbatch_size: int | None = None,
     dtype: Any = None,
     _chunk_compiler: Callable | None = None,
+    _microbatch_transform: Callable | None = None,
 ) -> tuple[Callable, AutoClipState]:
     r"""Transform a function so each per-example output is scaled to clipped norm via AUTO-S.
 
@@ -180,6 +181,7 @@ def auto_clipped_fun(
         _scale_fn=scale_fn,
         _builtin_scale=builtin_scale,
         _chunk_compiler=_chunk_compiler,
+        _microbatch_transform=_microbatch_transform,
     )
 
     state = AutoClipState()
@@ -224,6 +226,7 @@ def auto_clipped_grad(
     dtype: Any = None,
     second_moment: bool = False,
     _chunk_compiler: Callable | None = None,
+    _microbatch_transform: Callable | None = None,
 ) -> tuple[Callable, AutoClipState]:
     r"""Create a function that computes the sum of AUTO-S scaled per-example gradients.
 
@@ -338,6 +341,7 @@ def auto_clipped_grad(
         _scale_fn=scale_fn,
         _builtin_scale=builtin_scale,
         _chunk_compiler=_chunk_compiler,
+        _microbatch_transform=_microbatch_transform,
     )
 
     state = AutoClipState()
