@@ -38,9 +38,7 @@ def _is_phi3_style_mlp(mlp):
     return hasattr(mlp, "gate_up_proj") and not hasattr(mlp, "gate_proj")
 
 
-def _make_fused_lora_mlp_forward(
-    original_forward, activation_type, *, save_intermediates=False
-):
+def _make_fused_lora_mlp_forward(original_forward, activation_type):
     """Create fused LoRA MLP forward using Opake_LoRA_MLP kernel.
 
     Replaces separate gate_proj + up_proj + activation + down_proj
@@ -49,8 +47,6 @@ def _make_fused_lora_mlp_forward(
     Args:
         original_forward: Bound method of the MLP instance.
         activation_type: 0=SwiGLU, 1=GeGLU_exact, 2=GeGLU_approx.
-        save_intermediates: Save the intermediate-width ``gate`` / ``up``
-            tensors for backward instead of recomputing them.
     """
 
     def forward(self, x):
@@ -87,7 +83,6 @@ def _make_fused_lora_mlp_forward(
             Bd,
             Sd,
             activation_type,
-            save_intermediates,
         )
 
         # Add biases if present (most models don't have MLP bias)

@@ -138,38 +138,15 @@ with functorch). No special kwargs needed.
 ### Selective activation recomputation
 
 Full-layer checkpointing recomputes every projection of each decoder layer.
-The fused LoRA MLP has a narrower control over what it keeps:
+The fused LoRA MLP already recomputes narrowly: it saves only its input and
+recomputes the intermediate-width `gate` / `up` projections in backward.
 
-| Option | Saved per decoder layer | Recomputed in backward |
-|--------|-------------------------|------------------------|
-| `lora_mlp_recompute=True` (default) | Fused LoRA MLP input | Intermediate-width `gate` / `up` projections |
-| `lora_mlp_recompute=False` | Fused LoRA MLP input plus `gate` / `up` | Activation and gated product only |
-
-Pass it to `apply_model_patches(...)`, or through `performance_kernels_config`
-with `DPTrainer`:
-
-```python
-args = TrainingArguments(
-    gradient_checkpointing=False,
-    use_performance_kernels=True,
-    performance_kernels_config={"lora_mlp_recompute": False},
-)
-```
-
-`lora_mlp_recompute` applies to the fused LoRA MLP used when gate, up and down
-projections all carry dropout-free LoRA adapters on CUDA. The fused path also
-requires the adapters to run in the compute dtype: either CUDA autocast is
-active (as in `DPTrainer` with `bf16=True`), or the adapters already have the
-hidden states' dtype. PEFT upcasts adapters to fp32 by default, so a bf16 base
-model without autocast falls back to the PEFT forward, and the option has no
-effect.
-
-`lora_mlp_recompute=False` keeps two intermediate-width tensors per decoder
-layer, which is about `2 x num_layers x intermediate_size x bytes` extra per
-token per example, in exchange for two fewer matmuls per layer in backward. It
-pays off when that fits in spare memory. It changes only what is stored versus
-recomputed; the per-example gradients are the same up to floating-point
-reduction order.
+The fused LoRA MLP runs when gate, up and down projections all carry
+dropout-free LoRA adapters on CUDA and the adapters run in the compute dtype:
+either CUDA autocast is active (as in `DPTrainer` with `bf16=True`), or the
+adapters already have the hidden states' dtype. PEFT upcasts adapters to fp32
+by default, so a bf16 base model without autocast falls back to the PEFT
+forward.
 
 There is no separate attention-only checkpointing option. When `sdpa`
 attention dispatches to a fused backend (flash, memory-efficient or cuDNN), it

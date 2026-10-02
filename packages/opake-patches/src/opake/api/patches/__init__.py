@@ -55,10 +55,6 @@ def apply_model_patches(
     The wrapper delegates to the original forward unless a labeled call sets
     ``loss_only=True``, which permits the optimized branch to return
     ``logits=None``.
-
-    ``lora_mlp_recompute`` (default ``True``) makes the fused LoRA MLP
-    recompute its intermediate-width ``gate`` / ``up`` tensors in backward;
-    ``False`` saves them instead.
     """
     global _runtime_patches_applied
     if not _runtime_patches_applied:

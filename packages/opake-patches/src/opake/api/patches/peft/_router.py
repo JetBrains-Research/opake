@@ -49,16 +49,13 @@ def _find_decoder_layers(model):
     return []
 
 
-def _auto_fuse_lora(model, *, save_mlp_intermediates=False):
+def _auto_fuse_lora(model):
     """Auto-detect and fuse LoRA layers with Opake fused kernels.
 
     Called from explicit PEFT patching on an already wrapped model. Walks
     decoder layers and:
     1. Fuses Q/K/V projections when all three have LoRA (Opake_LoRA_QKV)
     2. Fuses gate/up/down projections when all three have LoRA (Opake_LoRA_MLP)
-
-    ``save_mlp_intermediates`` makes the fused MLP save its intermediate-width
-    ``gate`` / ``up`` tensors for backward instead of recomputing them.
     """
     layers = _find_decoder_layers(model)
     if not layers:
@@ -139,11 +136,7 @@ def _auto_fuse_lora(model, *, save_mlp_intermediates=False):
 
         activation_type = _MLP_ACTIVATION_MAP[cls_name]
 
-        fused_mlp_fwd = _make_fused_lora_mlp_forward(
-            mlp.forward,
-            activation_type,
-            save_intermediates=save_mlp_intermediates,
-        )
+        fused_mlp_fwd = _make_fused_lora_mlp_forward(mlp.forward, activation_type)
         fused_mlp_fwd.__opake_lora_mlp_patched__ = True
         mlp.forward = types.MethodType(fused_mlp_fwd, mlp)
         mlp._opake_lora_mlp_patched = True
@@ -173,13 +166,9 @@ def apply_peft_model_patches(
         performance: Whether to enable fused LoRA performance patches.
         compat: Reserved compatibility switch accepted by the common patch API.
         **kwargs: Additional patch options. ``lora`` overrides
-            ``performance`` when supplied. ``lora_mlp_recompute`` (default
-            ``True``) recomputes the fused MLP's intermediate-width
-            ``gate`` / ``up`` tensors in backward; ``False`` saves them
-            instead, trading activation memory for less backward compute.
+            ``performance`` when supplied.
     """
     lora = kwargs.get("lora", performance)
-    lora_mlp_recompute = bool(kwargs.get("lora_mlp_recompute", True))
     if not lora or not _lora_patching_allowed():
         return
 
@@ -199,4 +188,4 @@ def apply_peft_model_patches(
     if patched_lora:
         logger.debug("opake: Applied Triton kernel patches for peft.LoRA.Linear")
 
-    _auto_fuse_lora(model, save_mlp_intermediates=not lora_mlp_recompute)
+    _auto_fuse_lora(model)
