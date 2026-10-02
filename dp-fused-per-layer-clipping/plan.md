@@ -489,3 +489,51 @@ def test_end_to_end():
 - Opake noise convention: `packages/opake-dpsgd/src/opake/api/dpsgd/noise/_gaussian.py` (realized std = `noise_multiplier * clipped.max_norm` on the aggregate, explicit `RngKey`), `docs/user-guide/noise.md`
 - Opake clipping internals: `packages/opake-engine/src/opake/api/engine/clipping/` (`_pytree.py` `_guard_scale`/`_finalize_scale`; `_clipped_fun.py` microbatching + `_chunk_compiler`)
 - Opake architecture contracts: `.junie/architecture-contracts.md`
+
+## Unexplored levers (2026-10-02, after the full-step profile)
+
+Reference step (report §11, `train_dpsgd.py`, eager + triton clip): **5.43 s**.
+- `clip` phase 4.86 s: the fused clip-and-reduce is about 0.6 s, the rest is
+  the vmapped per-example forward/backward.
+- noise 0.34 s.
+- optimizer 0.23 s.
+
+Not done from `outputs/dp-clipping-optimization.md`:
+- **Tier-1 #1 / action 1: `torch.compile` (incl. `reduce-overhead`) on the
+  grad step.** Never measured. The flags exist (`--torch-compile`). Note that
+  `clip_backend` falls back or raises under a compiled chunk kernel.
+- **Tier-2 #6: `vmap(chunk_size)`.** Would make one clip call per step instead
+  of eight, at the cost of an *estimated* +2.6 GB for the `[16, 40.4M]` fp32
+  per-example stack.
+- **§3.3, apex `clip_grad` pattern (multi-tensor apply).** Used by PyTorch's
+  own `clip_grad_norm_` via `torch._foreach_norm` / `_foreach_mul_`, but only
+  for one norm over the aggregate. A per-example version would be a Triton
+  kernel over a leaf/tile pointer table: about 2 launches per call instead of
+  ~6 per leaf (392 leaves). *Estimate:* −0.4–0.5 s per step (78.5 ms per call
+  × ~7.6 calls is mostly launch and host overhead).
+- **Tier-1 #2/#4 (torch-path micro-optimizations).** Only matter for the
+  default `"torch"` backend.
+- **Ghost clipping / FGC / Book-Keeping.** These compute exact per-example
+  norms, so the mechanism is the same, but they need hooks or a non-vmap
+  backward. They're the only listed idea that targets the now-dominant
+  per-example forward/backward.
+- **Not pursued by design:** DP-SGD-RC (stochastic bound), FlashDP (per-layer
+  mechanism), spectral and quantile clipping (threshold selection, i.e.
+  utility rather than speed).
+
+Found by measurement, not in the report:
+- **Microbatch size.** mb=2 was chosen for memory, but peak is floor 15.0 GiB
+  plus a working set that scales with mb (7.4 GiB kernels / 9.4 GiB eager at
+  mb=2). mb=4 would *estimate* ~30 / ~34 GiB, which fits on 40 GB. It's a flag
+  change.
+- **DP-SGD noise is drawn on the CPU** (`_gaussian.py`: CPU-generator
+  `torch.randn` then `.to(device)`), which is the fixed 0.34 s. A CUDA
+  generator keyed from the same `RngKey` would be ~ms, but it changes the
+  seed→noise stream. Needs an opt-in design and DP review (no key reuse,
+  resume semantics).
+- **#1122: the fused LoRA kernels never run in `train_dpsgd.py`** (fp32
+  adapters, no autocast).
+
+Answered since the report: open Q5 (peak = activations; clipping is a time
+cost) and Q4 (the blocked reduction stays — the guard's roundoff bound
+depends on it, and the fused kernel keeps it).
