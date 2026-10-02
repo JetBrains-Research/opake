@@ -428,3 +428,11 @@ verification results for the DP-clipping optimization workstream. Newest last.
 - Padding measured on a next-edit-like dataset (`20260324-train.parquet`, 36,149 rows, Qwen2.5-Coder-7B tokens): mean length 2,022, p90 3,180. Essentially every ~256-sample batch contains a 4096-token example, so today all samples are computed at 4096.
 - Tokens computed / real: 2.02 (attention 3.44). Length-sorted per-microbatch trim brings this to 1.00–1.01 at microbatch 2–4 (1.07 with bucket 256).
 - Expected wall-clock gain is below ×2, because per-example gradient, clip and noise costs do not scale with length. Script `experiments/padding_waste/measure_padding.py`; data `notes/smoke-compare/padding_waste.json`.
+
+## 2026-10-03: experimental `trim_microbatch_padding` (NOT DP-reviewed): implemented; trial paused
+
+- opake `0da330c2`: private engine hook `_microbatch_transform` (clipped_fun / clipped_grad / AUTO-S), plus `DPTrainer`'s opt-in `trim_microbatch_padding`. It sorts each logical batch by real length and trims trailing columns that have no attended token and no valid label. It excludes `torch_compile` / `cuda_graphs`. Docs, docstrings and a runtime warning say it is EXPERIMENTAL and not DP-reviewed.
+- Tests: 13 new (engine hook; trimming/sorting rules; config exclusions; end-to-end equivalence under fixed and adaptive clipping at atol 1e-6). Regression: 853 engine + dpsgd-clipping tests and 333 transformers tests pass. On the NES stack with CUDA: 286 passed, 1 skipped. `mkdocs build --strict` passes.
+- NES `03a88f954`: vendored `0.16.1.dev89+g0da330c2`; `trim_microbatch_padding` is passed through in `sft.py`. Configs: `cmp_i` = H + trim (microbatch 4), `cmp_j` = G + trim (microbatch 2). NES tests: 261 passed, plus the same 6 pre-existing DPO/KTO failures.
+- Image #3 build: GitHub run `37078811523` (in progress when paused).
+- **Paused on user request: no ZenML runs started for I/J.** To resume: take the digest from the run log (`IMAGE_DIGEST:`), then `NES_DOCKER_IMAGE_TRAINING=…@<digest> uv run --frozen pusk run sft --profile trace --config-name sft_opake_dp_cmp_i` (and `_j`). A DP review is still required before any privacy claim.
