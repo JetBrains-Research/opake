@@ -294,10 +294,8 @@ def fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=None)
         ptrs = {}
         for g in plan["groups"]:
             first = leaves[g["idx"][0]]
-            ptrs[g["dtype"]] = torch.tensor(
-                [leaves[i].data_ptr() for i in g["idx"]],
-                dtype=torch.int64,
-                device=device,
+            ptrs[g["dtype"]] = _pointer_table(
+                [leaves[i].data_ptr() for i in g["idx"]], device
             )
             partial = torch.empty((batch, g["tiles"]), dtype=sq_dtype, device=device)
             _partial_sq_kernel[(g["tiles"], batch)](
@@ -376,6 +374,25 @@ def fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=None)
                 s2 = post.sum(1)
                 post_sq = s2 if post_sq is None else post_sq + s2
     return reduced, norm, post_sq, acc_dtype
+
+
+_CAPTURED_TABLES: list = []
+
+
+def _pointer_table(addresses, device):
+    """Tensor addresses as an int64 device tensor.
+
+    While a CUDA graph is being captured the upload goes through pinned host
+    memory, because pageable host-to-device copies cannot be captured. The
+    graph re-reads that host buffer on every replay, so it is kept alive for
+    the life of the process; the addresses it holds are the graph's static
+    tensors, which are the same on every replay.
+    """
+    if torch.cuda.is_current_stream_capturing():
+        host = torch.tensor(addresses, dtype=torch.int64).pin_memory()
+        _CAPTURED_TABLES.append(host)
+        return host.to(device=device, non_blocking=True)
+    return torch.tensor(addresses, dtype=torch.int64, device=device)
 
 
 _MARKERS: dict = {}
