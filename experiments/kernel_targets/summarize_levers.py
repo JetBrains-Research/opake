@@ -37,6 +37,7 @@ LABELS = {
     "lv_np_compro": "stock PEFT LoRA + torch.compile reduce-overhead",
     "lv_tf32_mb4": "TF32 + microbatch 4",
     "lv_np_tf32_mb4": "stock PEFT LoRA + TF32 + microbatch 4",
+    "lv_kern_mb4": "Opake model kernels on + microbatch 4",
 }
 
 
@@ -80,7 +81,16 @@ print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|")
 for name, label in LABELS.items():
     r = load(name)
     if r is None:
-        print(f"| {label} | {status(name)} | | | | | | | | |")
+        st_ = status(name)
+        if st_ == "ok":
+            st_ = "no step data (stopped early)"
+        print(f"| {label} | {st_} | | | | | | | | |")
+        continue
+    if "comp" in name:  # compiled runs: steps 0-2 include compilation
+        tail = r["steps"][3:]
+        print(f"| {label} | {status(name)} | steps 4-6: {' / '.join(f'{x:.1f}' for x in tail)} s "
+              f"(steps 1-3 incl. compile: {' / '.join(f'{x:.0f}' for x in r['steps'][:3])} s) | | | {r['peak']:.2f} GiB | | "
+              f"{util(name):.0f}% | steady state x{base['step'] / (sum(tail) / len(tail)):.2f} | |")
         continue
     same = r["batches"] == base["batches"]
     ratios = [a / b for a, b in zip(base["steps"], r["steps"], strict=True)] if same else []
