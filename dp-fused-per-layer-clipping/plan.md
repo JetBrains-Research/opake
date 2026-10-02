@@ -572,3 +572,14 @@ depends on it, and the fused kernel keeps it).
   stored-value bound holds for any order.
 - [ ] Still open: CUDA CI lanes (incl. minimum dependencies); split into
   focused PRs with the DP-review write-up.
+
+### Kernel and host-overhead targets (2026-10-02, `outputs/kernel-optimization-targets.md`)
+
+- [x] Profiled. The step is host-bound: custom `autograd.Function`s cost ~0.6 ms per call under `vmap(grad)`, so Opake's kernels are a net loss at mb ≤ 4.
+- [ ] T1: microbatch sizing (measured −33% / ×1.75 `DPTrainer`).
+- [ ] T2: gate Opake kernels on the `vmap(grad)` path (measured −13% / ×1.22 `DPTrainer` at mb 2).
+- [ ] T3: CUDA-graph capture of the per-microbatch chunk via `_chunk_compiler`. Estimate −40% at mb 2, not measured. Gate on bitwise equality with eager.
+- [ ] T4: opt-in GPU DP noise (0.34 s/step measured cost; RNG design plus DP review).
+- [ ] T5: GPU-side work after T3 (fp32 LoRA GEMMs, casts, elementwise).
+- [ ] T6: upstream reports (SDPA backward batching rules #176265; custom-Function overhead; `custom_op` under `torch.func.grad`).
+- `torch.compile`: blocked (in-place `addmm_` in the PEFT QKV backward, scalar graph break at `_clipped_fun.py:213`, Poisson-batch recompiles).

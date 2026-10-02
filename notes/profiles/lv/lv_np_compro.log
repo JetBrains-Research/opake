@@ -1,0 +1,327 @@
+[variant] multi_tensor=False vmap_chunk=0 old=False noforeach=False
+[variant] tf32=False no_peft=True
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+================================================================================
+DP-SGD LoRA Training for Causal Language Models
+================================================================================
+W&B initialized (mode: disabled)
+
+Using device: cuda (NVIDIA A100-SXM4-40GB)
+
+Loading model: Qwen/Qwen2.5-Coder-7B...
+
+Runtime mode:
+  Device: cuda (NVIDIA A100-SXM4-40GB)
+  Dtype: bfloat16 (torch.bfloat16)
+  Kernel optimizations: disabled (--no-kernel-patches)
+Attention: sdpa (backend=auto)
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 4937.94it/s]
+[After model load] Memory: alloc=14.23GB, peak=14.23GB, free=25.14GB (36.0% used)
+Applying LoRA...
+Kernel patches: DISABLED (eager baseline; compat/MoE/PEFT stay on)
+trainable params: 40,370,176 || all params: 7,655,986,688 || trainable%: 0.5273
+[After LoRA] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Loading dataset: JetBrains/KStack...
+  Split: train
+  Text field: content
+  Streaming source dataset and materializing required subset...
+  Total examples in dataset: 2100
+
+  Sample data (first example):
+    Text length: 11169 chars
+    Preview: /*
+ * Copyright 2010-2015 JetBrains s.r.o.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a...
+
+Preparing 100 eval + 2000 train samples...
+
+Tokenizing (max_seq_len=512)...
+Tokenizing eval:   0%|          | 0/100 [00:00<?, ? examples/s]Tokenizing eval: 100%|██████████| 100/100 [00:00<00:00, 1525.72 examples/s]
+Tokenizing train:   0%|          | 0/2000 [00:00<?, ? examples/s]Tokenizing train:  50%|█████     | 1000/2000 [00:00<00:00, 1582.61 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2118.50 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2002.88 examples/s]
+W1002 12:55:40.762000 10112 torch/_logging/_internal.py:1394] [0/0] Profiler record function <class 'torch.autograd.profiler.record_function'> will be ignored
+Prepared datasets: 2000 train samples, 100 eval samples
+
+Poisson sampling setup:
+  Sampler: poisson
+  Sample rate (per rank): 0.008000
+  Expected global batch size: 16
+  Expected steps per epoch: ~125
+Eval batches: 50
+
+Converting to functional form (LoRA parameters only)...
+  (This may take 1-2 minutes for large models...)
+Trainable parameters: 392 (took 0.0s)
+[After functional conversion] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Setting up DP-SGD training...
+  Optimizer: adafactor
+  Learning rate: 0.0005
+  Clip norm: 1.0
+  Microbatch size: 2
+  Clipping mode: adaptive
+  Eval steps: 100
+  Epochs: 2
+  Expected total steps: ~250
+
+Calibrating privacy parameters...
+  δ = 2.34e-04 (n=2000)
+  Total steps: 250
+  Sample rate: 0.008000
+  Target: ε=3.0, δ=2.34e-04
+  (This may take 1-3 minutes...)
+
+Calibrated privacy parameters (took 10.8s):
+  Target: ε=3.000, δ=2.3e-04 | Achieved ε≈2.998
+  Noise multiplier: 0.6279 (iterations=14, converged=True)
+
+================================================================================
+Starting training...
+================================================================================
+[Before training] Memory: alloc=14.41GB, peak=14.41GB, free=25.06GB (36.5% used)
+
+Memory profile: phases logged every step; allocation snapshot over steps 3..4 -> runs/lv/lv_np_compro.csv + .pickle
+  → Step 0 eval: loss=0.7220, ε=0.000
+
+Epoch 1/2
+--------------------------------------------------------------------------------
+Creating poisson sampler...
+Creating DataLoader...
+WARNING: torch.compile(fullgraph=True) failed (Unsupported: torch.* op returned non-Tensor
+  Explanation: torch.* ops that return a non-Tensor cannot be traced into the Dynamo FX graph output
+
+
+  Developer debug context: example_value type: bool; op: call_function; target: <function flash_sdp_enabled at 0x725232ac6d40>
+
+ For more details about this graph break, please visit: https://meta-pytorch.github.io/compile-graph-break-site/gb/gb0208.html
+
+from user code:
+   File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 443, in grad_fn
+    return _grad_fn_impl(*args, state=state, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 505, in _grad_fn_impl
+    result, _ = inner_fn(
+                ^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py", line 357, in grad_fn_wrapper
+    (clipped_grads, aux), returned_state = clipped_grad_fn(
+                                           ^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 989, in stateful_clipped_fn
+    result = clipped_fn(runtime_clipping_norm, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 914, in clipped_fn
+    result, squared_result, aux, stats = _microbatch_accumulate_reduced(
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 288, in _microbatch_accumulate_reduced
+    reduced, markers, squared_reduced, squared_markers, diagnostics = chunk_fn(
+                                                                      ^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 770, in _chunk_kernel
+    outputs = vmapped(kernel_clipping_norm, *chunk_args, **call_kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/apis.py", line 246, in wrapped
+    return vmap_impl(
+           ^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/vmap.py", line 316, in vmap_impl
+    return _flat_vmap(
+           ^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/vmap.py", line 507, in _flat_vmap
+    batched_outputs = func(*batched_inputs, **kwargs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 681, in _per_example_fn
+    value, aux = fun_with_aux(*args_single, **call_kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py", line 292, in grad_fn
+    grad, value_and_aux = grad_and_value_fn(*args, **kwargs)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/apis.py", line 503, in wrapper
+    return eager_transforms.grad_and_value_impl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/torch/checkpoint/saved_tensor_hooks_guard.py", line 45, in dispatch
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/eager_transforms.py", line 1492, in grad_and_value_impl
+    output = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_helpers.py", line 38, in <lambda>
+    return lambda *args, **kwargs: (fun(*args, **kwargs), ())
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "examples/train_dpsgd.py", line 1512, in per_example_loss_fn
+    output = fmodel(merged_params(trainable), input_ids, labels=labels)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 169, in fmodel_dict
+    return torch.func.functional_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/functional_call.py", line 154, in functional_call
+    return nn.utils.stateless._functional_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/utils/stateless.py", line 279, in _functional_call
+    return module(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 352, in wrapper
+    result = fn(*args_list, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/peft/peft_model.py", line 2120, in forward
+    return self.base_model(
+           ^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/peft/tuners/tuners_utils.py", line 359, in forward
+    return self.model(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/transformers/components/kv_cache.py", line 44, in wrapper
+    return forward_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 352, in wrapper
+    result = fn(*args_list, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/utils/generic.py", line 939, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py", line 452, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/utils/output_capturing.py", line 286, in wrapper
+    outputs = func(self, *args, **kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py", line 388, in forward
+    hidden_states = decoder_layer(
+                    ^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/modeling_layers.py", line 109, in __call__
+    return super().__call__(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py", line 282, in forward
+    hidden_states, _ = self.self_attn(
+                       ^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py", line 220, in forward
+    attn_output, attn_weights = attention_interface(
+                                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/transformers/components/attention.py", line 220, in vmap_sdpa_attention_forward
+    if _can_use_native_gqa(query, key, value, attention_mask, dropout, bool(is_causal)):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/transformers/components/attention.py", line 130, in _can_use_native_gqa
+    torch.backends.cuda.flash_sdp_enabled()
+
+Set TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS="+dynamo"
+); falling back to fullgraph=False.W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1] Graph break from `Tensor.item()`, consider setting:
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     torch._dynamo.config.capture_scalar_outputs = True
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1] or:
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     env TORCHDYNAMO_CAPTURE_SCALAR_OUTPUTS=1
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1] to include these operations in the captured graph.
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1] 
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1] Graph break: from user code at:
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 443, in grad_fn
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     return _grad_fn_impl(*args, state=state, **kwargs)
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 505, in _grad_fn_impl
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     result, _ = inner_fn(
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]                 ^^^^^^^^^
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py", line 357, in grad_fn_wrapper
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     (clipped_grads, aux), returned_state = clipped_grad_fn(
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]                                            ^^^^^^^^^^^^^^^^
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 989, in stateful_clipped_fn
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     result = clipped_fn(runtime_clipping_norm, *args, **kwargs)
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 834, in clipped_fn
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     kernel_clipping_norm = _prepare_kernel_clipping_norm(
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 248, in _prepare_kernel_clipping_norm
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     return _conservative_bound_tensor(clipping_norm, tensor.device)
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 213, in _conservative_bound_tensor
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]     if bound.item() > exact:
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1]        ^^^^^^^^^^^^^^^^^^^^^
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1] 
+W1002 12:56:29.693000 10112 torch/_dynamo/variables/tensor.py:1841] [0/1] 
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/autograd/graph.py:1072: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::_scaled_dot_product_flash_attention_backward. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+
+Step    2 [E1 S  2/125] | BS: 14 | Loss: 0.8691 | Clip: norm=0.056, rate=0.0% | GradNorm: μ=0.247 | Noise: σ=0.0354 | Time: 329.46s | Mem: 25.2GB
+Step    4 [E1 S  4/125] | BS: 14 | Loss: 0.8190 | Clip: norm=0.047, rate=0.0% | GradNorm: μ=0.218 | Noise: σ=0.0297 | Time: 18.30s | Mem: 25.1GB
+  → Memory snapshot: runs/lv/lv_np_compro.pickle
+Step    6 [E1 S  6/125] | BS: 15 | Loss: 0.9051 | Clip: norm=0.038, rate=6.7% | GradNorm: μ=0.293 | Noise: σ=0.0240 | Time: 334.50s | Mem: 25.2GB
+
+Reached --stop-at-step=6, stopping training.
+
+================================================================================
+Training Complete!
+================================================================================
+Model: Qwen/Qwen2.5-Coder-7B
+Dataset: JetBrains/KStack (2000 train samples)
+
+Training results:
+  Total steps: 6
+  Initial loss: 0.7040
+  Final loss: 0.9051
+  Loss reduction: -28.6%
+
+Adaptive clipping:
+  Initial output max_norm: 0.062
+  Final output max_norm: 0.038
+  Clip norm range: [0.038, 0.062]
+
+Privacy:
+  Target: ε=3.000, δ=2.34e-04 (n=2000)
+  Noise multiplier: 0.6279
+  Final ε (theoretical): 0.9518
+
+Memory profile: runs/lv/lv_np_compro.csv (6 steps), runs/lv/lv_np_compro.timeline.csv (44186 samples)
+
+Performance:
+  Throughput: 0.1 samples/s
+  Steps/s: 0.00
+  Peak memory: 25.66 GB

@@ -343,3 +343,22 @@ verification results for the DP-clipping optimization workstream. Newest last.
   and patches: the isolated failing subset has 60 failures (new) vs 62 (old);
   the extra two old-code failures are flaky timing tests. No new failures.
 - Workspace stopped after GPU work.
+
+## 2026-10-02: kernel and host-overhead targets (outputs/kernel-optimization-targets.md)
+
+- Filed #1123: the clipping-norm underflow decision, with the evidence and the four fix options. #1119 already holds the float16 decision.
+- Kernel-level profiles of full 7B steps (per-step `torch.profiler` hook in `run_train_variant.py`). GPU busy: 51% (eager, mb 2), 33% (model kernels on), 26% (`DPTrainer`). GPU work is about the same in all three (2.1–2.5 s); the rest is host time.
+- Root cause: each custom `autograd.Function` costs about 0.6 ms of host time per call under `vmap(grad)` on the A100 host (75 µs on a Mac), about 20× a plain op. That is why Opake's kernels make the step slower under DP-SGD.
+  - Caching functorch's per-call generated classes is correct (bitwise equal) but saves only 13%.
+  - `torch.library.custom_op` with `register_autograd` fails under `torch.func.grad`.
+- Measured levers (`train_dpsgd.py`, clean baseline 4.86 s):
+  - mb 4: −33%.
+  - Stock PEFT LoRA: −13% at mb 2.
+  - TF32: +2% at mb 2, −6.8% on top of mb 4.
+  - Best: stock PEFT + TF32 + mb 4, 2.92 s (−40%).
+  - `DPTrainer`: mb 4 + stock PEFT is ×2.06 (9.76 → 4.74 s).
+- `torch.compile`: needed `g++` on the workspace (installed). It fails with Opake's PEFT kernels (in-place `addmm_` under Dynamo). With stock PEFT it is ×0.36 of eager in steady state, with a graph break at `_clipped_fun.py:213` and recompiles on batch size. `reduce-overhead` is worse.
+- SDPA backward has no functorch batching rule in torch 2.14 (upstream PR #176265 is open); attention is only about 2% of GPU time here.
+- Hypothesis refuted: class generation is *not* the dominant part of the custom-Function overhead.
+- Blocked: the `pi-subagents` install is missing runner files, so no subagent delegation; the research was done directly.
+- Workspace stopped.

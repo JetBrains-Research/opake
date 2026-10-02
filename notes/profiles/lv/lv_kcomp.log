@@ -1,0 +1,44 @@
+[variant] multi_tensor=False vmap_chunk=0 old=False noforeach=False
+[variant] tf32=False no_peft=False
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+================================================================================
+DP-SGD LoRA Training for Causal Language Models
+================================================================================
+W&B initialized (mode: disabled)
+
+Using device: cuda (NVIDIA A100-SXM4-40GB)
+
+Loading model: Qwen/Qwen2.5-Coder-7B...
+
+Runtime mode:
+  Device: cuda (NVIDIA A100-SXM4-40GB)
+  Dtype: bfloat16 (torch.bfloat16)
+  Kernel optimizations: enabled (explicit kernel patches applied)
+Attention: sdpa (backend=auto)
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 4870.40it/s]
+[After model load] Memory: alloc=14.23GB, peak=14.23GB, free=25.14GB (36.0% used)
+Applying LoRA...
+trainable params: 40,370,176 || all params: 7,655,986,688 || trainable%: 0.5273
+[After LoRA] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Loading dataset: JetBrains/KStack...
+  Split: train
+  Text field: content
+  Streaming source dataset and materializing required subset...
+  Total examples in dataset: 2100
+
+  Sample data (first example):
+    Text length: 11169 chars
+    Preview: /*
+ * Copyright 2010-2015 JetBrains s.r.o.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a...
+
+Preparing 100 eval + 2000 train samples...
+
+Tokenizing (max_seq_len=512)...
+Tokenizing eval:   0%|          | 0/100 [00:00<?, ? examples/s]Tokenizing eval: 100%|██████████| 100/100 [00:00<00:00, 1466.88 examples/s]
+Tokenizing train:   0%|          | 0/2000 [00:00<?, ? examples/s]Tokenizing train:  50%|█████     | 1000/2000 [00:00<00:00, 1670.02 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2155.61 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2050.48 examples/s]
+W1002 12:33:48.467000 5238 torch/_logging/_internal.py:1394] [0/0] Profiler record function <class 'torch.autograd.profiler.record_function'> will be ignored

@@ -1,0 +1,346 @@
+[variant] multi_tensor=False vmap_chunk=0 old=False noforeach=False
+[variant] tf32=False no_peft=False
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+================================================================================
+DP-SGD LoRA Training for Causal Language Models
+================================================================================
+W&B initialized (mode: disabled)
+
+Using device: cuda (NVIDIA A100-SXM4-40GB)
+
+Loading model: Qwen/Qwen2.5-Coder-7B...
+
+Runtime mode:
+  Device: cuda (NVIDIA A100-SXM4-40GB)
+  Dtype: bfloat16 (torch.bfloat16)
+  Kernel optimizations: disabled (--no-kernel-patches)
+Attention: sdpa (backend=auto)
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 5519.81it/s]
+[After model load] Memory: alloc=14.23GB, peak=14.23GB, free=25.14GB (36.0% used)
+Applying LoRA...
+Kernel patches: DISABLED (eager baseline; compat/MoE/PEFT stay on)
+trainable params: 40,370,176 || all params: 7,655,986,688 || trainable%: 0.5273
+[After LoRA] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Loading dataset: JetBrains/KStack...
+  Split: train
+  Text field: content
+  Streaming source dataset and materializing required subset...
+  Total examples in dataset: 2100
+
+  Sample data (first example):
+    Text length: 11169 chars
+    Preview: /*
+ * Copyright 2010-2015 JetBrains s.r.o.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a...
+
+Preparing 100 eval + 2000 train samples...
+
+Tokenizing (max_seq_len=512)...
+Tokenizing eval:   0%|          | 0/100 [00:00<?, ? examples/s]Tokenizing eval: 100%|██████████| 100/100 [00:00<00:00, 1558.55 examples/s]
+Tokenizing train:   0%|          | 0/2000 [00:00<?, ? examples/s]Tokenizing train:  50%|█████     | 1000/2000 [00:00<00:00, 1585.68 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:00<00:00, 2107.90 examples/s]Tokenizing train: 100%|██████████| 2000/2000 [00:01<00:00, 1995.25 examples/s]
+W1002 12:26:30.162000 3471 torch/_logging/_internal.py:1394] [0/0] Profiler record function <class 'torch.autograd.profiler.record_function'> will be ignored
+/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_dynamo/utils.py:4427: UserWarning: There is a performance drop because we have not yet implemented the batching rule for aten::addmm_. Please file us an issue on GitHub so that we can prioritize its implementation. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/functorch/BatchedFallback.cpp:82.)
+  return getattr(args[0], node.target)(*args[1:], **kwargs)  # type: ignore[arg-type]
+Prepared datasets: 2000 train samples, 100 eval samples
+
+Poisson sampling setup:
+  Sampler: poisson
+  Sample rate (per rank): 0.008000
+  Expected global batch size: 16
+  Expected steps per epoch: ~125
+Eval batches: 50
+
+Converting to functional form (LoRA parameters only)...
+  (This may take 1-2 minutes for large models...)
+Trainable parameters: 392 (took 0.0s)
+[After functional conversion] Memory: alloc=14.40GB, peak=14.40GB, free=25.06GB (36.5% used)
+
+Setting up DP-SGD training...
+  Optimizer: adafactor
+  Learning rate: 0.0005
+  Clip norm: 1.0
+  Microbatch size: 2
+  Clipping mode: adaptive
+  Eval steps: 100
+  Epochs: 2
+  Expected total steps: ~250
+
+Calibrating privacy parameters...
+  δ = 2.34e-04 (n=2000)
+  Total steps: 250
+  Sample rate: 0.008000
+  Target: ε=3.0, δ=2.34e-04
+  (This may take 1-3 minutes...)
+
+Calibrated privacy parameters (took 10.8s):
+  Target: ε=3.000, δ=2.3e-04 | Achieved ε≈2.998
+  Noise multiplier: 0.6279 (iterations=14, converged=True)
+
+================================================================================
+Starting training...
+================================================================================
+[Before training] Memory: alloc=14.41GB, peak=14.41GB, free=25.06GB (36.5% used)
+
+Memory profile: phases logged every step; allocation snapshot over steps 3..4 -> runs/lv/lv_comp.csv + .pickle
+  → Step 0 eval: loss=0.7220, ε=0.000
+
+Epoch 1/2
+--------------------------------------------------------------------------------
+Creating poisson sampler...
+Creating DataLoader...
+WARNING: torch.compile(fullgraph=True) failed (Unsupported: Observed exception
+  Explanation: Dynamo found no exception handler at the top-level compiled function when encountering an exception. Exception will propagate outside the compiled region.
+  Hint: Your code may result in an error when running in eager. Please double check that your code doesn't contain a similar error when actually running eager/uncompiled. You can do this by removing the `torch.compile` call, or by using `torch.compiler.set_stance("force_eager")`. 
+  Hint: It may be possible to write Dynamo tracing rules for this code. Please report an issue to PyTorch if you encounter this graph break often and it is causing performance issues.
+
+  Developer debug context: raised exception RuntimeError("Dynamo failed to run FX node with fake tensors: call_method addmm_(*(GradTrackingTensor(lvl=2, value=\n    FakeTensor(..., device='cuda:0', size=(3584, 16))\n), GradTrackingTensor(lvl=2, value=\n    BatchedTensor(lvl=1, bdim=0, value=\n        FakeTensor(..., device='cuda:0', size=(2, 3584, 512))\n    )\n), GradTrackingTensor(lvl=2, value=\n    BatchedTensor(lvl=1, bdim=0, value=\n        FakeTensor(..., device='cuda:0', size=(2, 512, 16))\n    )\n)), **{'alpha': 1.0, 'beta': 0}): got RuntimeError('vmap: aten::addmm_(self, *extra_args) is not possible because there exists a Tensor `other` in extra_args that has more elements than `self`. This happened due to `other` being vmapped over but `self` not being vmapped over at level 1. Please try to use out-of-place operators instead of aten::addmm_. If said operator is being called inside the PyTorch framework, please file a bug report instead.')")
+
+ For more details about this graph break, please visit: https://meta-pytorch.github.io/compile-graph-break-site/gb/gb0088.html
+
+from user code:
+   File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 443, in grad_fn
+    return _grad_fn_impl(*args, state=state, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 505, in _grad_fn_impl
+    result, _ = inner_fn(
+                ^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py", line 357, in grad_fn_wrapper
+    (clipped_grads, aux), returned_state = clipped_grad_fn(
+                                           ^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 989, in stateful_clipped_fn
+    result = clipped_fn(runtime_clipping_norm, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 914, in clipped_fn
+    result, squared_result, aux, stats = _microbatch_accumulate_reduced(
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 288, in _microbatch_accumulate_reduced
+    reduced, markers, squared_reduced, squared_markers, diagnostics = chunk_fn(
+                                                                      ^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 770, in _chunk_kernel
+    outputs = vmapped(kernel_clipping_norm, *chunk_args, **call_kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/apis.py", line 246, in wrapped
+    return vmap_impl(
+           ^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/vmap.py", line 316, in vmap_impl
+    return _flat_vmap(
+           ^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/vmap.py", line 507, in _flat_vmap
+    batched_outputs = func(*batched_inputs, **kwargs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 681, in _per_example_fn
+    value, aux = fun_with_aux(*args_single, **call_kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py", line 292, in grad_fn
+    grad, value_and_aux = grad_and_value_fn(*args, **kwargs)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/apis.py", line 503, in wrapper
+    return eager_transforms.grad_and_value_impl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/torch/checkpoint/saved_tensor_hooks_guard.py", line 45, in dispatch
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/eager_transforms.py", line 1492, in grad_and_value_impl
+    output = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_helpers.py", line 38, in <lambda>
+    return lambda *args, **kwargs: (fun(*args, **kwargs), ())
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "examples/train_dpsgd.py", line 1512, in per_example_loss_fn
+    output = fmodel(merged_params(trainable), input_ids, labels=labels)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 169, in fmodel_dict
+    return torch.func.functional_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_functorch/functional_call.py", line 154, in functional_call
+    return nn.utils.stateless._functional_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/utils/stateless.py", line 279, in _functional_call
+    return module(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 352, in wrapper
+    result = fn(*args_list, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/peft/peft_model.py", line 2120, in forward
+    return self.base_model(
+           ^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/peft/tuners/tuners_utils.py", line 359, in forward
+    return self.model(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/transformers/components/kv_cache.py", line 44, in wrapper
+    return forward_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/functional/__init__.py", line 352, in wrapper
+    result = fn(*args_list, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/utils/generic.py", line 939, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py", line 452, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/utils/output_capturing.py", line 286, in wrapper
+    outputs = func(self, *args, **kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py", line 388, in forward
+    hidden_states = decoder_layer(
+                    ^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/modeling_layers.py", line 109, in __call__
+    return super().__call__(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/transformers/models/qwen2/modeling_qwen2.py", line 282, in forward
+    hidden_states, _ = self.self_attn(
+                       ^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/peft/components/qkv.py", line 122, in forward
+    Q, K, V = self._opake_fused_qkv(hidden_states)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/peft/components/qkv.py", line 67, in _opake_fused_lora_qkv
+    return Opake_LoRA_QKV.apply(
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/kernels/lora.py", line 553, in backward
+    dAq, dBq, dAk, dBk, dAv, dBv = _LoRAQKVBackward.apply(
+                                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/kernels/lora.py", line 325, in forward
+    return _lora_qkv_weight_backward_impl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/kernels/lora.py", line 314, in _lora_qkv_weight_backward_impl
+    dAq, dBq = _adapter_grads(grad_Q_flat, Aq, Bq, Sq)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/packages/opake-patches/src/opake/api/patches/kernels/lora.py", line 309, in _adapter_grads
+    dA.addmm_(X_adapter.t(), grad_Bt, alpha=scaling, beta=0)
+
+Set TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS="+dynamo"
+); falling back to fullgraph=False.W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1] Graph break from `Tensor.item()`, consider setting:
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     torch._dynamo.config.capture_scalar_outputs = True
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1] or:
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     env TORCHDYNAMO_CAPTURE_SCALAR_OUTPUTS=1
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1] to include these operations in the captured graph.
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1] 
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1] Graph break: from user code at:
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 443, in grad_fn
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     return _grad_fn_impl(*args, state=state, **kwargs)
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-dpsgd/src/opake/api/dpsgd/clipping/_adaptive.py", line 505, in _grad_fn_impl
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     result, _ = inner_fn(
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]                 ^^^^^^^^^
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_grad.py", line 357, in grad_fn_wrapper
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     (clipped_grads, aux), returned_state = clipped_grad_fn(
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]                                            ^^^^^^^^^^^^^^^^
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 989, in stateful_clipped_fn
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     result = clipped_fn(runtime_clipping_norm, *args, **kwargs)
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 834, in clipped_fn
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     kernel_clipping_norm = _prepare_kernel_clipping_norm(
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 248, in _prepare_kernel_clipping_norm
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     return _conservative_bound_tensor(clipping_norm, tensor.device)
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]   File "/home/mihajlolinic/opaque/packages/opake-engine/src/opake/api/engine/clipping/_clipped_fun.py", line 213, in _conservative_bound_tensor
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]     if bound.item() > exact:
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1]        ^^^^^^^^^^^^^^^^^^^^^
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1] 
+W1002 12:27:23.746000 3471 torch/_dynamo/variables/tensor.py:1841] [0/1] 
+
+Traceback (most recent call last):
+  File "/home/mihajlolinic/opaque/experiments/clip_fused/run_train_variant.py", line 128, in <module>
+    runpy.run_path(script, run_name="__main__")
+  File "<frozen runpy>", line 291, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "examples/train_dpsgd.py", line 2317, in <module>
+    exit(main())
+         ^^^^^^
+  File "examples/train_dpsgd.py", line 2049, in main
+    (grads_tuple, aux), clip_state = grad_fn(
+                                     ^^^^^^^^
+  File "examples/train_dpsgd.py", line 139, in wrapper
+    return fallback[0](*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_dynamo/eval_frame.py", line 1278, in compile_wrapper
+    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/compile_fx.py", line 1192, in _compile_fx_inner
+    raise InductorError(e, currentframe()).with_traceback(
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/compile_fx.py", line 1169, in _compile_fx_inner
+    mb_compiled_graph = fx_codegen_and_compile(
+                        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/compile_fx.py", line 2001, in fx_codegen_and_compile
+    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/compile_fx.py", line 1749, in codegen_and_compile
+    compiled_module = graph.compile_to_module()
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/graph.py", line 3060, in compile_to_module
+    return self._compile_to_module()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/graph.py", line 3066, in _compile_to_module
+    self.codegen_with_cpp_wrapper() if self.cpp_wrapper else self.codegen()
+                                                             ^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/graph.py", line 3002, in codegen
+    self.scheduler.codegen()
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/scheduler.py", line 10015, in codegen
+    self._codegen_partitions()
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/scheduler.py", line 10167, in _codegen_partitions
+    self._codegen(partition)
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/scheduler.py", line 10363, in _codegen
+    self.get_backend(device).codegen_node(node)
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/codegen/cpp.py", line 5908, in codegen_node
+    cpp_kernel_proxy = self.kernel_proxy_cls(kernel_group)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/codegen/cpp.py", line 4396, in __init__
+    self.picked_vec_isa: cpu_vec_isa.VecISA = cpu_vec_isa.pick_vec_isa()
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 675, in pick_vec_isa
+    _valid_vec_isa_list: list[VecISA] = valid_vec_isa_list()
+                                        ^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 662, in valid_vec_isa_list
+    isa_list.extend(
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 662, in <genexpr>
+    isa_list.extend(
+                   ^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 402, in __bool__
+    if super().__bool__():
+       ^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 342, in __bool__
+    if super().__bool__():
+       ^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 232, in __bool__
+    return self.__bool__impl(config.cpp.vec_isa_ok)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 242, in __bool__impl
+    return self.check_build(VecISA._avx_code)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 196, in check_build
+    extra=_get_isa_dry_compile_fingerprint(self.build_arch_flags()),
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpu_vec_isa.py", line 30, in _get_isa_dry_compile_fingerprint
+    compiler_info = get_compiler_version_info(get_cpp_compiler())
+                                              ^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpp_builder.py", line 437, in get_cpp_compiler
+    compiler = cpp_compiler_search(search)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mihajlolinic/opaque/.venv/lib/python3.11/site-packages/torch/_inductor/cpp_builder.py", line 146, in cpp_compiler_search
+    raise exc.InvalidCxxCompiler
+torch._inductor.exc.InductorError: InvalidCxxCompiler: No working C++ compiler found in torch._inductor.config.cpp.cxx: (None, 'g++')
+
+Set TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS="+dynamo"
+
