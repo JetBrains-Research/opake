@@ -346,8 +346,12 @@ def _resolve_model_dtype(
     )
 
 
-def _kernel_mode_summary(device: torch.device, dtype_name: str) -> tuple[str, str]:
+def _kernel_mode_summary(
+    device: torch.device, dtype_name: str, kernel_patches: bool = True
+) -> tuple[str, str]:
     """Return concise status of kernel optimization mode for this run."""
+    if not kernel_patches:
+        return "disabled", "--no-kernel-patches"
     if os.environ.get("OPAKE_NO_PATCH", "0") == "1":
         return "disabled", "OPAKE_NO_PATCH=1"
 
@@ -372,9 +376,12 @@ def _print_runtime_mode_report(
     dtype_name: str,
     dtype: torch.dtype,
     dtype_warning: str | None,
+    kernel_patches: bool = True,
 ) -> None:
     """Print active runtime mode so fallback behavior is explicit."""
-    kernel_mode, kernel_reason = _kernel_mode_summary(device, dtype_name)
+    kernel_mode, kernel_reason = _kernel_mode_summary(
+        device, dtype_name, kernel_patches
+    )
 
     print("\nRuntime mode:")
     print(f"  Device: {device} ({device_label})")
@@ -1208,7 +1215,7 @@ def main():
     dtype_name, torch_dtype, dtype_warning = _resolve_model_dtype(args.dtype, device)
     args.dtype = dtype_name
     _print_runtime_mode_report(
-        device, device_name, dtype_name, torch_dtype, dtype_warning
+        device, device_name, dtype_name, torch_dtype, dtype_warning, args.kernel_patches
     )
 
     # Load model
