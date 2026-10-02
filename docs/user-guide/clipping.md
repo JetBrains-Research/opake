@@ -178,9 +178,10 @@ See [Memory Optimizations](memory-optimizations.md) for details.
 ## Fused Triton backend
 
 On CUDA, `clip_backend="triton"` replaces the per-leaf PyTorch operations of
-the clip-and-sum with two fused kernels per parameter tensor, and never
-materializes clipped copies of the per-example gradients. The mechanism is
-unchanged:
+the clip-and-sum with a few fused kernels per call. Each kernel processes every
+parameter tensor of one dtype, so the number of launches does not grow with the
+number of tensors. The backend never materializes clipped copies of the
+per-example gradients. The mechanism is unchanged:
 
 - per-example norms, clipping scales and `norm(clipped) <= clipping_norm` on
   the stored values are computed exactly as on the PyTorch path;
@@ -209,7 +210,8 @@ use the PyTorch path), and support:
 
 - fixed or adaptive clipping with a scalar threshold (`adaptive_clipped_grad`
   forwards `clip_backend`);
-- float32 and bfloat16 gradients, with or without microbatching and diagnostics.
+- float32 and bfloat16 gradients on a single CUDA device, with or without
+  microbatching and diagnostics.
 
 Per-group thresholds, AUTO-S, `second_moment`, an explicit `compute_dtype`,
 float16 or float64 gradients, and compiled microbatch kernels use the PyTorch

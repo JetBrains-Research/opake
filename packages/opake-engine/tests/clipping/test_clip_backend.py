@@ -251,3 +251,96 @@ def test_clipped_grad_with_triton_matches_torch(microbatch_size):
         rtol=1e-5,
         atol=1e-7,
     )
+
+
+def _many_leaf_tree(batch, n_leaves, seed, *, mixed=False, noncontiguous=False):
+    """``n_leaves`` tensors of varied sizes, some spanning several 2048-tiles."""
+    gen = torch.Generator().manual_seed(seed)
+    sizes = [(3, 5), (2049,), (64, 70), (1,), (7, 300), (4100,)]
+    tree = {}
+    for i in range(n_leaves):
+        dtype = torch.bfloat16 if (mixed and i % 2) else torch.float32
+        value = torch.randn(batch, *sizes[i % len(sizes)], generator=gen) * 0.05
+        value = value.to(device="cuda", dtype=dtype)
+        if noncontiguous and value.dim() == 3:
+            value = value.transpose(1, 2).contiguous().transpose(1, 2)
+        tree[f"p{i}"] = value
+    return tree
+
+
+@pytest.mark.cuda
+@requires_fused
+@pytest.mark.parametrize("mixed", [False, True], ids=["fp32", "mixed"])
+def test_fused_many_tensors_match_torch(mixed, monkeypatch):
+    tree = _many_leaf_tree(5, 23, seed=3, mixed=mixed, noncontiguous=True)
+    assert any(not v.is_contiguous() for v in tree.values())
+    kwargs = {"clipping_norm": 1.0, "return_aux": True}
+    (expected, expected_aux) = _clip("torch", tree, **kwargs)
+    calls = _spy_fused(monkeypatch)
+    (actual, actual_aux) = _clip("triton", tree, **kwargs)
+    assert calls, "the fused kernels did not run"
+    torch.testing.assert_close(actual_aux.norms, expected_aux.norms, rtol=1e-6, atol=0)
+    for key in tree:
+        assert actual.pytree[key].shape == expected.pytree[key].shape
+        torch.testing.assert_close(actual.pytree[key], expected.pytree[key])
+
+
+@pytest.mark.cuda
+@requires_fused
+@pytest.mark.parametrize("mixed", [False, True], ids=["fp32", "mixed"])
+def test_fused_many_tensors_respect_the_bound(mixed):
+    tree = _many_leaf_tree(1, 23, seed=4, mixed=mixed)
+    norm = _stored_norm(tree)
+    tree = {k: (v.double() * (1.0001 / norm)).to(v.dtype) for k, v in tree.items()}
+    out = _clip("triton", tree, clipping_norm=1.0)
+    assert _stored_norm(out.pytree) <= 1.0
+
+
+def _cuda_kernels_per_call(fn, tree, state):
+    fn(tree, state=state)  # warm-up: compile and cache the tile plan
+    torch.cuda.synchronize()
+    activity = [torch.profiler.ProfilerActivity.CUDA]
+    with torch.profiler.profile(activities=activity) as prof:
+        fn(tree, state=state)
+        torch.cuda.synchronize()
+    cuda = torch.autograd.DeviceType.CUDA
+    return sum(1 for e in prof.events() if e.device_type == cuda)
+
+
+@pytest.mark.cuda
+@requires_fused
+@pytest.mark.parametrize("mixed", [False, True], ids=["fp32", "mixed"])
+def test_fused_launches_do_not_grow_with_the_number_of_tensors(mixed):
+    counts = []
+    for n_leaves in (6, 60):
+        fn, state = clipped_fun(
+            lambda v: v,
+            batch_argnums=0,
+            clip_backend="triton",
+            clipping_norm=1.0,
+            return_aux=True,
+        )
+        tree = _many_leaf_tree(4, n_leaves, seed=5, mixed=mixed)
+        counts.append(_cuda_kernels_per_call(fn, tree, state))
+    assert counts[0] == counts[1], counts
+
+
+@pytest.mark.cuda
+@requires_fused
+@pytest.mark.skipif(torch.cuda.device_count() < 2, reason="needs two CUDA devices")
+def test_fused_rejects_trees_across_devices():
+    tree = {
+        "a": torch.randn(4, 8, device="cuda:0"),
+        "b": torch.randn(4, 8, device="cuda:1"),
+    }
+    with pytest.raises(ConfigurationError, match="more than one device"):
+        _clip("triton", tree, clipping_norm=1.0)
+
+
+@pytest.mark.cuda
+@requires_fused
+def test_fused_tile_plan_cache_is_bounded():
+    module = importlib.import_module("opake.api.engine.kernels._clip_sum")
+    for width in range(1, module._MAX_PLANS + 6):
+        _clip("triton", {"w": torch.randn(2, width, device="cuda")}, clipping_norm=1.0)
+    assert len(module._PLANS) <= module._MAX_PLANS
