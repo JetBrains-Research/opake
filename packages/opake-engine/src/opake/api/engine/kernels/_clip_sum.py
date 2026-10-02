@@ -376,22 +376,40 @@ def fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=None)
     return reduced, norm, post_sq, acc_dtype
 
 
-_CAPTURED_TABLES: list = []
+_ARENA_SLOTS = 1 << 16  # int64 addresses in the pinned staging arena (512 KiB)
+_ARENA: dict = {"buffer": None, "used": 0}
 
 
 def _pointer_table(addresses, device):
     """Tensor addresses as an int64 device tensor.
 
-    While a CUDA graph is being captured the upload goes through pinned host
-    memory, because pageable host-to-device copies cannot be captured. The
-    graph re-reads that host buffer on every replay, so it is kept alive for
-    the life of the process; the addresses it holds are the graph's static
-    tensors, which are the same on every replay.
+    While a CUDA graph is being captured, pageable host-to-device copies are
+    not allowed, and pinned allocations would enter the capture's host-memory
+    bookkeeping. The upload therefore goes through a slice of a pinned arena
+    that the first eager call allocates. The graph re-reads its slice on every
+    replay, so slices are never reused; the addresses they hold are the graph's
+    static tensors, which are the same on every replay.
     """
     if torch.cuda.is_current_stream_capturing():
-        host = torch.tensor(addresses, dtype=torch.int64).pin_memory()
-        _CAPTURED_TABLES.append(host)
-        return host.to(device=device, non_blocking=True)
+        arena, used = _ARENA["buffer"], _ARENA["used"]
+        if arena is None or used + len(addresses) > arena.numel():
+            raise RuntimeError(
+                *(
+                    "fused clip pointer arena "
+                    + (
+                        "not allocated: run one eager call before capturing"
+                        if arena is None
+                        else "exhausted"
+                    )
+                    + ".",
+                )
+            )
+        view = arena[used : used + len(addresses)]
+        view.copy_(torch.tensor(addresses, dtype=torch.int64))
+        _ARENA["used"] = used + len(addresses)
+        return view.to(device=device, non_blocking=True)
+    if _ARENA["buffer"] is None:
+        _ARENA["buffer"] = torch.empty(_ARENA_SLOTS, dtype=torch.int64, pin_memory=True)
     return torch.tensor(addresses, dtype=torch.int64, device=device)
 
 
