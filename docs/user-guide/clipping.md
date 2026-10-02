@@ -183,10 +183,12 @@ parameter tensor of one dtype, so the number of launches does not grow with the
 number of tensors. The backend never materializes clipped copies of the
 per-example gradients. The mechanism is unchanged:
 
-- per-example norms, clipping scales and `norm(clipped) <= clipping_norm` on
-  the stored values are computed exactly as on the PyTorch path;
-- only the rounding of the batch sum can differ in the last bits, because the
-  examples are added in a different order.
+- per-example norms are accumulated in float64 as on the PyTorch path, and the
+  clipping scales and the guarantee `norm(clipped) <= clipping_norm` on the
+  stored values come from the same code;
+- results can differ in the last bits only through summation order: of the
+  batch sum, of the norm accumulation, and of the `clipped_norms` diagnostic.
+  The stored-value guarantee holds for any order.
 
 ```python
 grad_fn, state = clipped_grad(

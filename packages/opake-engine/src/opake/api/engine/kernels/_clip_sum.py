@@ -27,10 +27,17 @@ Semantics match the streaming path:
   float32 storage). Contributions are summed over the batch in float32.
 * ``clipped_norms`` diagnostics are computed from the stored values.
 
-Results differ from the streaming path only in the rounding of the batch sum:
-examples are added in a fixed order ``b = 0..B-1``, unlike ``torch.sum``'s
-reduction order, and for float32 tensors the compiler may fuse scale and add
-into one FMA. Per-example norms, scales and stored values are unchanged.
+Results can differ from the streaming path only in summation order:
+
+* the batch sum adds examples in a fixed order ``b = 0..B-1``, unlike
+  ``torch.sum``'s reduction order, and for float32 tensors the compiler may
+  fuse scale and add into one FMA;
+* the float64 norm accumulation and the ``clipped_norms`` diagnostic add their
+  terms in a different order. ``_norm_roundoff`` bounds the norm's rounding
+  for any order, so the stored-value bound holds regardless.
+
+Scales and stored values follow from the norms through the same code as the
+streaming path.
 
 The reduced tensors of one storage dtype are views into one flat buffer.
 
