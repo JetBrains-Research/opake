@@ -249,10 +249,8 @@ except ModuleNotFoundError as import_error:
     def _require_frozen_qkv_biases(*biases):
         if any(bias is not None and bias.requires_grad for bias in biases):
             raise ConfigurationError(
-                *(
-                    "opake_lora_qkv requires frozen Q/K/V base biases; "
-                    "use the unfused projection path for trainable biases.",
-                )
+                "opake_lora_qkv requires frozen Q/K/V base biases; "
+                "use the unfused projection path for trainable biases."
             )
 
     def opake_lora_qkv(  # noqa: PLR0913, PLR0917
@@ -349,7 +347,7 @@ except ModuleNotFoundError as import_error:
         elif activation in (ACTIVATION_GEGLU_APPROX, "geglu_approx"):
             hidden = opake_geglu_approx(gate, up)
         else:
-            raise ConfigurationError(*(f"Unknown activation: {activation}",))
+            raise ConfigurationError(f"Unknown activation: {activation}")
 
         return hidden @ Wd.transpose(-1, -2) + (hidden @ Ad @ Bd) * Sd
 
@@ -397,7 +395,7 @@ except ModuleNotFoundError as import_error:
             inv = torch.rsqrt(ms + eps_t)
             normed = x2 * inv
         else:
-            raise ConfigurationError(*(casting_mode,))
+            raise ConfigurationError(casting_mode)
         out = normed * (weight + offset)
         return out.view(orig)
 

@@ -73,7 +73,7 @@ def _blt_optimize_cached(
 ) -> BufferedToeplitz:
     """Run BLT L-BFGS for the given recipe + amplification context."""
     if n_steps < 1:
-        raise ConfigurationError(*(f"n_steps must be >= 1, got {n_steps}",))
+        raise ConfigurationError(f"n_steps must be >= 1, got {n_steps}")
     lr = torch.tensor(lr_key, dtype=torch.float64) if lr_key is not None else None
     workload_coef = _momentum_workload_coef(momentum, n_steps)
     return _blt_optimize(
@@ -135,10 +135,10 @@ class BltStrategy:
     def __post_init__(self) -> None:
         if self.max_buffers < 1:
             raise ConfigurationError(
-                *(f"max_buffers must be >= 1, got {self.max_buffers}",)
+                f"max_buffers must be >= 1, got {self.max_buffers}"
             )
         if self.momentum < 0:
-            raise ConfigurationError(*(f"momentum must be >= 0, got {self.momentum}",))
+            raise ConfigurationError(f"momentum must be >= 0, got {self.momentum}")
 
     def _blt(
         self, *, n_steps: int, min_sep: int, max_participations: int | None

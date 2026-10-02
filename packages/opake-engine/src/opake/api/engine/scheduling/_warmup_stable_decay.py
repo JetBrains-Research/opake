@@ -72,23 +72,17 @@ def warmup_stable_decay(
     """
     if num_warmup_steps <= 0:
         raise ConfigurationError(
-            *(
-                f"warmup_stable_decay requires num_warmup_steps > 0; "
-                f"got {num_warmup_steps}.",
-            )
+            f"warmup_stable_decay requires num_warmup_steps > 0; "
+            f"got {num_warmup_steps}."
         )
     if num_stable_steps < 0:
         raise ConfigurationError(
-            *(
-                f"warmup_stable_decay requires num_stable_steps >= 0; "
-                f"got {num_stable_steps}.",
-            )
+            f"warmup_stable_decay requires num_stable_steps >= 0; "
+            f"got {num_stable_steps}."
         )
     if num_decay_steps <= 0:
         raise ConfigurationError(
-            *(
-                f"warmup_stable_decay requires num_decay_steps > 0; got {num_decay_steps}.",
-            )
+            f"warmup_stable_decay requires num_decay_steps > 0; got {num_decay_steps}."
         )
     # Validate named ramps/decays at construction.
     resolve_ramp(warmup_ramp, field="warmup_ramp")

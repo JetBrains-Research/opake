@@ -59,30 +59,24 @@ class MfGaussian(DpProcess):
     def __post_init__(self) -> None:
         if self.noise_multiplier < 0:
             raise ConfigurationError(
-                *(
-                    f"noise_multiplier must be non-negative, got {self.noise_multiplier}",
-                )
+                f"noise_multiplier must be non-negative, got {self.noise_multiplier}"
             )
         if self.n_steps is not None and self.n_steps < 1:
-            raise ConfigurationError(*(f"n_steps must be >= 1, got {self.n_steps}",))
+            raise ConfigurationError(f"n_steps must be >= 1, got {self.n_steps}")
         if self.min_sep < 1:
-            raise ConfigurationError(*(f"min_sep must be >= 1, got {self.min_sep}",))
+            raise ConfigurationError(f"min_sep must be >= 1, got {self.min_sep}")
         if self.max_participations is not None and self.max_participations < 1:
             raise ConfigurationError(
-                *(
-                    f"max_participations must be >= 1 or None, got {self.max_participations}",
-                )
+                f"max_participations must be >= 1 or None, got {self.max_participations}"
             )
 
     @property
     def _bare_n_steps(self) -> int:
         if self.n_steps is None:
             raise ConfigurationError(
-                *(
-                    "Bare MfGaussian accounting requires explicit n_steps. "
-                    "Supply the release horizon, or wrap the recipe in a "
-                    "DP-FTRL amplifier.",
-                )
+                "Bare MfGaussian accounting requires explicit n_steps. "
+                "Supply the release horizon, or wrap the recipe in a "
+                "DP-FTRL amplifier."
             )
         return self.n_steps
 

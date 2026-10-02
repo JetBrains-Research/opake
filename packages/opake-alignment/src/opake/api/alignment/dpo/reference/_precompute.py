@@ -101,14 +101,14 @@ def _canonical_identity_value(value: Any, path: str = "cache_identity") -> Any:
         return value
     if isinstance(value, float):
         if not math.isfinite(value):
-            raise ConfigurationError(*(f"{path} contains a non-finite float",))
+            raise ConfigurationError(f"{path} contains a non-finite float")
         return value
     if isinstance(value, Mapping):
         normalized: dict[str, Any] = {}
         for key, item in value.items():
             if not isinstance(key, str):
                 raise InputTypeError(
-                    *(f"{path} mapping keys must be strings, got {type(key)!r}",)
+                    f"{path} mapping keys must be strings, got {type(key)!r}"
                 )
             normalized[key] = _canonical_identity_value(item, f"{path}.{key}")
         return normalized
@@ -118,10 +118,8 @@ def _canonical_identity_value(value: Any, path: str = "cache_identity") -> Any:
             for index, item in enumerate(value)
         ]
     raise InputTypeError(
-        *(
-            f"{path} contains unsupported value {type(value)!r}; use only JSON-like "
-            "scalars, string-keyed mappings, and sequences",
-        )
+        f"{path} contains unsupported value {type(value)!r}; use only JSON-like "
+        "scalars, string-keyed mappings, and sequences"
     )
 
 
@@ -138,9 +136,7 @@ def _cache_fingerprint(
     dataset_id = _dataset_fingerprint(dataset)
     if dataset_id is None:
         raise ConfigurationError(
-            *(
-                "dataset must expose a deterministic `_fingerprint` for reference caching",
-            )
+            "dataset must expose a deterministic `_fingerprint` for reference caching"
         )
     payload = {
         "version": _CACHE_FINGERPRINT_VERSION,
@@ -222,7 +218,7 @@ def _secure_cache_path(path: str) -> None:
         if cache_file.exists():
             cache_file.chmod(0o600)
     except PermissionError as error:
-        raise PermissionError(  # noqa: TRY003 - preserve standard Python error contract
+        raise PermissionError(
             f"cannot secure reference-logprob cache directory {cache_dir}; "
             "pass a private writable cache_dir or set use_cache=False"
         ) from error
@@ -257,11 +253,9 @@ def _resolve_sharding(shard: bool | None) -> bool:
         return is_distributed()
     if shard and not is_distributed():
         raise OperationError(
-            *(
-                "shard=True requires an initialised process group; call "
-                "torch.distributed.init_process_group first, or pass shard=None "
-                "to shard only when one is live.",
-            )
+            "shard=True requires an initialised process group; call "
+            "torch.distributed.init_process_group first, or pass shard=None "
+            "to shard only when one is live."
         )
     return shard
 
@@ -333,11 +327,9 @@ def _gather_columns(
         rows = int(gathered[name].shape[0])
         if rows != expected_rows:
             raise OperationError(
-                *(
-                    f"reference column {name!r} yielded {rows} values for a dataset "
-                    f"of {expected_rows} examples; either `ref` did not return one "
-                    "value per row, or the ranks disagree on the dataset",
-                )
+                f"reference column {name!r} yielded {rows} values for a dataset "
+                f"of {expected_rows} examples; either `ref` did not return one "
+                "value per row, or the ranks disagree on the dataset"
             )
     return gathered
 
@@ -421,10 +413,8 @@ def compute_ref_logprobs_for_dataset(
         assert_string_equal(dataset_id, name="reference precompute dataset fingerprint")
         if dataset_id is None:
             raise ConfigurationError(
-                *(
-                    "dataset must expose a deterministic `_fingerprint` for "
-                    "distributed reference precomputation",
-                )
+                "dataset must expose a deterministic `_fingerprint` for "
+                "distributed reference precomputation"
             )
 
     path: str | None = None

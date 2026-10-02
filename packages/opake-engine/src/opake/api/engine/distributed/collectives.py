@@ -46,9 +46,7 @@ def _resolve_op(op: str):
         )
     if op not in _OP_MAP:
         raise ConfigurationError(
-            *(
-                f"Invalid reduction operation: {op}. Must be one of: {list(_OP_MAP.keys())}",
-            )
+            f"Invalid reduction operation: {op}. Must be one of: {list(_OP_MAP.keys())}"
         )
     return _OP_MAP[op]
 
@@ -63,10 +61,8 @@ def all_reduce_(tensor: torch.Tensor, op: str = "sum") -> None:
     reduce_op = _resolve_op(op)
     if not is_distributed():
         raise OperationError(
-            *(
-                "torch.distributed is not initialized. "
-                "Call torch.distributed.init_process_group() first.",
-            )
+            "torch.distributed is not initialized. "
+            "Call torch.distributed.init_process_group() first."
         )
     dist.all_reduce(tensor, op=reduce_op)
 

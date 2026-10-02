@@ -57,9 +57,9 @@ class SequentialBatchSampler(Sampler):
         super().__init__()
 
         if len(data_source) == 0:
-            raise ConfigurationError(*("data_source must not be empty",))
+            raise ConfigurationError("data_source must not be empty")
         if batch_size < 1:
-            raise ConfigurationError(*(f"batch_size must be >= 1, got {batch_size}",))
+            raise ConfigurationError(f"batch_size must be >= 1, got {batch_size}")
 
         self.data_source: Sized = data_source
         self._num_samples = len(data_source)
@@ -68,23 +68,17 @@ class SequentialBatchSampler(Sampler):
 
         if n_steps is not None:
             if n_steps < 1:
-                raise ConfigurationError(
-                    *(f"n_steps must be >= 1 or None, got {n_steps}",)
-                )
+                raise ConfigurationError(f"n_steps must be >= 1 or None, got {n_steps}")
             if self._num_batches == 0:
                 raise ConfigurationError(
-                    *(
-                        f"batch_size ({batch_size}) exceeds dataset size "
-                        f"({self._num_samples}); no complete batch to cycle.",
-                    )
+                    f"batch_size ({batch_size}) exceeds dataset size "
+                    f"({self._num_samples}); no complete batch to cycle."
                 )
             if n_steps % self._num_batches != 0:
                 raise ConfigurationError(
-                    *(
-                        f"n_steps ({n_steps}) must be a positive multiple of the "
-                        f"per-pass batch count ({self._num_batches}); a partial "
-                        "final pass would make participation counts non-uniform.",
-                    )
+                    f"n_steps ({n_steps}) must be a positive multiple of the "
+                    f"per-pass batch count ({self._num_batches}); a partial "
+                    "final pass would make participation counts non-uniform."
                 )
         self.n_steps = n_steps
         self._consumed = 0
@@ -159,13 +153,11 @@ def _from_state_dict_sequential(
     template_n = len(template.data_source)
     if saved_n != template_n:
         raise ConfigurationError(
-            *(
-                f"SequentialBatchSampler.from_state_dict: template dataset "
-                f"length {template_n} does not match snapshot "
-                f"num_samples={saved_n}.  Restoring with a differently-sized "
-                "dataset would silently expose / skip different indices after "
-                "resume.",
-            )
+            f"SequentialBatchSampler.from_state_dict: template dataset "
+            f"length {template_n} does not match snapshot "
+            f"num_samples={saved_n}.  Restoring with a differently-sized "
+            "dataset would silently expose / skip different indices after "
+            "resume."
         )
     sampler = SequentialBatchSampler(
         template.data_source,

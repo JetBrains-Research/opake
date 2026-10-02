@@ -62,10 +62,10 @@ _TORCH_TO_TRITON_DTYPES = {
 def _casting_mode_int(casting_mode: str | int) -> int:
     if isinstance(casting_mode, int):
         if casting_mode not in _STR_TO_CASTING.values():
-            raise ConfigurationError(*(f"Invalid casting_mode int: {casting_mode}",))
+            raise ConfigurationError(f"Invalid casting_mode int: {casting_mode}")
         return casting_mode
     if casting_mode not in _STR_TO_CASTING:
-        raise ConfigurationError(*(f"Invalid casting_mode: {casting_mode}",))
+        raise ConfigurationError(f"Invalid casting_mode: {casting_mode}")
     return _STR_TO_CASTING[casting_mode]
 
 
@@ -535,12 +535,12 @@ def _rms_norm_backward_triton(
 
     if n_cols > BLOCK_SIZE:
         raise OperationError(
-            *(f"RMSNorm hidden dim {n_cols} exceeds fused block limit {BLOCK_SIZE}.",)
+            f"RMSNorm hidden dim {n_cols} exceeds fused block limit {BLOCK_SIZE}."
         )
 
     has_weight = W is not None
     if compute_dw and not has_weight:
-        raise OperationError(*("Cannot compute an RMSNorm weight gradient without W.",))
+        raise OperationError("Cannot compute an RMSNorm weight gradient without W.")
     if X.device.type == "cuda":
         sm_count = torch.cuda.get_device_properties(X.device).multi_processor_count
     else:
@@ -654,11 +654,11 @@ class _RMSNormBackward(torch.autograd.Function):
         del info
         dy_b, x_b, w_b, r_b, *static_dims = in_dims
         if any(dim is not None for dim in static_dims):
-            raise ConfigurationError(*("RMSNorm metadata must not be vmapped",))
+            raise ConfigurationError("RMSNorm metadata must not be vmapped")
         if w_b is not None:
-            raise ConfigurationError(*("W must not be vmapped",))
+            raise ConfigurationError("W must not be vmapped")
         if dy_b != 0 or x_b != 0 or r_b != 0:
-            raise ConfigurationError(*("dY, X, RSTD must be vmapped at dim 0",))
+            raise ConfigurationError("dY, X, RSTD must be vmapped at dim 0")
 
         H = X.shape[-1]
         head = dY.shape[:-1]
@@ -779,13 +779,9 @@ class Opake_RMSNorm(torch.autograd.Function):
         del info
         x_b, w_b = in_dims[0], in_dims[1]
         if w_b is not None:
-            raise ConfigurationError(
-                *("Opake_RMSNorm vmap: weight must not be batched",)
-            )
+            raise ConfigurationError("Opake_RMSNorm vmap: weight must not be batched")
         if x_b != 0:
-            raise ConfigurationError(
-                *("Opake_RMSNorm vmap: X must be vmapped at dim 0",)
-            )
+            raise ConfigurationError("Opake_RMSNorm vmap: X must be vmapped at dim 0")
         cm = _casting_mode_int(casting_mode)
         shape = X.shape
         H = shape[-1]
@@ -817,7 +813,7 @@ def opake_rms_norm(
 ) -> torch.Tensor:
     """Public API: fused RMSNorm (CUDA only when Triton path is used)."""
     if not x.is_cuda:
-        raise OperationError(*("opake_rms_norm Triton path requires CUDA",))
+        raise OperationError("opake_rms_norm Triton path requires CUDA")
     x, weight = follow_autocast(x, weight)
     normalized, _, _ = Opake_RMSNorm.apply(
         x,

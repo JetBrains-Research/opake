@@ -150,10 +150,8 @@ def apply_transformers_model_patches(
             (dropout_explicit and dropout) or (batchify_explicit and batchify)
         ):
             raise ConfigurationError(
-                *(
-                    "opake: compatibility/dropout/batchify patches require a registered "
-                    f"transformers family; got {family!r} ({type(model).__name__})",
-                )
+                "opake: compatibility/dropout/batchify patches require a registered "
+                f"transformers family; got {family!r} ({type(model).__name__})"
             )
         logger.warning(
             "opake: no registered apply function for model family %s; "

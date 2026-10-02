@@ -272,6 +272,30 @@ jobs:
       pr-mode: true
     secrets: inherit
 
+  qodana-gate:
+    name: Qodana gate
+    if: ${{ always() }}
+    needs: [qodana]
+    permissions: {}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Qodana result
+        env:
+          ACTUAL_RESULT: ${{ needs.qodana.result }}
+          EXPECTED_RESULT: >-
+            ${{
+              !github.event.pull_request.draft &&
+              github.event.pull_request.user.login != 'dependabot[bot]' &&
+              github.event.pull_request.head.repo.full_name == github.repository &&
+              'success' || 'skipped'
+            }}
+        shell: bash
+        run: |
+          if [[ "$ACTUAL_RESULT" != "$EXPECTED_RESULT" ]]; then
+            echo "::error::Expected Qodana result $EXPECTED_RESULT, got $ACTUAL_RESULT"
+            exit 1
+          fi
+
   docs:
     name: Build documentation
     runs-on: ubuntu-latest

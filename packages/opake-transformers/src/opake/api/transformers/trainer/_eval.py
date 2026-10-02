@@ -742,9 +742,9 @@ def _concat_tensor_chunks(
     first = chunks[0]
     for tensor in chunks[1:]:
         if tensor.dtype != first.dtype or tensor.device != first.device:
-            raise TypeError("Evaluation tensor chunks must share dtype and device.")  # noqa: TRY003
+            raise TypeError("Evaluation tensor chunks must share dtype and device.")
         if tensor.ndim != first.ndim or tensor.shape[2:] != first.shape[2:]:
-            raise ValueError("Evaluation tensor chunks have incompatible shapes.")  # noqa: TRY003
+            raise ValueError("Evaluation tensor chunks have incompatible shapes.")
 
     output_shape = list(first.shape)
     output_shape[0] = sum(tensor.shape[0] for tensor in chunks)
@@ -772,19 +772,19 @@ def _concat_nested_chunks(
     padding_value: int | float = _HF_PAD_VALUE,
 ) -> Any:
     if not tensors:
-        raise ValueError("Cannot concatenate an empty evaluation chunk list.")  # noqa: TRY003
+        raise ValueError("Cannot concatenate an empty evaluation chunk list.")
     if len(tensors) == 1:
         return tensors[0]
     first = tensors[0]
     if isinstance(first, Tensor):
         if not all(isinstance(tensor, Tensor) for tensor in tensors):
-            raise TypeError("Evaluation chunks must have matching nested structures.")  # noqa: TRY003
+            raise TypeError("Evaluation chunks must have matching nested structures.")
         return _concat_tensor_chunks(tensors, padding_value=padding_value)
     if isinstance(first, (tuple, list)):
         if not all(type(tensor) is type(first) for tensor in tensors):
-            raise TypeError("Evaluation chunks must have matching nested structures.")  # noqa: TRY003
+            raise TypeError("Evaluation chunks must have matching nested structures.")
         if not all(len(tensor) == len(first) for tensor in tensors):
-            raise ValueError("Evaluation chunk sequences must have matching lengths.")  # noqa: TRY003
+            raise ValueError("Evaluation chunk sequences must have matching lengths.")
         return type(first)(
             _concat_nested_chunks(
                 [tensor[index] for tensor in tensors],
@@ -794,11 +794,11 @@ def _concat_nested_chunks(
         )
     if isinstance(first, Mapping):
         if not all(type(tensor) is type(first) for tensor in tensors):
-            raise TypeError("Evaluation chunks must have matching nested structures.")  # noqa: TRY003
+            raise TypeError("Evaluation chunks must have matching nested structures.")
         keys = tuple(first)
         key_set = set(keys)
         if not all(set(tensor) == key_set for tensor in tensors):
-            raise ValueError("Evaluation chunk mappings must have matching keys.")  # noqa: TRY003
+            raise ValueError("Evaluation chunk mappings must have matching keys.")
         return type(first)(
             {
                 key: _concat_nested_chunks(
@@ -808,7 +808,7 @@ def _concat_nested_chunks(
                 for key in keys
             }
         )
-    raise TypeError(f"Unsupported evaluation chunk type: {type(first).__name__}")  # noqa: TRY003
+    raise TypeError(f"Unsupported evaluation chunk type: {type(first).__name__}")
 
 
 def _freeze_cpu_chunk(

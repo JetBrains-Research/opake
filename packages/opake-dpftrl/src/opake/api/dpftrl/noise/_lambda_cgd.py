@@ -83,9 +83,7 @@ def _column_norm(lambda_: float, n_steps: int, step: int) -> float:
     """
     if step < 0 or step >= n_steps:
         raise ConfigurationError(
-            *(
-                f"column-norm step {step} is outside the calibrated horizon [0, {n_steps}).",
-            )
+            f"column-norm step {step} is outside the calibrated horizon [0, {n_steps})."
         )
     if lambda_ == 0.0:
         return 1.0
@@ -111,17 +109,15 @@ class LambdaCgdStrategy:
     def __post_init__(self) -> None:
         if self.lr_schedule is not None:
             raise ConfigurationError(
-                *(
-                    "LambdaCgdStrategy does not support lr_schedule. Learning-rate "
-                    "schedules are optimizer post-processing and cannot weight its "
-                    "Balls-in-Bins privacy accounting. Remove lr_schedule from the "
-                    "strategy, pass it only to the optimizer, and recalibrate privacy "
-                    "and noise for any result previously computed with this option.",
-                )
+                "LambdaCgdStrategy does not support lr_schedule. Learning-rate "
+                "schedules are optimizer post-processing and cannot weight its "
+                "Balls-in-Bins privacy accounting. Remove lr_schedule from the "
+                "strategy, pass it only to the optimizer, and recalibrate privacy "
+                "and noise for any result previously computed with this option."
             )
         if not math.isfinite(self.lambda_) or not 0.0 <= self.lambda_ < 1.0:
             raise ConfigurationError(
-                *(f"lambda_ must be finite and in [0, 1), got {self.lambda_}",)
+                f"lambda_ must be finite and in [0, 1), got {self.lambda_}"
             )
 
     def coefficients(self, *, n_steps: int, **_) -> torch.Tensor:

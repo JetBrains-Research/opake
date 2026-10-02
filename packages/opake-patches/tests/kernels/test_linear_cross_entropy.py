@@ -10,10 +10,8 @@ Tests:
 6. Softcapping (Gemma2) and logit scaling (Granite)
 
 Uses bf16 throughout — CCE backward requires half precision.
-``mellum_config`` (see ``kernels/conftest.py``) uses Mellum-4b-shaped tensors
-(seq 1024, hidden 3072, vocab up to 128256): realistic geometry comparable to
-``train_dpsgd.py --preset mellum-kstack``, not tiny matrices where launch
-and dispatch dominate the timing story.
+Correctness tests use representative shapes. Marked performance tests use
+Mellum-4b geometry so launch and dispatch do not dominate the measurement.
 
 Parametrized over vocab sizes: 32768 (single-chunk) and 128256 (Mellum-4b, chunked path).
 Reference computes in fp32 for comparison baseline.
@@ -142,12 +140,12 @@ class TestLinearCEForward:
     """Test forward pass precision against PyTorch reference."""
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
-    def test_forward_matches_pytorch(self, assert_precision, mellum_config, vocab_size):
+    def test_forward_matches_pytorch(self, assert_precision, kernel_config, vocab_size):
         """Forward: fused linear CE vs matmul + F.cross_entropy."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
 
         hidden = torch.randn(
             batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16
@@ -195,13 +193,13 @@ class TestLinearCEForward:
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
     def test_forward_with_ignore_index(
-        self, assert_precision, mellum_config, vocab_size
+        self, assert_precision, kernel_config, vocab_size
     ):
         """Forward with masked labels (-100) at some positions."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
 
         hidden = torch.randn(
             batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16
@@ -225,12 +223,12 @@ class TestLinearCEForward:
         )
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
-    def test_forward_label_smoothing(self, assert_precision, mellum_config, vocab_size):
+    def test_forward_label_smoothing(self, assert_precision, kernel_config, vocab_size):
         """Forward with label smoothing matches PyTorch."""
         torch.manual_seed(43)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
 
         hidden = torch.randn(
             batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16
@@ -254,13 +252,13 @@ class TestLinearCEForward:
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
     def test_backward_label_smoothing_hidden_grad(
-        self, assert_precision, mellum_config, vocab_size
+        self, assert_precision, kernel_config, vocab_size
     ):
         ls = 0.1
         torch.manual_seed(44)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
 
         hidden_pt = torch.randn(
             batch,
@@ -293,13 +291,13 @@ class TestLinearCEForward:
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
     def test_backward_label_smoothing_weight_grad(
-        self, assert_precision, mellum_config, vocab_size
+        self, assert_precision, kernel_config, vocab_size
     ):
         ls = 0.1
         torch.manual_seed(45)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
 
         hidden = torch.randn(
             batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16
@@ -340,13 +338,13 @@ class TestLinearCEBackward:
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
     def test_backward_hidden_states_grad(
-        self, assert_precision, mellum_config, vocab_size
+        self, assert_precision, kernel_config, vocab_size
     ):
         """Backward: d_hidden_states matches PyTorch."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
 
         hidden_pt = torch.randn(
             batch,
@@ -378,12 +376,12 @@ class TestLinearCEBackward:
         )
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
-    def test_backward_weight_grad(self, assert_precision, mellum_config, vocab_size):
+    def test_backward_weight_grad(self, assert_precision, kernel_config, vocab_size):
         """Backward: d_weight matches PyTorch."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
 
         hidden = torch.randn(
             batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16
@@ -487,13 +485,13 @@ class TestLinearCEVmapForward:
     """Test vmap forward: batched forward via Triton vmap vs PyTorch."""
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
-    def test_vmap_forward_precision(self, assert_precision, mellum_config, vocab_size):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config, vocab_size):
         """Batched forward: opake vmap vs PyTorch vmap."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vmap_batch = mellum_config["vmap_batch"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vmap_batch = kernel_config["vmap_batch"]
 
         hidden = torch.randn(
             vmap_batch,
@@ -528,6 +526,7 @@ class TestLinearCEVmapForward:
             label="loss",
         )
 
+    @pytest.mark.kernel_stress
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
     def test_vmap_forward_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config, vocab_size
@@ -581,13 +580,13 @@ class TestLinearCEVmapGrad:
     """Test vmap(grad): per-example gradients for DP-SGD."""
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
-    def test_vmap_grad_hidden_states(self, assert_precision, mellum_config, vocab_size):
+    def test_vmap_grad_hidden_states(self, assert_precision, kernel_config, vocab_size):
         """Per-example gradients w.r.t. hidden_states."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vmap_batch = mellum_config["vmap_batch"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vmap_batch = kernel_config["vmap_batch"]
 
         hidden = torch.randn(
             vmap_batch,
@@ -623,13 +622,13 @@ class TestLinearCEVmapGrad:
         )
 
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
-    def test_vmap_grad_weight(self, assert_precision, mellum_config, vocab_size):
+    def test_vmap_grad_weight(self, assert_precision, kernel_config, vocab_size):
         """Per-example gradients w.r.t. weight (non-batched param)."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vmap_batch = mellum_config["vmap_batch"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vmap_batch = kernel_config["vmap_batch"]
 
         hidden = torch.randn(
             vmap_batch,
@@ -668,6 +667,7 @@ class TestLinearCEVmapGrad:
             label="per-example weight.grad",
         )
 
+    @pytest.mark.kernel_stress
     @pytest.mark.parametrize("vocab_size", VOCAB_SIZES)
     def test_vmap_grad_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config, vocab_size
@@ -833,6 +833,7 @@ class TestLinearCEMemory:
 # ============================================================================
 
 
+@pytest.mark.kernel_stress
 class TestLinearCEPerformance:
     """Benchmark forward and backward performance vs PyTorch materialized path."""
 
@@ -912,14 +913,14 @@ class TestLinearCEPerformance:
 class TestLinearCESoftcapping:
     """Test logit softcapping (Gemma2) and logit scaling (Granite)."""
 
-    def test_softcapping_forward(self, assert_precision, mellum_config):
-        """Softcapping forward matches PyTorch reference at mellum scale."""
+    def test_softcapping_forward(self, assert_precision, kernel_config):
+        """Softcapping forward matches PyTorch reference at representative scale."""
         torch.manual_seed(42)
         softcap = 30.0
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vocab = mellum_config["vocab_size"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vocab = kernel_config["vocab_size"]
 
         hidden = torch.randn(
             batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16
@@ -939,14 +940,14 @@ class TestLinearCESoftcapping:
             label="loss",
         )
 
-    def test_softcapping_backward(self, assert_precision, mellum_config):
-        """Softcapping backward matches PyTorch reference at mellum scale."""
+    def test_softcapping_backward(self, assert_precision, kernel_config):
+        """Softcapping backward matches PyTorch reference at representative scale."""
         torch.manual_seed(42)
         softcap = 30.0
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vocab = mellum_config["vocab_size"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vocab = kernel_config["vocab_size"]
 
         hidden_pt = torch.randn(
             batch,
@@ -975,14 +976,14 @@ class TestLinearCESoftcapping:
             label="hidden_states.grad",
         )
 
-    def test_logit_scaling_forward(self, assert_precision, mellum_config):
-        """Logit scaling (Granite) forward matches PyTorch reference at mellum scale."""
+    def test_logit_scaling_forward(self, assert_precision, kernel_config):
+        """Logit scaling (Granite) forward matches PyTorch reference at representative scale."""
         torch.manual_seed(42)
         scaling = 8.0
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vocab = mellum_config["vocab_size"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vocab = kernel_config["vocab_size"]
 
         hidden = torch.randn(
             batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16
@@ -1002,14 +1003,14 @@ class TestLinearCESoftcapping:
             label="loss",
         )
 
-    def test_logit_scaling_backward(self, assert_precision, mellum_config):
-        """Logit scaling backward matches PyTorch reference at mellum scale."""
+    def test_logit_scaling_backward(self, assert_precision, kernel_config):
+        """Logit scaling backward matches PyTorch reference at representative scale."""
         torch.manual_seed(42)
         scaling = 8.0
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vocab = mellum_config["vocab_size"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vocab = kernel_config["vocab_size"]
 
         hidden_pt = torch.randn(
             batch,
@@ -1058,15 +1059,15 @@ class TestLinearCESoftcapping:
         ids=["softcap", "logit-scaling"],
     )
     def test_logit_transform_vmap_grad(
-        self, assert_precision, mellum_config, softcap, scaling
+        self, assert_precision, kernel_config, softcap, scaling
     ):
-        """Logit transforms under vmap(grad) match PyTorch at mellum scale."""
+        """Logit transforms under vmap(grad) match PyTorch at representative scale."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vocab = mellum_config["vocab_size"]
-        vmap_batch = mellum_config["vmap_batch"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vocab = kernel_config["vocab_size"]
+        vmap_batch = kernel_config["vmap_batch"]
 
         hidden = torch.randn(
             vmap_batch,
@@ -1106,13 +1107,13 @@ class TestLinearCESoftcapping:
 class TestLinearCEWrapper:
     """Test the convenience wrapper function."""
 
-    def test_wrapper_matches_apply(self, assert_precision, mellum_config):
+    def test_wrapper_matches_apply(self, assert_precision, kernel_config):
         """opake_linear_cross_entropy_loss matches manual .apply() + reduce."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        hidden_dim = mellum_config["hidden_dim"]
-        vocab = mellum_config["vocab_size"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        hidden_dim = kernel_config["hidden_dim"]
+        vocab = kernel_config["vocab_size"]
 
         hidden = torch.randn(
             batch, seq_len, hidden_dim, device="cuda", dtype=torch.bfloat16

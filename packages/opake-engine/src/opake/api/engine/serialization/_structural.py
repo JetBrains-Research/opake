@@ -49,11 +49,9 @@ def _check_shape(saved: tuple[int, ...], expected: tuple[int, ...]) -> None:
     """
     if saved != expected:
         raise CheckpointError(
-            *(
-                f"state_dict value has shape {tuple(saved)}; template expects "
-                f"{tuple(expected)}. Restore is template-driven: rebuild the "
-                "template from the configuration the checkpoint was written with.",
-            )
+            f"state_dict value has shape {tuple(saved)}; template expects "
+            f"{tuple(expected)}. Restore is template-driven: rebuild the "
+            "template from the configuration the checkpoint was written with."
         )
 
 
@@ -67,7 +65,7 @@ def _tensor_load(template: torch.Tensor, sd: Mapping[str, Any]) -> torch.Tensor:
         return template
     if not isinstance(saved, torch.Tensor):
         raise CheckpointError(
-            *(f"state_dict value expected a torch.Tensor, got {type(saved).__name__}",)
+            f"state_dict value expected a torch.Tensor, got {type(saved).__name__}"
         )
     _check_shape(saved.shape, template.shape)
     return saved.to(dtype=template.dtype, device=template.device)

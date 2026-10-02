@@ -56,10 +56,10 @@ _TORCH_TO_TRITON_DTYPES = {
 def _casting_mode_int(casting_mode: str | int) -> int:
     if isinstance(casting_mode, int):
         if casting_mode not in _STR_TO_CASTING.values():
-            raise ConfigurationError(*(f"Invalid casting_mode int: {casting_mode}",))
+            raise ConfigurationError(f"Invalid casting_mode int: {casting_mode}")
         return casting_mode
     if casting_mode not in _STR_TO_CASTING:
-        raise ConfigurationError(*(f"Invalid casting_mode: {casting_mode}",))
+        raise ConfigurationError(f"Invalid casting_mode: {casting_mode}")
     return _STR_TO_CASTING[casting_mode]
 
 
@@ -237,10 +237,8 @@ def _fused_add_rms_norm_forward_triton(
         or n_rows < _MIN_ROWS_FOR_BLOCK_KERNEL
     ):
         raise OperationError(
-            *(
-                "Opake fused add RMSNorm: block kernel path not yet ported; use "
-                "shapes that satisfy BLOCK_SIZE > 256 or n_rows < 32768.",
-            )
+            "Opake fused add RMSNorm: block kernel path not yet ported; use "
+            "shapes that satisfy BLOCK_SIZE > 256 or n_rows < 32768."
         )
 
     Y = torch.empty((n_rows, n_cols), dtype=X.dtype, device=X.device)
@@ -298,7 +296,7 @@ def _fused_add_rms_norm_backward_triton(
 
     if n_cols > BLOCK_SIZE:
         raise OperationError(
-            *(f"fused add RMSNorm: hidden dim {n_cols} exceeds block {BLOCK_SIZE}.",)
+            f"fused add RMSNorm: hidden dim {n_cols} exceeds block {BLOCK_SIZE}."
         )
 
     has_dS = dS_out is not None
@@ -415,11 +413,11 @@ class _FusedAddRMSNormBackward(torch.autograd.Function):
         del info
         dy_b, ds_b, s_b, w_b, r_b, *static_dims = in_dims
         if any(dim is not None for dim in static_dims):
-            raise ConfigurationError(*("Fused RMSNorm metadata must not be vmapped",))
+            raise ConfigurationError("Fused RMSNorm metadata must not be vmapped")
         if w_b is not None:
-            raise ConfigurationError(*("W must not be vmapped",))
+            raise ConfigurationError("W must not be vmapped")
         if dy_b != 0 or s_b != 0 or r_b != 0:
-            raise ConfigurationError(*("dY, S, RSTD must be vmapped at dim 0",))
+            raise ConfigurationError("dY, S, RSTD must be vmapped at dim 0")
 
         H = S.shape[-1]
         head_dy = dY.shape[:-1]
@@ -429,12 +427,12 @@ class _FusedAddRMSNormBackward(torch.autograd.Function):
             dS_m = None
             if ds_b is not None:
                 raise ConfigurationError(
-                    *("dS_out in_dims must be None when dS_out is None",)
+                    "dS_out in_dims must be None when dS_out is None"
                 )
         else:
             if ds_b != 0:
                 raise ConfigurationError(
-                    *("dS_out must be vmapped at dim 0 when provided",)
+                    "dS_out must be vmapped at dim 0 when provided"
                 )
             dS_m = dS_out.reshape(-1, H)
         S_m = S.reshape(-1, H)
@@ -539,15 +537,15 @@ class Opake_FusedAddRMSNorm(torch.autograd.Function):
         x_b, r_b = in_dims[0], in_dims[1]
         if x_b is None or r_b is None or x_b != r_b:
             raise ConfigurationError(
-                *("Opake_FusedAddRMSNorm vmap: X and R must share the same vmap dim",)
+                "Opake_FusedAddRMSNorm vmap: X and R must share the same vmap dim"
             )
         if x_b != 0:
             raise ConfigurationError(
-                *("Opake_FusedAddRMSNorm vmap: use dim 0 for X and R",)
+                "Opake_FusedAddRMSNorm vmap: use dim 0 for X and R"
             )
         for i in range(2, 7):
             if in_dims[i] is not None:
-                raise ConfigurationError(*("Only X and R may be batched under vmap",))
+                raise ConfigurationError("Only X and R may be batched under vmap")
         cm = _casting_mode_int(casting_mode)
         shape = X.shape
         H = shape[-1]
@@ -571,7 +569,7 @@ def opake_fused_add_rms_norm(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Fused ``S = x + residual`` then Llama/Gemma RMSNorm; returns ``(norm(S), S)``."""
     if not x.is_cuda:
-        raise OperationError(*("opake_fused_add_rms_norm Triton path requires CUDA",))
+        raise OperationError("opake_fused_add_rms_norm Triton path requires CUDA")
     x, residual, weight = follow_autocast(x, residual, weight)
     normalized, summed, _ = Opake_FusedAddRMSNorm.apply(
         x,

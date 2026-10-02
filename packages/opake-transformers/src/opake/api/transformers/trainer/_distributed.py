@@ -152,21 +152,17 @@ def validate_ddp_backend(args: Any, ddp: DDPState) -> None:
     if not ddp.is_distributed:
         if configured_backend in _BACKEND_ENV_DEPENDENT_HINTS:
             raise ConfigurationError(
-                *(
-                    f"ddp_backend={configured_backend!r} requires a distributed process "
-                    f"group initialized with vendor runtime "
-                    f"({_BACKEND_ENV_DEPENDENT_HINTS[configured_backend]}), but no "
-                    "process group is currently initialized.",
-                )
+                f"ddp_backend={configured_backend!r} requires a distributed process "
+                f"group initialized with vendor runtime "
+                f"({_BACKEND_ENV_DEPENDENT_HINTS[configured_backend]}), but no "
+                "process group is currently initialized."
             )
         return
     live_backend = (ddp.backend or "").lower()
     if live_backend and configured_backend != live_backend:
         raise ConfigurationError(
-            *(
-                "Configured ddp_backend does not match initialized process group: "
-                f"ddp_backend={configured_backend!r}, live_backend={live_backend!r}.",
-            )
+            "Configured ddp_backend does not match initialized process group: "
+            f"ddp_backend={configured_backend!r}, live_backend={live_backend!r}."
         )
     # (Once the group is initialized ``get_backend()`` is always non-empty, so
     # the mismatch check above already covers env-dependent backends — no
@@ -253,8 +249,6 @@ def checkpoint_barrier(ddp: DDPState, local_error: Exception | None) -> None:
         raise local_error
     if int(failed.item()) > 0:
         raise OperationError(
-            *(
-                "Checkpoint save failed on another rank; aborting on rank "
-                f"{ddp.rank} instead of waiting at the checkpoint barrier.",
-            )
+            "Checkpoint save failed on another rank; aborting on rank "
+            f"{ddp.rank} instead of waiting at the checkpoint barrier."
         )

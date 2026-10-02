@@ -7,7 +7,7 @@ Tests:
 3. vmap (per-sample grad) vs PyTorch vmap
 4. Forward and backward performance benchmarks
 
-Config: Mellum-4b scale (uses mellum_config from conftest)
+Correctness tests use representative shapes; performance tests use Mellum-4b scale.
 """
 
 import pytest
@@ -92,13 +92,13 @@ def pytorch_rope_qk(Q, K, cos, sin, rope_indices=None):
 class TestRoPEForward:
     """Test forward pass precision."""
 
-    def test_forward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_forward_matches_pytorch(self, assert_precision, kernel_config):
         """Forward: opake vs pytorch."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        N_HEADS = mellum_config["n_heads"]
-        HEAD_DIM = mellum_config["head_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        N_HEADS = kernel_config["n_heads"]
+        HEAD_DIM = kernel_config["head_dim"]
 
         Q = torch.randn(
             batch, seq_len, N_HEADS, HEAD_DIM, device="cuda", dtype=torch.bfloat16
@@ -126,13 +126,13 @@ class TestRoPEForward:
 class TestRoPEBackward:
     """Test backward pass precision."""
 
-    def test_backward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_backward_matches_pytorch(self, assert_precision, kernel_config):
         """Backward: opake vs pytorch Q.grad."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        N_HEADS = mellum_config["n_heads"]
-        HEAD_DIM = mellum_config["head_dim"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        N_HEADS = kernel_config["n_heads"]
+        HEAD_DIM = kernel_config["head_dim"]
 
         Q_pt = torch.randn(
             batch,
@@ -326,14 +326,14 @@ class TestSlowRoPEPositionIds:
 class TestRoPEVmapForward:
     """Test vmap forward: Triton vmap vs PyTorch vmap."""
 
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         """Batched forward: opake Triton vmap vs PyTorch reference."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        N_HEADS = mellum_config["n_heads"]
-        HEAD_DIM = mellum_config["head_dim"]
-        VMAP_BATCH = mellum_config["vmap_batch"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        N_HEADS = kernel_config["n_heads"]
+        HEAD_DIM = kernel_config["head_dim"]
+        VMAP_BATCH = kernel_config["vmap_batch"]
 
         cos, sin = generate_cos_sin(seq_len, HEAD_DIM)
 
@@ -355,6 +355,7 @@ class TestRoPEVmapForward:
             out_op, out_pt, rtol=RTOL_FORWARD, atol=ATOL_FORWARD, label="output"
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_forward_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -391,14 +392,14 @@ class TestRoPEVmapForward:
 class TestRoPEVmapGrad:
     """Test vmap(grad): per-example gradients — the DP-SGD path."""
 
-    def test_vmap_grad_precision(self, assert_precision, mellum_config):
+    def test_vmap_grad_precision(self, assert_precision, kernel_config):
         """Per-example gradients: opake Triton vs PyTorch reference."""
         torch.manual_seed(42)
-        batch = mellum_config["batch_size"]
-        seq_len = mellum_config["seq_len"]
-        N_HEADS = mellum_config["n_heads"]
-        HEAD_DIM = mellum_config["head_dim"]
-        VMAP_BATCH = mellum_config["vmap_batch"]
+        batch = kernel_config["batch_size"]
+        seq_len = kernel_config["seq_len"]
+        N_HEADS = kernel_config["n_heads"]
+        HEAD_DIM = kernel_config["head_dim"]
+        VMAP_BATCH = kernel_config["vmap_batch"]
 
         cos, sin = generate_cos_sin(seq_len, HEAD_DIM)
 
@@ -426,6 +427,7 @@ class TestRoPEVmapGrad:
             grads_op, grads_pt, rtol=RTOL_BACKWARD, atol=ATOL_BACKWARD, label="Q.grad"
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, measure_time_and_memory, assert_perf_benefit, mellum_config
     ):
@@ -472,6 +474,7 @@ class TestRoPEVmapGrad:
 # ============================================================================
 
 
+@pytest.mark.kernel_stress
 class TestRoPEPerformance:
     """Benchmark forward and backward performance."""
 

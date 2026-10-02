@@ -54,7 +54,7 @@ def _require_hub() -> None:
     try:
         import huggingface_hub  # noqa: F401
     except ImportError as exc:
-        raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+        raise ImportError(
             "push_to_hub=True requires `huggingface_hub`. "
             "Install it with: pip install huggingface_hub"
         ) from exc

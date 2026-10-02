@@ -101,7 +101,7 @@ def _convert_trl_sft_config(
     trl = _import_trl()
     if not isinstance(trl_cfg, trl.SFTConfig):
         raise InputTypeError(
-            *(f"Expected ``trl.SFTConfig`` instance, got {type(trl_cfg).__name__}.",)
+            f"Expected ``trl.SFTConfig`` instance, got {type(trl_cfg).__name__}."
         )
 
     dp_layer = _normalize_dp_overrides(dp_overrides)

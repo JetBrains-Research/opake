@@ -133,21 +133,19 @@ class PoissonSampler(Sampler):
 
         if not 0 < sample_rate <= 1:
             raise ConfigurationError(
-                *(f"sample_rate must be in (0, 1], got {sample_rate}",)
+                f"sample_rate must be in (0, 1], got {sample_rate}"
             )
         if n_steps is not None and n_steps < 1:
-            raise ConfigurationError(*(f"n_steps must be >= 1 or None, got {n_steps}",))
+            raise ConfigurationError(f"n_steps must be >= 1 or None, got {n_steps}")
         if truncated_batch_size is not None:
             if type(truncated_batch_size) is not int:
                 raise InputTypeError(
-                    *(
-                        "truncated_batch_size must be an int, got "
-                        f"{type(truncated_batch_size).__name__}",
-                    )
+                    "truncated_batch_size must be an int, got "
+                    f"{type(truncated_batch_size).__name__}"
                 )
             if truncated_batch_size < 1:
                 raise ConfigurationError(
-                    *(f"truncated_batch_size must be >= 1, got {truncated_batch_size}",)
+                    f"truncated_batch_size must be >= 1, got {truncated_batch_size}"
                 )
 
         self.data_source: Sized = data_source
@@ -198,7 +196,7 @@ class PoissonSampler(Sampler):
             TypeError: If n_steps is None (infinite iteration).
         """
         if self.n_steps is None:
-            raise InputTypeError(*("len() of unsized object (n_steps=None)",))
+            raise InputTypeError("len() of unsized object (n_steps=None)")
         return self.n_steps - self._consumed
 
     @property
@@ -254,12 +252,10 @@ def _from_state_dict_poisson(
     template_n = len(template.data_source)
     if saved_n != template_n:
         raise ConfigurationError(
-            *(
-                f"PoissonSampler.from_state_dict: template dataset length "
-                f"{template_n} does not match snapshot num_samples={saved_n}.  "
-                "Restoring with a differently-sized dataset would silently emit "
-                "a different Poisson stream.",
-            )
+            f"PoissonSampler.from_state_dict: template dataset length "
+            f"{template_n} does not match snapshot num_samples={saved_n}.  "
+            "Restoring with a differently-sized dataset would silently emit "
+            "a different Poisson stream."
         )
     sampler = PoissonSampler._from_stream_key(
         template.data_source,

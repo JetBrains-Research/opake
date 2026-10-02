@@ -93,10 +93,10 @@ def sequence_logp(
     if ld_alpha is not None:
         if not math.isfinite(ld_alpha) or not 0.0 <= ld_alpha <= 1.0:
             raise ConfigurationError(
-                *(f"ld_alpha (LD-DPO) must be finite and in [0, 1], got {ld_alpha}",)
+                f"ld_alpha (LD-DPO) must be finite and in [0, 1], got {ld_alpha}"
             )
         if shared_prefix_len is None:
-            raise ConfigurationError(*("ld_alpha (LD-DPO) requires shared_prefix_len",))
+            raise ConfigurationError("ld_alpha (LD-DPO) requires shared_prefix_len")
         completion_pos = target_mask.to(torch.bool).cumsum(dim=-1)
         prefix_len = shared_prefix_len
         if isinstance(prefix_len, torch.Tensor):

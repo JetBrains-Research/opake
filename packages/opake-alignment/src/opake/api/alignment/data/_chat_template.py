@@ -101,11 +101,9 @@ def clone_chat_template(
         # Duck-type check: must look like a tokenizer.
         if not hasattr(source_tokenizer_or_path, "chat_template"):
             raise InputTypeError(
-                *(
-                    "source_tokenizer_or_path must be a string path or a "
-                    "PreTrainedTokenizerBase instance; "
-                    f"got {type(source_tokenizer_or_path)!r}",
-                )
+                "source_tokenizer_or_path must be a string path or a "
+                "PreTrainedTokenizerBase instance; "
+                f"got {type(source_tokenizer_or_path)!r}"
             )
         source_tokenizer = source_tokenizer_or_path
 
@@ -113,11 +111,9 @@ def clone_chat_template(
     chat_template = getattr(source_tokenizer, "chat_template", None)
     if chat_template is None:
         raise ConfigurationError(
-            *(
-                "The source tokenizer does not have a chat_template set "
-                "(chat_template is None).  Set it before calling "
-                "clone_chat_template.",
-            )
+            "The source tokenizer does not have a chat_template set "
+            "(chat_template is None).  Set it before calling "
+            "clone_chat_template."
         )
     tokenizer.chat_template = chat_template
 
@@ -205,11 +201,9 @@ def get_training_chat_template(tokenizer: PreTrainedTokenizerBase) -> str:
     """
     if not getattr(tokenizer, "chat_template", None):
         raise ConfigurationError(
-            *(
-                "tokenizer.chat_template is not set.  Assign a Jinja2 template "
-                "string to tokenizer.chat_template before calling "
-                "get_training_chat_template.",
-            )
+            "tokenizer.chat_template is not set.  Assign a Jinja2 template "
+            "string to tokenizer.chat_template before calling "
+            "get_training_chat_template."
         )
     template = _resolve_chat_template(tokenizer)
 
@@ -218,11 +212,9 @@ def get_training_chat_template(tokenizer: PreTrainedTokenizerBase) -> str:
         if _generation_block_marks_only_assistant(template, tokenizer):
             return template
         raise ConfigurationError(
-            *(
-                "get_training_chat_template: existing generation markers do not "
-                "identify a validated assistant-only render path in the tokenizer's "
-                "chat template. Ensure they exclude system and user content.",
-            )
+            "get_training_chat_template: existing generation markers do not "
+            "identify a validated assistant-only render path in the tokenizer's "
+            "chat template. Ensure they exclude system and user content."
         )
 
     # Strategy 1: wrap {{ generation_token }} — TRL v2 canonical placeholder.
@@ -274,12 +266,10 @@ def get_training_chat_template(tokenizer: PreTrainedTokenizerBase) -> str:
         return template_out
 
     raise ConfigurationError(
-        *(
-            "get_training_chat_template: could not identify and validate an "
-            "assistant-only render path in the tokenizer's chat template. "
-            "Provide a template with explicit '{% generation %}' / "
-            "'{% endgeneration %}' markers.",
-        )
+        "get_training_chat_template: could not identify and validate an "
+        "assistant-only render path in the tokenizer's chat template. "
+        "Provide a template with explicit '{% generation %}' / "
+        "'{% endgeneration %}' markers."
     )
 
 

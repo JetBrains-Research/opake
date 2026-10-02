@@ -103,13 +103,11 @@ def _loss_type_transform(trl: dict[str, Any]) -> dict[str, Any]:
     unsupported = [v for v in mapped if v not in _OPAKE_DPO_LOSS_TYPES]
     if unsupported:
         raise ConfigurationError(
-            *(
-                f"trl_dpo_config.loss_type contains unsupported heads: "
-                f"{sorted(set(unsupported))}. Opake implements: "
-                f"{sorted(_OPAKE_DPO_LOSS_TYPES)}. The Adversarial Optimal "
-                f"Transport family (``aot``, ``aot_unpaired``) added in TRL 1.x "
-                f"is not in opake.",
-            )
+            f"trl_dpo_config.loss_type contains unsupported heads: "
+            f"{sorted(set(unsupported))}. Opake implements: "
+            f"{sorted(_OPAKE_DPO_LOSS_TYPES)}. The Adversarial Optimal "
+            f"Transport family (``aot``, ``aot_unpaired``) added in TRL 1.x "
+            f"is not in opake."
         )
     return {"loss_type": mapped}
 
@@ -151,7 +149,7 @@ def _convert_trl_dpo_config(
     trl = _import_trl()
     if not isinstance(trl_cfg, trl.DPOConfig):
         raise InputTypeError(
-            *(f"Expected ``trl.DPOConfig`` instance, got {type(trl_cfg).__name__}.",)
+            f"Expected ``trl.DPOConfig`` instance, got {type(trl_cfg).__name__}."
         )
 
     dp_layer = _normalize_dp_overrides(dp_overrides)

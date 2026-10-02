@@ -24,7 +24,7 @@ runs:
           echo "tests-ran=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-        uv run coverage xml -o "${{ inputs.coverage-file }}"
+        uv run --no-sync coverage xml -o "${{ inputs.coverage-file }}"
         echo "tests-ran=true" >> "$GITHUB_OUTPUT"
 
     - name: Upload coverage

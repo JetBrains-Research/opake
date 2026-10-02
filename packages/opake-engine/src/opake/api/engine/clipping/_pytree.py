@@ -44,10 +44,8 @@ def _tensor_path_leaves(
     for path, leaf in zip(paths, leaves, strict=True):
         if not isinstance(leaf, torch.Tensor):
             raise InputTypeError(
-                *(
-                    f"Expected tensor leaves for per-group clipping; "
-                    f"got {type(leaf).__name__} at path {path!r}.",
-                )
+                f"Expected tensor leaves for per-group clipping; "
+                f"got {type(leaf).__name__} at path {path!r}."
             )
         tensor_leaves.append(leaf)
     return paths, tensor_leaves, treedef
@@ -71,7 +69,7 @@ def _validate_per_group_paths(
         parts.append(f"Leaves with no group assignment: {missing_in_groups}.")
     if missing_in_tree:
         parts.append(f"Group paths with no matching leaf: {missing_in_tree}.")
-    raise ConfigurationError(*(" ".join(parts),))
+    raise ConfigurationError(" ".join(parts))
 
 
 def _real_dtype(dtype: torch.dtype) -> torch.dtype:
@@ -89,13 +87,11 @@ def _resolve_compute_dtype_for_reduction(
     if compute_dtype is not None:
         if not compute_dtype.is_floating_point:
             raise InputTypeError(
-                *(
-                    f"compute_dtype must be a real floating-point dtype, got "
-                    f"{compute_dtype!r}.  Integer/bool/complex compute dtypes can "
-                    f"silently corrupt the L2-norm reduction (the squared sum is "
-                    f"non-negative real and the final sqrt assumes a real "
-                    f"accumulator).",
-                )
+                f"compute_dtype must be a real floating-point dtype, got "
+                f"{compute_dtype!r}.  Integer/bool/complex compute dtypes can "
+                f"silently corrupt the L2-norm reduction (the squared sum is "
+                f"non-negative real and the final sqrt assumes a real "
+                f"accumulator)."
             )
         return compute_dtype
     acc = torch.float32
@@ -465,7 +461,7 @@ def auto_scale_pytree(
     behavior of :func:`clip_pytree`.
     """
     if gamma <= 0:
-        raise ConfigurationError(*(f"gamma must be positive, got {gamma}",))
+        raise ConfigurationError(f"gamma must be positive, got {gamma}")
 
     pytree = tree_map(
         lambda t: (

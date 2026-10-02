@@ -1,7 +1,8 @@
 """Shared test fixtures for kernel tests.
 
 Provides pytest fixtures for:
-- mellum_config: Mellum-4b model dimensions for realistic testing
+- kernel_config: Representative correctness dimensions
+- mellum_config: Mellum-4b performance dimensions
 - assert_precision: Assert precision using torch.testing.assert_close (atol+rtol)
 - measure_time_and_memory: Benchmark execution time and peak CUDA memory
 - assert_perf_benefit: Assert performance improvement (and optionally record
@@ -17,40 +18,41 @@ from pathlib import Path
 import pytest
 import torch
 
-MIN_KERNEL_CUDA_MEM_GB = 24
+MIN_KERNEL_STRESS_CUDA_MEMORY_GIB = 24
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip CUDA kernel stress suite when runner GPU memory is insufficient."""
-    if not torch.cuda.is_available():
+    """Skip marked kernel stress tests on memory-constrained CUDA devices."""
+    stress_items = [
+        item for item in items if item.get_closest_marker("kernel_stress") is not None
+    ]
+    if not stress_items or not torch.cuda.is_available():
         return
 
-    try:
-        total_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-    except Exception:
-        return
-
-    if total_gb >= MIN_KERNEL_CUDA_MEM_GB:
+    total_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    if total_gb >= MIN_KERNEL_STRESS_CUDA_MEMORY_GIB:
         return
 
     reason = (
-        f"Kernel stress tests require >= {MIN_KERNEL_CUDA_MEM_GB}GB CUDA memory "
-        f"(found {total_gb:.2f}GB)."
+        f"Kernel stress tests require at least {MIN_KERNEL_STRESS_CUDA_MEMORY_GIB} GiB "
+        f"of CUDA memory; found {total_gb:.2f} GiB."
     )
     skip_marker = pytest.mark.skip(reason=reason)
-    # `pytest_collection_modifyitems` receives the WHOLE session's items, not
-    # just this directory's — so scope the skip to the kernel stress suite
-    # (this conftest's directory). Without this guard a <24GB GPU would skip
-    # every CUDA test in the repo, not just the kernel stress tests.
-    kernels_dir = Path(__file__).resolve().parent
-    for item in items:
-        if Path(str(item.fspath)).resolve().is_relative_to(kernels_dir):
-            item.add_marker(skip_marker)
+    for item in stress_items:
+        item.add_marker(skip_marker)
 
 
-# ============================================================================
-# Mellum-4b model configuration
-# ============================================================================
+CORRECTNESS_CONFIG = {
+    "batch_size": 2,
+    "seq_len": 33,
+    "hidden_dim": 384,
+    "intermediate_dim": 768,
+    "n_heads": 6,
+    "head_dim": 64,
+    "vocab_size": 4096,
+    "rank": 8,
+    "vmap_batch": 2,
+}
 
 MELLUM_CONFIG = {
     "batch_size": 4,
@@ -184,8 +186,14 @@ def _assert_perf_benefit(pt_stats, op_stats, label="", max_perf_overhead=0.20):
 
 
 @pytest.fixture(scope="session")
+def kernel_config():
+    """Return representative correctness dimensions."""
+    return CORRECTNESS_CONFIG
+
+
+@pytest.fixture(scope="session")
 def mellum_config():
-    """Mellum-4b model configuration for realistic testing."""
+    """Return Mellum-4b performance dimensions."""
     return MELLUM_CONFIG
 
 

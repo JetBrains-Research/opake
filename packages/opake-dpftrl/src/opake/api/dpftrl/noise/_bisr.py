@@ -116,11 +116,9 @@ def _validate_saved_execution_identity(
     mismatched.extend(sorted(set(actual_fields) - set(expected_fields)))
     if mismatched:
         raise CheckpointError(
-            *(
-                "BISR checkpoint execution identity does not match the configured "
-                f"runtime; mismatched fields={mismatched}. Rebuild the mechanism "
-                "with the checkpoint's strategy, horizon, and compute dtype.",
-            )
+            "BISR checkpoint execution identity does not match the configured "
+            f"runtime; mismatched fields={mismatched}. Rebuild the mechanism "
+            "with the checkpoint's strategy, horizon, and compute dtype."
         )
 
 
@@ -134,18 +132,14 @@ def _load_bisr_streaming_state(
     version = saved.get("layout_version")
     if version is None:
         raise CheckpointError(
-            *(
-                "Cannot restore a legacy BISR dense-history checkpoint into "
-                "the bounded streaming state. Resume it with the Opake "
-                "version that created it.",
-            )
+            "Cannot restore a legacy BISR dense-history checkpoint into "
+            "the bounded streaming state. Resume it with the Opake "
+            "version that created it."
         )
     if type(version) is not int or version != _BISR_STREAMING_STATE_VERSION:
         raise CheckpointError(
-            *(
-                f"Unsupported BISR streaming-state version {version!r}; "
-                f"expected {_BISR_STREAMING_STATE_VERSION}.",
-            )
+            f"Unsupported BISR streaming-state version {version!r}; "
+            f"expected {_BISR_STREAMING_STATE_VERSION}."
         )
 
     payload_template = _BisrStreamingPayload(
@@ -162,10 +156,8 @@ def _load_bisr_streaming_state(
         missing = sorted(expected_fields - actual_fields)
         unexpected = sorted(actual_fields - expected_fields)
         raise CheckpointError(
-            *(
-                "BISR streaming-state fields do not match the current layout: "
-                f"missing={missing}, unexpected={unexpected}.",
-            )
+            "BISR streaming-state fields do not match the current layout: "
+            f"missing={missing}, unexpected={unexpected}."
         )
 
     restored = from_state_dict(
@@ -178,20 +170,16 @@ def _load_bisr_streaming_state(
         or restored.step > template.execution_identity.n_steps
     ):
         raise CheckpointError(
-            *(
-                "BISR streaming-state step must be an int within the configured "
-                f"horizon [0, {template.execution_identity.n_steps}], got "
-                f"{restored.step!r}.",
-            )
+            "BISR streaming-state step must be an int within the configured "
+            f"horizon [0, {template.execution_identity.n_steps}], got "
+            f"{restored.step!r}."
         )
     expected_history = len(template.execution_identity.inverse_coefficients) - 1
     if len(restored.history) != expected_history:
         raise CheckpointError(
-            *(
-                "BISR streaming history length does not match the configured "
-                f"bandwidth: got {len(restored.history)}, expected "
-                f"{expected_history}.",
-            )
+            "BISR streaming history length does not match the configured "
+            f"bandwidth: got {len(restored.history)}, expected "
+            f"{expected_history}."
         )
     return _BisrStreamingState(
         step=restored.step,
@@ -259,7 +247,7 @@ def _zero_tree_in_dtype(tree: Any, compute_dtype: torch.dtype) -> Any:
     def make_zero(value: Any) -> torch.Tensor:
         if not isinstance(value, torch.Tensor):
             raise InputTypeError(
-                *(f"BISR noise expects tensor leaves; got {type(value).__name__}.",)
+                f"BISR noise expects tensor leaves; got {type(value).__name__}."
             )
         return torch.zeros_like(value, dtype=compute_dtype)
 
@@ -287,10 +275,8 @@ def _validate_history_tree(
     )
     if current_spec != previous_spec or current_paths != previous_paths:
         raise CheckpointError(
-            *(
-                "BISR streaming history PyTree structure does not match the "
-                f"current noise tree at history index {history_index}.",
-            )
+            "BISR streaming history PyTree structure does not match the "
+            f"current noise tree at history index {history_index}."
         )
     for path, current, previous in zip(
         current_paths, current_leaves, previous_leaves, strict=True
@@ -299,11 +285,9 @@ def _validate_history_tree(
             previous, torch.Tensor
         ):
             raise CheckpointError(
-                *(
-                    "BISR streaming history must contain tensor leaves; got "
-                    f"current={type(current).__name__}, "
-                    f"history={type(previous).__name__} at path {path!r}.",
-                )
+                "BISR streaming history must contain tensor leaves; got "
+                f"current={type(current).__name__}, "
+                f"history={type(previous).__name__} at path {path!r}."
             )
         if (
             current.shape != previous.shape
@@ -311,13 +295,11 @@ def _validate_history_tree(
             or current.device != previous.device
         ):
             raise CheckpointError(
-                *(
-                    "BISR streaming history leaf does not match the current noise "
-                    f"tree at path {path!r}: current(shape={tuple(current.shape)}, "
-                    f"dtype={current.dtype}, device={current.device}), "
-                    f"history(shape={tuple(previous.shape)}, "
-                    f"dtype={previous.dtype}, device={previous.device}).",
-                )
+                "BISR streaming history leaf does not match the current noise "
+                f"tree at path {path!r}: current(shape={tuple(current.shape)}, "
+                f"dtype={current.dtype}, device={current.device}), "
+                f"history(shape={tuple(previous.shape)}, "
+                f"dtype={previous.dtype}, device={previous.device})."
             )
 
 
@@ -347,35 +329,27 @@ def _direct_bisr_streaming_matrix(
     ) -> tuple[Any, _BisrStreamingState]:
         if not isinstance(state, _BisrStreamingState):
             raise CheckpointError(
-                *(
-                    "BISR noise state does not use the bounded streaming layout. "
-                    "Resume legacy dense-history checkpoints with the Opake "
-                    "version that created them.",
-                )
+                "BISR noise state does not use the bounded streaming layout. "
+                "Resume legacy dense-history checkpoints with the Opake "
+                "version that created them."
             )
         if (
             type(state.execution_identity) is not _BisrExecutionIdentity
             or state.execution_identity != execution_identity
         ):
             raise CheckpointError(
-                *(
-                    "BISR noise state execution identity does not match the "
-                    "configured strategy, horizon, or compute dtype.",
-                )
+                "BISR noise state execution identity does not match the "
+                "configured strategy, horizon, or compute dtype."
             )
         if state.step < 0 or state.step >= n_steps:
             raise ConfigurationError(
-                *(
-                    f"BISR streaming step {state.step} is outside the calibrated "
-                    f"horizon [0, {n_steps}).",
-                )
+                f"BISR streaming step {state.step} is outside the calibrated "
+                f"horizon [0, {n_steps})."
             )
         if len(state.history) != window:
             raise CheckpointError(
-                *(
-                    "BISR streaming history length does not match the configured "
-                    f"bandwidth: got {len(state.history)}, expected {window}.",
-                )
+                "BISR streaming history length does not match the configured "
+                f"bandwidth: got {len(state.history)}, expected {window}."
             )
 
         count = min(state.step, window)
@@ -417,11 +391,9 @@ def _raise_unrepresentable_effective_coefficient(
     compute_dtype: torch.dtype,
 ) -> None:
     raise ConfigurationError(
-        *(
-            "BISR effective runtime coefficient is not representable in the "
-            f"configured compute dtype: tap={tap_index}, step={step}, "
-            f"value={value!r}, compute_dtype={compute_dtype}.",
-        )
+        "BISR effective runtime coefficient is not representable in the "
+        f"configured compute dtype: tap={tap_index}, step={step}, "
+        f"value={value!r}, compute_dtype={compute_dtype}."
     )
 
 
@@ -439,19 +411,15 @@ def _validate_effective_runtime_coefficients(
     }
     if compute_dtype not in supported_compute_dtypes:
         raise ConfigurationError(
-            *(
-                "BISR compute_dtype must be a supported real floating-point "
-                f"dtype, got {compute_dtype}.",
-            )
+            "BISR compute_dtype must be a supported real floating-point "
+            f"dtype, got {compute_dtype}."
         )
     try:
         torch.finfo(compute_dtype)
     except (TypeError, RuntimeError) as exc:
         raise ConfigurationError(
-            *(
-                "BISR compute_dtype must be a supported floating-point dtype, "
-                f"got {compute_dtype}.",
-            )
+            "BISR compute_dtype must be a supported floating-point dtype, "
+            f"got {compute_dtype}."
         ) from exc
 
     last_step = len(column_scales) - 1
@@ -477,10 +445,8 @@ def _validate_effective_runtime_coefficients(
                 cast_is_zero = cast.item() == 0
             except (TypeError, RuntimeError, ValueError) as exc:
                 raise ConfigurationError(
-                    *(
-                        "BISR could not represent an effective runtime coefficient "
-                        f"in compute_dtype={compute_dtype}.",
-                    )
+                    "BISR could not represent an effective runtime coefficient "
+                    f"in compute_dtype={compute_dtype}."
                 ) from exc
             if not cast_is_finite or cast_is_zero:
                 _raise_unrepresentable_effective_coefficient(
@@ -510,10 +476,8 @@ def _bisr_runtime_parameters(
             prefix_norm = math.hypot(prefix_norm, coefficient)
             if not math.isfinite(prefix_norm) or prefix_norm <= 0.0:
                 raise ConfigurationError(
-                    *(
-                        "BISR normalized column norm is invalid at forward "
-                        f"coefficient {index}: {prefix_norm!r}.",
-                    )
+                    "BISR normalized column norm is invalid at forward "
+                    f"coefficient {index}: {prefix_norm!r}."
                 )
             prefix_norms.append(prefix_norm)
         column_scales = tuple(reversed(prefix_norms))
@@ -549,7 +513,7 @@ def _bisr_runtime_parameters(
         )
         if not math.isfinite(row_l2) or row_l2 <= 0.0:
             raise ConfigurationError(
-                *(f"BISR effective row L2 norm is invalid at step {step}: {row_l2!r}.",)
+                f"BISR effective row L2 norm is invalid at step {step}: {row_l2!r}."
             )
         row_l2_values.append(row_l2)
     return inverse, column_scales, tuple(row_l2_values)
@@ -604,19 +568,15 @@ def _make_bisr_noise(
         inner = st._inner_state
         if not isinstance(inner, _BisrStreamingState):
             raise CheckpointError(
-                *(
-                    "BISR noise state does not use the bounded streaming layout. "
-                    "Resume legacy dense-history checkpoints with the Opake "
-                    "version that created them.",
-                )
+                "BISR noise state does not use the bounded streaming layout. "
+                "Resume legacy dense-history checkpoints with the Opake "
+                "version that created them."
             )
         if inner.step != st._step_counter:
             raise CheckpointError(
-                *(
-                    "BISR inner and outer step counters disagree: "
-                    f"inner={inner.step}, outer={st._step_counter}. The checkpoint "
-                    "is incomplete or uses an incompatible state layout.",
-                )
+                "BISR inner and outer step counters disagree: "
+                f"inner={inner.step}, outer={st._step_counter}. The checkpoint "
+                "is incomplete or uses an incompatible state layout."
             )
         return raw_noise_fn(clipped_grads, st, stddev=stddev)
 
@@ -648,46 +608,38 @@ class BisrStrategy:
     def __post_init__(self) -> None:
         if self.lr_schedule is not None:
             raise ConfigurationError(
-                *(
-                    "BisrStrategy does not support lr_schedule. Learning-rate "
-                    "schedules are optimizer post-processing and cannot weight its "
-                    "Balls-in-Bins privacy accounting. Remove lr_schedule from the "
-                    "strategy, pass it only to the optimizer, and recalibrate privacy "
-                    "and noise for any result previously computed with this option.",
-                )
+                "BisrStrategy does not support lr_schedule. Learning-rate "
+                "schedules are optimizer post-processing and cannot weight its "
+                "Balls-in-Bins privacy accounting. Remove lr_schedule from the "
+                "strategy, pass it only to the optimizer, and recalibrate privacy "
+                "and noise for any result previously computed with this option."
             )
         if self.bandwidth < _MIN_BANDWIDTH:
-            raise ConfigurationError(
-                *(f"bandwidth must be >= 2, got {self.bandwidth}",)
-            )
+            raise ConfigurationError(f"bandwidth must be >= 2, got {self.bandwidth}")
         if not math.isfinite(self.momentum) or not 0.0 <= self.momentum < 1.0:
             raise ConfigurationError(
-                *(f"momentum must be finite and in [0, 1), got {self.momentum}",)
+                f"momentum must be finite and in [0, 1), got {self.momentum}"
             )
         if (
             self.inv_coefficients is not None
             and len(self.inv_coefficients) != self.bandwidth
         ):
             raise ConfigurationError(
-                *(
-                    f"inv_coefficients length ({len(self.inv_coefficients)}) must "
-                    f"equal bandwidth ({self.bandwidth})",
-                )
+                f"inv_coefficients length ({len(self.inv_coefficients)}) must "
+                f"equal bandwidth ({self.bandwidth})"
             )
         if self.inv_coefficients is not None:
             if not all(math.isfinite(float(coef)) for coef in self.inv_coefficients):
                 raise ConfigurationError(
-                    *("inv_coefficients must contain only finite values",)
+                    "inv_coefficients must contain only finite values"
                 )
             if (
                 abs(float(self.inv_coefficients[0]))
                 < _MIN_LEADING_COEFFICIENT_MAGNITUDE
             ):
                 raise ConfigurationError(
-                    *(
-                        "inv_coefficients[0] must have magnitude "
-                        f">= {_MIN_LEADING_COEFFICIENT_MAGNITUDE:.0e}",
-                    )
+                    "inv_coefficients[0] must have magnitude "
+                    f">= {_MIN_LEADING_COEFFICIENT_MAGNITUDE:.0e}"
                 )
 
     def _inv_coefs(self) -> tuple[float, ...]:

@@ -98,15 +98,15 @@ class BMinSepSampler(Sampler):
     ) -> None:
         super().__init__()
         if len(data_source) == 0:
-            raise ConfigurationError(*("data_source must not be empty",))
+            raise ConfigurationError("data_source must not be empty")
         if bands < 1:
-            raise ConfigurationError(*(f"bands must be >= 1, got {bands}",))
+            raise ConfigurationError(f"bands must be >= 1, got {bands}")
         if not 0 < sampling_prob <= 1:
             raise ConfigurationError(
-                *(f"sampling_prob must be in (0, 1], got {sampling_prob}",)
+                f"sampling_prob must be in (0, 1], got {sampling_prob}"
             )
         if n_steps < 1:
-            raise ConfigurationError(*(f"n_steps must be >= 1, got {n_steps}",))
+            raise ConfigurationError(f"n_steps must be >= 1, got {n_steps}")
 
         self.num_examples = len(data_source)
         self.data_source: Sized = data_source
@@ -242,12 +242,10 @@ def _from_state_dict_b_min_sep(
     template_n = len(template.data_source)
     if saved_n != template_n:
         raise ConfigurationError(
-            *(
-                f"BMinSepSampler.from_state_dict: template dataset length "
-                f"{template_n} does not match snapshot num_examples={saved_n}.  "
-                "Restoring with a differently-sized dataset would silently "
-                "reconstruct a different Markov chain.",
-            )
+            f"BMinSepSampler.from_state_dict: template dataset length "
+            f"{template_n} does not match snapshot num_examples={saved_n}.  "
+            "Restoring with a differently-sized dataset would silently "
+            "reconstruct a different Markov chain."
         )
     sampler = BMinSepSampler._from_stream_key(
         template.data_source,

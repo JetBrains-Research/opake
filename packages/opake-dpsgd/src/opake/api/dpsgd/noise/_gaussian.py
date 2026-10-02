@@ -85,25 +85,23 @@ def _validate_noise_stddev(noise_stddev: float | PerGroup) -> None:
         for gname, value in noise_stddev.values.items():
             if value < 0:
                 raise ConfigurationError(
-                    *(
-                        "noise standard deviation must be non-negative for all groups, "
-                        f"got {value} for group '{gname}'",
-                    )
+                    "noise standard deviation must be non-negative for all groups, "
+                    f"got {value} for group '{gname}'"
                 )
     else:
         if noise_stddev < 0:
             raise ConfigurationError(
-                *(f"noise standard deviation must be non-negative, got {noise_stddev}",)
+                f"noise standard deviation must be non-negative, got {noise_stddev}"
             )
 
 
 def _resolve_noise_multiplier(noise_multiplier: float | None) -> float:
     if noise_multiplier is None:
-        raise ConfigurationError(*("gaussian_noise() requires noise_multiplier.",))
+        raise ConfigurationError("gaussian_noise() requires noise_multiplier.")
     multiplier = float(noise_multiplier)
     if multiplier < 0:
         raise ConfigurationError(
-            *(f"noise_multiplier must be non-negative, got {noise_multiplier}",)
+            f"noise_multiplier must be non-negative, got {noise_multiplier}"
         )
     return multiplier
 
@@ -111,14 +109,12 @@ def _resolve_noise_multiplier(noise_multiplier: float | None) -> float:
 def _validate_compute_dtype(compute_dtype: torch.dtype) -> None:
     if not isinstance(compute_dtype, torch.dtype):
         raise InputTypeError(
-            *(f"compute_dtype must be torch.dtype, got {type(compute_dtype).__name__}",)
+            f"compute_dtype must be torch.dtype, got {type(compute_dtype).__name__}"
         )
     if compute_dtype not in _SUPPORTED_COMPUTE_DTYPES:
         raise ConfigurationError(
-            *(
-                "compute_dtype must be one of torch.float16, torch.bfloat16, "
-                f"torch.float32, or torch.float64; got {compute_dtype}.",
-            )
+            "compute_dtype must be one of torch.float16, torch.bfloat16, "
+            f"torch.float32, or torch.float64; got {compute_dtype}."
         )
 
 
@@ -178,7 +174,7 @@ def gaussian_noise(
     _validate_compute_dtype(compute_dtype)
 
     if not isinstance(key, RngKey):
-        raise InputTypeError(*(f"key must be RngKey, got {type(key)}",))
+        raise InputTypeError(f"key must be RngKey, got {type(key)}")
 
     state = GaussianNoiseState(
         _step_counter=0,
@@ -217,10 +213,8 @@ def gaussian_noise(
             for path, tensor in zip(paths, leaves, strict=True):
                 if not isinstance(tensor, torch.Tensor):
                     raise InputTypeError(
-                        *(
-                            "gaussian_noise with PerGroup stddev expects tensor "
-                            f"leaves; got {type(tensor).__name__} at path {path!r}.",
-                        )
+                        "gaussian_noise with PerGroup stddev expects tensor "
+                        f"leaves; got {type(tensor).__name__} at path {path!r}."
                     )
                 group_std = effective_stddev.for_path(path)
                 noised_leaves.append(_sample(tensor, group_std, generator))
@@ -312,18 +306,14 @@ def gaussian_noise(
 
         if isinstance(grads, NoisedPytree):
             raise InputTypeError(
-                *(
-                    "gaussian_noise expects ClippedPytree inputs, not NoisedPytree "
-                    "values that have already passed through a noise mechanism.",
-                )
+                "gaussian_noise expects ClippedPytree inputs, not NoisedPytree "
+                "values that have already passed through a noise mechanism."
             )
 
         if not isinstance(grads, ClippedPytree):
             raise InputTypeError(
-                *(
-                    "gaussian_noise expects ClippedPytree inputs. Wrap manual "
-                    "values with opake.types.clipped(...).",
-                )
+                "gaussian_noise expects ClippedPytree inputs. Wrap manual "
+                "values with opake.types.clipped(...)."
             )
 
         effective_stddev = _clipped_stddev(grads)

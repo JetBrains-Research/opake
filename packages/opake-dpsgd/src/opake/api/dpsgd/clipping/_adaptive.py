@@ -79,20 +79,16 @@ class AdaptiveClipState(ClipState):
             for gname, val in self._next_clipping_norm.values.items():
                 if val <= 0:
                     raise ConfigurationError(
-                        *(
-                            f"next_clipping_norm must be positive for all groups, "
-                            f"got {val} for group '{gname}'",
-                        )
+                        f"next_clipping_norm must be positive for all groups, "
+                        f"got {val} for group '{gname}'"
                     )
         elif self._next_clipping_norm <= 0:
             raise ConfigurationError(
-                *(
-                    f"next_clipping_norm must be positive, got {self._next_clipping_norm}",
-                )
+                f"next_clipping_norm must be positive, got {self._next_clipping_norm}"
             )
         if self._fraction_noise_std <= 0:
             raise ConfigurationError(
-                *(f"fraction_noise_std must be > 0, got {self._fraction_noise_std}",)
+                f"fraction_noise_std must be > 0, got {self._fraction_noise_std}"
             )
 
 
@@ -320,45 +316,37 @@ def adaptive_clipped_grad(
         Clipping", NeurIPS 2021. https://arxiv.org/abs/1905.03871
     """
     if return_aux and return_stats:
-        raise ConfigurationError(
-            *("return_stats cannot be combined with return_aux=True",)
-        )
+        raise ConfigurationError("return_stats cannot be combined with return_aux=True")
 
     # Validate parameters
     if isinstance(initial_clipping_norm, PerGroup):
         for gname, val in initial_clipping_norm.values.items():
             if val <= 0:
                 raise ConfigurationError(
-                    *(
-                        f"initial_clipping_norm must be positive for all groups, "
-                        f"got {val} for group '{gname}'",
-                    )
+                    f"initial_clipping_norm must be positive for all groups, "
+                    f"got {val} for group '{gname}'"
                 )
     elif initial_clipping_norm <= 0:
         raise ConfigurationError(
-            *(f"initial_clipping_norm must be positive, got {initial_clipping_norm}",)
+            f"initial_clipping_norm must be positive, got {initial_clipping_norm}"
         )
     if not 0 < target_quantile < 1:
         raise ConfigurationError(
-            *(f"target_quantile must be in (0, 1), got {target_quantile}",)
+            f"target_quantile must be in (0, 1), got {target_quantile}"
         )
     if learning_rate <= 0:
-        raise ConfigurationError(
-            *(f"learning_rate must be positive, got {learning_rate}",)
-        )
+        raise ConfigurationError(f"learning_rate must be positive, got {learning_rate}")
     if clipping_norm_min <= 0:
         raise ConfigurationError(
-            *(f"clipping_norm_min must be positive, got {clipping_norm_min}",)
+            f"clipping_norm_min must be positive, got {clipping_norm_min}"
         )
     if clipping_norm_max <= clipping_norm_min:
         raise ConfigurationError(
-            *(
-                f"clipping_norm_max ({clipping_norm_max}) must be > clipping_norm_min ({clipping_norm_min})",
-            )
+            f"clipping_norm_max ({clipping_norm_max}) must be > clipping_norm_min ({clipping_norm_min})"
         )
     if fraction_noise_std <= 0:
         raise ConfigurationError(
-            *(f"fraction_noise_std must be positive, got {fraction_noise_std}",)
+            f"fraction_noise_std must be positive, got {fraction_noise_std}"
         )
 
     # Normalize argnums/batch_argnums for empty-batch detection.

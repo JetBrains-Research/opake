@@ -55,7 +55,7 @@ from opake.exceptions import ConfigurationError
 try:
     from torchopt.base import GradientTransformation
 except ImportError as exc:
-    raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+    raise ImportError(
         "torchopt is required for opake.optimizers. "
         "Install it with: pip install 'torchopt>=0.7.3'"
     ) from exc
@@ -141,11 +141,9 @@ def _scale_by_adadelta(
         # Validate state consistency: BC enabled but state has None phi fields.
         if noise_bias_correction and state.phi_dx is None:
             raise ConfigurationError(
-                *(
-                    "Attempted to initialize Adadelta with noise_bias_correction=True "
-                    "but state.phi_dx is None. This indicates a configuration mismatch "
-                    "or a corrupted checkpoint. Re-initialize state or disable BC.",
-                )
+                "Attempted to initialize Adadelta with noise_bias_correction=True "
+                "but state.phi_dx is None. This indicates a configuration mismatch "
+                "or a corrupted checkpoint. Re-initialize state or disable BC."
             )
         return state
 
@@ -160,10 +158,8 @@ def _scale_by_adadelta(
     ) -> tuple[Any, AdadeltaState]:
         if noisy_squared_grads is not None and noise_stddev is not None:
             raise ConfigurationError(
-                *(
-                    "adadelta.update() received both noisy_squared_grads and "
-                    "noise_stddev (DP-BC); pass exactly one (or neither).",
-                )
+                "adadelta.update() received both noisy_squared_grads and "
+                "noise_stddev (DP-BC); pass exactly one (or neither)."
             )
 
         t = state.step + 1
@@ -374,16 +370,16 @@ def adadelta(
           without it.  Use the ``NoisedPytree`` path for full BC.
     """
     if eps <= 0:
-        raise ConfigurationError(*(f"eps must be positive, got {eps}",))
+        raise ConfigurationError(f"eps must be positive, got {eps}")
     if not 0 <= rho < 1:
-        raise ConfigurationError(*(f"rho must satisfy 0 <= rho < 1, got {rho}",))
+        raise ConfigurationError(f"rho must satisfy 0 <= rho < 1, got {rho}")
     if weight_decay < 0:
         raise ConfigurationError(
-            *(f"weight_decay must be non-negative, got {weight_decay}",)
+            f"weight_decay must be non-negative, got {weight_decay}"
         )
     if update_rms_clip is not None and update_rms_clip <= 0:
         raise ConfigurationError(
-            *(f"update_rms_clip must be positive when set, got {update_rms_clip}",)
+            f"update_rms_clip must be positive when set, got {update_rms_clip}"
         )
 
     moment = _scale_by_adadelta(

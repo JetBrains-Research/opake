@@ -87,14 +87,14 @@ class KOutOfTSampler(Sampler):
     ) -> None:
         super().__init__()
         if len(data_source) == 0:
-            raise ConfigurationError(*("data_source must not be empty",))
+            raise ConfigurationError("data_source must not be empty")
         if t < 1:
-            raise ConfigurationError(*(f"t must be >= 1, got {t}",))
+            raise ConfigurationError(f"t must be >= 1, got {t}")
         if not 1 <= k <= t:
-            raise ConfigurationError(*(f"k must be in [1, t={t}], got {k}",))
+            raise ConfigurationError(f"k must be in [1, t={t}], got {k}")
         if allocation not in ("block", "total"):
             raise ConfigurationError(
-                *(f"allocation must be 'block' or 'total', got {allocation!r}",)
+                f"allocation must be 'block' or 'total', got {allocation!r}"
             )
 
         self.data_source: Sized = data_source
@@ -195,11 +195,9 @@ def _from_state_dict_k_out_of_t(
     """Restore the saved stream on an unchanged allocation schedule."""
     if len(template.data_source) != int(state["num_samples"]):
         raise ConfigurationError(
-            *(
-                "KOutOfTSampler.from_state_dict: template dataset length "
-                f"{len(template.data_source)} does not match snapshot "
-                f"num_samples={state['num_samples']}",
-            )
+            "KOutOfTSampler.from_state_dict: template dataset length "
+            f"{len(template.data_source)} does not match snapshot "
+            f"num_samples={state['num_samples']}"
         )
     for name in ("k", "t", "allocation"):
         saved = state[name]

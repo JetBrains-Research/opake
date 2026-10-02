@@ -47,14 +47,14 @@ class KOutOfT(DpHorizonProcess):
 
     def __post_init__(self) -> None:
         if self.n_steps < 1:
-            raise ConfigurationError(*(f"t must be >= 1, got {self.n_steps}",))
+            raise ConfigurationError(f"t must be >= 1, got {self.n_steps}")
         if not 1 <= self.k <= self.n_steps:
             raise ConfigurationError(
-                *(f"k must be in [1, t={self.n_steps}], got {self.k}",)
+                f"k must be in [1, t={self.n_steps}], got {self.k}"
             )
         if self.allocation not in ("block", "total"):
             raise ConfigurationError(
-                *(f"allocation must be 'block' or 'total', got {self.allocation!r}",)
+                f"allocation must be 'block' or 'total', got {self.allocation!r}"
             )
 
     @property
@@ -81,7 +81,7 @@ class KOutOfT(DpHorizonProcess):
                 return ac.effective_noise_multiplier
             case _:
                 raise InputTypeError(
-                    *("KOutOfT requires Gaussian, AdaClip(Gaussian), or NonPrivate",)
+                    "KOutOfT requires Gaussian, AdaClip(Gaussian), or NonPrivate"
                 )
 
     @pld_cache(maxsize=16)
@@ -135,14 +135,12 @@ def k_out_of_t(
     """
     if not isinstance(inner, (Gaussian, AdaClip, NonPrivate)):
         raise InputTypeError(
-            *(
-                "k_out_of_t() requires Gaussian, AdaClip, or NonPrivate inner, got "
-                f"{type(inner).__name__}.",
-            )
+            "k_out_of_t() requires Gaussian, AdaClip, or NonPrivate inner, got "
+            f"{type(inner).__name__}."
         )
     if allocation not in ("block", "total"):
         raise ConfigurationError(
-            *(f"allocation must be 'block' or 'total', got {allocation!r}",)
+            f"allocation must be 'block' or 'total', got {allocation!r}"
         )
     return KOutOfT(
         inner=inner,

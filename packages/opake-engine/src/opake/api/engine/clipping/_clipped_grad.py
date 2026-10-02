@@ -64,22 +64,20 @@ class ClippedGradAux:
 def _validate_static_args(argnums, batch_argnums, normalize_by):
     """Validates the argnums and batch_argnums inputs are compatible."""
     if normalize_by <= 0.0:
-        raise ConfigurationError(*(f"normalize_by must be > 0, got {normalize_by}.",))
+        raise ConfigurationError(f"normalize_by must be > 0, got {normalize_by}.")
     argnums = normalize_to_tuple(argnums)
     batch_argnums = normalize_to_tuple(batch_argnums)
     if not batch_argnums:
-        raise ConfigurationError(*("Batch argnums must not be empty.",))
+        raise ConfigurationError("Batch argnums must not be empty.")
     if min(argnums + batch_argnums) < 0:
         raise ConfigurationError(
-            *(f"argnums={argnums} and batch_argnums={batch_argnums} must be >= 0.",)
+            f"argnums={argnums} and batch_argnums={batch_argnums} must be >= 0."
         )
     shared_argnums = set(argnums) & set(batch_argnums)
     if shared_argnums:
         raise ConfigurationError(
-            *(
-                "Cannot compute clipped gradients for argnums that have a batch axis. "
-                f"{argnums=} and {batch_argnums=} with overlap {list(shared_argnums)}.",
-            )
+            "Cannot compute clipped gradients for argnums that have a batch axis. "
+            f"{argnums=} and {batch_argnums=} with overlap {list(shared_argnums)}."
         )
 
 
@@ -209,9 +207,7 @@ def clipped_grad(
     """
     _validate_static_args(argnums, batch_argnums, normalize_by)
     if return_aux and return_stats:
-        raise ConfigurationError(
-            *("return_stats cannot be combined with return_aux=True",)
-        )
+        raise ConfigurationError("return_stats cannot be combined with return_aux=True")
 
     argnums_tuple = normalize_to_tuple(argnums)
     batch_argnums_tuple = normalize_to_tuple(batch_argnums)

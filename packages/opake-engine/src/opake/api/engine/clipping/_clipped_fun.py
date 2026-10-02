@@ -194,16 +194,12 @@ def _validate_clipping_norm(clipping_norm: float | PerGroup) -> None:
         for group_name, value in clipping_norm.values.items():
             if value <= 0:
                 raise ConfigurationError(
-                    *(
-                        "clipping_norm must be positive for all groups, "
-                        f"got {value} for group '{group_name}'",
-                    )
+                    "clipping_norm must be positive for all groups, "
+                    f"got {value} for group '{group_name}'"
                 )
         return
     if clipping_norm <= 0:
-        raise ConfigurationError(
-            *(f"clipping_norm must be positive, got {clipping_norm}",)
-        )
+        raise ConfigurationError(f"clipping_norm must be positive, got {clipping_norm}")
 
 
 def _conservative_bound_tensor(value, device):
@@ -226,14 +222,12 @@ def _prepare_kernel_clipping_norm(
     )
     if tensor is None:
         raise ConfigurationError(
-            *("Could not determine the device for the runtime clipping norm",)
+            "Could not determine the device for the runtime clipping norm"
         )
     if tensor.shape[0] == 0:
         raise ConfigurationError(
-            *(
-                "Function-output clipping requires a non-empty batch because "
-                "the output pytree cannot be inferred otherwise.",
-            )
+            "Function-output clipping requires a non-empty batch because "
+            "the output pytree cannot be inferred otherwise."
         )
 
     if isinstance(clipping_norm, PerGroup):
@@ -401,9 +395,7 @@ def _prepare_clipped_fun(
     return_stats: bool,
 ) -> tuple[int, ...]:
     if return_aux and return_stats:
-        raise ConfigurationError(
-            *("return_stats cannot be combined with return_aux=True",)
-        )
+        raise ConfigurationError("return_stats cannot be combined with return_aux=True")
     normalized_batch_argnums = normalize_to_tuple(batch_argnums)
     _validate_clipping_norm(clipping_norm)
     return normalized_batch_argnums
@@ -631,9 +623,7 @@ def clipped_fun(
         return clipped_value
 
     if _chunk_compiler is not None and microbatch_size is None:
-        raise ConfigurationError(
-            *("_chunk_compiler requires a finite microbatch_size",)
-        )
+        raise ConfigurationError("_chunk_compiler requires a finite microbatch_size")
 
     def _streaming_kernel(in_dims, kernel_clipping_norm, args, kwargs, reduce_leaf):
         values, value_aux = _vmap_values(

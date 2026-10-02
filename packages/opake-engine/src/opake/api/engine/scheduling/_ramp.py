@@ -48,9 +48,7 @@ def resolve_ramp(
         return ramp
     if ramp not in NAMED_RAMPS:
         raise ConfigurationError(
-            *(
-                f"Unknown {field}={ramp!r}; expected one of {sorted(NAMED_RAMPS)} "
-                f"or a callable.",
-            )
+            f"Unknown {field}={ramp!r}; expected one of {sorted(NAMED_RAMPS)} "
+            f"or a callable."
         )
     return NAMED_RAMPS[ramp]

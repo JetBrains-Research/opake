@@ -14,7 +14,7 @@ set -euo pipefail
 bash "$(dirname "${BASH_SOURCE[0]}")/assert_cuda_available.sh"
 
 pytest_args=(
-  uv run pytest "$TEST_PATH"
+  uv run --no-sync pytest "$TEST_PATH"
   -m "$PYTEST_MARKER"
 )
 if [[ -n "${PYTEST_XDIST:-}" ]]; then

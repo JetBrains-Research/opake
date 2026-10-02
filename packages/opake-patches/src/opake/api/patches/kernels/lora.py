@@ -79,10 +79,8 @@ def _validate_vmap_dims(in_dims, *, name, batched_indices):
         expected = 0 if index in batched_indices else None
         if batch_dim != expected:
             raise ConfigurationError(
-                *(
-                    f"{name} vmap requires inputs {sorted(batched_indices)} to be batched "
-                    f"at dim 0 and all other inputs to be unbatched, got {in_dims}",
-                )
+                f"{name} vmap requires inputs {sorted(batched_indices)} to be batched "
+                f"at dim 0 and all other inputs to be unbatched, got {in_dims}"
             )
 
 
@@ -97,10 +95,8 @@ def _require_frozen_qkv_biases(*biases):
     """Reject base biases whose gradients the fused kernel cannot compute."""
     if any(bias is not None and bias.requires_grad for bias in biases):
         raise ConfigurationError(
-            *(
-                "Opake_LoRA_QKV requires frozen Q/K/V base biases; "
-                "use the unfused projection path for trainable biases.",
-            )
+            "Opake_LoRA_QKV requires frozen Q/K/V base biases; "
+            "use the unfused projection path for trainable biases."
         )
 
 

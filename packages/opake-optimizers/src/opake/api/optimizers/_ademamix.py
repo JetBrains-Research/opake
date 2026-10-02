@@ -45,7 +45,7 @@ from opake.exceptions import ConfigurationError
 try:
     from torchopt.base import GradientTransformation
 except ImportError as exc:
-    raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+    raise ImportError(
         "torchopt is required for opake.optimizers. "
         "Install it with: pip install 'torchopt>=0.7.3'"
     ) from exc
@@ -108,10 +108,8 @@ def _scale_by_ademamix(
     ) -> tuple[Any, AdEMAMixState]:
         if noisy_squared_grads is not None and noise_stddev is not None:
             raise ConfigurationError(
-                *(
-                    "ademamix.update() received both noisy_squared_grads and "
-                    "noise_stddev (DP-BC); pass exactly one (or neither).",
-                )
+                "ademamix.update() received both noisy_squared_grads and "
+                "noise_stddev (DP-BC); pass exactly one (or neither)."
             )
 
         t = state.step + 1
@@ -248,23 +246,23 @@ def ademamix(
     """
     if len(betas) != 3:  # noqa: PLR2004 - AdEMAMix exposes its documented beta triple
         raise ConfigurationError(
-            *(f"betas must contain exactly three values, got {betas}",)
+            f"betas must contain exactly three values, got {betas}"
         )
     b1, b2, b3 = betas
     for name, b in (("β₁", b1), ("β₂", b2), ("β₃", b3)):
         if not 0 <= b < 1:
-            raise ConfigurationError(*(f"{name} must satisfy 0 <= b < 1, got {b}",))
+            raise ConfigurationError(f"{name} must satisfy 0 <= b < 1, got {b}")
     if alpha < 0:
-        raise ConfigurationError(*(f"alpha must be non-negative, got {alpha}",))
+        raise ConfigurationError(f"alpha must be non-negative, got {alpha}")
     if eps <= 0:
-        raise ConfigurationError(*(f"eps must be positive, got {eps}",))
+        raise ConfigurationError(f"eps must be positive, got {eps}")
     if weight_decay < 0:
         raise ConfigurationError(
-            *(f"weight_decay must be non-negative, got {weight_decay}",)
+            f"weight_decay must be non-negative, got {weight_decay}"
         )
     if update_rms_clip is not None and update_rms_clip <= 0:
         raise ConfigurationError(
-            *(f"update_rms_clip must be positive when set, got {update_rms_clip}",)
+            f"update_rms_clip must be positive when set, got {update_rms_clip}"
         )
     bc_floor = eps * eps
     moment = _scale_by_ademamix(

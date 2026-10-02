@@ -240,12 +240,10 @@ def _optim_collapse(hf: dict[str, Any]) -> dict[str, Any]:
 
     if optim_str in _HF_PAGED_OPTIMS:
         raise ConfigurationError(
-            *(
-                f"hf_training_arguments.optim={optim_value!r}: Quantized / "
-                f"Apex-fused optimizers are not in opake-engine's torchopt "
-                f"path. Use ``optim='adamw'`` (opake's functional AdamW has no "
-                f"fused CUDA kernel).",
-            )
+            f"hf_training_arguments.optim={optim_value!r}: Quantized / "
+            f"Apex-fused optimizers are not in opake-engine's torchopt "
+            f"path. Use ``optim='adamw'`` (opake's functional AdamW has no "
+            f"fused CUDA kernel)."
         )
     if optim_str in {"adamw_torch", "adamw_hf"}:
         return {"optim": "adamw"}
@@ -457,18 +455,16 @@ def _convert_hf_training_arguments(
     try:
         from transformers import TrainingArguments as HFTrainingArguments
     except ImportError as e:
-        raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+        raise ImportError(
             "_convert_hf_training_arguments requires the ``transformers`` "
             "package. Install it with ``pip install transformers``."
         ) from e
 
     if not isinstance(hf_args, HFTrainingArguments):
         raise InputTypeError(
-            *(
-                f"Expected ``transformers.TrainingArguments`` instance, got "
-                f"{type(hf_args).__name__}. To convert a dict, build a "
-                "``TrainingArguments(**your_dict)`` first.",
-            )
+            f"Expected ``transformers.TrainingArguments`` instance, got "
+            f"{type(hf_args).__name__}. To convert a dict, build a "
+            "``TrainingArguments(**your_dict)`` first."
         )
 
     source_values = _get_dataclass_field_values(hf_args)

@@ -291,7 +291,7 @@ def momentum_sgd_matrix(
 
     if lr_sched.min() <= 0.0:
         raise ConfigurationError(
-            *(f"Learning rates must be positive. Found {learning_rates}",)
+            f"Learning rates must be positive. Found {learning_rates}"
         )
 
     def init_multiply(abstract_value):

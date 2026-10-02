@@ -23,7 +23,7 @@ try:
     from torchopt.alias.utils import scale_by_neg_lr
     from torchopt.base import GradientTransformation
 except ImportError as exc:
-    raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+    raise ImportError(
         "torchopt is required for opake.optimizers. "
         "Install it with: pip install 'torchopt>=0.7.3'"
     ) from exc
@@ -146,11 +146,9 @@ def make_optimizer_chain(
             return updates.pytree, {"noise_stddev": updates.noise_stddev}
         if isinstance(updates, ClippedPytree):
             raise InputTypeError(
-                *(
-                    "optimizer.update() received ClippedPytree updates that have not "
-                    "passed through a noise mechanism. Pass NoisedPytree outputs from "
-                    "a DP mechanism, or unwrap `.pytree` explicitly for non-private use.",
-                )
+                "optimizer.update() received ClippedPytree updates that have not "
+                "passed through a noise mechanism. Pass NoisedPytree outputs from "
+                "a DP mechanism, or unwrap `.pytree` explicitly for non-private use."
             )
         return updates, {}
 
@@ -159,10 +157,8 @@ def make_optimizer_chain(
             return value.pytree
         if isinstance(value, ClippedPytree):
             raise InputTypeError(
-                *(
-                    f"SecondMomentNoiseOutput.{name} is a ClippedPytree that has not "
-                    "passed through a noise mechanism.",
-                )
+                f"SecondMomentNoiseOutput.{name} is a ClippedPytree that has not "
+                "passed through a noise mechanism."
             )
         return value
 

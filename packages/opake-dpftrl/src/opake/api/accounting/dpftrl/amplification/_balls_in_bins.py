@@ -109,16 +109,14 @@ class BallsInBins(DpHorizonProcess):
     def __post_init__(self) -> None:
         if self.num_bins < _MIN_NUM_BINS:
             raise ConfigurationError(
-                *(f"num_bins must be >= 2 for BnB amplification, got {self.num_bins}",)
+                f"num_bins must be >= 2 for BnB amplification, got {self.num_bins}"
             )
         if self.n_steps < 1:
-            raise ConfigurationError(*(f"n_steps must be >= 1, got {self.n_steps}",))
+            raise ConfigurationError(f"n_steps must be >= 1, got {self.n_steps}")
         if self.n_steps % self.num_bins != 0:
             raise ConfigurationError(
-                *(
-                    f"n_steps ({self.n_steps}) must be a positive multiple of "
-                    f"num_bins ({self.num_bins}); BnB analysis assumes integer epochs.",
-                )
+                f"n_steps ({self.n_steps}) must be a positive multiple of "
+                f"num_bins ({self.num_bins}); BnB analysis assumes integer epochs."
             )
 
     @property
@@ -298,17 +296,13 @@ def balls_in_bins(
     """
     if not isinstance(inner, MfGaussian):
         raise InputTypeError(
-            *(
-                f"balls_in_bins() requires an MfGaussian inner, got {type(inner).__name__}.",
-            )
+            f"balls_in_bins() requires an MfGaussian inner, got {type(inner).__name__}."
         )
     if not isinstance(inner.strategy, (*_CorrelatedStrategies, IdentityStrategy)):
         raise InputTypeError(
-            *(
-                "balls_in_bins() requires inner.strategy in {BltStrategy, "
-                "BsrStrategy, BisrStrategy, LambdaCgdStrategy, IdentityStrategy}, "
-                f"got {type(inner.strategy).__name__}.",
-            )
+            "balls_in_bins() requires inner.strategy in {BltStrategy, "
+            "BsrStrategy, BisrStrategy, LambdaCgdStrategy, IdentityStrategy}, "
+            f"got {type(inner.strategy).__name__}."
         )
     # num_bins/n_steps bounds live in ``BallsInBins.__post_init__``.
     return BallsInBins(inner=inner, num_bins=num_bins, n_steps=n_steps)

@@ -59,7 +59,7 @@ from opake.exceptions import ConfigurationError
 try:
     from torchopt.base import GradientTransformation
 except ImportError as exc:
-    raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+    raise ImportError(
         "torchopt is required for opake.optimizers. "
         "Install it with: pip install 'torchopt>=0.7.3'"
     ) from exc
@@ -213,17 +213,15 @@ def adagrad(
         A ``torchopt.base.GradientTransformation``.
     """
     if eps <= 0:
-        raise ConfigurationError(*(f"eps must be positive, got {eps}",))
+        raise ConfigurationError(f"eps must be positive, got {eps}")
     if weight_decay < 0:
         raise ConfigurationError(
-            *(f"weight_decay must be non-negative, got {weight_decay}",)
+            f"weight_decay must be non-negative, got {weight_decay}"
         )
     if initial_accumulator_value < 0:
         raise ConfigurationError(
-            *(
-                "initial_accumulator_value must be non-negative, got "
-                f"{initial_accumulator_value}",
-            )
+            "initial_accumulator_value must be non-negative, got "
+            f"{initial_accumulator_value}"
         )
     moment = _scale_by_adagrad(
         eps=eps,

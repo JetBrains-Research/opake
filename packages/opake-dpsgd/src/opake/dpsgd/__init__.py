@@ -59,7 +59,7 @@ def __getattr__(name: str):
         module = import_module(f"opake.dpsgd.{name}")
         globals()[name] = module
         return module
-    raise AttributeError(f"module 'opake.dpsgd' has no attribute {name!r}")  # noqa: TRY003 - preserve standard Python error contract
+    raise AttributeError(f"module 'opake.dpsgd' has no attribute {name!r}")
 
 
 __all__ = [

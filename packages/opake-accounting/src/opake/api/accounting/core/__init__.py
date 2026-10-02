@@ -15,7 +15,7 @@ a short private name.
 try:
     from . import opake_accounting as _native  # noqa: F401
 except ImportError as e:
-    raise ImportError(  # noqa: TRY003 - preserve standard Python error contract
+    raise ImportError(
         "opake.api.accounting.core native extension not found. "
         "Build with: uv run maturin develop --release "
         "-m packages/opake-accounting/Cargo.toml"

@@ -85,7 +85,7 @@ def ld_dpo_split(
     """
     if not math.isfinite(alpha) or not 0.0 <= alpha <= 1.0:
         raise ConfigurationError(
-            *(f"alpha (LD-DPO) must be finite and in [0, 1], got {alpha}",)
+            f"alpha (LD-DPO) must be finite and in [0, 1], got {alpha}"
         )
 
     mask = completion_mask.to(per_token_logps.dtype)

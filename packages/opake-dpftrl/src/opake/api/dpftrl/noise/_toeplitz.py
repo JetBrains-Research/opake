@@ -128,7 +128,7 @@ def _lbfgs_optimize(
             torch.isfinite(torch.as_tensor(result.x)).all()
         ):
             raise OperationError(
-                *(f"L-BFGS produced a non-finite result: {result.message}",)
+                f"L-BFGS produced a non-finite result: {result.message}"
             )
         optimal_params = torch.tensor(result.x, dtype=original_dtype)
     except _EarlyStopException as e:
@@ -241,11 +241,9 @@ def inverse_as_streaming_matrix(
         identity[0] = 1.0
         if not np.allclose(product, identity, atol=1e-8):
             raise ConfigurationError(
-                *(
-                    "inverse_coefficients is not the Toeplitz inverse of coef: "
-                    "max |toeplitz(coef) @ toeplitz(inverse_coefficients) - I| = "
-                    f"{np.abs(product - identity).max():.3e}",
-                )
+                "inverse_coefficients is not the Toeplitz inverse of coef: "
+                "max |toeplitz(coef) @ toeplitz(inverse_coefficients) - I| = "
+                f"{np.abs(product - identity).max():.3e}"
             )
 
     def init(abstract_yi):
@@ -412,10 +410,8 @@ def multiply(
     """
     if not skip_checks and n is None and len(lhs_coef) != len(rhs_coef):
         raise ConfigurationError(
-            *(
-                "If n is not specified, lhs_coef and rhs_coef must have "
-                f"the same length, found {len(lhs_coef)} and {len(rhs_coef)}.",
-            )
+            "If n is not specified, lhs_coef and rhs_coef must have "
+            f"the same length, found {len(lhs_coef)} and {len(rhs_coef)}."
         )
     lhs_coef, n = _reconcile(lhs_coef, n)
     rhs_coef, _ = _reconcile(rhs_coef, n)
@@ -477,26 +473,24 @@ def minsep_sensitivity_squared(
     coef, n = _reconcile(strategy_coef, n)
 
     if not torch.all(torch.isfinite(coef)):
-        raise ConfigurationError(*("coef must contain only finite values",))
+        raise ConfigurationError("coef must contain only finite values")
     if not torch.all(coef >= 0):
         raise ConfigurationError(
-            *(f"coef must be non-negative, found min={coef.min().item()}",)
+            f"coef must be non-negative, found min={coef.min().item()}"
         )
     if len(coef) > 1:
         incr = coef[1:] - coef[:-1]
         max_incr = incr.max()
         if max_incr > 0:
             raise ConfigurationError(
-                *(
-                    f"coef must be non-increasing, found increase "
-                    f"{max_incr.item()} at index {incr.argmax().item()}",
-                )
+                f"coef must be non-increasing, found increase "
+                f"{max_incr.item()} at index {incr.argmax().item()}"
             )
     if min_sep <= 0:
-        raise ConfigurationError(*("min_sep must be positive",))
+        raise ConfigurationError("min_sep must be positive")
     if max_participations is not None and max_participations < 0:
         raise ConfigurationError(
-            *(f"max_participations must be non-negative, found {max_participations}",)
+            f"max_participations must be non-negative, found {max_participations}"
         )
 
     k = sensitivity.minsep_true_max_participations(
@@ -532,12 +526,12 @@ def minsep_sensitivity_upper_bound(
     """
     coef, n = _reconcile(strategy_coef, n)
     if not torch.all(torch.isfinite(coef)):
-        raise ConfigurationError(*("coef must contain only finite values",))
+        raise ConfigurationError("coef must contain only finite values")
     if min_sep <= 0:
-        raise ConfigurationError(*("min_sep must be positive",))
+        raise ConfigurationError("min_sep must be positive")
     if max_participations is not None and max_participations < 0:
         raise ConfigurationError(
-            *(f"max_participations must be non-negative, found {max_participations}",)
+            f"max_participations must be non-negative, found {max_participations}"
         )
 
     k = sensitivity.minsep_true_max_participations(
@@ -609,9 +603,7 @@ def per_query_error(
     )
     if query_weights.ndim != 1 or query_weights.shape[0] != n:
         raise ConfigurationError(
-            *(
-                f"query_weights must have shape ({n},), got {tuple(query_weights.shape)}",
-            )
+            f"query_weights must have shape ({n},), got {tuple(query_weights.shape)}"
         )
     return error * query_weights.square()
 
@@ -749,7 +741,7 @@ def optimize(
     if strategy_coef is None:
         strategy_coef = optimal_max_error_strategy_coefs(bands)
     if strategy_coef.shape[0] != bands:
-        raise ConfigurationError(*(f"{strategy_coef.shape=} != {bands=}",))
+        raise ConfigurationError(f"{strategy_coef.shape=} != {bands=}")
 
     params = _lbfgs_optimize(
         partial_loss,

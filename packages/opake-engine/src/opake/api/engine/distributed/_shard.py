@@ -40,14 +40,12 @@ def _local_shard_bounds(
 ) -> tuple[int, int]:
     """Return ``[start, end)`` index bounds for ``rank``."""
     if dataset_size < 0:
-        raise ConfigurationError(*(f"dataset_size must be >= 0, got {dataset_size}",))
+        raise ConfigurationError(f"dataset_size must be >= 0, got {dataset_size}")
     if world_size < 1:
-        raise ConfigurationError(*(f"world_size must be >= 1, got {world_size}",))
+        raise ConfigurationError(f"world_size must be >= 1, got {world_size}")
     if not 0 <= rank < world_size:
         raise ConfigurationError(
-            *(
-                f"rank must be in [0, world_size), got rank={rank}, world_size={world_size}",
-            )
+            f"rank must be in [0, world_size), got rank={rank}, world_size={world_size}"
         )
 
     if world_size == 1:

@@ -55,7 +55,7 @@ class RngKey:
 def key(seed: int) -> RngKey:
     """Create a PRNG key from an integer seed."""
     if not isinstance(seed, int) or isinstance(seed, bool):
-        raise InputTypeError(*(f"seed must be int, got {type(seed)}",))
+        raise InputTypeError(f"seed must be int, got {type(seed)}")
     return RngKey(seed=_to_uint64(seed))
 
 
@@ -104,13 +104,13 @@ def fold_in(rng_key: RngKey, *data: int | str) -> RngKey:
         >>> fold_in(stream, step, rank)               # equals fold_in twice
     """
     if not isinstance(rng_key, RngKey):
-        raise InputTypeError(*(f"rng_key must be RngKey, got {type(rng_key)}",))
+        raise InputTypeError(f"rng_key must be RngKey, got {type(rng_key)}")
     if not data:
-        raise ConfigurationError(*("fold_in requires at least one data argument",))
+        raise ConfigurationError("fold_in requires at least one data argument")
     result = rng_key
     for d in data:
         if not isinstance(d, (int, str)) or isinstance(d, bool):
-            raise InputTypeError(*(f"data must be int or str, got {type(d)}",))
+            raise InputTypeError(f"data must be int or str, got {type(d)}")
         mixed = _stable_hash64(result.seed, d)
         result = RngKey(seed=mixed, impl=result.impl)
     return result
@@ -125,9 +125,9 @@ def split(rng_key: RngKey, num: int = 2) -> tuple[RngKey, ...]:
     hand out the same keys ``split`` does.  See :func:`fold_in`.
     """
     if not isinstance(num, int) or isinstance(num, bool):
-        raise InputTypeError(*(f"num must be int, got {type(num)}",))
+        raise InputTypeError(f"num must be int, got {type(num)}")
     if num < 1:
-        raise ConfigurationError(*(f"num must be >= 1, got {num}",))
+        raise ConfigurationError(f"num must be >= 1, got {num}")
     return tuple(fold_in(rng_key, i) for i in range(num))
 
 

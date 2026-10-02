@@ -7,7 +7,7 @@ Tests:
 3. vmap (per-sample grad) vs PyTorch vmap
 4. Performance: forward+backward time and memory vs PyTorch
 
-Config: Mellum-4b scale (intermediate_dim=8256)
+Correctness tests use representative shapes; performance tests use Mellum-4b scale.
 """
 
 import pytest
@@ -64,13 +64,13 @@ def opake_geglu_approx(gate, up):
 class TestGeGLUExactForward:
     """Test GeGLU exact forward pass."""
 
-    def test_forward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_forward_matches_pytorch(self, assert_precision, kernel_config):
         """Forward: opake vs pytorch."""
         torch.manual_seed(42)
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(batch, seq, dim, device="cuda", dtype=torch.bfloat16)
@@ -92,13 +92,13 @@ class TestGeGLUExactForward:
 class TestGeGLUExactBackward:
     """Test GeGLU exact backward pass."""
 
-    def test_backward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_backward_matches_pytorch(self, assert_precision, kernel_config):
         """Backward: opake vs pytorch."""
         torch.manual_seed(42)
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate_pt = torch.randn(
@@ -135,14 +135,14 @@ class TestGeGLUExactBackward:
 class TestGeGLUExactVmapForward:
     """Test GeGLU exact vmap forward."""
 
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         """Batched forward: opake Triton vmap vs PyTorch reference."""
         torch.manual_seed(42)
-        vmap_batch = mellum_config["vmap_batch"]
+        vmap_batch = kernel_config["vmap_batch"]
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(
@@ -164,6 +164,7 @@ class TestGeGLUExactVmapForward:
             label="vmap forward output",
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_forward_performance(
         self, mellum_config, measure_time_and_memory, assert_perf_benefit
     ):
@@ -196,14 +197,14 @@ class TestGeGLUExactVmapForward:
 class TestGeGLUExactVmapGrad:
     """Test GeGLU exact vmap(grad): the DP-SGD path."""
 
-    def test_vmap_grad_precision(self, assert_precision, mellum_config):
+    def test_vmap_grad_precision(self, assert_precision, kernel_config):
         """Per-example gradients: opake Triton vs PyTorch reference."""
         torch.manual_seed(42)
-        vmap_batch = mellum_config["vmap_batch"]
+        vmap_batch = kernel_config["vmap_batch"]
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(
@@ -238,6 +239,7 @@ class TestGeGLUExactVmapGrad:
             label="up grad",
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, mellum_config, measure_time_and_memory, assert_perf_benefit
     ):
@@ -280,6 +282,7 @@ class TestGeGLUExactVmapGrad:
 # ============================================================================
 
 
+@pytest.mark.kernel_stress
 class TestGeGLUExactPerformance:
     """Test GeGLU exact kernel performance (non-vmap)."""
 
@@ -348,13 +351,13 @@ class TestGeGLUExactPerformance:
 class TestGeGLUApproxForward:
     """Test GeGLU approx forward pass."""
 
-    def test_forward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_forward_matches_pytorch(self, assert_precision, kernel_config):
         """Forward: opake vs pytorch."""
         torch.manual_seed(42)
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(batch, seq, dim, device="cuda", dtype=torch.bfloat16)
@@ -376,13 +379,13 @@ class TestGeGLUApproxForward:
 class TestGeGLUApproxBackward:
     """Test GeGLU approx backward pass."""
 
-    def test_backward_matches_pytorch(self, assert_precision, mellum_config):
+    def test_backward_matches_pytorch(self, assert_precision, kernel_config):
         """Backward: opake vs pytorch."""
         torch.manual_seed(42)
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate_pt = torch.randn(
@@ -419,14 +422,14 @@ class TestGeGLUApproxBackward:
 class TestGeGLUApproxVmapForward:
     """Test GeGLU approx vmap forward."""
 
-    def test_vmap_forward_precision(self, assert_precision, mellum_config):
+    def test_vmap_forward_precision(self, assert_precision, kernel_config):
         """Batched forward: opake Triton vmap vs PyTorch reference."""
         torch.manual_seed(42)
-        vmap_batch = mellum_config["vmap_batch"]
+        vmap_batch = kernel_config["vmap_batch"]
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(
@@ -448,6 +451,7 @@ class TestGeGLUApproxVmapForward:
             label="vmap forward output",
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_forward_performance(
         self, mellum_config, measure_time_and_memory, assert_perf_benefit
     ):
@@ -480,14 +484,14 @@ class TestGeGLUApproxVmapForward:
 class TestGeGLUApproxVmapGrad:
     """Test GeGLU approx vmap(grad): the DP-SGD path."""
 
-    def test_vmap_grad_precision(self, assert_precision, mellum_config):
+    def test_vmap_grad_precision(self, assert_precision, kernel_config):
         """Per-example gradients: opake Triton vs PyTorch reference."""
         torch.manual_seed(42)
-        vmap_batch = mellum_config["vmap_batch"]
+        vmap_batch = kernel_config["vmap_batch"]
         batch, seq, dim = (
-            mellum_config["batch_size"],
-            mellum_config["seq_len"],
-            mellum_config["intermediate_dim"],
+            kernel_config["batch_size"],
+            kernel_config["seq_len"],
+            kernel_config["intermediate_dim"],
         )
 
         gate = torch.randn(
@@ -522,6 +526,7 @@ class TestGeGLUApproxVmapGrad:
             label="up grad",
         )
 
+    @pytest.mark.kernel_stress
     def test_vmap_grad_performance(
         self, mellum_config, measure_time_and_memory, assert_perf_benefit
     ):
@@ -564,6 +569,7 @@ class TestGeGLUApproxVmapGrad:
 # ============================================================================
 
 
+@pytest.mark.kernel_stress
 class TestGeGLUApproxPerformance:
     """Test GeGLU approx kernel performance (non-vmap)."""
 
