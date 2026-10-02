@@ -47,7 +47,7 @@ import opake.dpsgd.accounting as dpsgd_acc
 from opake.accounting import Accountant
 from opake.accounting import calibration as cal
 from opake.accounting.types import DpHorizonProcess
-from opake.api.engine.clipping import clipped_grad
+from opake.api.engine.clipping import CudaGraphChunkCompiler, clipped_grad
 from opake.api.engine.device import (
     device_capabilities,
     sdpa_autocast_under_vmap_broken,
@@ -424,6 +424,28 @@ def _deep_json_recursion(limit: int = 30_000):
         sys.setrecursionlimit(old)
 
 
+def _active_dropout(model: Any) -> list[str]:
+    """Names of dropout modules or config fields with a positive probability."""
+    found = [
+        name or type(module).__name__
+        for name, module in model.named_modules()
+        if isinstance(module, torch.nn.modules.dropout._DropoutNd) and module.p > 0
+    ]
+    config = getattr(model, "config", None)
+    for field_name in (
+        "attention_dropout",
+        "hidden_dropout",
+        "dropout",
+        "resid_pdrop",
+        "attn_pdrop",
+        "embd_pdrop",
+    ):
+        value = getattr(config, field_name, None)
+        if isinstance(value, (int, float)) and value > 0:
+            found.append(f"config.{field_name}={value}")
+    return found
+
+
 class DPTrainer:
     """Differentially private trainer for HuggingFace models.
 
@@ -695,6 +717,8 @@ class DPTrainer:
         # complementary — HF's ``speed_metrics`` for run-level wall-clock
         # stays, the tracker adds per-step + post-warmup steady-state.
         self._perf_tracker: PerfTracker = perf_tracker(self._device)
+        # One CUDA-graph pool per trainer when ``cuda_graphs=True``; built lazily.
+        self._cuda_graph_compiler: CudaGraphChunkCompiler | None = None
         self._callback_handler = build_callback_handler(
             args=args,
             model=self._model,
@@ -1466,6 +1490,19 @@ class DPTrainer:
         # --- Gradient checkpointing ---
         if a.gradient_checkpointing:
             gc_kwargs = a.gradient_checkpointing_kwargs or {"use_reentrant": False}
+            if a.cuda_graphs:
+                # Saving and restoring CUDA RNG state cannot be captured. The
+                # recompute needs it only for random ops, so require none.
+                active = _active_dropout(self._model)
+                if active:
+                    raise ConfigurationError(
+                        *(
+                            "cuda_graphs=True with gradient checkpointing "
+                            "requires a model without active dropout; found "
+                            f"{', '.join(active[:5])}.",
+                        )
+                    )
+                gc_kwargs = {**gc_kwargs, "preserve_rng_state": False}
             self._model.gradient_checkpointing_enable(
                 gradient_checkpointing_kwargs=gc_kwargs,
             )
@@ -4463,6 +4500,18 @@ class DPTrainer:
         Poisson or remainder batch sizes; PyTorch may retain a size-one variant.
         """
         a = self.args
+        if a.cuda_graphs:
+            if self._device.type != "cuda":
+                raise ConfigurationError(
+                    *(
+                        "cuda_graphs=True requires a CUDA device; got "
+                        f"{self._device.type!r}.",
+                    )
+                )
+            if self._cuda_graph_compiler is None:
+                self._cuda_graph_compiler = CudaGraphChunkCompiler()
+                log.info("CUDA-graph replay enabled for DP gradient chunks.")
+            return self._cuda_graph_compiler
         if not a.torch_compile:
             return None
         caps = device_capabilities(self._device)

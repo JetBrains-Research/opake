@@ -499,6 +499,13 @@ class TrainingArguments:
     torch_compile: bool = False
     torch_compile_backend: str | None = None
     torch_compile_mode: str | None = None
+    #: Replay each DP microbatch kernel (``vmap(grad)`` + clipping + reduction)
+    #: from a CUDA graph captured once per microbatch shape, which removes the
+    #: per-call Python and launch overhead. CUDA only; excludes
+    #: ``torch_compile`` and ``auto_find_microbatch_size``. With gradient
+    #: checkpointing the model must have no active dropout, because the
+    #: checkpoint recompute then runs without saved RNG state.
+    cuda_graphs: bool = False
     # ``use_performance_kernels`` gates the CUDA + Triton kernel group
     # (``rope``, ``rms_norm``, ``activation``, ``cross_entropy``).  Default
     # ``False`` because the kernels need CUDA + Triton at runtime and the
@@ -931,6 +938,25 @@ class TrainingArguments:
 
         # torch.compile cannot retrace the vmap+grad closure that
         # auto_find_microbatch_size rebuilds on OOM (PyTorch #128711).
+        if not isinstance(self.cuda_graphs, bool):
+            raise ConfigurationError(
+                *(f"cuda_graphs must be a bool; got {self.cuda_graphs!r}.",)
+            )
+        if self.cuda_graphs and self.torch_compile:
+            raise ConfigurationError(
+                *(
+                    "cuda_graphs=True and torch_compile=True are mutually "
+                    "exclusive: both replace the eager microbatch kernel.",
+                )
+            )
+        if self.cuda_graphs and self.auto_find_microbatch_size:
+            raise ConfigurationError(
+                *(
+                    "cuda_graphs=True is incompatible with "
+                    "auto_find_microbatch_size=True: the probe's OOM retries "
+                    "would capture graphs at every probed size.",
+                )
+            )
         if self.torch_compile and self.auto_find_microbatch_size:
             raise ConfigurationError(
                 *(
