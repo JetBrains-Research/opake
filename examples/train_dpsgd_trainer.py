@@ -535,6 +535,18 @@ def parse_args() -> argparse.Namespace:
         default="adaptive",
     )
     dp_group.add_argument(
+        "--clip-backend",
+        type=str,
+        choices=["torch", "auto", "triton"],
+        default="torch",
+        help=(
+            "Per-example clip-and-sum implementation for fixed and adaptive "
+            "clipping: torch (default), triton (fused CUDA kernels; errors when "
+            "a call is unsupported) or auto (Triton where supported, torch "
+            "otherwise). AUTO-S (--clipping-mode auto) always uses torch."
+        ),
+    )
+    dp_group.add_argument(
         "--clipping-norm",
         type=float,
         default=1.0,
@@ -805,6 +817,10 @@ def parse_args() -> argparse.Namespace:
 
     if args.push_to_hub and not args.hub_model_id:
         parser.error("--push-to-hub requires --hub-model-id (e.g. 'org/name')")
+    if args.clip_backend == "triton" and args.clipping_mode == "auto":
+        parser.error(
+            "--clip-backend triton does not support --clipping-mode auto (AUTO-S)"
+        )
 
     if args.per_group_clipping:
         parsed: dict[str, float] = {}
@@ -826,6 +842,19 @@ def parse_args() -> argparse.Namespace:
     _validate_sampler_cli(parser, args)
 
     return args
+
+
+def _clipping_kwargs_for_trainer(args: argparse.Namespace) -> dict:
+    """Mode-specific ``clipping_kwargs`` for ``TrainingArguments``."""
+    if args.clipping_mode == "auto":
+        return {"gamma": args.auto_clipping_gamma}
+    kwargs = {}
+    if args.clipping_mode == "adaptive":
+        kwargs["target_quantile"] = args.target_clipping_rate
+        kwargs["clipping_norm_max"] = args.clipping_norm_max
+    if args.clip_backend != "torch":
+        kwargs["clip_backend"] = args.clip_backend
+    return kwargs
 
 
 def _validate_sampler_cli(
@@ -1116,16 +1145,7 @@ def main() -> int:
             if args.per_group_clipping
             else args.clipping_norm
         ),
-        clipping_kwargs=(
-            {
-                "target_quantile": args.target_clipping_rate,
-                "clipping_norm_max": args.clipping_norm_max,
-            }
-            if args.clipping_mode == "adaptive"
-            else {"gamma": args.auto_clipping_gamma}
-            if args.clipping_mode == "auto"
-            else {}
-        ),
+        clipping_kwargs=_clipping_kwargs_for_trainer(args),
         sampling_mode=args.sampler,
         sampling_kwargs=_sampling_kwargs_for_trainer(args),
         privacy_noise_mechanism=args.noise_mechanism,
