@@ -108,9 +108,12 @@ def test_signatures_beyond_max_graphs_run_eagerly():
 @pytest.mark.cuda
 @requires_cuda
 def test_unhashable_non_tensor_arguments_are_rejected():
+    class Unhashable:
+        __hash__ = None
+
     graphed = CudaGraphChunkCompiler()(lambda x, extra: x * 2)
     with pytest.raises(ConfigurationError, match="hashable"):
-        graphed(torch.ones(2, device="cuda"), [1, 2])
+        graphed(torch.ones(2, device="cuda"), Unhashable())
 
 
 def test_inputs_without_cuda_tensors_run_eagerly():

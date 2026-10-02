@@ -1234,10 +1234,22 @@ def test_capture_safe_path_replays_from_a_cuda_graph():
             captured_loss, captured_grad = _per_example_ce_grads(
                 static_hidden, weight, static_labels
             )
+        replayed = []
         for h, t in ((hidden, labels), (new_hidden, new_labels)):
             static_hidden.copy_(h)
             static_labels.copy_(t)
             graph.replay()
             eager_loss, eager_grad = _per_example_ce_grads(h, weight, t)
+            # The loss reduction is deterministic. The backward accumulates
+            # across vocabulary tiles in a nondeterministic order, so the
+            # gradient is compared within the eager kernel's tolerance.
             assert torch.equal(captured_loss, eager_loss)
-            assert torch.equal(captured_grad, eager_grad)
+            torch.testing.assert_close(
+                captured_grad.float(),
+                eager_grad.float(),
+                rtol=RTOL_BACKWARD,
+                atol=ATOL_BACKWARD,
+            )
+            replayed.append(captured_grad.clone())
+    # The replays read the current inputs, not the captured ones.
+    assert not torch.allclose(replayed[0].float(), replayed[1].float())
