@@ -425,3 +425,6 @@ verification results for the DP-clipping optimization workstream. Newest last.
 - Likely the largest lever for the next-edit workload; size not yet measured (needs the token-length distribution).
 - Candidate fixes: per-microbatch trim and length-ordered slicing. Both are DP-neutral by argument, pending DP review.
 - Correction: the earlier "new shape every microbatch" explanation for the C/D failure was wrong. Full microbatches share one shape per step. Memory remains the likely cause (inference).
+- Padding measured on a next-edit-like dataset (`20260324-train.parquet`, 36,149 rows, Qwen2.5-Coder-7B tokens): mean length 2,022, p90 3,180. Essentially every ~256-sample batch contains a 4096-token example, so today all samples are computed at 4096.
+- Tokens computed / real: 2.02 (attention 3.44). Length-sorted per-microbatch trim brings this to 1.00–1.01 at microbatch 2–4 (1.07 with bucket 256).
+- Expected wall-clock gain is below ×2, because per-example gradient, clip and noise costs do not scale with length. Script `experiments/padding_waste/measure_padding.py`; data `notes/smoke-compare/padding_waste.json`.

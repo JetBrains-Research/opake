@@ -1,0 +1,87 @@
+{
+ "dataset": "/Users/mihajlo.linic/PycharmProjects/diffusion-confusion-attack/datasets/20260324-train.parquet",
+ "model": "Qwen/Qwen2.5-Coder-7B",
+ "stats": {
+  "rows": 36149,
+  "truncated_at_4096": 866,
+  "length_mean": 2022.3978809925586,
+  "length_p50": 2033,
+  "length_p90": 3180,
+  "length_p99": 4096,
+  "length_max": 4096,
+  "batch_mean": 256.0825,
+  "batch_max_len_mean": 4095.866,
+  "batch_max_len_p10": 4096,
+  "steps": 2000
+ },
+ "results": {
+  "current (pad to logical-batch max)": {
+   "linear_ratio": 2.0248232808966993,
+   "attn_ratio": 3.4367850984471118
+  },
+  "trim mb=1": {
+   "linear_ratio": 1.0,
+   "attn_ratio": 1.0
+  },
+  "trim mb=2": {
+   "linear_ratio": 1.249788867211636,
+   "attn_ratio": 1.4307049138115335
+  },
+  "trim mb=4": {
+   "linear_ratio": 1.4646300843086781,
+   "attn_ratio": 1.8828820986614514
+  },
+  "trim mb=8": {
+   "linear_ratio": 1.6433652790053324,
+   "attn_ratio": 2.324826876205571
+  },
+  "sorted trim mb=2": {
+   "linear_ratio": 1.0037588331173848,
+   "attn_ratio": 1.0067016848273458
+  },
+  "sorted trim mb=4": {
+   "linear_ratio": 1.011187595747819,
+   "attn_ratio": 1.020049895247125
+  },
+  "sorted trim mb=8": {
+   "linear_ratio": 1.0258768387035804,
+   "attn_ratio": 1.0469104088926555
+  },
+  "sorted trim mb=2 bucket=128": {
+   "linear_ratio": 1.034299478882758,
+   "attn_ratio": 1.0576575652342293
+  },
+  "sorted trim mb=2 bucket=256": {
+   "linear_ratio": 1.0651450007111245,
+   "attn_ratio": 1.1110368623590994
+  },
+  "sorted trim mb=2 bucket=512": {
+   "linear_ratio": 1.1249697037990893,
+   "attn_ratio": 1.223148701097021
+  },
+  "sorted trim mb=4 bucket=128": {
+   "linear_ratio": 1.0415782812307273,
+   "attn_ratio": 1.0709063895494844
+  },
+  "sorted trim mb=4 bucket=256": {
+   "linear_ratio": 1.072275296415134,
+   "attn_ratio": 1.1242184350896998
+  },
+  "sorted trim mb=4 bucket=512": {
+   "linear_ratio": 1.1318548770558305,
+   "attn_ratio": 1.2361885094269933
+  },
+  "sorted trim mb=8 bucket=128": {
+   "linear_ratio": 1.0560642271467187,
+   "attn_ratio": 1.0977786600456334
+  },
+  "sorted trim mb=8 bucket=256": {
+   "linear_ratio": 1.0863728023239623,
+   "attn_ratio": 1.1508918474602636
+  },
+  "sorted trim mb=8 bucket=512": {
+   "linear_ratio": 1.1458960443376656,
+   "attn_ratio": 1.262612470977221
+  }
+ }
+}
