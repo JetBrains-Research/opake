@@ -2,7 +2,8 @@
 
 Env:
   CB_CUDAGRAPH=1   CUDA-graph the per-microbatch chunk (experiments/cuda_graph); needs a
-                   clip backend other than "triton". CB_CUDAGRAPH_CHECK=1 compares replays with eager.
+                   clip backend other than "triton". CB_CUDAGRAPH_CHECK=1 compares replays with eager;
+                   CB_CUDAGRAPH_FUSED=1 lets the fused Triton clip run inside the graph.
   CB_TF32=1        allow TF32 for float32 matmuls (cuBLAS and cuDNN)
   CB_NO_PEFT=1     apply_model_patches(..., peft=False): PEFT's stock LoRA instead of Opake's
   CB_KPROF=prefix  torch.profiler on chosen train steps; CB_KPROF_STEPS="4:cuda,5:all"
@@ -81,6 +82,8 @@ if os.environ.get("CB_CUDAGRAPH") == "1":
     import cudagraph_chunk as _cg
 
     _cg.install(check=os.environ.get("CB_CUDAGRAPH_CHECK") == "1")
+    if os.environ.get("CB_CUDAGRAPH_FUSED") == "1":
+        _cg.allow_fused_clip()
     atexit.register(lambda: print(f"[cudagraph] report {_cg.report()}", flush=True))
     print(f"[variant] cudagraph=True check={os.environ.get('CB_CUDAGRAPH_CHECK') == '1'}", flush=True)
 

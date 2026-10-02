@@ -155,6 +155,26 @@ def report():
 _PATCHED = {}
 
 
+def allow_fused_clip():
+    """Let clip_backend="triton"/"auto" use the fused kernels inside the graph.
+
+    ``_resolve_stream_impl`` rejects any chunk compiler for the fused backend
+    because torch.compile would trace it. A CUDA graph replays the eager
+    kernels it captured, so the wrapper is passed as "no compiler" there.
+    """
+    import importlib
+
+    cf = importlib.import_module("opake.api.engine.clipping._clipped_fun")
+    orig = cf._resolve_stream_impl
+
+    def resolve(clip_backend, **kw):
+        if kw.get("chunk_compiler") is CudaGraphChunk:
+            kw["chunk_compiler"] = None
+        return orig(clip_backend, **kw)
+
+    cf._resolve_stream_impl = resolve
+
+
 def install(check: bool = False):
     """Use ``CudaGraphChunk`` as the chunk compiler wherever none is set.
 

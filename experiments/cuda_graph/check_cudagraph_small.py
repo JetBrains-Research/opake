@@ -6,7 +6,8 @@ sizes that leave partial microbatches (several capture keys). For fixed and
 adaptive clipping (the threshold changes every step), gradients, the clip
 state's threshold and aux norms must be bitwise equal at every step.
 
-Usage (CUDA host, repo root): .venv/bin/python experiments/cuda_graph/check_cudagraph_small.py
+Usage (CUDA host, repo root):
+  .venv/bin/python experiments/cuda_graph/check_cudagraph_small.py [torch|triton]
 """
 
 from __future__ import annotations
@@ -18,11 +19,15 @@ import torch
 import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).parent))
+import cudagraph_chunk  # noqa: E402
 from cudagraph_chunk import CudaGraphChunk, report  # noqa: E402
 
 from opake.dpsgd.clipping import adaptive_clipped_grad, clipped_grad  # noqa: E402
 from opake.random import key  # noqa: E402
 
+BACKEND = sys.argv[1] if len(sys.argv) > 1 else "torch"
+if BACKEND != "torch":
+    cudagraph_chunk.allow_fused_clip()
 torch.manual_seed(0)
 DEV = "cuda"
 D, H, O = 32, 64, 8
@@ -41,7 +46,7 @@ def loss(p, x, y):
 
 def run(mode, compiler):
     kw = {"argnums": 0, "batch_argnums": (1, 2), "microbatch_size": 4, "return_aux": True,
-          "normalize_by": 12, "clip_backend": "torch"}
+          "normalize_by": 12, "clip_backend": BACKEND}
     if compiler is not None:
         kw["_chunk_compiler"] = compiler
     if mode == "adaptive":
