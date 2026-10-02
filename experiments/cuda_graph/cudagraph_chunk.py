@@ -55,6 +55,7 @@ class CudaGraphChunk:
     check_every = 20
     warmup = 2
     _pool = None
+    _warmed_up = False
 
     def __init__(self, fn):
         self.fn = fn
@@ -84,19 +85,27 @@ class CudaGraphChunk:
         t0 = time.perf_counter()
         static_flat = [x.clone() if isinstance(x, torch.Tensor) else x for x in flat]
         s_args, s_kwargs = pytree.tree_unflatten(static_flat, spec)
-        side = torch.cuda.Stream()
-        side.wait_stream(torch.cuda.current_stream())
-        with torch.cuda.stream(side):
-            for _ in range(self.warmup):
-                self.fn(*s_args, **s_kwargs)
-        torch.cuda.current_stream().wait_stream(side)
+        # Warm up (lazy init, cuBLAS handles, autotuning) only before the first
+        # capture. Later keys capture straight into the shared pool, reusing its
+        # freed blocks: an eager warmup there would need a second activation-sized
+        # allocation next to the pool (OOM at microbatch 4 on 40 GB).
+        n_warm = 0 if CudaGraphChunk._warmed_up else self.warmup
+        if n_warm:
+            side = torch.cuda.Stream()
+            side.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.stream(side):
+                for _ in range(n_warm):
+                    self.fn(*s_args, **s_kwargs)
+            torch.cuda.current_stream().wait_stream(side)
         torch.cuda.synchronize()
+        torch.cuda.empty_cache()  # release warmup blocks cached for the side stream
         if CudaGraphChunk._pool is None:
             CudaGraphChunk._pool = torch.cuda.graph_pool_handle()
         graph = torch.cuda.CUDAGraph()
         with torch.cuda.graph(graph, pool=CudaGraphChunk._pool):
             static_out = self.fn(*s_args, **s_kwargs)
         torch.cuda.synchronize()
+        CudaGraphChunk._warmed_up = True
         _STATS["captures"] += 1
         _STATS["capture_s"] += time.perf_counter() - t0
         _STATS["keys"].append([k for k in (_leaf_key(x) for x in flat) if k[0] == "T"][-1][1])
@@ -147,17 +156,24 @@ _PATCHED = {}
 
 
 def install(check: bool = False):
-    """Inject ``_chunk_compiler=CudaGraphChunk`` into opake.dpsgd.clipping's
-    ``clipped_grad`` / ``adaptive_clipped_grad`` (before the caller imports them)."""
+    """Use ``CudaGraphChunk`` as the chunk compiler wherever none is set.
+
+    Patches ``clipped_grad`` / ``adaptive_clipped_grad`` in opake.dpsgd.clipping
+    and ``clipped_grad`` in opake.api.engine.clipping (DPTrainer imports both),
+    before the caller imports them. An explicit ``_chunk_compiler=None`` (how
+    DPTrainer passes "no compile") is replaced; a real compiler is kept.
+    """
+    import opake.api.engine.clipping as ec
     import opake.dpsgd.clipping as dc
 
     CudaGraphChunk.check = check
-    for name in ("clipped_grad", "adaptive_clipped_grad"):
-        orig = getattr(dc, name)
-        _PATCHED[name] = orig
+    for mod, name in ((dc, "clipped_grad"), (dc, "adaptive_clipped_grad"), (ec, "clipped_grad")):
+        orig = getattr(mod, name)
+        _PATCHED[(mod.__name__, name)] = orig
 
         def wrapped(*a, _orig=orig, **k):
-            k.setdefault("_chunk_compiler", CudaGraphChunk)
+            if k.get("_chunk_compiler") is None:
+                k["_chunk_compiler"] = CudaGraphChunk
             return _orig(*a, **k)
 
-        setattr(dc, name, wrapped)
+        setattr(mod, name, wrapped)
