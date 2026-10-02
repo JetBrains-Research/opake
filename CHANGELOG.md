@@ -415,3 +415,6 @@ verification results for the DP-clipping optimization workstream. Newest last.
 - C and D (`cuda_graphs`): failed in the Adam update after step 1 (likely OOM; 73 GB reserved). Variable-length microbatches mean a capture per shape, each holding ~3.9 GB of rank-384 outputs. Next: shared static buffers and length bucketing.
 - ZenML runs: A `870a5a5a`, B `416ecfd8`, C `879b748b`, D `86979dc4`. Images: `sha256:dc825d30…` (A, B), `sha256:488960c5…` (C, D).
 - Workspace stopped.
+- E–H follow-up (same batches as A; paired speed-ups vs A): E microbatch 4 ×1.14; F checkpointing off ×1.42; G F + kernels ×1.52 at 48.3 GB; H G + microbatch 4 ×1.58 at 67.4 GB, ×1.50 vs the baseline per sample.
+- ε is identical in all runs; eval loss within 0.25%. G matches the old sweep's best speed with 18 GB less memory.
+- ZenML runs: E `7579928b`, F `56c99278`, G `08b42a25`, H `083816b9`.

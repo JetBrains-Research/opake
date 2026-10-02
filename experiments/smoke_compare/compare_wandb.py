@@ -34,6 +34,11 @@ VARIANTS = {
     "a": "opake A: baseline replica",
     "b": "opake B: + fused clip",
     "c": "opake C: + CUDA graphs",
+    "d": "opake D: C + model kernels",
+    "e": "opake E: B at microbatch 4",
+    "f": "opake F: B, checkpointing off",
+    "g": "opake G: F + model kernels",
+    "h": "opake H: G at microbatch 4",
 }
 def load(run):
     full = [r for r in run.scan_history() if r.get("train/step_time_sec") is not None]
