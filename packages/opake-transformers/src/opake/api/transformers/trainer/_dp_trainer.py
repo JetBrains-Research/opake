@@ -15,8 +15,8 @@ The trainer is shape-agnostic: any HF-style ``data_collator`` whose output
 the model's forward accepts will work.  Domain-specific training that
 builds on this trainer (SFT / DPO / KTO) should subclass it and override
 :meth:`DPTrainer.compute_per_example_loss` — the single DP-correct
-extension point that both training (vmap → grad → clip → noise) and
-eval (vmap when ``include_for_metrics=['loss']``) route through.
+extension point used by training (vmap → grad → clip → noise) and by
+evaluation's per-example-loss path.
 """
 
 from __future__ import annotations
@@ -441,13 +441,9 @@ class DPTrainer:
     - ``log()`` — append to state + fire callbacks
     """
 
-    #: eval_loss aggregation: ``True`` → weight per-example / batch losses by
-    #: their real (non ``-100``) token counts, reconstructing the corpus
-    #: per-token mean (HF CE parity; valid when the per-example loss is a
-    #: token-mean CE).  Subclasses whose eval loss is a per-example objective
-    #: in its own right (e.g. SFT ``dft``) set this ``False`` → plain
-    #: per-example mean, matching the training objective's fixed,
-    #: per-example-equal weighting (no data-dependent token-count divisor).
+    #: Native causal-LM eval losses use token-count weighting by default.
+    #: Custom callbacks always use the plain per-example mean; subclasses with
+    #: other per-example objectives (for example, SFT ``dft``) set this false.
     _eval_token_weighted_loss: bool = True
 
     def __init__(
@@ -549,9 +545,8 @@ class DPTrainer:
         self._preprocess_logits = preprocess_logits_for_metrics
         self._warned_per_example_logits_only = False
         self._warned_eval_on_train = False
-        # Lazily-built per-example eval-loss closure (vmap'd).  Populated
-        # by ``_get_eval_per_example_loss_fn`` on first use; reset to
-        # ``None`` here so model rebinding can invalidate the cache.
+        # Lazily built per-example eval closures, keyed by functional source
+        # and input signature in ``_get_eval_per_example_loss_fn``.
         self._eval_per_example_loss_fn: Callable | None = None
         self._eval_per_example_loss_fn_model: Any = None
         self._eval_per_example_loss_only_fn: Callable | None = None
@@ -2489,7 +2484,8 @@ class DPTrainer:
 
         This is the unified DP-correct override hook.  The trainer wraps
         it with ``vmap`` for training (then ``grad`` → clip → noise) and
-        for per-example eval (when ``'loss' in include_for_metrics``).
+        for evaluation whenever a custom objective or per-example losses are
+        requested.
         Subclasses (SFT, DPO, KTO, …) override this method to compute
         domain-specific per-example losses — the same override point
         covers training and eval semantics by construction.
@@ -2724,17 +2720,23 @@ class DPTrainer:
         else:
             labs = None
 
-        # ``'loss' in include_for_metrics`` opts into real per-example
-        # losses via the vmap'd eval closure. Requires labels
-        # (loss-without-labels falls through to the standard path). In
-        # loss-only mode the separate scalar closure avoids returning logits.
-        use_per_example_loss = (
+        # Custom objectives have one contract in training and evaluation: the
+        # callback receives one example. ``include_for_metrics=['loss']`` also
+        # selects this path for native model losses.
+        include_per_example_loss = (
             "loss" in (self.args.include_for_metrics or []) and has_labels
         )
+        use_custom_eval_loss = self._compute_loss_func is not None and has_labels
+        custom_eval_loss: Tensor | None = None
 
-        if use_per_example_loss:
+        if include_per_example_loss or use_custom_eval_loss:
+            return_logits = include_per_example_loss and not prediction_loss_only
+            eval_batch_keys = tuple(
+                key for key, value in inputs.items() if isinstance(value, Tensor)
+            )
             vmapped_fn, _batch_argnums, batch_keys = self._get_eval_per_example_loss_fn(
-                return_logits=not prediction_loss_only
+                return_logits=return_logits,
+                batch_keys=eval_batch_keys,
             )
             if self._ctx is not None:
                 trainable = self._ctx.trainable_params
@@ -2744,23 +2746,7 @@ class DPTrainer:
                     for name, p in self._model.named_parameters()
                     if p.requires_grad
                 }
-            # ``batch_keys`` / ``batch_argnums`` were discovered from the
-            # *train* collator and baked into the vmap'd closure.  If the eval
-            # collator emits a different key set, ``inputs.get(k)`` is ``None``
-            # and vmap fails with an opake error.  Validate up front and
-            # raise a clear, actionable message instead.
-            missing = [k for k in batch_keys if inputs.get(k) is None]
-            if missing:
-                raise ConfigurationError(
-                    *(
-                        "Per-example eval (include_for_metrics=['loss']) expects the "
-                        f"eval batch to carry the train-discovered keys {list(batch_keys)!r}, "
-                        f"but {missing!r} are absent (or None).  The eval collator/"
-                        "dataset differs from the training one; align them, or drop "
-                        "'loss' from include_for_metrics to use the standard eval path.",
-                    )
-                )
-            batch_args = tuple(inputs.get(k) for k in batch_keys)
+            batch_args = tuple(inputs[k] for k in batch_keys)
             with torch.no_grad():
                 was_training = self._model.training
                 if was_training:
@@ -2772,31 +2758,30 @@ class DPTrainer:
                         self._model.train()
             if prediction_loss_only:
                 return output.detach(), None, None
-            loss, logits_tensor = output
-            loss = loss.detach()
-            # The per-example path collects only the model's ``logits``
-            # tensor (not the full ``ignore_keys``-filtered output tuple the
-            # standard path builds).  Surface that once so multi-output
-            # users aren't silently handed logits-only predictions, and
-            # honour an explicit ``logits`` entry in ``ignore_keys``.
-            if not getattr(self, "_warned_per_example_logits_only", False):
-                log.warning(
-                    "include_for_metrics=['loss'] uses the per-example eval "
-                    "path, which returns logits-only predictions (auxiliary "
-                    "model outputs are not collected).  Drop 'loss' from "
-                    "include_for_metrics for the full multi-output prediction "
-                    "tuple."
+            if include_per_example_loss:
+                loss, logits_tensor = output
+                loss = loss.detach()
+                # This opt-in path returns logits only; the default prediction
+                # path below preserves every tensor-valued model output.
+                if not getattr(self, "_warned_per_example_logits_only", False):
+                    log.warning(
+                        "include_for_metrics=['loss'] uses the per-example eval "
+                        "path, which returns logits-only predictions (auxiliary "
+                        "model outputs are not collected).  Drop 'loss' from "
+                        "include_for_metrics for the full multi-output prediction "
+                        "tuple."
+                    )
+                    self._warned_per_example_logits_only = True
+                preds = (
+                    None
+                    if ignore_keys and "logits" in ignore_keys
+                    else (logits_tensor.detach() if logits_tensor is not None else None)
                 )
-                self._warned_per_example_logits_only = True
-            preds = (
-                None
-                if ignore_keys and "logits" in ignore_keys
-                else (logits_tensor.detach() if logits_tensor is not None else None)
-            )
-            return loss, preds, labs
+                return loss, preds, labs
+            custom_eval_loss = output.detach()
 
-        # Batched forward: the default reduced eval path avoids the per-example
-        # vmap while still using the configured training objective below.
+        # The batched forward remains the full prediction surface. Custom loss
+        # values come from the complete per-example forwards above.
         forward_inputs = {**model_inputs, **labels_kwargs}
         smoothing = float(self.args.label_smoothing_factor)
         if (
@@ -2825,44 +2810,39 @@ class DPTrainer:
             finally:
                 if was_training:
                     self._model.train()
-            if has_labels and isinstance(output, Mapping):
-                if self._compute_loss_func is not None:
-                    custom_labels = next(
-                        (labels_kwargs[k] for k in label_keys if k in labels_kwargs),
+            if custom_eval_loss is not None:
+                loss = custom_eval_loss
+            elif has_labels and isinstance(output, Mapping):
+                loss = output.get("loss")
+                output_logits = output.get("logits")
+                if smoothing > 0.0 and output_logits is not None:
+                    label_key = next(
+                        (k for k in label_keys if k in labels_kwargs),
                         None,
                     )
-                    loss = self._compute_loss_func(output, custom_labels)
-                else:
-                    loss = output.get("loss")
-                    output_logits = output.get("logits")
-                    if smoothing > 0.0 and output_logits is not None:
-                        label_key = next(
-                            (k for k in label_keys if k in labels_kwargs),
-                            None,
+                    labels_tensor = (
+                        labels_kwargs.get(label_key)
+                        if label_key is not None
+                        else labels_kwargs.get("labels")
+                    )
+                    if labels_tensor is not None:
+                        if (
+                            self._is_causal_lm
+                            and output_logits.ndim >= 3  # noqa: PLR2004
+                            and output_logits.shape[:-1] == labels_tensor.shape
+                            and output_logits.shape[-2] > 1
+                        ):
+                            smooth_logits = output_logits[..., :-1, :].contiguous()
+                            smooth_labels = labels_tensor[..., 1:].contiguous()
+                        else:
+                            smooth_logits = output_logits
+                            smooth_labels = labels_tensor
+                        loss = torch.nn.functional.cross_entropy(
+                            smooth_logits.view(-1, smooth_logits.size(-1)),
+                            smooth_labels.view(-1),
+                            ignore_index=_IGNORE_INDEX,
+                            label_smoothing=smoothing,
                         )
-                        labels_tensor = (
-                            labels_kwargs.get(label_key)
-                            if label_key is not None
-                            else labels_kwargs.get("labels")
-                        )
-                        if labels_tensor is not None:
-                            if (
-                                self._is_causal_lm
-                                and output_logits.ndim >= 3  # noqa: PLR2004
-                                and output_logits.shape[:-1] == labels_tensor.shape
-                                and output_logits.shape[-2] > 1
-                            ):
-                                smooth_logits = output_logits[..., :-1, :].contiguous()
-                                smooth_labels = labels_tensor[..., 1:].contiguous()
-                            else:
-                                smooth_logits = output_logits
-                                smooth_labels = labels_tensor
-                            loss = torch.nn.functional.cross_entropy(
-                                smooth_logits.view(-1, smooth_logits.size(-1)),
-                                smooth_labels.view(-1),
-                                ignore_index=_IGNORE_INDEX,
-                                label_smoothing=smoothing,
-                            )
                 if loss is not None:
                     loss = loss.detach().mean()
             else:
@@ -3036,24 +3016,15 @@ class DPTrainer:
                         self._control,
                     )
 
-                    # ``loss`` is scalar (default forward) or 1-D per-example
-                    # (when ``'loss' in include_for_metrics`` triggers the
-                    # vmap'd eval closure).  The model's per-example CE is already
-                    # the mean over real (non-``-100``) tokens, so:
-                    #   - scalar branch: ``loss.item() * real_tokens_in_batch`` is
-                    #     the total CE; dividing the running sum by the running
-                    #     ``loss_samples`` count gives per-real-token mean CE.
-                    #   - 1-D branch: ``loss[i] * real_tokens_in_example[i]`` is
-                    #     example i's total CE; summing then dividing by the total
-                    #     real-token count gives the same per-token mean.
-                    # When labels aren't exposed (rare), or the trainer opted out
-                    # of token weighting (``_eval_token_weighted_loss=False``),
-                    # fall back to the plain per-example mean.
+                    # Native causal-LM loss is a token mean. A custom callback
+                    # instead defines one scalar per privacy unit, matching
+                    # training's per-example mean.
                     if loss is not None:
                         if (
                             labels is not None
                             and self._eval_token_weighted_loss
                             and self._is_causal_lm
+                            and self._compute_loss_func is None
                         ):
                             # HF's ForCausalLMLoss scores ``labels[..., 1:]`` (drops
                             # position 0 via the internal shift); the per-token-mean
@@ -3801,10 +3772,24 @@ class DPTrainer:
 
         def _call(merged: dict[str, Tensor], inputs: dict[str, Tensor]) -> Any:
             if with_metrics:
-                return self.compute_per_example_loss_and_metrics(fmodel, merged, inputs)
-            return self.compute_per_example_loss(
-                fmodel, merged, inputs, return_logits=return_logits
-            )
+                result = self.compute_per_example_loss_and_metrics(
+                    fmodel, merged, inputs
+                )
+            else:
+                result = self.compute_per_example_loss(
+                    fmodel, merged, inputs, return_logits=return_logits
+                )
+            loss = result[0] if with_metrics or return_logits else result
+            if not isinstance(loss, Tensor) or loss.ndim != 0:
+                actual = (
+                    f"Tensor with shape {tuple(loss.shape)}"
+                    if isinstance(loss, Tensor)
+                    else type(loss).__name__
+                )
+                raise InputTypeError(
+                    *(f"Per-example loss must be a scalar Tensor; got {actual}.",)
+                )
+            return result
 
         def per_example_loss(
             trainable: dict[str, Tensor],
@@ -3834,6 +3819,7 @@ class DPTrainer:
         self,
         *,
         return_logits: bool = True,
+        batch_keys: tuple[str, ...],
     ) -> tuple[Callable[..., Any], tuple[int, ...], tuple[str, ...]]:
         """Return a vmap'd per-example eval closure (cached) plus its batch keys.
 
@@ -3844,12 +3830,8 @@ class DPTrainer:
         ``return_logits=False`` builds a separate loss-only closure so callers
         that discard predictions do not retain a logits result.
 
-        Cached per model identity — invalidated when ``self._model``
-        rebinds (the cache key is the live ``self._model`` reference).
-        During an active training run the trainer already has
-        ``ctx.fmodel`` / ``ctx.frozen_params`` populated; outside
-        training we run ``make_functional(self._model)`` once on first
-        use and reuse the result.
+        ``batch_keys`` comes from the prepared evaluation batch. The closure is
+        cached by its functional model and input signature.
         """
         cached_fn = (
             self._eval_per_example_loss_fn
@@ -3861,33 +3843,50 @@ class DPTrainer:
             if return_logits
             else self._eval_per_example_loss_only_fn_model
         )
-        if cached_fn is not None and cached_model is self._model:
-            fn, batch_argnums, batch_keys = cached_fn
-            return fn, batch_argnums, batch_keys
-
+        requested_batch_keys = batch_keys
         ctx = self._ctx
+        cache_owner = ctx.fmodel if ctx is not None else self._model
+        if cached_fn is not None and cached_model is cache_owner:
+            fn, batch_argnums, cached_batch_keys = cached_fn
+            if cached_batch_keys == requested_batch_keys:
+                return fn, batch_argnums, cached_batch_keys
+
+        if not requested_batch_keys:
+            raise InputTypeError(
+                *("Per-example evaluation requires at least one tensor input.",)
+            )
         if ctx is not None:
             fmodel = ctx.fmodel
             frozen_params = ctx.frozen_params
-            batch_keys = ctx.batch_keys
         else:
             from opake.functional import make_functional
 
             fmodel, _trainable, frozen_params = make_functional(
                 self._model, partition_trainable=True
             )
-            batch_keys = self._discover_batch_keys()
         fn, batch_argnums = self._build_per_example_loss(
-            fmodel, frozen_params, batch_keys, return_logits=return_logits
+            fmodel, frozen_params, requested_batch_keys, return_logits=return_logits
         )
-        vmapped = torch.vmap(fn, in_dims=(None,) + (0,) * len(batch_argnums))
+        vmapped = torch.vmap(
+            fn,
+            in_dims=(None,) + (0,) * len(batch_argnums),
+            randomness="same",
+        )
         if return_logits:
-            self._eval_per_example_loss_fn = (vmapped, batch_argnums, batch_keys)
-            self._eval_per_example_loss_fn_model = self._model
+            self._eval_per_example_loss_fn = (
+                vmapped,
+                batch_argnums,
+                requested_batch_keys,
+            )
+            self._eval_per_example_loss_fn_model = cache_owner
         else:
-            self._eval_per_example_loss_only_fn = (vmapped, batch_argnums, batch_keys)
-            self._eval_per_example_loss_only_fn_model = self._model
-        return vmapped, batch_argnums, batch_keys
+            self._eval_per_example_loss_only_fn = (
+                vmapped,
+                batch_argnums,
+                requested_batch_keys,
+            )
+            self._eval_per_example_loss_only_fn_model = cache_owner
+        return vmapped, batch_argnums, requested_batch_keys
 
     def _discover_batch_keys(self) -> tuple[str, ...]:
         """Discover the ordered tuple of tensor keys the collator emits.

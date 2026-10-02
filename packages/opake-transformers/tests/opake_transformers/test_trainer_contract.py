@@ -10,6 +10,7 @@ from transformers.trainer_callback import DefaultFlowCallback, TrainerCallback
 
 import opake.api.transformers.trainer._callback as callback_module
 import opake.api.transformers.trainer._dp_trainer as trainer_impl
+from opake.exceptions import InputTypeError
 from opake.transformers.trainer import DPTrainer, TrainingArguments
 
 
@@ -48,6 +49,46 @@ class _FusedAwareModel(torch.nn.Module):
             "loss": loss,
             "logits": None if loss_only else logits,
         }
+
+
+class _MultiOutputModel(torch.nn.Module):
+    main_input_name = "x"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.linear = torch.nn.Linear(4, 2)
+
+    def forward(self, x, labels=None):
+        logits = self.linear(x)
+        loss = (
+            torch.nn.functional.cross_entropy(logits, labels)
+            if labels is not None
+            else None
+        )
+        return {
+            "loss": loss,
+            "logits": logits,
+            "auxiliary": logits.square(),
+        }
+
+
+class _OptionalInputModel(torch.nn.Module):
+    main_input_name = "x"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.linear = torch.nn.Linear(4, 2)
+
+    def forward(self, x, labels=None, offset=None):
+        logits = self.linear(x)
+        if offset is not None:
+            logits = logits + offset
+        loss = (
+            torch.nn.functional.cross_entropy(logits, labels)
+            if labels is not None
+            else None
+        )
+        return {"loss": loss, "logits": logits}
 
 
 class _TokenClassifierModel(torch.nn.Module):
@@ -325,7 +366,7 @@ def test_prediction_step_requests_fused_loss_only_only_without_predictions(tmp_p
     assert model.fused_requests == [True, False]
 
 
-def test_default_eval_uses_same_custom_objective_as_training(tmp_path):
+def test_default_eval_calls_custom_loss_per_example_without_train_dataset(tmp_path):
     model = _FusedAwareModel()
     batch = {"x": torch.randn(3, 4), "labels": torch.tensor([0, 1, 0])}
     dataset = [
@@ -334,7 +375,7 @@ def test_default_eval_uses_same_custom_objective_as_training(tmp_path):
     ]
 
     def custom_loss(output, labels):
-        return 3.0 * torch.nn.functional.cross_entropy(output["logits"], labels)
+        return -output["logits"].gather(0, labels.unsqueeze(0)).squeeze(0)
 
     trainer = DPTrainer(
         model=model,
@@ -354,8 +395,211 @@ def test_default_eval_uses_same_custom_objective_as_training(tmp_path):
             )
         )
 
+    assert trainer.train_dataset is None
     assert eval_loss == pytest.approx(torch.stack(per_example_losses).mean().item())
     assert model.fused_requests == [False, False, False, False, False]
+
+
+def test_default_eval_recomputes_reduced_model_loss_per_example(tmp_path):
+    model = _FusedAwareModel()
+    with torch.no_grad():
+        model.linear.weight.copy_(
+            torch.tensor([[1.0, 0.0, 0.0, 0.0], [-1.0, 0.0, 0.0, 0.0]])
+        )
+        model.linear.bias.zero_()
+    batch = {
+        "x": torch.tensor(
+            [[2.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [-1.0, 0.0, 0.0, 0.0]]
+        ),
+        "labels": torch.tensor([0, 0, 0]),
+    }
+    dataset = [
+        {"x": x, "labels": label}
+        for x, label in zip(batch["x"], batch["labels"], strict=True)
+    ]
+    trainer = DPTrainer(
+        model=model,
+        args=_args(tmp_path, per_device_eval_batch_size=3),
+        eval_dataset=dataset,
+        compute_loss_func=lambda output, _labels: output["loss"].square(),
+    )
+
+    eval_loss = trainer.evaluate()["eval_loss"]
+    logits = model.linear(batch["x"])
+    per_example = torch.nn.functional.cross_entropy(
+        logits, batch["labels"], reduction="none"
+    ).square()
+    square_of_batch_mean = torch.nn.functional.cross_entropy(
+        logits, batch["labels"]
+    ).square()
+
+    assert eval_loss == pytest.approx(per_example.mean().item())
+    assert eval_loss != pytest.approx(square_of_batch_mean.item())
+
+
+def test_custom_eval_loss_uses_training_randomness_policy(tmp_path):
+    model = _FusedAwareModel()
+
+    def random_loss(output, _labels):
+        return output["loss"] + torch.rand(
+            (), device=output["loss"].device, dtype=output["loss"].dtype
+        )
+
+    trainer = DPTrainer(
+        model=model,
+        args=_args(tmp_path),
+        compute_loss_func=random_loss,
+    )
+    batch = {"x": torch.randn(3, 4), "labels": torch.tensor([0, 1, 0])}
+
+    loss, _, _ = trainer.prediction_step(model, dict(batch), prediction_loss_only=True)
+
+    base_loss = torch.nn.functional.cross_entropy(
+        model.linear(batch["x"]), batch["labels"], reduction="none"
+    )
+    random_offset = loss - base_loss
+    assert torch.allclose(random_offset, random_offset[0].expand_as(random_offset))
+
+
+def test_custom_eval_loss_preserves_full_prediction_output(tmp_path):
+    model = _MultiOutputModel()
+    trainer = DPTrainer(
+        model=model,
+        args=_args(tmp_path),
+        compute_loss_func=lambda output, _labels: output["loss"].square(),
+    )
+    batch = {"x": torch.randn(2, 4), "labels": torch.tensor([0, 1])}
+
+    loss, predictions, labels = trainer.prediction_step(
+        model, dict(batch), prediction_loss_only=False
+    )
+
+    logits = model.linear(batch["x"])
+    expected_loss = torch.nn.functional.cross_entropy(
+        logits, batch["labels"], reduction="none"
+    ).square()
+    assert torch.allclose(loss, expected_loss)
+    assert isinstance(predictions, tuple)
+    assert len(predictions) == 2
+    assert torch.allclose(predictions[0], logits)
+    assert torch.allclose(predictions[1], logits.square())
+    assert torch.equal(labels, batch["labels"])
+
+
+def test_custom_eval_loss_uses_current_batch_signature(tmp_path):
+    model = _OptionalInputModel()
+    train_dataset = [{"x": torch.zeros(4), "labels": torch.tensor(0)}]
+    trainer = DPTrainer(
+        model=model,
+        args=_args(tmp_path),
+        train_dataset=train_dataset,
+        compute_loss_func=lambda output, _labels: output["loss"],
+    )
+    batch = {
+        "x": torch.zeros(2, 4),
+        "labels": torch.tensor([0, 1]),
+        "offset": torch.tensor([[4.0, -4.0], [4.0, -4.0]]),
+    }
+
+    loss, _, _ = trainer.prediction_step(model, dict(batch), prediction_loss_only=True)
+
+    logits = model.linear(batch["x"]) + batch["offset"]
+    expected = torch.nn.functional.cross_entropy(
+        logits, batch["labels"], reduction="none"
+    )
+    without_offset = torch.nn.functional.cross_entropy(
+        model.linear(batch["x"]), batch["labels"], reduction="none"
+    )
+    assert torch.allclose(loss, expected)
+    assert not torch.allclose(loss, without_offset)
+
+
+def test_one_step_train_and_default_eval_use_same_custom_objective(tmp_path):
+    model = _MultiOutputModel()
+    dataset = [
+        {"x": torch.tensor([value, 0.0, 0.0, 0.0]), "labels": label}
+        for value, label in [(2.0, 0), (-1.0, 1), (0.5, 0)]
+    ]
+
+    def custom_loss(output, labels):
+        return -output["logits"].gather(0, labels.unsqueeze(0)).squeeze(0)
+
+    trainer = DPTrainer(
+        model=model,
+        args=_args(
+            tmp_path,
+            per_device_train_batch_size=len(dataset),
+            per_device_eval_batch_size=len(dataset),
+            max_steps=1,
+            learning_rate=0.0,
+            disable_tqdm=True,
+        ),
+        train_dataset=dataset,
+        eval_dataset=dataset,
+        compute_loss_func=custom_loss,
+    )
+
+    training_loss = trainer.train().training_loss
+    eval_loss = trainer.evaluate()["eval_loss"]
+
+    assert training_loss == pytest.approx(eval_loss)
+
+
+@pytest.mark.parametrize("with_metrics", [False, True])
+def test_custom_causal_loss_uses_example_mean(tmp_path, with_metrics):
+    model = _CausalLMModel()
+    with torch.no_grad():
+        model.linear.weight.copy_(
+            torch.tensor(
+                [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0, 0.0],
+                ]
+            )
+        )
+        model.linear.bias.zero_()
+    x = torch.zeros(2, 4, 4)
+    x[..., 0] = 3.0
+    labels = torch.tensor([[0, 0, -100, -100], [0, 2, 2, 2]])
+    dataset = [
+        {"x": example, "labels": target}
+        for example, target in zip(x, labels, strict=True)
+    ]
+    trainer = DPTrainer(
+        model=model,
+        args=_args(tmp_path, per_device_eval_batch_size=2),
+        eval_dataset=dataset,
+        compute_loss_func=lambda output, _labels: output["loss"],
+        compute_metrics=(lambda _prediction: {}) if with_metrics else None,
+    )
+
+    eval_loss = trainer.evaluate()["eval_loss"]
+    logits = model.linear(x)[..., :-1, :]
+    per_example = torch.stack(
+        [
+            torch.nn.functional.cross_entropy(logit, target, ignore_index=-100)
+            for logit, target in zip(logits, labels[..., 1:], strict=True)
+        ]
+    )
+    token_counts = (labels[..., 1:] != -100).sum(dim=1)
+    token_weighted = (per_example * token_counts).sum() / token_counts.sum()
+
+    assert eval_loss == pytest.approx(per_example.mean().item())
+    assert eval_loss != pytest.approx(token_weighted.item())
+
+
+def test_custom_loss_must_return_a_scalar_per_example(tmp_path):
+    model = _FusedAwareModel()
+    trainer = DPTrainer(
+        model=model,
+        args=_args(tmp_path),
+        compute_loss_func=lambda output, _labels: output["logits"],
+    )
+    batch = {"x": torch.randn(2, 4), "labels": torch.tensor([0, 1])}
+
+    with pytest.raises(InputTypeError, match="must be a scalar Tensor"):
+        trainer.prediction_step(model, batch, prediction_loss_only=True)
 
 
 def test_default_eval_applies_label_smoothing(tmp_path):
@@ -450,7 +694,7 @@ def test_custom_loss_takes_precedence_over_label_smoothing(tmp_path):
     )
     batch = {"x": torch.randn(2, 4), "labels": torch.tensor([0, 1])}
     expected = torch.nn.functional.cross_entropy(
-        model.linear(batch["x"]), batch["labels"]
+        model.linear(batch["x"]), batch["labels"], reduction="none"
     )
 
     loss, _, _ = trainer.prediction_step(
