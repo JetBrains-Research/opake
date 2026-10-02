@@ -1,6 +1,9 @@
 """Run an example training script with the clip-path prototypes installed.
 
 Env:
+  CB_GC_NO_DEVICE_RNG=1  gradient checkpointing does not save/restore CUDA RNG state (equivalent to
+                   preserve_rng_state=False for the device). Exact only when the checkpointed
+                   forward draws no random numbers (no active dropout); needed for CUDA-graph capture.
   CB_CUDAGRAPH=1   CUDA-graph the per-microbatch chunk (experiments/cuda_graph); needs a
                    clip backend other than "triton". CB_CUDAGRAPH_CHECK=1 compares replays with eager;
                    CB_CUDAGRAPH_FUSED=1 lets the fused Triton clip run inside the graph.
@@ -91,6 +94,12 @@ if os.environ.get("CB_CUDAGRAPH") == "1":
         _cg.allow_fused_clip()
     atexit.register(lambda: print(f"[cudagraph] report {_cg.report()}", flush=True))
     print(f"[variant] cudagraph=True check={os.environ.get('CB_CUDAGRAPH_CHECK') == '1'}", flush=True)
+
+if os.environ.get("CB_GC_NO_DEVICE_RNG") == "1":
+    import torch.utils.checkpoint as _ckpt
+
+    _ckpt.get_device_states = lambda *args: ([], [])
+    print("[variant] checkpoint device RNG state: not preserved", flush=True)
 
 _KPROF = os.environ.get("CB_KPROF")
 if _KPROF:
