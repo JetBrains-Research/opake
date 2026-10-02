@@ -1,6 +1,8 @@
 """Run an example training script with the clip-path prototypes installed.
 
 Env:
+  CB_TF32=1        allow TF32 for float32 matmuls (cuBLAS and cuDNN)
+  CB_NO_PEFT=1     apply_model_patches(..., peft=False): PEFT's stock LoRA instead of Opake's
   CB_KPROF=prefix  torch.profiler on chosen train steps; CB_KPROF_STEPS="4:cuda,5:all"
                    (cuda = CUDA activity only, accurate timeline; all = CPU+CUDA for
                    op attribution, inflates host time). Writes <prefix>.step<N>.*
@@ -52,6 +54,23 @@ if chunk:
     mt_engine.install_vmap_chunk(chunk)
 print(f"[variant] multi_tensor={os.environ.get('CB_MT') == '1'} vmap_chunk={chunk} "
       f"old={os.environ.get('CB_OLD') == '1'} noforeach={os.environ.get('CB_NOFOREACH') == '1'}", flush=True)
+
+if os.environ.get("CB_TF32") == "1":
+    import torch as _torch
+
+    _torch.backends.cuda.matmul.allow_tf32 = True
+    _torch.backends.cudnn.allow_tf32 = True
+if os.environ.get("CB_NO_PEFT") == "1":
+    import opake.patches as _patches
+
+    _orig_amp = _patches.apply_model_patches
+
+    def _amp_no_peft(model, *a, **k):
+        k["peft"] = False
+        return _orig_amp(model, *a, **k)
+
+    _patches.apply_model_patches = _amp_no_peft
+print(f"[variant] tf32={os.environ.get('CB_TF32') == '1'} no_peft={os.environ.get('CB_NO_PEFT') == '1'}", flush=True)
 
 _KPROF = os.environ.get("CB_KPROF")
 if _KPROF:
