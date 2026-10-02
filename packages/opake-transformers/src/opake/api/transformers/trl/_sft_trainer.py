@@ -665,8 +665,12 @@ class SFTTrainer(DPTrainer):
         # per-example aggregation, but has no consumer for logits. Ask the base
         # helper for its separate no-logits closure so this call can also take
         # DFT's fused logits-free path despite telemetry being enabled elsewhere.
+        eval_batch_keys = tuple(
+            key for key, value in inputs.items() if isinstance(value, torch.Tensor)
+        )
         vmapped_fn, _argnums, batch_keys = self._get_eval_per_example_loss_fn(
-            return_logits=not prediction_loss_only
+            return_logits=not prediction_loss_only,
+            batch_keys=eval_batch_keys,
         )
         if self._ctx is not None:
             trainable = self._ctx.trainable_params
@@ -674,17 +678,6 @@ class SFTTrainer(DPTrainer):
             trainable = {
                 name: p for name, p in self._model.named_parameters() if p.requires_grad
             }
-        # Fail loudly on a mismatched eval collator (base-path parity) —
-        # a missing key would otherwise surface as an opake vmap error.
-        missing = [k for k in batch_keys if inputs.get(k) is None]
-        if missing:
-            raise ConfigurationError(
-                *(
-                    "DFT eval expects the eval batch to carry the train-discovered "
-                    f"keys {list(batch_keys)!r}, but {missing!r} are absent (or "
-                    "None); align the eval collator/dataset with the training one.",
-                )
-            )
         batch_args = tuple(inputs[k] for k in batch_keys)
 
         amp_dtype = self._amp_dtype
