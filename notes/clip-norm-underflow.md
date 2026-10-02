@@ -1,6 +1,6 @@
 # Clipping norm underflow: stored-value bound outside the representable range
 
-**Status:** documented limitation (docstring note in `clip_pytree`, bullet in
+**Status:** tracked in [#1123](https://github.com/JetBrains-Research/opake/issues/1123); documented limitation (docstring note in `clip_pytree`, bullet in
 `docs/user-guide/precision.md`). No code change. A fix needs owner sign-off and
 DP review.
 **Found:** 2026-10-01, adversarial bound review of the fused clip engine

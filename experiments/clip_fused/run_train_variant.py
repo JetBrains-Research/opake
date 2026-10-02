@@ -1,6 +1,9 @@
 """Run an example training script with the clip-path prototypes installed.
 
 Env:
+  CB_KPROF=prefix  torch.profiler on chosen train steps; CB_KPROF_STEPS="4:cuda,5:all"
+                   (cuda = CUDA activity only, accurate timeline; all = CPU+CUDA for
+                   op attribution, inflates host time). Writes <prefix>.step<N>.*
   CB_OLD=1         previous packaged kernels, per-leaf markers, leafwise accumulator
   CB_NOFOREACH=1   leafwise accumulator instead of torch._foreach_add
   CB_MT=1          multi-tensor clip kernel + shared dtype markers (mt_engine)
@@ -49,6 +52,57 @@ if chunk:
     mt_engine.install_vmap_chunk(chunk)
 print(f"[variant] multi_tensor={os.environ.get('CB_MT') == '1'} vmap_chunk={chunk} "
       f"old={os.environ.get('CB_OLD') == '1'} noforeach={os.environ.get('CB_NOFOREACH') == '1'}", flush=True)
+
+_KPROF = os.environ.get("CB_KPROF")
+if _KPROF:
+    import contextlib
+    import csv
+    import gzip
+
+    import torch
+
+    _MEM = importlib.import_module("opake.api.engine.profiling._memory")
+    _orig_call = _MEM.PerfStage.__call__
+    _plan = dict(item.split(":") for item in os.environ.get("CB_KPROF_STEPS", "4:cuda,5:all").split(","))
+    _seen = {"train": 0}
+
+    def _dump(prof, prefix, mode):
+        cuda = torch.autograd.DeviceType.CUDA
+        with gzip.open(f"{prefix}.kernels.csv.gz", "wt", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["name", "start_us", "dur_us"])
+            for e in prof.events():
+                if e.device_type == cuda:
+                    w.writerow([e.name, f"{e.time_range.start:.3f}", f"{e.time_range.elapsed_us():.3f}"])
+        if mode == "all":
+            ka = prof.key_averages()
+            Path(f"{prefix}.cpu_ops.txt").write_text(ka.table(sort_by="self_cpu_time_total", row_limit=80))
+            Path(f"{prefix}.cuda_ops.txt").write_text(ka.table(sort_by="self_cuda_time_total", row_limit=80))
+        print(f"[kprof] wrote {prefix}.* ({mode})", flush=True)
+
+    @contextlib.contextmanager
+    def _profiled(self, *, batch_size=0, track_memory=True):
+        n = None
+        if self.name == "train":
+            _seen["train"] += 1
+            n = _seen["train"]
+        mode = _plan.get(str(n)) if n is not None else None
+        if mode is None:
+            with _orig_call(self, batch_size=batch_size, track_memory=track_memory) as sp:
+                yield sp
+            return
+        acts = [torch.profiler.ProfilerActivity.CUDA]
+        if mode == "all":
+            acts.append(torch.profiler.ProfilerActivity.CPU)
+        torch.cuda.synchronize()
+        with torch.profiler.profile(activities=acts) as prof:
+            with _orig_call(self, batch_size=batch_size, track_memory=track_memory) as sp:
+                yield sp
+            torch.cuda.synchronize()
+        print(f"[kprof] step {n} batch {batch_size} wall {self.last.step_time_sec:.3f}s ({mode})", flush=True)
+        _dump(prof, f"{_KPROF}.step{n}", mode)
+
+    _MEM.PerfStage.__call__ = _profiled
 
 script = sys.argv[1]
 sys.argv = [script] + sys.argv[2:]
