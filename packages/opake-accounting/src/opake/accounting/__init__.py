@@ -14,12 +14,14 @@ Algorithm-specific factories live in their respective packages
 Implementation uses Google's PLD accounting via the ``opake-accounting``
 Rust crate (PyO3 bindings).
 
-Example (requires ``opake-dpsgd`` in the environment):
+Example:
 
->>> import opake.dpsgd.accounting as dpsgd_acc
->>> step = dpsgd_acc.poisson(dpsgd_acc.gaussian(1.1), sample_rate=0.01)
->>> training = step * 1000
+>>> import math
+>>> import opake.accounting as acc
+>>> training = acc.eps_delta(0.2, 1e-8) * 3
 >>> epsilon = training.epsilon_at(1e-5)
+>>> math.isfinite(epsilon) and epsilon > 0
+True
 """
 
 from opake.api.accounting.core import (
