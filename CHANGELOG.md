@@ -407,3 +407,11 @@ verification results for the DP-clipping optimization workstream. Newest last.
   - Capture probe: checkpoint RNG saving is not capturable; `preserve_rng_state=False` is exact without dropout.
   - Fused-CE gradients are not bitwise-reproducible even eager-vs-eager (atomics; max 3.8e-6).
 - The user confirmed speed is the target and bitwise equality is not required, as long as privacy holds.
+
+## 2026-10-02: next-edit smoke results (report §9)
+
+- A (opake, same recipe): ε identical to the baseline (10293.44); eval loss within 0.3%; peak memory 46.8 vs 54.0 GB. The per-sample time ratio (×0.95) is confounded because opake 0.16's sampler draws different batches.
+- B (+ fused clip): −9.2% step time vs A, exact and paired (0.908–0.910 on every step).
+- C and D (`cuda_graphs`): failed in the Adam update after step 1 (likely OOM; 73 GB reserved). Variable-length microbatches mean a capture per shape, each holding ~3.9 GB of rank-384 outputs. Next: shared static buffers and length bucketing.
+- ZenML runs: A `870a5a5a`, B `416ecfd8`, C `879b748b`, D `86979dc4`. Images: `sha256:dc825d30…` (A, B), `sha256:488960c5…` (C, D).
+- Workspace stopped.
