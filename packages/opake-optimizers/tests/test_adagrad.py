@@ -9,9 +9,10 @@ import torch
 
 torchopt = pytest.importorskip("torchopt")
 
+from opake.exceptions import ConfigurationError
 from opake.optimizers import adagrad
 from opake.optimizers.types import AdagradState
-from opake.types import noised
+from opake.types import SecondMomentNoiseOutput, noised
 
 # Closed-form oracle for the DP tests below.  Under a constant gradient
 # Adagrad's accumulators are exact: ``v_acc = t·g²`` and ``phi_acc = t·sigma²``,
@@ -240,6 +241,25 @@ class TestDPCorrection:
             params=params,
         )
         assert _ada_state(state).phi_acc == 0.0
+
+
+class TestSecondMomentOutput:
+    def test_is_rejected(self, params, grads):
+        opt = adagrad(lr=1e-2)
+        state = opt.init(params)
+        output = SecondMomentNoiseOutput(
+            noised(grads, max_norm=1.0, noise_stddev=0.1),
+            noised(
+                {name: value.square() for name, value in grads.items()},
+                max_norm=1.0,
+                noise_stddev=0.1,
+            ),
+        )
+        with pytest.raises(
+            ConfigurationError,
+            match='Optimizer "adagrad" cannot consume SecondMomentNoiseOutput',
+        ):
+            opt.update(output, state, params=params)
 
 
 class TestWeightDecay:

@@ -7,9 +7,11 @@ import torch
 
 torchopt = pytest.importorskip("torchopt")
 
+from opake.exceptions import ConfigurationError
 from opake.optimizers import lion
 from opake.optimizers.types import LionState
 from opake.types import (
+    SecondMomentNoiseOutput,
     clipped,
     noised,
 )
@@ -112,6 +114,23 @@ class TestLion:
         )
         for k in params:
             assert updates[k].shape == params[k].shape
+
+    def test_second_moment_output_is_rejected(self, params, grads):
+        opt = lion(lr=1e-4)
+        state = opt.init(params)
+        output = SecondMomentNoiseOutput(
+            noised(grads, max_norm=1.0, noise_stddev=0.1),
+            noised(
+                {name: value.square() for name, value in grads.items()},
+                max_norm=1.0,
+                noise_stddev=0.1,
+            ),
+        )
+        with pytest.raises(
+            ConfigurationError,
+            match='Optimizer "lion" cannot consume SecondMomentNoiseOutput',
+        ):
+            opt.update(output, state, params=params)
 
     def test_clipped_updates_are_rejected(self, params, grads):
         opt = lion(lr=1e-4)

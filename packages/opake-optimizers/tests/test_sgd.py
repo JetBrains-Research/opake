@@ -7,6 +7,7 @@ import torch
 
 torchopt = pytest.importorskip("torchopt")
 
+from opake.exceptions import ConfigurationError
 from opake.optimizers import sgd
 from opake.types import (
     SecondMomentNoiseOutput,
@@ -67,9 +68,7 @@ class TestSGD:
         with pytest.raises(TypeError, match="noisy_squared_grads"):
             opt.update(grads, state, params=params, noisy_squared_grads={})
 
-    def test_second_moment_output_uses_first_stream_silently(self, params, grads):
-        """SGD has no second-moment path, so a SecondMomentNoiseOutput
-        falls back to the noisy_grads stream silently."""
+    def test_second_moment_output_is_rejected(self, params, grads):
         opt = sgd(lr=1e-2)
         state = opt.init(params)
         sq = {name: value.square() for name, value in grads.items()}
@@ -77,6 +76,8 @@ class TestSGD:
             noised(grads, max_norm=1.0, noise_stddev=0.1),
             noised(sq, max_norm=1.0, noise_stddev=0.1),
         )
-        updates, _ = opt.update(output, state, params=params)
-        for name in updates:
-            assert updates[name].shape == params[name].shape
+        with pytest.raises(
+            ConfigurationError,
+            match='Optimizer "sgd" cannot consume SecondMomentNoiseOutput',
+        ):
+            opt.update(output, state, params=params)

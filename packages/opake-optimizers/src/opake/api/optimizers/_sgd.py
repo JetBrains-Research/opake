@@ -16,6 +16,7 @@ except ImportError as exc:
         "Install it with: pip install 'torchopt>=0.7.3'"
     ) from exc
 
+from opake.api.optimizers._chain import _raise_unsupported_second_moment
 from opake.types import ClippedPytree, NoisedPytree, SecondMomentNoiseOutput
 
 _LR = float | Callable[[Any], Any]
@@ -33,7 +34,7 @@ def _unwrap_update_value(updates: Any) -> Any:
             )
         )
     if isinstance(updates, SecondMomentNoiseOutput):
-        return _unwrap_update_value(updates.noisy_grads)
+        _raise_unsupported_second_moment("sgd")
     return updates
 
 

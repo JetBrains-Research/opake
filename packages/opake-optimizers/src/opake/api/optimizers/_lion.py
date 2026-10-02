@@ -115,6 +115,7 @@ def lion(
         _scale_by_lion(b1, b2),
         lr=lr,
         weight_decay=weight_decay,
+        optimizer_name="lion",
         decoupled_weight_decay=decoupled_weight_decay,
     )
 
