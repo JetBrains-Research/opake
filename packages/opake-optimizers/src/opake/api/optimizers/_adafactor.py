@@ -377,6 +377,7 @@ def adafactor(
         moment,
         lr=lr,
         weight_decay=weight_decay,
+        optimizer_name="adafactor",
         decoupled_weight_decay=decoupled_weight_decay,
         update_rms_clip=None,
     )
