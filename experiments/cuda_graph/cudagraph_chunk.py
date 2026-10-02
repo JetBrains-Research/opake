@@ -104,26 +104,36 @@ class CudaGraphChunk:
         return graph, static_flat, static_out
 
     def _check(self, args, kwargs, out):
+        """Graph vs eager, and eager vs eager (the kernel's own run-to-run noise)."""
         ref = self.fn(*args, **kwargs)
-        a, _ = pytree.tree_flatten(out)
-        b, _ = pytree.tree_flatten(ref)
+        ref2 = self.fn(*args, **kwargs)
         _STATS["checks"] += 1
-        same = len(a) == len(b)
-        worst = 0.0
-        for x, y in zip(a, b):
-            if isinstance(x, torch.Tensor):
-                if x.shape != y.shape or x.dtype != y.dtype:
-                    same = False
-                    continue
-                if not torch.equal(x, y):
-                    same = False
-                    worst = max(worst, float((x.double() - y.double()).abs().max()))
-            elif x != y:
-                same = False
+        g_vs_e = _compare(out, ref)
+        e_vs_e = _compare(ref2, ref)
+        same = all(r["bitwise"] for r in g_vs_e.values())
         if not same:
             _STATS["check_mismatch"] += 1
-            _STATS["max_abs_diff"] = max(_STATS["max_abs_diff"], worst)
-        print(f"[cudagraph] check #{_STATS['checks']}: bitwise={same} max_abs_diff={worst:.3e}", flush=True)
+        _STATS.setdefault("check_detail", []).append({"graph_vs_eager": g_vs_e, "eager_vs_eager": e_vs_e})
+        fmt = lambda d: " ".join(f"{k}:{'=' if v['bitwise'] else f'{v[chr(114)+chr(101)+chr(108)]:.1e}'}" for k, v in d.items())  # noqa: E731
+        print(f"[cudagraph] check #{_STATS['checks']}: graph-vs-eager [{fmt(g_vs_e)}] | eager-vs-eager [{fmt(e_vs_e)}]", flush=True)
+
+
+def _compare(a_tree, b_tree):
+    """Per output field (reduced, diagnostics...): bitwise flag and max relative diff."""
+    names = ("reduced", "markers", "squared_reduced", "squared_markers", "diagnostics")
+    res = {}
+    for name, a, b in zip(names, a_tree, b_tree):
+        fa, _ = pytree.tree_flatten(a)
+        fb, _ = pytree.tree_flatten(b)
+        ta = [x for x in fa if isinstance(x, torch.Tensor) and x.numel()]
+        tb = [x for x in fb if isinstance(x, torch.Tensor) and x.numel()]
+        if not ta:
+            continue
+        bitwise = all(torch.equal(x, y) for x, y in zip(ta, tb))
+        rel = max(float((x.double() - y.double()).abs().max() / y.double().abs().max().clamp_min(1e-30))
+                  for x, y in zip(ta, tb))
+        res[name] = {"bitwise": bitwise, "rel": rel}
+    return res
 
 
 def report():
