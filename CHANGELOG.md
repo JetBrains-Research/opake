@@ -418,3 +418,10 @@ verification results for the DP-clipping optimization workstream. Newest last.
 - E–H follow-up (same batches as A; paired speed-ups vs A): E microbatch 4 ×1.14; F checkpointing off ×1.42; G F + kernels ×1.52 at 48.3 GB; H G + microbatch 4 ×1.58 at 67.4 GB, ×1.50 vs the baseline per sample.
 - ε is identical in all runs; eval loss within 0.25%. G matches the old sweep's best speed with 18 GB less memory.
 - ZenML runs: E `7579928b`, F `56c99278`, G `08b42a25`, H `083816b9`.
+
+## 2026-10-03: padding finding; correction of the C/D explanation
+
+- Code check: the DP dataloader collates the whole Poisson logical batch, padded to its longest example, and `_microbatch_accumulate_reduced` slices microbatches without trimming. Every sample is therefore computed at the batch's `L_max`.
+- Likely the largest lever for the next-edit workload; size not yet measured (needs the token-length distribution).
+- Candidate fixes: per-microbatch trim and length-ordered slicing. Both are DP-neutral by argument, pending DP review.
+- Correction: the earlier "new shape every microbatch" explanation for the C/D failure was wrong. Full microbatches share one shape per step. Memory remains the likely cause (inference).
