@@ -13,7 +13,8 @@ Everything below is measured unless marked *estimate* or *inferred*.
 the probe used here and the library option `attention_checkpointing` that
 `a05b0b8e` ported to this branch. See §9. The `model.train()` fix in
 `train_dpsgd.py` stays. `lora_mlp_recompute=False` measured **−9.9% step time
-for +2.08 GB** through DPTrainer, and is inert in `train_dpsgd.py` (§10).
+for +2.08 GB** through DPTrainer before the fused clip, and only −1.5% with it
+(§11), so that option has also been **removed** (§10).
 The fused clip backend (`--clip-backend triton`) cuts the full step by **34%
 in `train_dpsgd.py` (×1.51) and 29% through DPTrainer (×1.42)**, with
 unchanged memory. Eager model kernels plus the fused clip halve the
@@ -110,6 +111,12 @@ it, and that per-example grads were bitwise equal either way. It passed locally
 and on the workspace, and was deleted with the feature (§9).
 
 ## 3. Variants and runs
+
+**"Eager" in this report means `--no-kernel-patches`:** Opake's Triton
+model kernels (QKV, RoPE, RMSNorm, activation, fused CE) are off and those ops
+run as plain PyTorch. It does **not** refer to the attention implementation.
+Every run uses `sdpa` attention (`Attention: sdpa (backend=auto)` in each
+log).
 
 | Variant | Extra flags | Batch 1 (09-30) | Batch 2 (10-01, fixed) |
 |---|---|---|---|
@@ -460,6 +467,20 @@ condition (`fbc214a1`). Tracked in
 below `train_dpsgd.py`'s (22.43 GiB). The fused LoRA kernels are one plausible
 cause, but the loops differ in other ways, so this is not attributed.
 
+**Removed (2026-10-02, `c9966971`).** With the fused clip backend (§11) the
+option's saving fell to −1.5% (10.18 → 10.03 s) for the same +2.08 GB. Paired
+over steps 2–6, the absolute saving per step fell from 0.48 s (torch clip) to
+0.16 s (triton clip). It still helped on every step, but by too little to
+carry its own code path through the vmap-capable fused kernel. It was in no
+release. `kernels/lora.py`, the PEFT router and MLP component, their test and
+the trainer docstring are back to their `main` versions. The
+`--lora-mlp-recompute` example flag and the user-guide rows are gone; the
+guide still states when the fused LoRA MLP runs. The only evidence of a larger
+benefit is the H100 seq-4096 sweep (−6.5%), which predates the fused clip.
+Restoring the option from `a05b0b8e` should start with a new measurement at
+that shape with the fused clip. On a 40 GB A100 that regime does not fit at
+mb=2 even without saving gate/up (§7).
+
 ## 11. Fused clip backend: full-step improvement (2026-10-02)
 
 **What changed.** `clip_backend="triton"` replaces the per-leaf PyTorch
@@ -518,6 +539,9 @@ GPU util 26% → 33%. That agrees with the +51% measured with the profiler.
 | torch clip, `lora_mlp_recompute=False` | 13.63 s (×1.06) | — | 19.11 GB | 1.31 smp/s | 29% |
 | **triton clip, `lora_mlp_recompute=False`** | **10.03 s** (×1.44) | ×1.30–1.41 vs the row above | 19.11 GB | **1.78 smp/s** | 34% |
 
+`lora_mlp_recompute` was removed after these runs (§10); its rows are the
+evidence for that.
+
 Training losses agree across arms to within run-to-run variation. For
 example, the DPTrainer torch run logged 0.9531 0.9275 0.8347 1.2130 0.7956
 0.8898, and the triton run 0.9531 0.9269 0.8354 1.2120 0.7950 0.8903.
@@ -543,6 +567,8 @@ example, the DPTrainer torch run logged 0.9531 0.9275 0.8347 1.2130 0.7956
    adds only −1.5% on top (10.18 → 10.03 s) for +2.08 GB. Without the fused
    clip it gave −5.5% in this session (−9.9% in §10's). Once clip-and-reduce
    is fused, the backward matmuls it saves are a smaller share of the step.
+   Paired over steps 2–6, its saving fell from 0.48 s to 0.16 s per step, so
+   the option was removed (§10).
 5. **The bottleneck moves.** GPU utilisation rises but stays at or below 44%.
    The remaining 4.9–6.8 s of the `clip` phase is mostly the vmapped
    per-example forward/backward; the fused clip-and-reduce itself is about

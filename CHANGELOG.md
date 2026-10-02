@@ -293,3 +293,16 @@ verification results for the DP-clipping optimization workstream. Newest last.
   `lora_mlp_recompute=False` adds only −1.5% on top of triton (−5.5% without).
 - Next bottleneck: the vmapped per-example forward/backward (GPU util ≤44%).
   Workspace stopped after the runs.
+
+## 2026-10-02 — `lora_mlp_recompute` removed; runtime header fixed
+
+- With the fused clip backend, `lora_mlp_recompute=False` saved only 0.16 s
+  per step (steps 2–6, paired; −1.5%) for +2.08 GB, down from 0.48 s without
+  it. It was removed (`c9966971`): patches files restored to `main`, example
+  flag and user-guide rows dropped. Report §10, §11 and the header updated.
+- `train_dpsgd.py` printed "Kernel optimizations: enabled" even with
+  `--no-kernel-patches`, because only the environment switches were checked.
+  Fixed (`89ea8f88`). The §11 "eager" runs were confirmed eager by their
+  later `Kernel patches: DISABLED` line.
+- Report terminology: "eager" means `--no-kernel-patches`. Attention is
+  `sdpa` in every run.
