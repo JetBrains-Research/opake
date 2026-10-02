@@ -10,7 +10,7 @@ on:
 
 jobs:
   install-all:
-    name: opake[all] (Python ${{ matrix.python-version }})
+    name: Installed artifacts (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -32,6 +32,32 @@ jobs:
           pattern: ${{ inputs.artifact-prefix }}-*
           path: dist/
           merge-multiple: true
+
+      - name: Install torch-free opake-accounting from built wheels
+        run: |
+          uv venv --python ${{ matrix.python-version }} .accounting-venv
+          uv pip install \
+            --python .accounting-venv/bin/python \
+            --no-index \
+            --find-links dist \
+            --only-binary :all: \
+            opake-accounting
+
+      - name: Run installed accounting facade
+        run: |
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/.accounting-venv/bin/python" - <<'PY'
+          import doctest
+          from importlib.util import find_spec
+
+          assert find_spec("torch") is None
+
+          import opake.accounting as accounting
+
+          result = doctest.testmod(accounting, raise_on_error=True)
+          assert result.attempted > 0
+          print(f"accounting facade doctest: {result.attempted} examples")
+          PY
 
       - name: Install opake[all] from built wheels
         run: |

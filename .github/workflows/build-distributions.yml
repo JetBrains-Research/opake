@@ -209,3 +209,49 @@ jobs:
           name: ${{ inputs.artifact-prefix }}-opake-accounting-${{ matrix.target.artifact }}
           path: dist/${{ matrix.target.pattern }}
           retention-days: ${{ inputs.retention-days }}
+
+  verify-build-inventory:
+    name: Complete wheel inventory
+    needs: [build-python-wheels, build-native-artifacts]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out target source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          path: source
+          ref: ${{ inputs.checkout-ref || github.sha }}
+
+      - name: Check out workflow tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: tooling
+          ref: ${{ job.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: false
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ${{ inputs.artifact-prefix }}-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Verify distribution inventory
+        run: |
+          uv venv --python 3.11 .inventory-venv
+          uv pip install --python .inventory-venv/bin/python packaging==25.0
+          .inventory-venv/bin/python -m unittest discover \
+            -s tooling/.github/scripts/tests \
+            -p 'test_check_distribution_inventory.py'
+          .inventory-venv/bin/python \
+            tooling/.github/scripts/check_distribution_inventory.py \
+            --pyproject source/pyproject.toml \
+            --wheel-dir dist

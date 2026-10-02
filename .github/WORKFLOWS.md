@@ -47,17 +47,20 @@ publication.
 
 ### `.github/workflows/build-distributions.yml`
 
-This private `workflow_call` workflow builds all Python wheels, native wheels,
-the umbrella wheel, and the accounting sdist from caller-supplied package
-matrices. `pr.yml`, `ci.yml`, and release preparation discover the matrices once
-and supply them with an artifact prefix, retention period, and, when necessary,
-an explicit build version. This renders checks as `Build / <distribution>`
-without an internal discovery child.
+This private `workflow_call` workflow builds the explicitly listed pure-Python
+wheels and umbrella wheel, plus the platform-specific accounting wheels and
+accounting sdist. Callers supply an artifact prefix, retention period, and,
+when necessary, an explicit source ref and build version.
 
 Each build job validates its own wheel metadata. Native artifact jobs also
 validate accounting policy, and the sdist job proves that the source artifact
-can rebuild a wheel. The callable workflow intentionally does not own
-credentials, publication, cross-package validation, or pipeline gates.
+can rebuild a wheel. After both build groups finish, an aggregate check derives
+the expected distribution names from the workspace and requires the downloaded
+wheel family to match exactly. It reads the selected source's workspace while
+running validation tooling from the reusable workflow's own revision, so
+maintenance releases can use current workflow fixes. The callable workflow
+intentionally does not own credentials, publication, or cross-package runtime
+validation.
 
 ### `.github/workflows/python-tests.yml`
 
@@ -93,10 +96,12 @@ release add `cargo test --lib -- --ignored` after the default unit/doc-test run.
 ### `.github/workflows/validate-distributions.yml`
 
 This private `workflow_call` workflow downloads a complete caller-selected
-artifact family, installs `opake[all]` using only built Opake wheels, and runs
-a representative DP-SGD + DP-FTRL cross-stack accounting scenario without
-checking out the source tree. PR, main, and release differ only in artifact
-prefix.
+artifact family. In a clean, index-free environment it installs
+`opake-accounting` from built wheels, proves Torch is absent, and runs the
+installed façade doctest. In a separate environment it installs `opake[all]`,
+using built Opake wheels and the package index for third-party dependencies,
+then runs a representative DP-SGD + DP-FTRL scenario. Neither phase checks out
+the source tree. PR, main, and release differ only in artifact prefix.
 
 ### `.github/workflows/prepare-release-implementation.yml`
 
