@@ -35,6 +35,8 @@ LABELS = {
     "lv_np_gc_mb8": "stock PEFT LoRA + checkpointing, microbatch 8",
     "lv_np_comp": "stock PEFT LoRA + torch.compile (default)",
     "lv_np_compro": "stock PEFT LoRA + torch.compile reduce-overhead",
+    "lv_tf32_mb4": "TF32 + microbatch 4",
+    "lv_np_tf32_mb4": "stock PEFT LoRA + TF32 + microbatch 4",
 }
 
 
