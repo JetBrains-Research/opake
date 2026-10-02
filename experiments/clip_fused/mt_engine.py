@@ -199,14 +199,62 @@ def mt_fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=No
 
 _CS = importlib.import_module("opake.api.engine.kernels._clip_sum")
 _ORIGINAL_FUSED = _CS.fused_clip_sum
+_ORIGINAL_STREAM_FN = _CS.fused_stream_clip_and_sum
+_MARKERS: dict = {}
 
 
-def install():
+def _shared_marker(leaf):
+    """One 0-dim zero per (dtype, device). Markers are only read for .dtype."""
+    k = (leaf.dtype, leaf.device)
+    m = _MARKERS.get(k)
+    if m is None:
+        m = _MARKERS[k] = leaf.new_zeros(())
+    return m
+
+
+def mt_fused_stream_clip_and_sum(values, clipping_norm, *, scale, batch_size, reduce_leaf,
+                                 compute_dtype, second_moment, return_aux, return_stats,
+                                 strict):
+    """Packaged wrapper with shared dtype markers; same checks and fallback."""
+    from opake.api.engine.pytree import tree_flatten, tree_unflatten
+    from opake.exceptions import ConfigurationError
+
+    leaves, treedef = tree_flatten(values)
+    reason = _CS.unsupported_reason(leaves, clipping_norm, scale, compute_dtype=compute_dtype,
+                                    second_moment=second_moment, batch_size=batch_size)
+    out_dtypes = None
+    if reason is None:
+        out_dtypes = _CS._output_dtypes(leaves, reduce_leaf)
+        if out_dtypes is None:
+            reason = "the requested output dtype is not supported"
+    if reason is not None:
+        if strict:
+            raise ConfigurationError(*(f"clip_backend='triton' cannot run this call: {reason}.",))
+        return _CS._stream_clip_and_sum(values, clipping_norm, scale=scale, batch_size=batch_size,
+                                        reduce_leaf=reduce_leaf, compute_dtype=compute_dtype,
+                                        second_moment=second_moment, return_aux=return_aux,
+                                        return_stats=return_stats)
+    reduced, norm, post_sq, acc_dtype = mt_fused_clip_sum(
+        leaves, clipping_norm, with_postsq=return_aux, out_dtypes=out_dtypes)
+    diagnostics = {}
+    if return_aux or return_stats:
+        diagnostics["norms"] = norm.to(acc_dtype).detach()
+    if return_aux:
+        diagnostics["clipped_norms"] = torch.sqrt(post_sq).detach()
+    markers = [_shared_marker(leaf) for leaf in leaves]
+    return (tree_unflatten(treedef, reduced), tree_unflatten(treedef, markers), (), (),
+            diagnostics if (return_aux or return_stats) else ())
+
+
+def install(shared_markers: bool = True):
     _CS.fused_clip_sum = mt_fused_clip_sum
+    if shared_markers:
+        _CS.fused_stream_clip_and_sum = mt_fused_stream_clip_and_sum
 
 
 def uninstall():
     _CS.fused_clip_sum = _ORIGINAL_FUSED
+    _CS.fused_stream_clip_and_sum = _ORIGINAL_STREAM_FN
 
 
 _CF = importlib.import_module("opake.api.engine.clipping._clipped_fun")
