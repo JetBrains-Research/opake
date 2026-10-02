@@ -1,0 +1,178 @@
+{
+ "zenml_run_id": "06ef7070-d227-49ef-a936-4d64d53e7418",
+ "name": "ckpt-sweep-baseline-182330",
+ "created": "2026-09-25 16:24:04",
+ "status": "completed",
+ "images": {
+  "Mix prompt datasets.orchestrator": "europe-west4-docker.pkg.dev/grazie-development/grazie-ml/next-edit-pipeline-user-logs:main-bd71e95",
+  "Run SFT training.orchestrator": "europe-west4-docker.pkg.dev/grazie-development/grazie-ml/next-edit-pipeline-training@sha256:87fab1f246251bf3e05af0d6ece18011dd2b90e7a238afb4cbc1863c57bc50e9"
+ },
+ "code_reference": null,
+ "parameters": {
+  "dataset_or_config": {
+   "trace_v20260605_accepted": {
+    "loader_config": {
+     "_hydra_target_": "jetbrains.nes.datasets.loader.S3DatasetLoader",
+     "s3_bucket_path": "s3://do-ss-ml-non-sensitive-data-prod/nes",
+     "dataset_path": "trace_v20260605",
+     "splits": {
+      "train": "20260605-all",
+      "test": "20260605-all"
+     }
+    },
+    "morpher_config": {
+     "_hydra_target_": "jetbrains.nes.datasets.morphing.ZetaLegacyMorpher",
+     "history_column": "events"
+    },
+    "revision": null,
+    "source": "TRACE",
+    "row_filters": [
+     {
+      "_hydra_target_": "jetbrains.nes.datasets.row_filters.AcceptedFilter"
+     }
+    ],
+    "val_from_train": 0.1
+   }
+  },
+  "prompt": {
+   "type": "zed.zeta"
+  },
+  "sft_config": {
+   "model_id": "nes-opaque-dp-7B-ckpt-sweep-baseline",
+   "model": {
+    "_hydra_target_": "jetbrains.nes.training.types.PretrainedModelConfig",
+    "model_name": "Qwen/Qwen2.5-Coder-7B",
+    "size": "7B",
+    "load_in_4bit": false,
+    "additional_kwargs": {
+     "attn_implementation": "sdpa"
+    }
+   },
+   "trainer_args": {
+    "max_length": 4096,
+    "per_device_train_batch_size": 2,
+    "gradient_accumulation_steps": 128,
+    "max_steps": 5,
+    "num_train_epochs": 4,
+    "learning_rate": 0.0001,
+    "logging_steps": 1,
+    "optim": "adamw_torch",
+    "weight_decay": 0.1,
+    "lr_scheduler_type": "linear",
+    "warmup_ratio": 0.05,
+    "seed": 42,
+    "eval_steps": 5,
+    "eval_strategy": "steps",
+    "do_eval": true,
+    "per_device_eval_batch_size": 1,
+    "completion_only_loss": true,
+    "dataset_num_proc": 4,
+    "packing": false,
+    "dataloader_num_workers": 0,
+    "gradient_checkpointing": true,
+    "loss_type": "chunked_nll",
+    "lr_scheduler_kwargs": null,
+    "save_strategy": "steps",
+    "save_steps": 5,
+    "save_total_limit": 1,
+    "metric_for_best_model": "eval_loss",
+    "greater_is_better": false,
+    "load_best_model_at_end": true,
+    "log_completion_metrics": false
+   },
+   "peft": {
+    "_hydra_target_": "jetbrains.nes.training.types.PeftModelConfig",
+    "rank": 384,
+    "lora_alpha": 352,
+    "target_modules": [
+     "q_proj",
+     "k_proj",
+     "v_proj",
+     "o_proj",
+     "gate_proj",
+     "up_proj",
+     "down_proj"
+    ],
+    "train_new_tokens_only": false,
+    "additional_kwargs": {
+     "lora_dropout": 0,
+     "bias": "none",
+     "use_gradient_checkpointing": true,
+     "random_state": 3407,
+     "use_rslora": false,
+     "loftq_config": {}
+    }
+   },
+   "tracking": {
+    "_hydra_target_": "jetbrains.nes.training.types.TrackingConfig",
+    "_recursive_": false,
+    "cfg": {
+     "_hydra_target_": "jetbrains.nes.training.trackers.wandb.WandbTracker",
+     "entity": "grazie-ml",
+     "project": "next-edit-prediction-trl-fed-dp"
+    }
+   },
+   "save_location": "/home/nonroot/training-outputs",
+   "debug": false,
+   "data_pipeline": {
+    "_hydra_target_": "jetbrains.nes.training.data.prepare.DataPipeline",
+    "processor": {
+     "_hydra_target_": "jetbrains.nes.training.data.prepare.SftDataProcessor",
+     "_convert_": "object",
+     "keep_columns": [
+      "language",
+      "metadata",
+      "source"
+     ],
+     "filters": [
+      {
+       "_hydra_target_": "jetbrains.nes.training.data.prepare.TooLongFilter",
+       "constraints": [
+        {
+         "_hydra_target_": "jetbrains.nes.training.data.types.TokenLengthConstraint",
+         "columns": [
+          "prompt",
+          "completion"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    "seed": 42,
+    "eval_size": 1000,
+    "test_size": 1000
+   },
+   "eval_metrics": {
+    "_hydra_target_": "jetbrains.nes.training.metrics.EvalMetricsConfig",
+    "enabled": false,
+    "detailed_groups_enabled": true,
+    "max_table_rows": 20
+   },
+   "early_stopping_patience": 5,
+   "privacy_args": {
+    "_hydra_target_": "jbr.fed.dp_training.PrivacyArguments",
+    "grad_sample_mode": "hooks",
+    "accountant": "ctd",
+    "noise_multiplier": 0.01,
+    "clipping": "adaptive",
+    "per_sample_max_grad_norm": 1.0,
+    "target_unclipped_quantile": 0.5,
+    "unclipped_num_std": 1.0,
+    "clipbound_learning_rate": 0.2
+   },
+   "privacy_backend": "opaque"
+  },
+  "output_model_registry": {
+   "registry_config": {
+    "_hydra_target_": "jetbrains.nes.models.registry.s3.S3ModelRegistry",
+    "bucket": "fl-training-artifacts.dev.grazie.aws.intellij.net",
+    "prefix": "nep/zenml",
+    "aws_access_key_id_env": "AWS_GRAZIE_ACCESS_KEY_ID",
+    "aws_secret_access_key_env": "AWS_GRAZIE_SECRET_ACCESS_KEY",
+    "overwrite": true
+   }
+  },
+  "input_model_registry": null
+ }
+}
