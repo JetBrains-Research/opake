@@ -312,8 +312,9 @@ verification results for the DP-clipping optimization workstream. Newest last.
 - Multi-tensor prototype (`experiments/clip_fused/mt_engine.py`): every leaf
   of one dtype per launch via tile + pointer tables, plus shared dtype markers.
   393 of the remaining 423 kernels per call were per-leaf marker fills.
-  Per call: 93.6 → 13.1 ms, 2,767 → 31 kernels. 25/25 gates; output bitwise
-  identical to the packaged kernel.
+  Per call: 93.6 → 13.1 ms, 2,767 → 31 kernels. 25/25 gates. (Corrected
+  later: clipped sums and norms are bitwise identical; the `clipped_norms`
+  diagnostic differs by up to 2.4e-7.)
 - 7B full steps, same session, identical batches: eager 5.59 → 4.80 s
   (−14.2%, 6/6 steps), kernels 7.59 → 6.93 s (−8.8%), DPTrainer 10.60 →
   9.84 s (−7.2%). Peak memory unchanged. Clean eager throughput 3.10 →
@@ -322,3 +323,23 @@ verification results for the DP-clipping optimization workstream. Newest last.
   nothing meaningful on top of the multi-tensor kernel (+1.7% eager, −4.8%
   kernels). Not pursued.
 - Workspace stopped after the runs.
+
+## 2026-10-02 — multi-tensor clip kernel packaged (report §12.3)
+
+- `6f339050`: packaged the multi-tensor clip kernel in `_clip_sum`, with
+  shared markers, a same-device guard and an LRU plan cache. A foreach
+  microbatch accumulator went in the same commit.
+- Found an overclaim and corrected it. "Output bitwise identical" was wrong:
+  clipped sums and norms are bitwise equal (16 cases); the `clipped_norms`
+  diagnostic differs by up to 2.4e-7. `bench_mt.py` never compared norms
+  bitwise. Report, plan and this log are corrected. Docs and docstring now
+  state where the fused path can differ from torch (`ddd3bece`).
+- 7B, same session: eager 5.49 → 4.88 s, kernels 7.68 → 6.84 s, DPTrainer
+  10.62 → 9.68 s, clean 3.10 → 3.60 smp/s. Memory unchanged.
+- Foreach accumulator: 4.88 vs 4.85 s/step, no gain. Reverted
+  (`a530ca2d`). This also refutes the §12.2 inference about where chunking's
+  remaining gain comes from.
+- Suites on A100: engine/dpsgd/dpftrl 2,166 passed, 0 failed. Transformers
+  and patches: the isolated failing subset has 60 failures (new) vs 62 (old);
+  the extra two old-code failures are flaky timing tests. No new failures.
+- Workspace stopped after GPU work.

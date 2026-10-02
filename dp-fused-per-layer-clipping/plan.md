@@ -544,7 +544,8 @@ depends on it, and the fused kernel keeps it).
   - Per call (392 leaves): 13.1 ms and 31 CUDA kernels, vs 93.6 ms and 2,767
     for the packaged per-leaf kernel.
   - Full step: −14.2% (eager), −8.8% (model kernels), −7.2% (DPTrainer), with
-    no memory change and output bitwise identical to the packaged kernel.
+    no memory change. Clipped sums and norms bitwise identical to the per-tensor
+    kernels; `clipped_norms` diagnostic within 2.4e-7 (fp32 summation order).
   - Packaging: replace `fused_clip_sum` with the multi-tensor version and
     share dtype markers in `fused_stream_clip_and_sum`. Same tests (parity,
     zero-tolerance bound, determinism), plus a kernel-count regression check.
@@ -554,3 +555,20 @@ depends on it, and the fused kernel keeps it).
 - **Follow-up:** a multi-tensor `torch._foreach_add_` in
   `_MicrobatchAccumulator` (392 per-leaf adds per microbatch today). It is the
   memory-free way to take what chunking still recovers with model kernels on.
+
+### Packaged 2026-10-02 (report §12.3)
+
+- [x] Multi-tensor clip kernel packaged in `opake.api.engine.kernels._clip_sum`
+  (`6f339050`), with shared dtype markers, a same-device guard and a bounded
+  plan cache.
+  - Gates: CUDA suites 51 pass; 16/16 cases with clipped sums and norms
+    bitwise equal to the per-tensor kernels.
+  - 7B, same session: −11.1% eager, −10.9% model kernels, −8.9% DPTrainer,
+    clean +16%. Memory unchanged.
+- [x] Foreach microbatch accumulator: measured no gain (4.88 vs 4.85 s/step).
+  Reverted (`a530ca2d`).
+- [x] Docs precision fix (`ddd3bece`): norms and `clipped_norms` can differ
+  from the torch path in the last bits through summation order; the
+  stored-value bound holds for any order.
+- [ ] Still open: CUDA CI lanes (incl. minimum dependencies); split into
+  focused PRs with the DP-review write-up.

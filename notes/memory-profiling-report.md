@@ -19,7 +19,7 @@ The fused clip backend (`--clip-backend triton`) cuts the full step by **34%
 in `train_dpsgd.py` (×1.51) and 29% through DPTrainer (×1.42)**, with
 unchanged memory. Eager model kernels plus the fused clip halve the
 `train_dpsgd.py` step (×2.05, §11). A multi-tensor version of the fused clip
-kernel (prototype, §12) takes another 9–14% off the step at no memory cost.
+kernel (§12, packaged in §12.3) takes another 9–11% off the step at no memory cost.
 `vmap(chunk_size)` adds little on top of it.
 Follow-ups are tracked in
 [#1121](https://github.com/JetBrains-Research/opake/issues/1121) (DPTrainer
@@ -348,10 +348,8 @@ activations in place.
   performance target. `clip_backend` stays opt-in. Making `"auto"` the
   default in the examples or the library is a separate decision; it should
   wait for the CUDA CI lanes, including the minimum-dependencies one.
-- Package the multi-tensor clip kernel (§12): output bitwise identical to the
-  packaged kernel, −9–14% step. Share the dtype markers in
-  `fused_stream_clip_and_sum`. Try `torch._foreach_add_` in the microbatch
-  accumulator.
+- ~~Package the multi-tensor clip kernel (§12)~~ Done (§12.3): packaged with
+  shared dtype markers and a foreach microbatch accumulator.
 - At seq 512 neither checkpointing variant pays off. The regime where
   activation memory binds (seq 4096) doesn't fit on 40 GB at mb=2 without
   checkpointing and has not been profiled here.
@@ -626,9 +624,15 @@ are installed into the unmodified examples by
   one per microbatch (report Tier-2 #6).
 
 **Gates** (`experiments/clip_fused/bench_mt.py`, A100): 25/25 pass.
-- The multi-tensor output is **bitwise identical** to the packaged per-leaf
-  kernel for fp32/bf16/mixed trees, B = 1/2/16, with and without
-  microbatching.
+- Clipped sums and per-example norms are **bitwise identical** to the
+  per-tensor kernels for fp32/bf16/mixed and LoRA-shaped trees, B = 1/2/16,
+  with and without microbatching (16 cases,
+  `experiments/clip_fused/check_packaged_vs_per_tensor.py`). The
+  `clipped_norms` diagnostic differs by at most 2.4e-7 relative: its tile
+  partials are summed in a different fp32 order. Nothing in clipping, noise or
+  accounting reads it. *Correction:* an earlier version of this section
+  claimed the whole output was bitwise identical; `bench_mt.py` compares only
+  the clipped sums bitwise, and norms at `rtol=1e-6`.
 - Zero-tolerance stored-value bound (B=1 trick), including the adversarial
   round-back case.
 - Deterministic.
@@ -690,8 +694,8 @@ Losses agree within run-to-run variation (e.g. eager, steps 2/4/6:
 
 1. **The multi-tensor kernel is a clean win:** −14.2% (eager), −8.8%
    (kernels) and −7.2% (DPTrainer) step time. It is faster on every step,
-   costs no memory, and its output is bitwise identical to the packaged
-   kernel's. It saves 0.79 / 0.66 / 0.76 s per step, slightly more than the
+   costs no memory, and its clipped sums and norms are bitwise identical to the
+   per-tensor kernels'. It saves 0.79 / 0.66 / 0.76 s per step, slightly more than the
    per-call estimate (7.6 calls × 80 ms ≈ 0.61 s). The best `train_dpsgd.py`
    configuration becomes **eager + multi-tensor: 4.80 s/step, 3.60 smp/s
    clean**. Against §11's kernels + torch baseline (11.10 s, a different
@@ -704,12 +708,11 @@ Losses agree within run-to-run variation (e.g. eager, steps 2/4/6:
    - Added to the multi-tensor kernel: +1.7% step time in eager (clean
      throughput −5.6%), −4.8% with model kernels on, −0.8% in DPTrainer.
      Once the clip call is 13 ms there is little left to amortize.
-3. **What chunking still recovers with model kernels on is mostly the
-   microbatch loop's per-leaf work outside the clip** (*inferred, not
-   measured*). The accumulator adds `acc + new` per leaf per chunk: 392 adds ×
-   ~7 chunks per step, plus Python slicing. A multi-tensor
-   `torch._foreach_add_` in `_MicrobatchAccumulator` would target that
-   without the memory cost.
+3. ~~What chunking still recovers with model kernels on is mostly the
+   microbatch accumulator's per-leaf adds~~ **Refuted in §12.3:** replacing
+   those 392 adds per chunk with one `torch._foreach_add` changed nothing
+   measurable (4.88 vs 4.85 s/step). Where the remaining chunking gain comes
+   from is not established.
 
 **Limits.**
 - One run per configuration; the paired per-step ratios are tight.
@@ -722,3 +725,66 @@ Losses agree within run-to-run variation (e.g. eager, steps 2/4/6:
 - `experiments/clip_fused/summarize_mt_runs.py`, which produces every number
   above.
 - `experiments/clip_fused/bench_mt.py`: gates and per-call numbers.
+
+### 12.3 Packaged (2026-10-02)
+
+The multi-tensor kernel replaces the per-tensor kernels in
+`opake.api.engine.kernels._clip_sum` (`6f339050`). It keeps the same entry
+points and support rules, plus two packaging changes:
+- a same-device guard: trees spanning several GPUs fall back, or raise under
+  `"triton"`;
+- a bounded (LRU, 64) tile-plan cache, with tables built by torch ops.
+
+The dtype markers are shared. A `torch._foreach_add` microbatch accumulator
+was added in the same commit and reverted (`a530ca2d`, below). `ddd3bece`
+corrects the docs: norms and the `clipped_norms` diagnostic can differ from
+the torch path in the last bits through summation order. The stored-value
+bound holds for any order (`_norm_roundoff`).
+
+**Gates on the A100 (final code):**
+- CUDA clipping suites: 51 passed, 1 skipped (the two-GPU guard test). New
+  tests: many-tensor parity and zero-tolerance bound with non-contiguous and
+  multi-tile tensors; launch count independent of the number of tensors (6 vs
+  60, fp32 and mixed); bounded plan cache.
+- `check_packaged_vs_per_tensor.py`, packaged vs the `c13e3007` per-tensor
+  kernels, 16 cases (fp32, bf16, mixed and LoRA trees; B = 1/2/16; with and
+  without microbatching):
+  - clipped sums and per-example norms **bitwise equal**;
+  - `clipped_norms` within 2.4e-7 relative, from fp32 summation order. It is
+    a diagnostic only: clipping, noise and accounting never read it. Adaptive
+    clipping uses the pre-clip norms.
+  - Log: `experiments/clip_fused/check_packaged_vs_per_tensor.log`.
+- Engine, DP-SGD and DP-FTRL non-slow suites: 2,166 passed, 0 failed.
+- Transformers and patches suites: 79 failures in a full run. On the
+  isolated failing subset, the pre-change engine gives 62 failures and the
+  packaged one 60. The two extra failures on the old code are
+  `test_linear_cross_entropy` timing tests. No test fails with the new code
+  that passes with the old.
+- Per call (`bench_mt.py`): 13.0 / 13.2 ms (B = 2 / 16), 31 CUDA kernels.
+
+**7B confirmation.** Same session, identical batches, strict triton, §3
+protocol. "old" is the previous packaged behaviour (`CB_OLD=1`).
+"no foreach" is the packaged kernel with the leafwise accumulator. Driver:
+`notes/profiles/pk/pk_driver.sh`. Summarizer:
+`experiments/clip_fused/summarize_pk_runs.py`.
+
+| Setup | old | packaged | Change | Per step |
+|---|---:|---:|---:|---:|
+| `train_dpsgd.py` eager | 5.49 s | **4.88 s** | **−11.1%** | ×1.08–1.15, 6/6 |
+| `train_dpsgd.py` eager, no foreach | 5.49 s | 4.85 s | −11.6% | ×1.09–1.16, 6/6 |
+| `train_dpsgd.py` model kernels | 7.68 s | **6.84 s** | **−10.9%** | ×1.09–1.16, 6/6 |
+| eager clean (8 steps, no profiler) | 3.10 smp/s | **3.60 smp/s** | **+16%** | — |
+| `DPTrainer` | 10.62 s | **9.68 s** | **−8.9%** | ×1.08–1.11 |
+
+Peak memory is unchanged in every pair (24.40 → 24.39 GiB eager,
+22.43 → 22.41 GiB kernels, 17.03 → 17.02 GB `DPTrainer`). Noise stays
+0.34–0.36 s. The packaged numbers agree with the prototype's (§12.1: 4.80 s
+eager, 3.60 smp/s clean) within run-to-run variation.
+
+**Foreach accumulator: no gain, reverted.** With and without it the step is
+4.88 vs 4.85 s. The accumulator runs on every microbatched call, including
+the default torch backend, so a change there needs a measured benefit. Its
+392 per-chunk adds are not a measurable cost at this configuration.
+
+**Artifacts:** `notes/profiles/pk/` (CSVs, timelines, logs, `nvidia-smi`
+samples, driver) and `experiments/clip_fused/check_packaged_vs_per_tensor.log`.
