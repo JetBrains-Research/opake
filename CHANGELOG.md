@@ -277,3 +277,19 @@ verification results for the DP-clipping optimization workstream. Newest last.
   fixtures construct models directly and hide it. Issue #1121, not fixed here.
 - Workspace synced to the branch via git bundle; its prior local state is
   backed up in `~/opaque_backup_20261001`.
+
+## 2026-10-02 — fused clip backend: full-step profile (A100-40GB, report §11)
+
+- `--clip-backend {torch,auto,triton}` added to `train_dpsgd.py` and
+  `train_dpsgd_trainer.py` (`b6f83956`). Ten runs in one session with
+  identical Poisson batches per script; triton runs strict, so every clipping
+  call ran fused.
+- `train_dpsgd.py` (Qwen2.5-Coder-7B LoRA, seq 512, mb 2, profiler on):
+  11.10 → 7.35 s per step (×1.51, faster on 6/6 steps), the `clip` phase
+  −3.76 s, peak unchanged at 22.43 GiB. Eager: 9.10 → 5.43 s (×1.68).
+  Eager + triton against the kernels + torch baseline: ×2.05,
+  1.37 → 2.80 smp/s. Clean runs: 1.50 → 2.30 smp/s (+53%).
+- `DPTrainer`: 14.42 → 10.18 s (×1.42, peak unchanged at 17.03 GB).
+  `lora_mlp_recompute=False` adds only −1.5% on top of triton (−5.5% without).
+- Next bottleneck: the vmapped per-example forward/backward (GPU util ≤44%).
+  Workspace stopped after the runs.

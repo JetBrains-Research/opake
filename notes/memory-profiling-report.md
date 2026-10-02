@@ -1,6 +1,7 @@
 # Memory Profiling Report: DP-SGD step, Qwen2.5-Coder-7B LoRA, mb=2
 
-**Dates:** 2026-09-30 (first batch), 2026-10-01 (re-run after the train-mode fix)
+**Dates:** 2026-09-30 (first batch), 2026-10-01 (re-run after the train-mode fix),
+2026-10-02 (fused clip backend, §11)
 **Branch:** `feat/dp-fused-per-layer-clipping`. Profiling tooling and the fix
 were uncommitted at time of writing (see §8).
 **Hardware:** A100-SXM4-40GB (Coder workspace `kernel`, repo at `~/opaque`)
@@ -13,6 +14,10 @@ the probe used here and the library option `attention_checkpointing` that
 `a05b0b8e` ported to this branch. See §9. The `model.train()` fix in
 `train_dpsgd.py` stays. `lora_mlp_recompute=False` measured **−9.9% step time
 for +2.08 GB** through DPTrainer, and is inert in `train_dpsgd.py` (§10).
+The fused clip backend (`--clip-backend triton`) cuts the full step by **34%
+in `train_dpsgd.py` (×1.51) and 29% through DPTrainer (×1.42)**, with
+unchanged memory. Eager model kernels plus the fused clip halve the
+`train_dpsgd.py` step (×2.05, §11).
 Follow-ups are tracked in
 [#1121](https://github.com/JetBrains-Research/opake/issues/1121) (DPTrainer
 trains in eval mode) and
@@ -310,7 +315,9 @@ activations in place.
    (§10, #1122).
 6. **At this shape, time is the binding constraint, not memory.** The card had
    ~16 GiB unused, mean GPU utilisation was 32% (batch 1), and about 95% of
-   step time is spent inside `grad_fn`.
+   step time is spent inside `grad_fn`. The fused clip backend (§11) removes
+   about 3.7 s of that per step. What remains is mostly the per-example
+   forward/backward.
 7. **Training-gated code was silently off in `train_dpsgd.py` until this fix.**
    Check every training-mode-dependent patch and wrapper against the real
    `from_pretrained` + PEFT path, not only against tests that call
@@ -327,6 +334,11 @@ activations in place.
   hides it. Not fixed here.
 - [#1122](https://github.com/JetBrains-Research/opake/issues/1122): the fused
   LoRA MLP/Linear kernels never run in `train_dpsgd.py` (§10).
+- With the fused clip backend (§11), the vmapped per-example
+  forward/backward dominates the step (GPU utilisation ≤44%). That is the next
+  performance target. `clip_backend` stays opt-in. Making `"auto"` the
+  default in the examples or the library is a separate decision; it should
+  wait for the CUDA CI lanes, including the minimum-dependencies one.
 - At seq 512 neither checkpointing variant pays off. The regime where
   activation memory binds (seq 4096) doesn't fit on 40 GB at mb=2 without
   checkpointing and has not been profiled here.
@@ -336,7 +348,8 @@ activations in place.
 Everything is committed on `feat/dp-fused-per-layer-clipping`: profiling
 `87a2c0c5`, `--memory-profile` `1562e33f`, train-mode fix `5a1131a2`,
 attention-checkpointing removal `a2ce1712`, `--lora-mlp-recompute` for the
-DPTrainer example `6d4a352f`. Note that `c165da35` added the flag to
+DPTrainer example `6d4a352f`, fused clip backend `da32352f` (ROCm guard
+`c1d44b48`), `--clip-backend` in both examples `b6f83956`. Note that `c165da35` added the flag to
 `train_dpsgd.py` and `6f6fbf2a` removed it again as inert. The workspace (`coder ssh kernel`, `~/opaque`) is
 synced to the same commit through git, not by copying files. Its pre-sync local
 state (a modified `experiments/clip_breakdown/results.json`, a modified
@@ -446,3 +459,119 @@ condition (`fbc214a1`). Tracked in
 *Not established:* DPTrainer's step peak at this shape (17.02 GB) is 5.4 GB
 below `train_dpsgd.py`'s (22.43 GiB). The fused LoRA kernels are one plausible
 cause, but the loops differ in other ways, so this is not attributed.
+
+## 11. Fused clip backend: full-step improvement (2026-10-02)
+
+**What changed.** `clip_backend="triton"` replaces the per-leaf PyTorch
+clip-and-sum inside `grad_fn` with two fused Triton kernels per parameter
+tensor (`da32352f`, ROCm guard `c1d44b48`). Per-example norms, clipping scales
+and the stored-value bound are unchanged; batch sums can differ in the last
+bits. Both examples take `--clip-backend {torch,auto,triton}` (`b6f83956`). The
+library default stays `"torch"`.
+
+**Method.**
+- One session (2026-10-02, 00:22–00:42 UTC), ten sequential runs on the A100,
+  each torch run directly followed by its triton counterpart. Driver:
+  `notes/profiles/cb/cb_driver.sh`.
+- Same seed, so Poisson batches were identical within each script.
+  `train_dpsgd.py`: `[14, 14, 19, 14, 15, 15]`. `DPTrainer`:
+  `[16, 20, 16, 15, 22, 18]`. Checked by `summarize_cb_runs.py`.
+- `train_dpsgd.py` used the §3 command plus `--clip-backend`. The triton runs
+  were strict: an unsupported clipping call would have aborted, so a completed
+  run means every call ran fused.
+- `DPTrainer` used `examples/train_dpsgd_trainer.py` with `--model-name
+  Qwen/Qwen2.5-Coder-7B --dataset JetBrains/KStack --dataset-text-field content
+  --dtype bfloat16 --lora-r 16 --lora-alpha 16 --lora-modules q_proj k_proj
+  v_proj o_proj gate_proj up_proj down_proj --max-seq-len 512 --batch-size 16
+  --microbatch-size 2 --stop-at-step 6 --use-performance-kernels
+  --target-epsilon 3.0`. This reconstructs §10's setup: its baseline step peak,
+  17.03 GB, matches §10's 17.02 GB. DPTrainer still trains in eval mode
+  (#1121), identically in every arm.
+
+### 11.1 `train_dpsgd.py`, profiler on (6 steps, §3 instrumentation)
+
+| Variant | Mean step | `clip` phase | noise | optimizer | Step peak | Throughput | GPU util |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| kernels, torch clip | 11.10 s | 10.52 s | 0.34 s | 0.24 s | 22.43 GiB | 1.37 smp/s | 23% |
+| kernels, **triton clip** | **7.35 s** | 6.76 s | 0.35 s | 0.24 s | 22.43 GiB | **2.06 smp/s** | 29% |
+| eager, torch clip | 9.10 s | 8.53 s | 0.34 s | 0.22 s | 24.40 GiB | 1.67 smp/s | 32% |
+| eager, **triton clip** | **5.43 s** | 4.86 s | 0.34 s | 0.23 s | 24.40 GiB | **2.80 smp/s** | 44% |
+
+| Comparison | Step time | Per-step speedup (paired) | `clip` phase | Throughput |
+|---|---:|---:|---:|---:|
+| kernels: torch → triton | −33.8% (×1.51) | ×1.49–1.53, 6/6 steps | −3.76 s | +51% |
+| eager: torch → triton | −40.3% (×1.68) | ×1.61–1.74, 6/6 steps | −3.67 s | +68% |
+| kernels+torch → eager+triton | −51.1% (×2.05) | — | −5.66 s | +104% |
+
+GPU util is the mean of 1 Hz `nvidia-smi` samples taken while device memory
+was within 90% of the run's maximum. Compare it between rows only.
+
+**Clean runs** (8 steps, no profiler, kernels): **1.50 → 2.30 smp/s (+53%)**,
+GPU util 26% → 33%. That agrees with the +51% measured with the profiler.
+
+### 11.2 DPTrainer (steps 1–6)
+
+| Variant | Mean step | Per-step speedup vs torch | Step peak | Throughput | GPU util |
+|---|---:|---:|---:|---:|---:|
+| torch clip | 14.42 s | — | 17.03 GB | 1.24 smp/s | 29% |
+| **triton clip** | **10.18 s** (×1.42) | ×1.32–1.50, 6/6 steps | 17.03 GB | **1.75 smp/s** | 35% |
+| torch clip, `lora_mlp_recompute=False` | 13.63 s (×1.06) | — | 19.11 GB | 1.31 smp/s | 29% |
+| **triton clip, `lora_mlp_recompute=False`** | **10.03 s** (×1.44) | ×1.30–1.41 vs the row above | 19.11 GB | **1.78 smp/s** | 34% |
+
+Training losses agree across arms to within run-to-run variation. For
+example, the DPTrainer torch run logged 0.9531 0.9275 0.8347 1.2130 0.7956
+0.8898, and the triton run 0.9531 0.9269 0.8354 1.2120 0.7950 0.8903.
+
+### 11.3 Reading
+
+1. **The backend saves the same ~3.7 s per step with or without the model
+   kernels** (−3.76 s with kernels, −3.67 s eager). So the saving comes from
+   the clip-and-reduce stage, which doesn't depend on the forward/backward
+   kernels. That matches the earlier seam attribution (478 → 79 ms per
+   microbatch call, about 7.6 calls per step).
+2. **Memory is unchanged:** identical step peak and working set in every pair.
+   At mb=2 the per-example gradient stack is about 0.3 GB, and the peak is
+   activations (§6.2). Figure: `notes/profiles/compare_clip_backend.png`.
+   - With torch clipping, each microbatch spike is followed by a long flat
+     stretch near the floor, which is the clip-and-reduce work.
+   - With triton clipping that stretch almost disappears.
+3. **Fastest measured `train_dpsgd.py` configuration: eager + triton clip,
+   5.43 s per step.** That is ×2.05 against the kernels + torch baseline, for
+   +1.97 GiB of peak memory (eager). The eager advantage from §6.5 persists
+   with the fused clip.
+4. **Through DPTrainer the backend gives ×1.42.** `lora_mlp_recompute=False`
+   adds only −1.5% on top (10.18 → 10.03 s) for +2.08 GB. Without the fused
+   clip it gave −5.5% in this session (−9.9% in §10's). Once clip-and-reduce
+   is fused, the backward matmuls it saves are a smaller share of the step.
+5. **The bottleneck moves.** GPU utilisation rises but stays at or below 44%.
+   The remaining 4.9–6.8 s of the `clip` phase is mostly the vmapped
+   per-example forward/backward; the fused clip-and-reduce itself is about
+   0.6 s per step by the earlier attribution. That is the next target.
+
+**Limits.**
+- One run per configuration. Paired per-step ratios are tight, but there is no
+  repeat-run spread.
+- Profiler instrumentation is on in §11.1. The clean pair confirms the
+  relative gain.
+- The DPTrainer command is a reconstruction of §10's, and DPTrainer runs in
+  eval mode (#1121).
+- Compare within these tables, not across sessions. This session's
+  kernels + torch baseline (11.10 s) is 5% below §4.1's 11.67 s.
+
+**Artifacts:**
+- `notes/profiles/cb/`: per-phase CSVs, 1 ms timelines, stdout logs,
+  `nvidia-smi` samples and the driver.
+- `notes/profiles/compare_clip_backend.png`.
+- `experiments/clip_fused/summarize_cb_runs.py`, which produces every number
+  above from those files.
+- The CUDA snapshot pickles stay in the workspace's `~/opaque/runs/`.
+
+**Reproduce:**
+```bash
+coder ssh kernel -- '~/cb_driver.sh'   # or run notes/profiles/cb/cb_driver.sh in ~/opaque
+python experiments/clip_fused/summarize_cb_runs.py notes/profiles/cb
+python examples/plot_memory_compare.py notes/profiles/cb \
+    "kernels, torch clip:cb_kern_torch" "kernels, triton clip:cb_kern_triton" \
+    "eager, torch clip:cb_eager_torch" "eager, triton clip:cb_eager_triton" \
+    --step 3 --out notes/profiles/compare_clip_backend.png
+```
