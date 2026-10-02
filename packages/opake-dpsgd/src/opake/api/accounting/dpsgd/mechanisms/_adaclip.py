@@ -9,6 +9,7 @@ absolute noise std is ``σ_b = expected_batch_size × fraction_noise_std``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import assert_never
 
 from opake.api.accounting.core import _native
 from opake.api.accounting.core._base import DpProcess, Pld
@@ -38,10 +39,13 @@ class AdaClip(DpProcess):
     num_groups: int = 1
 
     def __post_init__(self) -> None:
-        # Validate here (not only in ``adaclip()``) so direct construction and
-        # deserialization — the generic DpProcess codec rebuilds with
-        # ``cls(**kwargs)`` — cannot produce an instance that prices the
-        # quantile release as free (e.g. ``num_groups=0``).
+        if not isinstance(self.inner, (Gaussian, NonPrivate)):
+            raise InputTypeError(
+                *(
+                    "AdaClip requires a Gaussian or NonPrivate inner mechanism, "
+                    f"got {type(self.inner).__name__}.",
+                )
+            )
         if self.fraction_noise_std <= 0:
             raise ConfigurationError(
                 *(
@@ -111,20 +115,7 @@ class AdaClip(DpProcess):
             case Gaussian():
                 return _native.gaussian_pld(self.effective_noise_multiplier, native_cfg)
             case _:
-                inner_pld = self.inner.pld(
-                    discretization=discretization,
-                    log_x_mass_truncation_bound=log_x_mass_truncation_bound,
-                    max_grid_size=max_grid_size,
-                    max_conv_grid=max_conv_grid,
-                    seed=seed,
-                    mc_resolution=mc_resolution,
-                    mc_failure_probability=mc_failure_probability,
-                )
-                sigma_b = self.expected_batch_size * self.fraction_noise_std
-                bit_pld = _native.gaussian_pld(2.0 * sigma_b, native_cfg)
-                if self.num_groups > 1:
-                    bit_pld = bit_pld * self.num_groups
-                return inner_pld.compose(bit_pld)
+                assert_never(self.inner)
 
 
 def adaclip(
@@ -140,7 +131,7 @@ def adaclip(
     clipping-fraction query.
 
     Args:
-        inner: Base mechanism — ``gaussian()``.
+        inner: Base mechanism — ``gaussian()`` or ``nonprivate()``.
         fraction_noise_std: Noise std on the clipping fraction
             (default 0.05).
         expected_batch_size: Data-independent batch size
@@ -161,19 +152,6 @@ def adaclip(
             sample_rate=0.01,
         )
     """
-    match inner:
-        case Gaussian() | NonPrivate():
-            pass
-        case _:
-            raise InputTypeError(
-                *(
-                    f"adaclip() requires a Gaussian or NonPrivate inner mechanism, "
-                    f"got {type(inner).__name__}.",
-                )
-            )
-    # Parameter bounds (fraction_noise_std, expected_batch_size, num_groups)
-    # are validated in ``AdaClip.__post_init__`` so direct construction and
-    # deserialization stay consistent with this factory.
     return AdaClip(
         inner=inner,
         fraction_noise_std=fraction_noise_std,

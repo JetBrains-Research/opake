@@ -1,9 +1,4 @@
-"""Poisson-subsampled mechanism — standard DP-SGD step.
-
-Plain Poisson accepts any ``DpProcess``. When ``truncated_batch_size`` and
-``dataset_size`` are provided, the capped form requires a Gaussian-derived or
-non-private base.
-"""
+"""Poisson-subsampled mechanism — standard DP-SGD step."""
 
 from __future__ import annotations
 
@@ -17,20 +12,19 @@ from opake.api.accounting.dpsgd.mechanisms._adaclip import AdaClip
 from opake.api.accounting.dpsgd.mechanisms._gaussian import Gaussian
 from opake.exceptions import ConfigurationError, InputTypeError
 
-#: Mechanism types accepted by plain :func:`poisson`.
-_Inner = DpProcess
+#: Mechanism types accepted by :func:`poisson`.
+_Inner = Gaussian | AdaClip | NonPrivate
 
 
 @dataclass(frozen=True, slots=True)
 class Poisson(DpProcess):
     """Poisson-subsampled mechanism (single step).
 
-    Plain Poisson accepts any Opake ``DpProcess``. ``sample_rate=1.0``
-    returns the base mechanism without amplification. The capped form
-    requires a Gaussian, AdaClip(Gaussian), or NonPrivate inner mechanism,
-    with both ``truncated_batch_size`` and ``dataset_size`` set. Its guarantee
-    uses the dataset-size-indexed add/remove adjacency of Ganesh (2025),
-    https://arxiv.org/abs/2508.15089.
+    Accepts a Gaussian, AdaClip, or NonPrivate inner mechanism.
+    ``sample_rate=1.0`` returns the base mechanism without amplification.
+    The capped form additionally requires both ``truncated_batch_size`` and
+    ``dataset_size``. Its guarantee uses the dataset-size-indexed add/remove
+    adjacency of Ganesh (2025), https://arxiv.org/abs/2508.15089.
     """
 
     inner: _Inner
@@ -39,11 +33,11 @@ class Poisson(DpProcess):
     dataset_size: int | None = None
 
     def __post_init__(self):
-        if not isinstance(self.inner, DpProcess):
+        if not isinstance(self.inner, (Gaussian, AdaClip, NonPrivate)):
             raise InputTypeError(
                 *(
-                    "Poisson requires a DpProcess inner mechanism, got "
-                    f"{type(self.inner).__name__}.",
+                    "Poisson requires a Gaussian, AdaClip, or NonPrivate inner "
+                    f"mechanism, got {type(self.inner).__name__}.",
                 )
             )
 
@@ -67,10 +61,7 @@ class Poisson(DpProcess):
                 )
             )
 
-        # Validate truncation pairing here (not only in the factory) so direct
-        # construction and deserialization can't pass an unpaired
-        # ``(truncated_batch_size, dataset_size)`` into
-        # ``_native.truncated_poisson_gaussian_pld`` and fail at PLD time.
+        # Direct construction and deserialization share this pairing invariant.
         if (self.truncated_batch_size is None) != (self.dataset_size is None):
             raise ConfigurationError(
                 *(
@@ -103,14 +94,6 @@ class Poisson(DpProcess):
             if self.dataset_size < 1:
                 raise ConfigurationError(
                     *(f"Poisson: dataset_size must be >= 1, got {self.dataset_size}",)
-                )
-            if not isinstance(self.inner, (Gaussian, AdaClip, NonPrivate)):
-                raise InputTypeError(
-                    *(
-                        "truncated Poisson requires a Gaussian, AdaClip(Gaussian), "
-                        "or NonPrivate inner mechanism, got "
-                        f"{type(self.inner).__name__}.",
-                    )
                 )
 
     @pld_cache(maxsize=8)
@@ -210,9 +193,8 @@ def poisson(
     must retain that same dataset-size interpretation.
 
     Args:
-        inner: The base Opake :class:`DpProcess`. The capped form requires
-            :func:`gaussian`, :func:`adaclip`, or
-            :func:`opake.accounting.nonprivate`.
+        inner: A :func:`gaussian`, :func:`adaclip`, or
+            :func:`opake.accounting.nonprivate` mechanism.
         sample_rate: Probability of including each example
             (``E[batch_size] / |D|``), between zero and one inclusive.
             ``sample_rate=1.0`` means every example participates — no
@@ -241,9 +223,6 @@ def poisson(
         )
         eps = (step * 1000).epsilon_at(1e-5)
     """
-    # Pairing + per-field bounds on truncated_batch_size / dataset_size are
-    # validated in ``Poisson.__post_init__`` so direct construction,
-    # deserialization, and this factory stay consistent.
     return Poisson(
         inner=inner,
         sample_rate=float(sample_rate),
