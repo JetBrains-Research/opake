@@ -122,15 +122,15 @@ def _compare(a_tree, b_tree):
     """Per output field (reduced, diagnostics...): bitwise flag and max relative diff."""
     names = ("reduced", "markers", "squared_reduced", "squared_markers", "diagnostics")
     res = {}
-    for name, a, b in zip(names, a_tree, b_tree):
+    for name, a, b in zip(names, a_tree, b_tree, strict=True):
         fa, _ = pytree.tree_flatten(a)
         fb, _ = pytree.tree_flatten(b)
         ta = [x for x in fa if isinstance(x, torch.Tensor) and x.numel()]
         tb = [x for x in fb if isinstance(x, torch.Tensor) and x.numel()]
         if not ta:
             continue
-        bitwise = all(torch.equal(x, y) for x, y in zip(ta, tb))
-        diff2 = sum(float(((x.double() - y.double()) ** 2).sum()) for x, y in zip(ta, tb))
+        bitwise = all(torch.equal(x, y) for x, y in zip(ta, tb, strict=True))
+        diff2 = sum(float(((x.double() - y.double()) ** 2).sum()) for x, y in zip(ta, tb, strict=True))
         ref2 = sum(float((y.double() ** 2).sum()) for y in tb)
         rel = (diff2 / ref2) ** 0.5 if ref2 > 0 else (0.0 if diff2 == 0 else float("inf"))
         res[name] = {"bitwise": bitwise, "rel": rel}  # global ||a-b|| / ||b|| over the field
