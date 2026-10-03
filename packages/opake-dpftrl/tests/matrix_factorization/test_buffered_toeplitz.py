@@ -603,3 +603,101 @@ class TestFromRationalApprox:
     def test_invalid_num_buffers(self):
         with pytest.raises(ValueError, match="num_buffers must be >= 1"):
             BufferedToeplitz.from_rational_approx_to_sqrt_x(num_buffers=0)
+
+
+def _stream(streaming, xs):
+    """Run the rows of ``xs`` through ``streaming`` and stack the outputs."""
+    state = streaming.init_multiply(xs[0])
+    outs = []
+    for x in xs:
+        y, state = streaming.multiply_next(x, state)
+        outs.append(y)
+    return torch.stack(outs), state
+
+
+class TestBLTStreamingCoefficients:
+    """Coefficient handling in the BLT streaming recurrences."""
+
+    @staticmethod
+    def _blt():
+        return BufferedToeplitz.build(buf_decay=[0.7, 0.3], output_scale=[0.4, 0.2])
+
+    @pytest.mark.parametrize("inverse", [False, True])
+    @pytest.mark.parametrize("leaf_shape", [(3,), (2, 3), (2, 2, 3), (4, 2)])
+    def test_multidim_leaves_match_dense(self, inverse, leaf_shape):
+        # Two buffers: a leading leaf axis of size 2 must not be mistaken for
+        # the buffer axis, where a broadcasting slip is silent, not an error.
+        blt = self._blt()
+        n = 6
+        dense = materialize(blt, n).to(torch.float64)
+        if inverse:
+            dense = torch.linalg.inv(dense)
+        build = inverse_as_streaming_matrix if inverse else as_streaming_matrix
+        gen = torch.Generator().manual_seed(0)
+        xs = torch.randn(n, *leaf_shape, dtype=torch.float64, generator=gen)
+        got, _ = _stream(build(blt), xs)
+        expected = torch.einsum("ij,j...->i...", dense, xs)
+        torch.testing.assert_close(got, expected, atol=1e-10, rtol=1e-10)
+
+    @pytest.mark.parametrize("inverse", [False, True])
+    def test_fresh_matrix_continues_from_another_instances_state(self, inverse):
+        # A restored run rebuilds the matrix from its strategy and resumes from
+        # saved state without calling ``init_multiply`` on the new object.
+        blt = self._blt()
+        build = inverse_as_streaming_matrix if inverse else as_streaming_matrix
+        gen = torch.Generator().manual_seed(1)
+        xs = torch.randn(6, 2, 3, dtype=torch.float64, generator=gen)
+        uninterrupted, _ = _stream(build(blt), xs)
+
+        first = build(blt)
+        state = first.init_multiply(xs[0])
+        outs = []
+        for x in xs[:3]:
+            y, state = first.multiply_next(x, state)
+            outs.append(y)
+        resumed = build(blt)
+        for x in xs[3:]:
+            y, state = resumed.multiply_next(x, state)
+            outs.append(y)
+        assert torch.equal(torch.stack(outs), uninterrupted)
+
+    def test_one_matrix_serves_float32_and_float64_leaves(self):
+        blt = self._blt()
+        streaming = as_streaming_matrix(blt)
+        n = 5
+        dense = materialize(blt, n).to(torch.float64)
+        gen = torch.Generator().manual_seed(2)
+        a = torch.randn(n, 3, generator=gen, dtype=torch.float32)
+        b = torch.randn(n, 2, 3, generator=gen, dtype=torch.float64)
+        state_a, state_b = streaming.init_multiply(a[0]), streaming.init_multiply(b[0])
+        ys_a, ys_b = [], []
+        for t in range(n):  # interleave both leaves through one instance
+            y, state_a = streaming.multiply_next(a[t], state_a)
+            ys_a.append(y)
+            y, state_b = streaming.multiply_next(b[t], state_b)
+            ys_b.append(y)
+        out_a, out_b = torch.stack(ys_a), torch.stack(ys_b)
+        assert out_a.dtype == torch.float32
+        assert out_b.dtype == torch.float64
+        torch.testing.assert_close(
+            out_a, torch.einsum("ij,j...->i...", dense.float(), a)
+        )
+        torch.testing.assert_close(
+            out_b, torch.einsum("ij,j...->i...", dense, b), atol=1e-10, rtol=1e-10
+        )
+
+    def test_buffer_update_matches_diagonal_product(self):
+        from opake.api.dpftrl.noise._blt_math import _streaming_matrix_builder
+
+        builder = _streaming_matrix_builder(
+            BufferedToeplitz.build(
+                buf_decay=[0.7, 0.3, 0.1], output_scale=[0.4, 0.2, 0.1]
+            )
+        )
+        gen = torch.Generator().manual_seed(3)
+        # Leading leaf axis equal to the buffer count (3).
+        state = torch.randn(3, 3, 5, generator=gen, dtype=torch.float64)
+        rhs = torch.randn(3, 5, generator=gen, dtype=torch.float64)
+        decay = torch.tensor(builder.buf_decay, dtype=torch.float64)
+        expected = (torch.diag(decay) @ state.reshape(3, -1)).reshape(state.shape) + rhs
+        torch.testing.assert_close(builder._update(state, rhs), expected)

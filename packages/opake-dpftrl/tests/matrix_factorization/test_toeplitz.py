@@ -502,3 +502,71 @@ class TestMomentumWorkloadCoef:
         # (lower loss) as the one optimized for prefix-sum, when evaluated
         # under the momentum workload.
         assert loss_mom.item() <= loss_pfx.item() + 1e-6
+
+
+def _stream(streaming, xs):
+    """Run the rows of ``xs`` through ``streaming`` and stack the outputs."""
+    state = streaming.init_multiply(xs[0])
+    outs = []
+    for x in xs:
+        y, state = streaming.multiply_next(x, state)
+        outs.append(y)
+    return torch.stack(outs), state
+
+
+class TestInverseStreamingCoefficients:
+    """Coefficient handling in the Toeplitz inverse streaming recurrence."""
+
+    COEF = (1.0, 0.6, 0.2)  # three bands -> a state axis of length two
+
+    @pytest.mark.parametrize("leaf_shape", [(4,), (2, 4), (2, 2, 3)])
+    def test_multidim_leaves_match_dense(self, leaf_shape):
+        coef = torch.tensor(self.COEF, dtype=torch.float64)
+        n = 6
+        dense = torch.linalg.inv(materialize_lower_triangular(coef, n))
+        gen = torch.Generator().manual_seed(0)
+        xs = torch.randn(n, *leaf_shape, dtype=torch.float64, generator=gen)
+        got, _ = _stream(inverse_as_streaming_matrix(coef), xs)
+        expected = torch.einsum("ij,j...->i...", dense, xs)
+        torch.testing.assert_close(got, expected, atol=1e-10, rtol=1e-10)
+
+    def test_fresh_matrix_continues_from_another_instances_state(self):
+        coef = torch.tensor(self.COEF, dtype=torch.float64)
+        gen = torch.Generator().manual_seed(1)
+        xs = torch.randn(6, 2, 4, dtype=torch.float32, generator=gen)
+        uninterrupted, _ = _stream(inverse_as_streaming_matrix(coef), xs)
+
+        first = inverse_as_streaming_matrix(coef)
+        state = first.init_multiply(xs[0])
+        outs = []
+        for x in xs[:3]:
+            y, state = first.multiply_next(x, state)
+            outs.append(y)
+        resumed = inverse_as_streaming_matrix(coef)
+        for x in xs[3:]:
+            y, state = resumed.multiply_next(x, state)
+            outs.append(y)
+        assert torch.equal(torch.stack(outs), uninterrupted)
+
+    def test_grad_carrying_coefficients_track_optimizer_updates(self):
+        coef = torch.tensor(self.COEF, dtype=torch.float64, requires_grad=True)
+        streaming = inverse_as_streaming_matrix(coef)
+        # float32 inputs force a dtype conversion of ``coef`` inside the recurrence.
+        xs = torch.randn(4, 3, generator=torch.Generator().manual_seed(2))
+        out, _ = _stream(streaming, xs)
+        (grad,) = torch.autograd.grad(out.sum(), coef)
+        with torch.no_grad():
+            coef.sub_(0.1 * grad)  # an optimizer step, in place
+        after, _ = _stream(streaming, xs)
+        expected, _ = _stream(inverse_as_streaming_matrix(coef.detach().clone()), xs)
+        torch.testing.assert_close(after, expected)
+
+    def test_in_place_coefficient_update_is_seen(self):
+        coef = torch.tensor([2.0, 0.5], dtype=torch.float64)
+        streaming = inverse_as_streaming_matrix(coef)
+        x = torch.ones(3, dtype=torch.float32)  # forces a converted copy of ``coef``
+        state = streaming.init_multiply(x)
+        before, _ = streaming.multiply_next(x, state)
+        coef.mul_(2.0)
+        after, _ = streaming.multiply_next(x, state)
+        torch.testing.assert_close(after, before / 2.0)
