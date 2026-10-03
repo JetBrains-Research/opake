@@ -46,11 +46,14 @@ USAGE:
 
 import argparse
 import contextlib
+import csv
 import importlib.util
 import math
 import os
 import sys
+import threading
 import time
+from pathlib import Path
 
 import torch
 import torch.distributed as dist
@@ -81,9 +84,11 @@ from opake.distributed import sync
 from opake.distributed.gradients import sum_gradients_
 from opake.dpsgd.noise import gaussian_noise
 from opake.profiling import (
+    finish_snapshot,
     perf_tracker,
     print_memory,
     reset_peak_memory,
+    start_snapshot,
 )
 from opake.random import fold_in, key, split
 from opake.dpsgd.sampling import KOutOfTSampler, PoissonSampler
@@ -173,6 +178,90 @@ def _log_private_second_moment() -> None:
     the same multiplier.
     """
     print("  Second moments: on (sensitivity-proportional allocation)")
+
+
+class _Timeline:
+    """Sample live device bytes during profiled steps.
+
+    A background thread reads ``memory_allocated`` (a cheap counter, no device
+    sync) so the curve resolves what happens *inside* ``grad_fn``, which the
+    per-phase peaks cannot. Replaying an allocation history instead needs the
+    whole window recorded: the ring buffer truncates, and a truncated history
+    replays to negative live bytes.
+
+    Sampling contends for the GIL, so step times measured while this runs are
+    inflated; keep the recorded window small.
+    """
+
+    def __init__(self, device: torch.device, interval_s: float = 1e-3) -> None:
+        self.device = device
+        self.interval_s = interval_s
+        self.samples: list[tuple[float, str, float]] = []
+        self.phase = ""
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._t0 = 0.0
+
+    def start(self) -> None:
+        self.samples.clear()
+        self.phase = "grad"
+        self._stop.clear()
+        self._t0 = time.perf_counter()
+
+        def _loop() -> None:
+            read = torch.cuda.memory_allocated
+            while not self._stop.wait(self.interval_s):
+                self.samples.append(
+                    (time.perf_counter() - self._t0, self.phase, read())
+                )
+
+        self._thread = threading.Thread(target=_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> list[tuple[float, str, float]]:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5.0)
+        return self.samples
+
+
+def _write_memory_timeline(path: Path, timeline_rows: list) -> int:
+    """Write sampled ``(step, t_ms, phase, alloc_bytes)`` rows; return count.
+
+    Long format rather than one column per phase because a step has thousands
+    of samples and the phase is what you colour by. Bytes, not MiB, straight
+    from ``memory_allocated`` - the reader converts.
+    """
+    count = 0
+    with path.open("w", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["step", "t_ms", "phase", "alloc_bytes"])
+        for step, _batch, samples in timeline_rows:
+            for t, phase, nbytes in samples:
+                writer.writerow([step, round(t * 1e3, 3), phase, nbytes])
+                count += 1
+    return count
+
+
+def _write_memory_profile(prefix: str, rows: list[dict]) -> Path | None:
+    """Dump per-step phase timings + peak-memory readings as a CSV.
+
+    One row per training step, one column per ``step_perf`` phase (``clip`` /
+    ``noise`` / ``optimizer``) for both seconds (``_sec``) and the allocated
+    high-water mark at that phase (``_peak_gb``). Plot the ``_peak_gb``
+    columns as a stacked bar per step to see which phase owns the peak.
+    """
+    if not rows:
+        return None
+    path = Path(prefix).with_suffix(".csv")
+    if path.parent != Path("."):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    fields = list(dict.fromkeys(key for row in rows for key in row))
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields, restval="")
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
 
 
 def _select_device(local_rank: int | None = None) -> tuple[torch.device, str]:
@@ -550,6 +639,31 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Offload saved tensors to CPU via save_on_cpu (works with or without checkpointing)",
+    )
+    train_group.add_argument(
+        "--memory-profile",
+        type=str,
+        default=None,
+        metavar="PREFIX",
+        help="Write a plottable memory profile to PREFIX.csv (time + peak "
+        "allocated at each in-step phase) and PREFIX.pickle (CUDA allocation "
+        "history; open at https://pytorch.org/memory_viz to see every "
+        "allocation, its lifetime and the stack that made it). CUDA only; "
+        "no-op elsewhere. Costs memory while recording, so it covers only "
+        "--memory-profile-steps steps.",
+    )
+    train_group.add_argument(
+        "--memory-profile-skip",
+        type=int,
+        default=3,
+        help="Skip this many optimizer steps before the snapshot window, so "
+        "the profile captures steady state rather than first-step compile.",
+    )
+    train_group.add_argument(
+        "--memory-profile-steps",
+        type=int,
+        default=2,
+        help="Number of steps to capture in the allocation-history snapshot.",
     )
 
     lora_group = parser.add_argument_group("lora", "LoRA adapter settings")
@@ -1095,7 +1209,7 @@ def main():
         backend_label = args.sdpa_backend or "auto"
         print(f"Attention: sdpa (backend={backend_label})")
 
-    tracker = perf_tracker(device)
+    tracker = perf_tracker(device, phase_memory=bool(args.memory_profile))
 
     try:
         model = AutoModelForCausalLM.from_pretrained(args.model_name, **model_kwargs)
@@ -1803,6 +1917,34 @@ def main():
     reset_peak_memory(device)
     print_memory(device, "Before training")
 
+    # --memory-profile: collect a per-step phase breakdown, plus a CUDA
+    # allocation-history snapshot over a few steady-state steps.
+    mem_prof = None
+    if args.memory_profile:
+        if device.type != "cuda":
+            print(
+                f"\nMemory profile: skipped (--memory-profile is CUDA-only; "
+                f"device is {device.type})"
+            )
+        else:
+            start = max(0, args.memory_profile_skip)
+            count = max(1, args.memory_profile_steps)
+            mem_prof = {
+                "prefix": args.memory_profile,
+                "start": start,
+                "count": count,
+                "recorded": 0,
+                "rows": [],
+                "recording": False,
+                "timeline": _Timeline(device),
+                "timeline_rows": [],
+            }
+            print(
+                f"\nMemory profile: phases logged every step; allocation "
+                f"snapshot over steps {start}..{start + count - 1} "
+                f"-> {args.memory_profile}.csv + .pickle"
+            )
+
     # Step-0 eval: log baseline metrics before any training
     initial_eval_loss = eval_loss(trainable_params)
     initial_epsilon = accounting.epsilon_at(args.target_delta)
@@ -1859,6 +2001,16 @@ def main():
             batch_size = len(input_ids)
 
             # === Execution ===
+            if mem_prof and global_step == mem_prof["start"]:
+                # Snapshot and sampled timeline share one window so both stay
+                # cheap: the timeline resolves what happens inside grad_fn,
+                # the snapshot is for stack-level drill-down.
+                mem_prof["recording"] = start_snapshot(device)
+            timeline = (
+                mem_prof["timeline"] if mem_prof and mem_prof["recording"] else None
+            )
+            if timeline is not None:
+                timeline.start()
             with tracker.train(batch_size=batch_size) as sp:
                 # Compute clipped gradients (handles empty batches via library)
                 with offload_ctx:
@@ -1869,6 +2021,8 @@ def main():
                     clip_state, aux = sync(clip_state, aux)
                     sum_gradients_(grads_tuple)
                 sp.mark("clip")
+                if timeline is not None:
+                    timeline.phase = "noise"
 
                 step_clip_norm = _step_clip_norm(grads_tuple)
                 noisy_grads, noise_state = noise_fn(grads_tuple, noise_state)
@@ -1876,12 +2030,37 @@ def main():
                 if is_ddp:
                     noise_state = sync(noise_state)
                 sp.mark("noise")
+                if timeline is not None:
+                    timeline.phase = "optimizer"
 
                 updates, opt_state = base_opt.update(
                     noisy_grads, opt_state, params=trainable_params
                 )
                 trainable_params = torchopt.apply_updates(trainable_params, updates)
                 sp.mark("optimizer")
+                if timeline is not None:
+                    mem_prof["timeline_rows"].append(
+                        (global_step, batch_size, timeline.stop())
+                    )
+
+            if mem_prof:
+                if batch_size > 0:
+                    mem_prof["rows"].append(
+                        {
+                            "step": global_step,
+                            "batch": batch_size,
+                            "snapshot": int(bool(mem_prof.get("recording"))),
+                        }
+                        | sp.perf.to_dict()
+                    )
+                if mem_prof.get("recording"):
+                    mem_prof["recorded"] += 1
+                    if mem_prof["recorded"] >= mem_prof["count"]:
+                        mem_prof["recording"] = False
+                        snapshot = finish_snapshot(
+                            f"{mem_prof['prefix']}.pickle", device
+                        )
+                        print(f"  → Memory snapshot: {snapshot}")
 
             # Empty batch (rare but possible with Poisson): skip metrics.
             if batch_size == 0:
@@ -2077,6 +2256,16 @@ def main():
             )
 
     synced = sync(tracker) if is_ddp else tracker
+    if mem_prof:
+        csv_path = _write_memory_profile(mem_prof["prefix"], mem_prof["rows"])
+        timeline_path = Path(f"{mem_prof['prefix']}.timeline.csv")
+        samples = _write_memory_timeline(timeline_path, mem_prof["timeline_rows"])
+        print(
+            f"\nMemory profile: {csv_path} ({len(mem_prof['rows'])} steps), "
+            f"{timeline_path} ({samples} samples)"
+        )
+        if not csv_path:
+            print("Memory profile: no steps recorded")
     print("\nPerformance:")
     print(f"  Throughput: {synced.train.samples_per_second:.1f} samples/s")
     print(f"  Steps/s: {synced.train.steps_per_second:.2f}")
