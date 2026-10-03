@@ -227,6 +227,7 @@ Mechanism constraints (validated at construction):
 | `gradient_checkpointing` | `False` | Opake automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with `torch_compile`. |
 | `torch_compile` | `False` | Compiles the tensor-only per-microbatch `vmap(grad)+clip+reduce` kernel with `fullgraph=True`. |
 | `cuda_graphs` | `False` | Replays the per-microbatch `vmap(grad)+clip+reduce` kernel from CUDA graphs. See [CUDA-graph replay](#cuda-graph-replay). |
+| `trim_microbatch_padding` | `False` | **Experimental, not yet DP-reviewed.** Orders each logical batch by length and trims every microbatch's trailing padding. See [Microbatch padding trim](#microbatch-padding-trim-experimental). |
 
 ### CUDA-graph replay
 
@@ -253,6 +254,44 @@ launch many small operations, and it makes the fused kernels
 - Clipping, noise, sampling and accounting are unchanged. Results can differ
   from eager execution in the last bits, within the run-to-run variation of
   the eager kernels.
+
+### Microbatch padding trim (experimental)
+
+!!! danger "Experimental: not yet DP-reviewed"
+    `trim_microbatch_padding` has **not** been through the privacy review that
+    privacy-sensitive changes require. Do not rely on it for a privacy claim
+    until that review is complete. It is opt-in and off by default.
+
+The collator pads the whole logical batch to its longest example, and
+microbatches are slices of that batch, so by default every example is computed
+at the logical batch's longest length. With `trim_microbatch_padding=True`:
+
+1. each logical batch is ordered by real length, longest first (a permutation
+   of the sampled examples), and
+2. each microbatch drops its trailing columns in which no row has an attended
+   token (`attention_mask != 0`) or a valid label (`labels != -100`).
+
+Why the result should be unchanged, which is the argument the review has to
+confirm:
+
+- the clipped gradient sum does not depend on the order of examples;
+- in a causal LM, no position attends to a later one, so dropping trailing
+  columns leaves real-token outputs unchanged;
+- the shifted loss pairs `logits[t]` with `labels[t + 1]`, and every dropped
+  pair has an ignored label.
+
+Sampling, noise and accounting do not change. Expect per-example gradients to
+match the untrimmed run up to floating-point summation order.
+
+Requirements and limits:
+
+- a right-padded causal-LM batch with an `attention_mask` key; batches without
+  one raise `ConfigurationError`;
+- every batch tensor whose second dimension equals the padded length is
+  trimmed;
+- incompatible with `torch_compile` and `cuda_graphs`, which need static
+  shapes;
+- one host synchronization per microbatch, to read the trimmed length.
 
 ## Patches and kernels
 

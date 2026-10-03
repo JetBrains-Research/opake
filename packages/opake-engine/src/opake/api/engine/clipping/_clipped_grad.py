@@ -102,6 +102,7 @@ def clipped_grad(
     _scale_fn: Callable | None = None,
     _builtin_scale: _BuiltinScale | None = None,
     _chunk_compiler: Callable | None = None,
+    _microbatch_transform: Callable | None = None,
 ) -> tuple[ClippedGradFn, FixedClipState]:
     """Create a function to compute the sum of clipped gradients of loss_fn.
 
@@ -319,6 +320,7 @@ def clipped_grad(
         _scale_fn=_scale_fn,
         _builtin_scale=_builtin_scale,
         _chunk_compiler=_chunk_compiler,
+        _microbatch_transform=_microbatch_transform,
     )
 
     if return_stats:
