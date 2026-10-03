@@ -76,6 +76,12 @@ accountant relies on.
   so clipping conservatively shrinks each leaf's scale and rounds outward
   subnormal casts toward zero to preserve `norm(output) <= clipping_norm` on
   the values as stored.
+- **The bound assumes squares do not underflow.** Squared entries are formed
+  in `compute_dtype`. With float32, entries below about `1e-19` lose precision
+  when squared and entries below about `2.6e-23` square to zero, so an input
+  made only of such entries can be under-measured and returned unclipped. This
+  requires a clipping norm below roughly `1e-19 * sqrt(numel)`, far from any
+  practical threshold; float64 reductions move the limit to about `1e-154`.
 
 Under microbatching, the running sum is held at the accumulation precision and
 cast once at the end. A `bfloat16` run therefore uses one model-sized float32
