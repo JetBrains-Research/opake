@@ -4513,6 +4513,7 @@ class DPTrainer:
         target_quantile = float(ca.get("target_quantile", 0.5))
         clipping_norm_max = float(ca.get("clipping_norm_max", 10.0))
         auto_gamma = float(ca.get("gamma", 0.01))
+        clip_backend = ca.get("clip_backend", "torch")
         compiler = self._grad_compiler()
 
         if a.clipping_mode == "adaptive":
@@ -4528,6 +4529,7 @@ class DPTrainer:
                 return_aux=True,
                 key=quantile_noise_key,
                 normalize_by=expected_batch_size,
+                clip_backend=clip_backend,
                 _chunk_compiler=compiler,
             )
         elif a.clipping_mode == "auto":
@@ -4553,6 +4555,7 @@ class DPTrainer:
                 normalize_by=expected_batch_size,
                 microbatch_size=microbatch_size,
                 return_aux=True,
+                clip_backend=clip_backend,
                 _chunk_compiler=compiler,
             )
         return grad_fn, state
