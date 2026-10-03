@@ -155,6 +155,43 @@ def test_vmap_causal_mask_materializes_supplied_attention_masks():
     assert created_masks[0] is not None
 
 
+@pytest.mark.cuda
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+def test_vmap_causal_mask_is_cuda_graph_capturable():
+    class DummyConfig:
+        _attn_implementation = "sdpa"
+
+    device = "cuda"
+    input_embeds = torch.randn(1, 8, 16, device=device)
+    cache_position = torch.arange(8, device=device)
+    padded = torch.ones(2, 8, dtype=torch.bool, device=device)
+    padded[1, -2:] = False
+
+    def build(attention_mask):
+        return vmap_create_causal_mask(
+            config=DummyConfig(),
+            input_embeds=input_embeds,
+            attention_mask=attention_mask,
+            cache_position=cache_position,
+            past_key_values=None,
+        )
+
+    eager = torch.vmap(build)(padded)
+    assert eager is not None
+
+    static_mask = padded.clone()
+    side = torch.cuda.Stream()
+    side.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(side):
+        torch.vmap(build)(static_mask)
+    torch.cuda.current_stream().wait_stream(side)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        captured = torch.vmap(build)(static_mask)
+    graph.replay()
+    torch.testing.assert_close(captured, eager, rtol=0, atol=0)
+
+
 @pytest.mark.parametrize(
     ("input_shape", "mask", "expected"),
     [

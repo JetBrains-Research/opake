@@ -294,10 +294,8 @@ def fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=None)
         ptrs = {}
         for g in plan["groups"]:
             first = leaves[g["idx"][0]]
-            ptrs[g["dtype"]] = torch.tensor(
-                [leaves[i].data_ptr() for i in g["idx"]],
-                dtype=torch.int64,
-                device=device,
+            ptrs[g["dtype"]] = _pointer_table(
+                [leaves[i].data_ptr() for i in g["idx"]], device
             )
             partial = torch.empty((batch, g["tiles"]), dtype=sq_dtype, device=device)
             _partial_sq_kernel[(g["tiles"], batch)](
@@ -376,6 +374,43 @@ def fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=None)
                 s2 = post.sum(1)
                 post_sq = s2 if post_sq is None else post_sq + s2
     return reduced, norm, post_sq, acc_dtype
+
+
+_ARENA_SLOTS = 1 << 16  # int64 addresses in the pinned staging arena (512 KiB)
+_ARENA: dict = {"buffer": None, "used": 0}
+
+
+def _pointer_table(addresses, device):
+    """Tensor addresses as an int64 device tensor.
+
+    While a CUDA graph is being captured, pageable host-to-device copies are
+    not allowed, and pinned allocations would enter the capture's host-memory
+    bookkeeping. The upload therefore goes through a slice of a pinned arena
+    that the first eager call allocates. The graph re-reads its slice on every
+    replay, so slices are never reused; the addresses they hold are the graph's
+    static tensors, which are the same on every replay.
+    """
+    if torch.cuda.is_current_stream_capturing():
+        arena, used = _ARENA["buffer"], _ARENA["used"]
+        if arena is None or used + len(addresses) > arena.numel():
+            raise RuntimeError(
+                *(
+                    "fused clip pointer arena "
+                    + (
+                        "not allocated: run one eager call before capturing"
+                        if arena is None
+                        else "exhausted"
+                    )
+                    + ".",
+                )
+            )
+        view = arena[used : used + len(addresses)]
+        view.copy_(torch.tensor(addresses, dtype=torch.int64))
+        _ARENA["used"] = used + len(addresses)
+        return view.to(device=device, non_blocking=True)
+    if _ARENA["buffer"] is None:
+        _ARENA["buffer"] = torch.empty(_ARENA_SLOTS, dtype=torch.int64, pin_memory=True)
+    return torch.tensor(addresses, dtype=torch.int64, device=device)
 
 
 _MARKERS: dict = {}
