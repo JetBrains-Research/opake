@@ -135,6 +135,29 @@ with functorch). No special kwargs needed.
   `vmap_checkpointing=False` to `apply_runtime_patches(...)` or
   `apply_model_patches(...)`.
 
+### Selective activation recomputation
+
+Full-layer checkpointing recomputes every projection of each decoder layer.
+The fused LoRA MLP already recomputes narrowly: it saves only its input and
+recomputes the intermediate-width `gate` / `up` projections in backward.
+
+The fused LoRA MLP runs when gate, up and down projections all carry
+dropout-free LoRA adapters on CUDA and the adapters run in the compute dtype:
+either CUDA autocast is active (as in `DPTrainer` with `bf16=True`), or the
+adapters already have the hidden states' dtype. PEFT upcasts adapters to fp32
+by default, so a bf16 base model without autocast falls back to the PEFT
+forward.
+
+There is no separate attention-only checkpointing option. When `sdpa`
+attention dispatches to a fused backend (flash, memory-efficient or cuDNN), it
+never stores the `(heads, seq, seq)` attention matrix; the backend recomputes it
+in its own backward. Only the `MATH` backend and `eager` attention materialize
+the matrix.
+That is the cheap-to-recompute part that selective recomputation targets
+([Korthikanti et al., 2022](https://arxiv.org/abs/2205.05198)). Checkpointing
+the whole attention block would additionally recompute the Q/K/V and output
+projections, which costs matmul FLOPs for little memory.
+
 ### CPU offloading of saved tensors
 
 `torch.autograd.graph.save_on_cpu` moves tensors saved for backward to
