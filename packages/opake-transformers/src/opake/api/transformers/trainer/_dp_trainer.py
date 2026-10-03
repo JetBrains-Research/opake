@@ -102,6 +102,7 @@ from ._callback import (
     resolve_eval_metric,
 )
 from ._eval import EvalPrediction
+from ._padding import microbatch_padding_trimmer, sort_batch_by_length
 from ._precision import eval_dtype
 from ._scheduler import build_lr_schedule
 from ._state import DPTrainerState
@@ -1656,6 +1657,7 @@ class DPTrainer:
             microbatch_size,
             quantile_noise_key=quantile_noise_key,
             has_aux=wants_metrics,
+            batch_keys=batch_keys,
         )
 
         # --- LR schedule ---
@@ -2320,6 +2322,10 @@ class DPTrainer:
                     f"_setup_training time from a dry run on one example).",
                 )
             ) from None
+        if self.args.trim_microbatch_padding:
+            # EXPERIMENTAL, NOT YET DP-REVIEWED: a permutation of the sampled
+            # examples, so length-similar examples share a microbatch.
+            batch_args = sort_batch_by_length(batch_args, ctx.batch_keys)
         # Tracked separately for batch-size accounting; the first
         # tensor's leading dim is what HF's ``find_batch_size`` would
         # return.  ``clipped_grad`` short-circuits on empty batches
@@ -4548,6 +4554,7 @@ class DPTrainer:
         *,
         quantile_noise_key: RngKey,
         has_aux: bool = False,
+        batch_keys: tuple[str, ...] = (),
     ) -> tuple[Callable[..., Any], Any]:
         """Create the clipped gradient function based on clipping mode.
 
@@ -4564,6 +4571,16 @@ class DPTrainer:
         auto_gamma = float(ca.get("gamma", 0.01))
         clip_backend = ca.get("clip_backend", "torch")
         compiler = self._grad_compiler()
+        microbatch_transform = None
+        if a.trim_microbatch_padding:
+            log.warning(
+                "trim_microbatch_padding=True is EXPERIMENTAL and has NOT been "
+                "through DP review: each logical batch is ordered by length and "
+                "every microbatch's trailing padding columns are dropped before "
+                "the per-example kernel. Do not rely on it for a privacy claim "
+                "until it is reviewed."
+            )
+            microbatch_transform = microbatch_padding_trimmer(batch_keys)
 
         if a.clipping_mode == "adaptive":
             grad_fn, state = adaptive_clipped_grad(
@@ -4580,6 +4597,7 @@ class DPTrainer:
                 normalize_by=expected_batch_size,
                 clip_backend=clip_backend,
                 _chunk_compiler=compiler,
+                _microbatch_transform=microbatch_transform,
             )
         elif a.clipping_mode == "auto":
             grad_fn, state = auto_clipped_grad(
@@ -4593,6 +4611,7 @@ class DPTrainer:
                 microbatch_size=microbatch_size,
                 return_aux=True,
                 _chunk_compiler=compiler,
+                _microbatch_transform=microbatch_transform,
             )
         else:
             grad_fn, state = clipped_grad(
@@ -4606,6 +4625,7 @@ class DPTrainer:
                 return_aux=True,
                 clip_backend=clip_backend,
                 _chunk_compiler=compiler,
+                _microbatch_transform=microbatch_transform,
             )
         return grad_fn, state
 
