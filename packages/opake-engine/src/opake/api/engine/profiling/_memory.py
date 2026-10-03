@@ -35,6 +35,7 @@ import time
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -114,6 +115,64 @@ class MemoryStats:
             f"free={self.free_gb:.2f}GB "
             f"({self.utilization:.1%} used)"
         )
+
+
+def start_snapshot(
+    device: torch.device | str,
+    *,
+    max_entries: int = 200_000,
+) -> bool:
+    """Begin recording the CUDA allocation history (alloc/free + stacks).
+
+    The pairing of :func:`finish_snapshot` with this is what makes the dump
+    plottable: dump the result and open it at https://pytorch.org/memory_viz
+    to see every allocation, its size, its lifetime and the Python stack that
+    created it. Unlike :func:`step_perf`, which only sees the peak at a few
+    marks, this sees the whole inside of a step.
+
+    Recording is per-allocation and costs memory, so keep the window small
+    (a couple of steady-state steps, not the whole run).
+
+    Args:
+        device: Device to record on. No-op unless CUDA.
+        max_entries: Ring-buffer size for recorded events.
+
+    Returns:
+        ``True`` if recording actually started.
+    """
+    if isinstance(device, str):
+        device = torch.device(device)
+    if device.type != "cuda" or not torch.cuda.is_available():
+        return False
+    torch.cuda.synchronize(device)
+    torch.cuda.memory._record_memory_history(max_entries=max_entries, stacks="python")
+    return True
+
+
+def finish_snapshot(
+    path: str | Path,
+    device: torch.device | str = "cuda",
+) -> Path | None:
+    """Stop recording started by :func:"start_snapshot" and write the dump.
+
+    Args:
+        path: Destination ``.pickle`` path (openable in the PyTorch memory
+            visualizer).
+        device: Device recording was started on.
+
+    Returns:
+        The written path, or ``None`` if nothing was being recorded.
+    """
+    if isinstance(device, str):
+        device = torch.device(device)
+    if device.type != "cuda" or not torch.cuda.is_available():
+        return None
+    torch.cuda.synchronize(device)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.cuda.memory._dump_snapshot(str(path))
+    torch.cuda.memory._record_memory_history(enabled=None)
+    return path
 
 
 def get_memory_stats(device: torch.device | str) -> MemoryStats:
@@ -280,6 +339,9 @@ class StepPerf:
             and MPS/MPSGraph allocations.
         batch_size: Number of samples processed.
         marks: Sub-step timing marks as ``{name: elapsed_sec}``.
+        mem_marks: Allocated-memory high-water mark (GB) at each mark, so the
+            rise between two marks attributes the peak to a phase. Empty when
+            memory tracking is off or the backend has no peak counter.
     """
 
     step_time_sec: float = 0.0
@@ -289,6 +351,7 @@ class StepPerf:
     memory_reserved_gb: float = 0.0
     batch_size: int = 0
     marks: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
+    mem_marks: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
 
     def to_dict(self, prefix: str = "") -> dict[str, float]:
         """Convert to flat dict for logging.
@@ -311,7 +374,22 @@ class StepPerf:
         }
         for name, elapsed in self.marks.items():
             d[f"{prefix}{name}_sec"] = elapsed
+        for name, peak_gb in self.mem_marks.items():
+            d[f"{prefix}{name}_peak_gb"] = peak_gb
         return d
+
+    def phase_table(self) -> list[tuple[str, float, float]]:
+        """Per-phase ``(name, seconds, segment_peak_gb)`` in mark order.
+
+        Each memory figure is the allocated high-water mark reached *within*
+        that phase, so the entries are directly comparable and say which phase
+        to attack. Empty when the backend has no peak counter or
+        ``phase_memory`` was off.
+        """
+        return [
+            (name, self.marks[name], self.mem_marks.get(name, 0.0))
+            for name in self.marks
+        ]
 
 
 class _StepPerfBuilder:
@@ -327,12 +405,17 @@ class _StepPerfBuilder:
         batch_size: int,
         *,
         sample_memory_peak: bool = False,
+        track_memory: bool = True,
+        phase_memory: bool = False,
     ) -> None:
         self._device = device
         self._batch_size = batch_size
         self._sample_memory_peak = sample_memory_peak
         self._sampled_memory_peak_gb = 0.0
+        self._phase_memory = phase_memory
+        self._track_peak = track_memory and device.type in ("cuda", "mps")
         self._marks: dict[str, float] = {}
+        self._mem_marks: dict[str, float] = {}
         self._last_mark_time: float = 0.0
         self._perf: StepPerf | None = None
 
@@ -343,6 +426,11 @@ class _StepPerfBuilder:
                 self._sampled_memory_peak_gb,
                 allocated_gb,
             )
+
+    def _read_peak_gb(self) -> float:
+        if self._device.type == "cuda":
+            return torch.cuda.max_memory_allocated(self._device) / (1024**3)
+        return torch.mps.current_allocated_memory() / (1024**3)
 
     def mark(self, name: str) -> None:
         """Record a sub-step timing mark (device-synchronized).
@@ -365,6 +453,15 @@ class _StepPerfBuilder:
         now = time.perf_counter()
         self._marks[name] = now - self._last_mark_time
         self._last_mark_time = now
+        if self._phase_memory and self._track_peak and not self._sample_memory_peak:
+            # Segment peak: high-water since the previous mark, then reset so
+            # the next segment measures its own rise. A cumulative reading here
+            # would show the same number at every mark once the peak is set.
+            segment = self._read_peak_gb()
+            self._mem_marks[name] = segment
+            self._sampled_memory_peak_gb = max(self._sampled_memory_peak_gb, segment)
+            if self._device.type == "cuda":
+                torch.cuda.reset_peak_memory_stats(self._device)
 
     @property
     def perf(self) -> StepPerf:
@@ -400,6 +497,7 @@ def step_perf(
     *,
     batch_size: int = 0,
     track_memory: bool = True,
+    phase_memory: bool = False,
 ) -> Iterator[_StepPerfBuilder]:
     """Time a training step and produce an immutable :class:`StepPerf` record.
 
@@ -411,6 +509,10 @@ def step_perf(
         device: PyTorch device (for GPU sync and memory reads).
         batch_size: Number of samples in this step (for throughput).
         track_memory: Whether to record peak memory (default True).
+        phase_memory: Report a peak per ``.mark()`` segment instead of one
+            whole-step peak (default False). Adds a peak read plus a
+            `reset_peak_memory_stats()` per segment on top of the sync that
+            every mark already pays.
 
     Yields:
         A :class:`_StepPerfBuilder` that supports ``.mark(name)``
@@ -438,6 +540,8 @@ def step_perf(
         device,
         batch_size,
         sample_memory_peak=sample_memory_peak,
+        track_memory=track_memory,
+        phase_memory=phase_memory,
     )
 
     if track_memory and peak_trackable:
@@ -457,6 +561,12 @@ def step_perf(
     memory_peak_gb = (
         builder._sampled_memory_peak_gb if sample_memory_peak else mem.peak_gb
     )
+    if builder._phase_memory and track_memory:
+        # Per-phase peaks were taken segment-wise with resets, so the true
+        # step peak is the largest segment (including the tail after the last
+        # mark, which mem.peak_gb still reports because it is read before any
+        # further reset).
+        memory_peak_gb = max(memory_peak_gb, builder._sampled_memory_peak_gb)
 
     builder._perf = StepPerf(
         step_time_sec=elapsed,
@@ -466,6 +576,7 @@ def step_perf(
         memory_reserved_gb=mem.reserved_gb,
         batch_size=batch_size,
         marks=MappingProxyType(dict(builder._marks)),
+        mem_marks=MappingProxyType(dict(builder._mem_marks)),
     )
 
 
@@ -607,6 +718,7 @@ class PerfStage:
         name: str,
         device: torch.device,
         warmup_steps: int = 1,
+        phase_memory: bool = False,
     ) -> None:
         self.name = name
         self.num_steps: int = 0
@@ -616,6 +728,7 @@ class PerfStage:
         self.last: StepPerf | None = None
         self._device = device
         self._warmup_steps = warmup_steps
+        self._phase_memory = phase_memory
 
     @property
     def samples_per_second(self) -> float:
@@ -654,6 +767,7 @@ class PerfStage:
                 self._device,
                 batch_size=batch_size,
                 track_memory=track_memory,
+                phase_memory=self._phase_memory,
             ) as sp:
                 yield sp
             self._absorb(sp.perf)
@@ -687,15 +801,26 @@ class PerfTracker:
         >>> wandb.log(tracker.train.last.to_dict("train/"))
     """
 
-    def __init__(self, device: torch.device, warmup_steps: int = 1) -> None:
+    def __init__(
+        self,
+        device: torch.device,
+        warmup_steps: int = 1,
+        phase_memory: bool = False,
+    ) -> None:
         object.__setattr__(self, "device", device)
         object.__setattr__(self, "_warmup_steps", warmup_steps)
+        object.__setattr__(self, "_phase_memory", phase_memory)
         object.__setattr__(self, "_stages", {})
 
     def _get_stage(self, name: str) -> PerfStage:
         stages: dict[str, PerfStage] = self._stages
         if name not in stages:
-            stages[name] = PerfStage(name, self.device, self._warmup_steps)
+            stages[name] = PerfStage(
+                name,
+                self.device,
+                self._warmup_steps,
+                phase_memory=self._phase_memory,
+            )
         return stages[name]
 
     def __getattr__(self, name: str) -> PerfStage:
@@ -722,6 +847,7 @@ class PerfTracker:
 def perf_tracker(
     device: torch.device | str,
     warmup_steps: int = 1,
+    phase_memory: bool = False,
 ) -> PerfTracker:
     """Create a multi-stage performance tracker.
 
@@ -729,6 +855,8 @@ def perf_tracker(
         device: PyTorch device (for GPU sync and memory reads).
         warmup_steps: Steps to exclude from time/sample totals per
             stage (default ``1``).
+        phase_memory: Record per-phase memory high-water marks inside each
+            step (see :func:`step_perf`). Off by default.
 
     Returns:
         A new :class:`PerfTracker`.
@@ -741,7 +869,7 @@ def perf_tracker(
     """
     if isinstance(device, str):
         device = torch.device(device)
-    return PerfTracker(device, warmup_steps)
+    return PerfTracker(device, warmup_steps, phase_memory)
 
 
 __all__ = [
@@ -751,8 +879,10 @@ __all__ = [
     "StepPerf",
     "empty_cache",
     "get_memory_stats",
+    "finish_snapshot",
     "perf_tracker",
     "print_memory",
     "reset_peak_memory",
+    "start_snapshot",
     "step_perf",
 ]
