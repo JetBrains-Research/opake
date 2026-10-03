@@ -436,3 +436,29 @@ verification results for the DP-clipping optimization workstream. Newest last.
 - NES `03a88f954`: vendored `0.16.1.dev89+g0da330c2`; `trim_microbatch_padding` is passed through in `sft.py`. Configs: `cmp_i` = H + trim (microbatch 4), `cmp_j` = G + trim (microbatch 2). NES tests: 261 passed, plus the same 6 pre-existing DPO/KTO failures.
 - Image #3 build: GitHub run `37078811523` (in progress when paused).
 - **Paused on user request: no ZenML runs started for I/J.** To resume: take the digest from the run log (`IMAGE_DIGEST:`), then `NES_DOCKER_IMAGE_TRAINING=…@<digest> uv run --frozen pusk run sft --profile trace --config-name sft_opake_dp_cmp_i` (and `_j`). A DP review is still required before any privacy claim.
+
+## 2026-10-03: work split into PRs against opake main
+
+Each PR's branch replays its topic's package commits onto `origin/main`, filtered to `packages/`, `docs/` and `examples/`, and squashed. Research artifacts (`experiments/`, `notes/`, the plan, this notebook) stay on `feat/dp-fused-per-layer-clipping` only.
+
+Oracle: merging all eight branches onto `origin/main` reproduces this branch's net package/docs/examples diff; the only differing files are `main`'s own newer #1113 commit.
+
+Checks: ruff check + format pass on all eight. CPU PR-equivalent suites on each code branch in isolation:
+- dpftrl: 641 passed;
+- profiling (engine): 723 passed;
+- `main` baseline 3,507 passed; fused clip 3,521; CUDA graphs 3,528; trim 3,541. Zero new failures.
+
+`mkdocs build --strict` passes on all five docs-touching branches.
+
+| PR | Base | Topic |
+|---|---|---|
+| #1129 | main | perf(dpftrl): cache streaming-matrix coefficients |
+| #1130 | main | docs(clipping): underflow assumption (#1123) |
+| #1131 | main | docs(memory): selective recomputation |
+| #1132 | main | feat(profiling): per-phase memory peaks and snapshots |
+| #1133 | main | fix(examples): training mode and header |
+| #1134 | main | perf(clipping): fused Triton clip backend |
+| #1135 | #1134 | feat(transformers): CUDA-graph replay |
+| #1136 (draft) | #1135 | feat(transformers): experimental padding trim. NOT DP-reviewed |
+
+CI triggers only on PRs into `main`, so #1135/#1136 get no CI until they are retargeted. After #1134 squash-merges, rebase with `git rebase --onto origin/main perf/fused-clip-backend feat/cuda-graph-replay` (and the same for #1136) and retarget.
