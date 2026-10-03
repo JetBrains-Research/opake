@@ -248,6 +248,23 @@ def inverse_as_streaming_matrix(
                 )
             )
 
+    # Device-local copies of ``coef`` keyed by (device, dtype), filled on first
+    # use so states that skipped ``init`` (restored, moved) still work. Each
+    # entry records ``coef._version`` and is refreshed after an in-place update
+    # of a caller-owned ``coef``; grad-carrying coefficients are converted on
+    # every call so autograd always records a fresh conversion.
+    coef_cache: dict[tuple[torch.device, torch.dtype], tuple[int, torch.Tensor]] = {}
+
+    def _coef_like(state: torch.Tensor) -> torch.Tensor:
+        if coef.requires_grad:
+            return coef.to(device=state.device, dtype=state.dtype)
+        key = (state.device, state.dtype)
+        entry = coef_cache.get(key)
+        if entry is None or entry[0] != coef._version:
+            entry = (coef._version, coef.to(device=state.device, dtype=state.dtype))
+            coef_cache[key] = entry
+        return entry[1]
+
     def init(abstract_yi):
         dtype = abstract_yi.dtype
         if dtype in (torch.float16, torch.bfloat16):
@@ -256,10 +273,9 @@ def inverse_as_streaming_matrix(
         return zero.unsqueeze(0).expand(bands - 1, *zero.shape).clone()
 
     def _next(yi, state):
+        coef_local = _coef_like(state)
         if bands == 1:
-            coef0 = coef[0].to(device=state.device, dtype=state.dtype)
-            return yi.to(state.dtype) / coef0, state
-        coef_local = coef.to(device=state.device, dtype=state.dtype)
+            return yi.to(state.dtype) / coef_local[0], state
         inner = torch.tensordot(coef_local[1:], state, dims=1)
         xi = (yi.to(state.dtype) - inner) / coef_local[0]
         new_state = torch.roll(state, 1, dims=0)
