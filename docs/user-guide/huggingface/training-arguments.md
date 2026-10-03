@@ -226,6 +226,33 @@ Mechanism constraints (validated at construction):
 | `bf16_full_eval` | `False` | Cast the model to bf16 for the eval scope only. |
 | `gradient_checkpointing` | `False` | Opake automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with `torch_compile`. |
 | `torch_compile` | `False` | Compiles the tensor-only per-microbatch `vmap(grad)+clip+reduce` kernel with `fullgraph=True`. |
+| `cuda_graphs` | `False` | Replays the per-microbatch `vmap(grad)+clip+reduce` kernel from CUDA graphs. See [CUDA-graph replay](#cuda-graph-replay). |
+
+### CUDA-graph replay
+
+`cuda_graphs=True` captures the per-microbatch kernel (`vmap(grad)`, per-example
+clipping and the batch reduction) as a CUDA graph the first time each
+microbatch shape occurs, and replays it afterwards. This removes the Python and
+kernel-launch overhead that dominates DP-SGD steps whose microbatch kernels
+launch many small operations, and it makes the fused kernels
+(`use_performance_kernels`, `clip_backend`) pay off at small microbatches.
+
+- Each distinct microbatch shape is captured once (at most one per partial last
+  microbatch size); the first steps include the capture time.
+- Every tensor input, including the current clipping threshold and the
+  parameters, is copied into the graph before each replay. Python state that
+  the per-example loss reads other than through its arguments is frozen at
+  capture.
+- CUDA only. Mutually exclusive with `torch_compile` and incompatible with
+  `auto_find_microbatch_size`.
+- With `gradient_checkpointing`, the model must have no active dropout: the
+  checkpoint recompute runs without saved RNG state (`preserve_rng_state=False`).
+- The fused linear cross-entropy (`loss_type="chunked_nll"`) processes ignored
+  tokens with zero weight instead of compacting them, because compaction needs
+  a host synchronization.
+- Clipping, noise, sampling and accounting are unchanged. Results can differ
+  from eager execution in the last bits, within the run-to-run variation of
+  the eager kernels.
 
 ## Patches and kernels
 

@@ -474,7 +474,9 @@ def _resolve_stream_impl(
         unsupported = "second_moment=True"
     elif compute_dtype is not None:
         unsupported = "an explicit compute_dtype"
-    elif chunk_compiler is not None:
+    elif chunk_compiler is not None and not getattr(
+        chunk_compiler, "replays_eager_kernels", False
+    ):
         unsupported = "a compiled microbatch kernel"
     elif not fused_kernels_available():
         unsupported = "hosts without a CUDA device and an importable Triton"

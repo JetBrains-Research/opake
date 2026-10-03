@@ -1154,3 +1154,102 @@ class TestLinearCEWrapper:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+# ============================================================================
+# CUDA-graph capturable path
+# ============================================================================
+
+
+def _ce_inputs(seed, vmap_batch=2, batch=1, seq_len=65, hidden_dim=64, vocab=512):
+    gen = torch.Generator(device="cuda").manual_seed(seed)
+    hidden = torch.randn(
+        vmap_batch,
+        batch,
+        seq_len,
+        hidden_dim,
+        device="cuda",
+        dtype=torch.bfloat16,
+        generator=gen,
+    )
+    weight = torch.randn(
+        vocab, hidden_dim, device="cuda", dtype=torch.bfloat16, generator=gen
+    )
+    labels = torch.randint(
+        0, vocab, (vmap_batch, batch, seq_len), device="cuda", generator=gen
+    )
+    ignored = torch.rand(labels.shape, device="cuda", generator=gen) < 0.35
+    labels = labels.masked_fill(ignored, -100)
+    return hidden, weight, labels
+
+
+def _per_example_ce_grads(hidden, weight, labels, use_token_scaling=False):
+    def loss(h, t):
+        nll_sum, _lse, _valids, _w = Opake_LinearCrossEntropyLoss.apply(
+            h, weight, t, -100, 0.0, 0.0, use_token_scaling, 1.0
+        )
+        n_valid = (t[..., 1:] != -100).sum().float().clamp(min=1)
+        return nll_sum / n_valid
+
+    losses = vmap(loss, in_dims=(0, 0))(hidden, labels)
+    grads = vmap(grad(loss, argnums=0), in_dims=(0, 0))(hidden, labels)
+    return losses, grads
+
+
+@pytest.mark.parametrize("use_token_scaling", [False, True], ids=["nll", "dft"])
+def test_capture_safe_path_matches_compaction(use_token_scaling):
+    from opake.api.engine.device import capture_safe_kernels
+
+    hidden, weight, labels = _ce_inputs(seed=11)
+    ref_loss, ref_grad = _per_example_ce_grads(
+        hidden, weight, labels, use_token_scaling
+    )
+    with capture_safe_kernels():
+        loss, grads = _per_example_ce_grads(hidden, weight, labels, use_token_scaling)
+    torch.testing.assert_close(loss, ref_loss, rtol=RTOL_FORWARD, atol=ATOL_FORWARD)
+    torch.testing.assert_close(
+        grads.float(), ref_grad.float(), rtol=RTOL_BACKWARD, atol=ATOL_BACKWARD
+    )
+    # Positions whose next-token label is ignored get no gradient on either path.
+    ignored_next = torch.nn.functional.pad(labels[..., 1:] == -100, (0, 1), value=True)
+    assert torch.count_nonzero(grads[ignored_next]) == 0
+    assert torch.count_nonzero(ref_grad[ignored_next]) == 0
+
+
+def test_capture_safe_path_replays_from_a_cuda_graph():
+    from opake.api.engine.device import capture_safe_kernels
+
+    hidden, weight, labels = _ce_inputs(seed=12)
+    new_hidden, _, new_labels = _ce_inputs(seed=13)
+    static_hidden, static_labels = hidden.clone(), labels.clone()
+    with capture_safe_kernels():
+        side = torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(side):
+            _per_example_ce_grads(static_hidden, weight, static_labels)
+        torch.cuda.current_stream().wait_stream(side)
+        torch.cuda.synchronize()
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph):
+            captured_loss, captured_grad = _per_example_ce_grads(
+                static_hidden, weight, static_labels
+            )
+        replayed = []
+        for h, t in ((hidden, labels), (new_hidden, new_labels)):
+            static_hidden.copy_(h)
+            static_labels.copy_(t)
+            graph.replay()
+            eager_loss, eager_grad = _per_example_ce_grads(h, weight, t)
+            # The loss reduction is deterministic. The backward accumulates
+            # across vocabulary tiles in a nondeterministic order, so the
+            # gradient is compared within the eager kernel's tolerance.
+            assert torch.equal(captured_loss, eager_loss)
+            torch.testing.assert_close(
+                captured_grad.float(),
+                eager_grad.float(),
+                rtol=RTOL_BACKWARD,
+                atol=ATOL_BACKWARD,
+            )
+            replayed.append(captured_grad.clone())
+    # The replays read the current inputs, not the captured ones.
+    assert not torch.allclose(replayed[0].float(), replayed[1].float())

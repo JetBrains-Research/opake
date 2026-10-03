@@ -991,3 +991,56 @@ class TestDictFieldInputContract:
             clipping_norm=_FakeDictConfig({"fallback": 1.0, "attn": 0.5}),
         )
         assert args.clipping_norm == {"fallback": 1.0, "attn": 0.5}
+
+
+# --- cuda_graphs ------------------------------------------------------------
+
+
+def test_cuda_graphs_is_accepted_with_gradient_checkpointing():
+    from opake.transformers.trl import SFTConfig
+
+    cfg = SFTConfig(
+        output_dir="/tmp/x",
+        privacy_noise_multiplier=0.01,
+        cuda_graphs=True,
+        gradient_checkpointing=True,
+    )
+    assert cfg.cuda_graphs is True
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
+        ({"torch_compile": True}, "mutually exclusive"),
+        ({"auto_find_microbatch_size": True}, "auto_find_microbatch_size"),
+        ({"cuda_graphs": "yes"}, "must be a bool"),
+    ],
+)
+def test_cuda_graphs_rejects_incompatible_settings(extra, match):
+    from opake.exceptions import ConfigurationError
+    from opake.transformers.trl import SFTConfig
+
+    with pytest.raises(ConfigurationError, match=match):
+        SFTConfig(
+            output_dir="/tmp/x",
+            privacy_noise_multiplier=0.01,
+            **({"cuda_graphs": True} | extra),
+        )
+
+
+def test_active_dropout_finds_modules_and_config_fields():
+    from types import SimpleNamespace
+
+    import torch
+
+    from opake.api.transformers.trainer._dp_trainer import _active_dropout
+
+    model = torch.nn.Sequential(
+        torch.nn.Linear(2, 2), torch.nn.Dropout(0.0), torch.nn.Dropout(0.1)
+    )
+    assert _active_dropout(model) == ["2"]
+    model.config = SimpleNamespace(attention_dropout=0.0, hidden_dropout=0.2)
+    assert _active_dropout(model) == ["2", "config.hidden_dropout=0.2"]
+    quiet = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.Dropout(0.0))
+    quiet.config = SimpleNamespace(attention_dropout=0.0)
+    assert _active_dropout(quiet) == []

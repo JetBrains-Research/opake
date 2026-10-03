@@ -344,3 +344,32 @@ def test_fused_tile_plan_cache_is_bounded():
     for width in range(1, module._MAX_PLANS + 6):
         _clip("triton", {"w": torch.randn(2, width, device="cuda")}, clipping_norm=1.0)
     assert len(module._PLANS) <= module._MAX_PLANS
+
+
+@pytest.mark.cuda
+@requires_fused
+@pytest.mark.parametrize("mixed", [False, True], ids=["fp32", "mixed"])
+def test_fused_clip_sum_replays_from_a_cuda_graph(mixed):
+    module = importlib.import_module("opake.api.engine.kernels._clip_sum")
+    first = _many_leaf_tree(4, 12, seed=6, mixed=mixed)
+    second = _many_leaf_tree(4, 12, seed=7, mixed=mixed)
+    static = {k: v.clone() for k, v in first.items()}
+    norm = torch.tensor(1.0, dtype=torch.float64, device="cuda")
+
+    def run(tree):
+        return module.fused_clip_sum(list(tree.values()), norm, with_postsq=True)
+
+    run(static)  # warm up: compile kernels and cache the tile plan
+    torch.cuda.synchronize()
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        captured = run(static)
+    for data in (first, second):  # the replay must read the current inputs
+        for k, v in data.items():
+            static[k].copy_(v)
+        graph.replay()
+        expected = run(data)
+        for got, want in zip(captured[0], expected[0], strict=True):
+            assert torch.equal(got, want)
+        assert torch.equal(captured[1], expected[1])
+        assert torch.equal(captured[2], expected[2])

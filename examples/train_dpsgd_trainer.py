@@ -434,6 +434,12 @@ def parse_args() -> argparse.Namespace:
         help="Enable torch.compile on the DP per-example loss closure.",
     )
     train_group.add_argument(
+        "--cuda-graphs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Replay each DP microbatch kernel from a CUDA graph (CUDA only).",
+    )
+    train_group.add_argument(
         "--torch-compile-backend",
         type=str,
         default=None,
@@ -1112,6 +1118,7 @@ def main() -> int:
         microbatch_size=args.microbatch_size,
         auto_find_microbatch_size=args.auto_find_microbatch_size,
         torch_compile=args.torch_compile,
+        cuda_graphs=args.cuda_graphs,
         torch_compile_backend=args.torch_compile_backend,
         torch_compile_mode=args.torch_compile_mode,
         use_performance_kernels=args.use_performance_kernels,

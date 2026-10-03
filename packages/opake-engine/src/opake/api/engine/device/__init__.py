@@ -11,9 +11,15 @@ from opake.api.engine.device._capabilities import (
     fused_kernels_available,
     sdpa_autocast_under_vmap_broken,
 )
+from opake.api.engine.device._graph_capture import (
+    capture_safe_kernels,
+    capture_safe_kernels_active,
+)
 
 __all__ = [
     "DeviceCapabilities",
+    "capture_safe_kernels",
+    "capture_safe_kernels_active",
     "device_capabilities",
     "fused_kernels_available",
     "sdpa_autocast_under_vmap_broken",
