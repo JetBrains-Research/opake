@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
+import opake.accounting as acc
 import opake.dpftrl.accounting as ftrl_acc
 from opake.api.accounting.core import _native
 from opake.api.accounting.core._native_cache import _clear_all_native_caches
+from opake.api.accounting.core.discretization import _use_discretization
 from opake.api.accounting.dpftrl.amplification import (
     _balls_in_bins_transcript_cache as transcript_cache,
 )
@@ -88,3 +92,33 @@ def test_oversized_corpus_preserves_one_shot_fallback(monkeypatch):
 
     assert _process(1.0).pld(**_CONFIG).epsilon_at(2e-2) > 0
     assert calls == 1
+
+
+def test_calibration_confidence_covers_runtime_fallback():
+    evaluations = []
+
+    class RecordingEpsilonBudget:
+        value = 3.0
+        decreasing = True
+        name = "epsilon(3.0, delta=0.02)"
+
+        def evaluate(self, process):
+            evaluations.append(acc.get_discretization().mc_failure_probability)
+            return process.epsilon_at(2e-2)
+
+    max_iterations = 30
+    config = replace(acc.get_discretization(), **_CONFIG, seed=42)
+    with _use_discretization(config):
+        result = acc.calibrate(
+            RecordingEpsilonBudget(),
+            _process,
+            param_min=0.2,
+            param_max=5.0,
+            tolerance=1e-4,
+            max_iterations=max_iterations,
+        )
+
+    probe_failure = config.mc_failure_probability / (max_iterations + 2)
+    assert evaluations.count(probe_failure) > 2
+    assert evaluations.count(config.mc_failure_probability) > 1
+    assert result.mc_failure_probability == pytest.approx(sum(evaluations))

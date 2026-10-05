@@ -30,6 +30,19 @@ class _MetricProcess:
 
 
 @dataclass(frozen=True)
+class _PldMetadata:
+    mc_failure_probability: float
+
+
+@dataclass(frozen=True)
+class _MonteCarloMetricProcess:
+    metric: float
+
+    def pld(self, **_kwargs):
+        return _PldMetadata(acc.get_discretization().mc_failure_probability)
+
+
+@dataclass(frozen=True)
 class _GainBudget:
     """Synthetic privacy-gain budget (safe at-or-above the target)."""
 
@@ -71,6 +84,7 @@ def test_decreasing_parameter_loss_metric_converges():
     )
     assert result.converged
     assert result.achieved <= 3.0
+    assert result.mc_failure_probability == 0.0
 
 
 @pytest.mark.parametrize(
@@ -191,3 +205,103 @@ def test_runtime_value_must_meet_tolerance(decreasing):
         pytest.raises(CalibrationError, match="runtime discretization"),
     ):
         acc.calibrate(ConfigBudget(decreasing=decreasing), process, 0.0, 2.0)
+
+
+def test_mc_failure_bound_counts_endpoint_evaluations():
+    failure_probability = 0.01
+    max_iterations = 8
+    config = replace(
+        acc.get_discretization(),
+        mc_failure_probability=failure_probability,
+    )
+    with _use_discretization(config):
+        result = acc.calibrate(
+            _GainBudget(1.0),
+            _MonteCarloMetricProcess,
+            param_min=0.0,
+            param_max=1.0,
+            max_iterations=max_iterations,
+        )
+
+    probe_failure = failure_probability / (max_iterations + 2)
+    assert result.iterations == 0
+    assert result.mc_failure_probability == pytest.approx(
+        2 * probe_failure + failure_probability
+    )
+
+
+def test_mc_failure_bound_keeps_earlier_mc_evaluations():
+    failure_probability = 0.01
+    max_iterations = 8
+
+    @dataclass(frozen=True)
+    class VariableProcess:
+        metric: float
+        mc_failure_probability: float
+
+        def pld(self, **_kwargs):
+            return _PldMetadata(self.mc_failure_probability)
+
+    def process(param):
+        failure = (
+            acc.get_discretization().mc_failure_probability if param < 0.5 else 0.0
+        )
+        return VariableProcess(param, failure)
+
+    config = replace(
+        acc.get_discretization(),
+        mc_failure_probability=failure_probability,
+    )
+    with _use_discretization(config):
+        result = acc.calibrate(
+            _GainBudget(0.75),
+            process,
+            param_min=0.0,
+            param_max=1.0,
+            max_iterations=max_iterations,
+        )
+
+    probe_failure = failure_probability / (max_iterations + 2)
+    assert process(result.param).mc_failure_probability == 0.0
+    assert result.mc_failure_probability == pytest.approx(probe_failure)
+
+
+@pytest.mark.parametrize("failure_probability", [0.01, 0.1])
+def test_mc_failure_bound_includes_runtime_fallback(failure_probability):
+    evaluations = []
+
+    @dataclass(frozen=True)
+    class ConfigProcess:
+        param: float
+
+        def pld(self, **_kwargs):
+            return _PldMetadata(acc.get_discretization().mc_failure_probability)
+
+    @dataclass(frozen=True)
+    class ConfigBudget:
+        value: float = 1.0
+        decreasing: bool = True
+        name: str = "config metric"
+
+        def evaluate(self, process):
+            failure = acc.get_discretization().mc_failure_probability
+            evaluations.append(failure)
+            return 2.0 - process.param + failure
+
+    config = replace(
+        acc.get_discretization(),
+        mc_failure_probability=failure_probability,
+    )
+    with _use_discretization(config):
+        result = acc.calibrate(
+            ConfigBudget(),
+            ConfigProcess,
+            param_min=0.0,
+            param_max=2.0,
+            tolerance=1e-6,
+            max_iterations=30,
+        )
+
+    assert len(set(evaluations)) == 2
+    assert evaluations.count(failure_probability) > 1
+    assert result.mc_failure_probability == pytest.approx(min(1.0, sum(evaluations)))

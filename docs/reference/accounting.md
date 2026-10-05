@@ -739,8 +739,12 @@ safe endpoint reaches the requested relative tolerance, `calibrate()` raises
 
 When the process uses a Monte Carlo PLD, calibration divides the configured
 failure probability across the two endpoint probes and at most
-`max_iterations` interior probes. `result.mc_confidence` therefore covers the
-adaptive search as a whole rather than only its selected final parameter.
+`max_iterations` interior probes. Every evaluated PLD contributes its pointwise
+failure probability, including the runtime evaluation and any runtime-config
+fallback probes. `result.mc_failure_probability` is their capped sum, and
+`result.mc_confidence` is its complement. This is per-probe accounting; it does
+not establish a parameter-uniform confidence band for probes selected from a
+shared Monte Carlo transcript.
 Balls-in-Bins calibration also reuses its seeded, sigma-independent projected
 draws across probes when they fit the bounded native cache. Set
 `OPAKE_BNB_TRANSCRIPT_CACHE_MAX_BYTES` to control its memory cap (4 GiB by
@@ -789,8 +793,8 @@ Returned by `calibrate()`.
 | `target`    | `float` | Target metric value                              |
 | `iterations`| `int`   | Number of binary search iterations               |
 | `converged` | `bool`  | Always `True` for a successfully returned result |
-| `mc_failure_probability` | `float` | Overall failure probability for adaptive MC probes |
-| `mc_confidence` | `float` | Confidence covering the complete calibration search |
+| `mc_failure_probability` | `float` | Capped sum of pointwise MC failure probabilities |
+| `mc_confidence` | `float` | Complement of `mc_failure_probability` |
 
 ### Budget Factories
 

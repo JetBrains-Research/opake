@@ -77,8 +77,8 @@ class CalibrateResult:
         target: Target metric value.
         iterations: Number of binary search iterations.
         converged: Always ``True`` for results returned by :func:`calibrate`.
-        mc_failure_probability: Overall failure probability covering every
-            adaptive Monte Carlo probe. Zero for analytic calibration.
+        mc_failure_probability: Capped sum of the pointwise Monte Carlo failure
+            probabilities used during calibration. Zero for analytic calibration.
     """
 
     param: float
@@ -90,7 +90,7 @@ class CalibrateResult:
 
     @property
     def mc_confidence(self) -> float:
-        """Confidence level covering all adaptive Monte Carlo probes."""
+        """Complement of the accumulated pointwise MC failure probability."""
         return 1.0 - self.mc_failure_probability
 
     def __repr__(self) -> str:
@@ -105,6 +105,43 @@ class CalibrateResult:
             f"achieved={self.achieved:.6f}, target={self.target:.6f}, "
             f"iterations={self.iterations}, {status}{confidence})"
         )
+
+
+@dataclass(slots=True)
+class _FailureTrackingBudget:
+    """Track Monte Carlo failure probability across budget evaluations."""
+
+    budget: Budget
+    mc_failure_probability: float = 0.0
+
+    @property
+    def value(self) -> float:
+        return self.budget.value
+
+    @property
+    def name(self) -> str:
+        return self.budget.name
+
+    @property
+    def decreasing(self) -> bool:
+        return self.budget.decreasing
+
+    def evaluate(self, process: DpProcess) -> float:
+        achieved = self.budget.evaluate(process)
+        pld_method = getattr(process, "pld", None)
+        if not callable(pld_method):
+            return achieved
+
+        kwargs = {}
+        if isinstance(self.budget, EpsilonBudget):
+            config = get_discretization()
+            kwargs["mc_resolution"] = min(config.mc_resolution, self.budget.delta / 2.0)
+        pld = pld_method(**kwargs)
+        self.mc_failure_probability = min(
+            1.0,
+            self.mc_failure_probability + pld.mc_failure_probability,
+        )
+        return achieved
 
 
 def calibrate(
@@ -186,8 +223,8 @@ def calibrate(
         - target: Target metric value (for comparison)
         - iterations: Number of iterations performed
         - converged: always True for a successfully returned result
-        - mc_failure_probability: overall failure probability covering all
-          adaptive MC probes (zero for analytic calibration)
+        - mc_failure_probability: capped sum of pointwise MC failure
+          probabilities across all evaluations (zero for analytic calibration)
 
     Raises:
         CalibrationError: If tolerance is not finite and positive, or
@@ -298,6 +335,7 @@ def calibrate(
 
     try:
         overall_config = get_discretization()
+        tracked_budget = _FailureTrackingBudget(budget)
         probe_count = max_iterations + 2
         probe_config = replace(
             overall_config,
@@ -307,7 +345,7 @@ def calibrate(
         )
         with _use_discretization(probe_config):
             result = _calibrate_impl(
-                budget,
+                tracked_budget,
                 process,
                 param_min,
                 param_max,
@@ -320,7 +358,7 @@ def calibrate(
         # to get the achieved epsilon that will actually apply during training.
         with _use_discretization(overall_config):
             final_process = process(result.param)
-            achieved = budget.evaluate(final_process)
+            achieved = tracked_budget.evaluate(final_process)
             runtime_safe = (
                 achieved <= budget.value
                 if budget.decreasing
@@ -328,14 +366,13 @@ def calibrate(
             )
             if not runtime_safe:
                 result = _calibrate_impl(
-                    budget,
+                    tracked_budget,
                     process,
                     param_min,
                     param_max,
                     tolerance,
                     max_iterations,
                 )
-                final_process = process(result.param)
                 achieved = result.achieved
             if not math.isclose(achieved, budget.value, rel_tol=tolerance, abs_tol=0.0):
                 message = (
@@ -345,17 +382,7 @@ def calibrate(
                 )
                 raise CalibrationError(message)
             result.achieved = achieved
-
-            pld_method = getattr(final_process, "pld", None)
-            runtime_kwargs = {}
-            if isinstance(budget, EpsilonBudget):
-                runtime_kwargs["mc_resolution"] = min(
-                    overall_config.mc_resolution,
-                    budget.delta / 2.0,
-                )
-            final_pld = pld_method(**runtime_kwargs) if callable(pld_method) else None
-            if final_pld is not None and final_pld.mc_failure_probability > 0.0:
-                result.mc_failure_probability = overall_config.mc_failure_probability
+            result.mc_failure_probability = tracked_budget.mc_failure_probability
 
             return result
     finally:
