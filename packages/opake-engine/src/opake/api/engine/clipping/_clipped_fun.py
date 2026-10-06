@@ -9,12 +9,14 @@ import torch
 from torch.func import vmap as _vmap
 
 from opake.api.engine.clipping._helpers import batch_size_from_args, normalize_to_tuple
+from opake.api.engine.clipping._kernel_backend import get_fused_clip_backend
 from opake.api.engine.clipping._pytree import clip_pytree
 from opake.api.engine.clipping._streaming import (
     _FIXED_SCALE,
     _BuiltinScale,
     _stream_clip_and_sum,
 )
+from opake.api.engine.device import fused_kernels_available
 from opake.api.engine.functional._transform_stack import under_differentiating_transform
 from opake.api.engine.pytree import global_norm, tree_leaves, tree_map
 from opake.api.engine.types import (
@@ -437,6 +439,71 @@ def _attach_value_aux(diagnostics, value, aux, has_aux):
             diagnostics["value_aux"] = aux
 
 
+_CLIP_BACKENDS = ("torch", "auto", "triton")
+
+
+def _resolve_stream_impl(
+    clip_backend: str,
+    *,
+    clipping_norm: float | PerGroup,
+    second_moment: bool,
+    compute_dtype: torch.dtype | None,
+    scale_fn: Callable | None,
+    chunk_compiler: Callable | None,
+) -> Callable | None:
+    """Resolve ``clip_backend`` to a streaming clip-and-sum implementation.
+
+    Returns ``None`` for the torch path, or a callable with the signature of
+    ``_stream_clip_and_sum``.  ``"triton"`` raises for configurations or hosts
+    the fused kernels cannot serve; it also requires ``opake-patches`` to have
+    registered its clipping kernel via ``apply_runtime_patches()``. ``"auto"``
+    resolves to the torch path when the fused kernel is unavailable.
+    """
+    if clip_backend not in _CLIP_BACKENDS:
+        raise ConfigurationError(
+            *(
+                f"clip_backend must be one of 'torch', 'auto', 'triton'; "
+                f"got {clip_backend!r}.",
+            )
+        )
+    if clip_backend == "torch":
+        return None
+    if isinstance(clipping_norm, PerGroup):
+        unsupported = "per-group clipping norms"
+    elif scale_fn is not None:
+        unsupported = "scaling rules other than fixed clipping"
+    elif second_moment:
+        unsupported = "second_moment=True"
+    elif compute_dtype is not None:
+        unsupported = "an explicit compute_dtype"
+    elif chunk_compiler is not None:
+        unsupported = "a compiled microbatch kernel"
+    elif not fused_kernels_available():
+        unsupported = "hosts without a CUDA device and an importable Triton"
+    elif torch.version.hip is not None:
+        unsupported = "ROCm builds, where the kernels are not validated"
+    else:
+        fused_backend = get_fused_clip_backend()
+        unsupported = (
+            None
+            if fused_backend is not None
+            else "an unregistered fused clipping kernel; call "
+            "opake.patches.apply_runtime_patches()"
+        )
+    if unsupported is not None:
+        if clip_backend == "triton":
+            raise ConfigurationError(
+                *(f"clip_backend='triton' does not support {unsupported}.",)
+            )
+        return None
+    strict = clip_backend == "triton"
+
+    def fused_stream_impl(*args, **kwargs):
+        return fused_backend(*args, strict=strict, **kwargs)
+
+    return fused_stream_impl
+
+
 def _streaming_supported(clipping_norm, scale_fn, builtin_scale) -> bool:
     if scale_fn is None:
         return True
@@ -472,6 +539,7 @@ def clipped_fun(
     microbatch_size: int | None = None,
     dtype: torch.dtype | None = None,
     compute_dtype: torch.dtype | None = None,
+    clip_backend: str = "torch",
     _scale_fn: Callable | None = None,
     _builtin_scale: _BuiltinScale | None = None,
     _chunk_compiler: Callable | None = None,
@@ -557,6 +625,20 @@ def clipped_fun(
             value. Independent of ``dtype`` (which controls the *output* dtype).
             Applies across microbatches too, so microbatched and non-microbatched
             runs agree at their resolved accumulation precision.
+        clip_backend: Implementation of the per-example clip-and-sum.
+            ``"torch"`` (default) uses PyTorch operations. ``"triton"`` uses
+            fused Triton kernels and raises :class:`ConfigurationError` when
+            they cannot serve the configuration or a call. ``"auto"`` uses the
+            Triton kernels where supported and PyTorch otherwise. The Triton
+            kernels need a CUDA device and an importable Triton, and support
+            fixed scalar clipping of float32/bfloat16 values without
+            ``second_moment``, ``compute_dtype`` or a compiled microbatch
+            kernel, on NVIDIA CUDA (ROCm builds are not supported). Clipping
+            norms, scales and the stored-value bound are the
+            same for both implementations; the batch sums can differ in the
+            last bits because the examples are added in a different order.
+            Under ``torch.compile`` or an enclosing ``grad``/``jvp``, both use
+            the vmapped PyTorch path.
     Returns:
         A tuple ``(clip_fn, FixedClipState)`` where ``clip_fn(*args, state=...)``
         clips the output of ``fun`` and sums across the batch.  The exact
@@ -573,10 +655,20 @@ def clipped_fun(
         is paired with :class:`ClippingStats`.
 
     Raises:
-        ConfigurationError: If the batch is empty.
+        ConfigurationError: If the batch is empty, if ``clip_backend`` is not
+            one of the supported values, or if ``clip_backend="triton"`` cannot
+            serve the configuration or a call.
     """
     batch_argnums = _prepare_clipped_fun(
         batch_argnums, clipping_norm, return_aux, return_stats
+    )
+    stream_impl = _resolve_stream_impl(
+        clip_backend,
+        clipping_norm=clipping_norm,
+        second_moment=second_moment,
+        compute_dtype=compute_dtype,
+        scale_fn=_scale_fn,
+        chunk_compiler=_chunk_compiler,
     )
 
     # Wrap function to handle has_aux - use empty tuple () not None!
@@ -640,17 +732,17 @@ def clipped_fun(
             fun_with_aux, in_dims, args, kwargs, return_aux
         )
         reduced, markers, squared_reduced, squared_markers, diagnostics = (
-            _stream_clip_and_sum(
-                values,
-                kernel_clipping_norm,
-                scale=_FIXED_SCALE if _scale_fn is None else _builtin_scale,
-                batch_size=batch_size_from_args(args, batch_argnums),
-                reduce_leaf=reduce_leaf,
-                compute_dtype=compute_dtype,
-                second_moment=second_moment,
-                return_aux=return_aux,
-                return_stats=return_stats,
-            )
+            _stream_clip_and_sum if stream_impl is None else stream_impl
+        )(
+            values,
+            kernel_clipping_norm,
+            scale=_FIXED_SCALE if _scale_fn is None else _builtin_scale,
+            batch_size=batch_size_from_args(args, batch_argnums),
+            reduce_leaf=reduce_leaf,
+            compute_dtype=compute_dtype,
+            second_moment=second_moment,
+            return_aux=return_aux,
+            return_stats=return_stats,
         )
         if return_aux:
             _attach_value_aux(diagnostics, values, value_aux, has_aux)

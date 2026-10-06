@@ -211,8 +211,8 @@ _ALLOWED_SAMPLERS: dict[str, frozenset[str]] = {
 }
 
 _CLIPPING_KWARGS: dict[str, frozenset[str]] = {
-    "fixed": frozenset(),
-    "adaptive": frozenset({"target_quantile", "clipping_norm_max"}),
+    "fixed": frozenset({"clip_backend"}),
+    "adaptive": frozenset({"target_quantile", "clipping_norm_max", "clip_backend"}),
     "auto": frozenset({"gamma"}),
 }
 
@@ -567,6 +567,8 @@ class TrainingArguments:
     clipping_mode: str = "fixed"
     #: Mode-specific clipping factory kwargs. Adaptive clipping accepts
     #: ``target_quantile`` / ``clipping_norm_max``; AUTO-S accepts ``gamma``.
+    #: Fixed and adaptive clipping accept ``clip_backend`` (``"torch"``,
+    #: ``"auto"`` or ``"triton"``; see :func:`opake.dpsgd.clipping.clipped_grad`).
     clipping_kwargs: dict[str, Any] | str = field(default_factory=dict)
 
     # ---- Noise mechanism / fixed multiplier -------------------------------

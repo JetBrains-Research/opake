@@ -582,6 +582,16 @@ def parse_args():
         "al. NeurIPS 2023).",
     )
     dp_group.add_argument(
+        "--clip-backend",
+        type=str,
+        choices=["torch", "auto", "triton"],
+        default="torch",
+        help="Per-example clip-and-sum implementation for fixed and adaptive "
+        "clipping: torch (default), triton (fused CUDA kernels; errors when a "
+        "call is unsupported) or auto (Triton where supported, torch otherwise). "
+        "AUTO-S (--clipping-mode auto) always uses torch.",
+    )
+    dp_group.add_argument(
         "--clipping-norm",
         type=float,
         default=1.0,
@@ -968,6 +978,11 @@ def parse_args():
         parser.error("--k is only used with --sampler k_out_of_t")
     elif args.allocation is not None:
         parser.error("--allocation is only used with --sampler k_out_of_t")
+
+    if args.clip_backend == "triton" and args.clipping_mode == "auto":
+        parser.error(
+            "--clip-backend triton does not support --clipping-mode auto (AUTO-S)"
+        )
 
     return args
 
@@ -1497,6 +1512,7 @@ def main():
             key=quantile_noise_key,
             normalize_by=args.batch_size,
             second_moment=use_second_moment,
+            clip_backend=args.clip_backend,
         )
     elif args.clipping_mode == "auto":
         grad_fn, clip_state = auto_clipped_grad(
@@ -1520,6 +1536,7 @@ def main():
             microbatch_size=args.microbatch_size,
             return_aux=True,
             second_moment=use_second_moment,
+            clip_backend=args.clip_backend,
         )
 
     # Caller-applied torch.compile of the whole DP grad transform (opt-in).

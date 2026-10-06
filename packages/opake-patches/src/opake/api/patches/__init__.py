@@ -96,10 +96,25 @@ def apply_runtime_patches(
     ``empty_batches`` (collator handling for Poisson-sampled empty
     batches), ``vmap_checkpointing`` (gradient-checkpointing shim),
     ``vmap_grouped_mm`` (vmap-safe grouped-GEMM gate for MoE experts).
+    On CUDA with Triton available, ``performance=True`` also registers the
+    fused clipping kernel for ``clip_backend="auto"`` / ``"triton"``.
     Per-model CE patches live on :func:`apply_model_patches`.
     """
     global _runtime_patches_applied
     _runtime_patches_applied = True
+
+    if performance:
+        from opake.api.engine.device import fused_kernels_available
+
+        if fused_kernels_available():
+            from opake.api.engine.clipping._kernel_backend import (
+                register_fused_clip_backend,
+            )
+            from opake.api.patches.kernels._clip_sum import (
+                fused_stream_clip_and_sum,
+            )
+
+            register_fused_clip_backend(fused_stream_clip_and_sum)
 
     vmap_masking = kwargs.get("vmap_masking", compat)
     empty_batches = kwargs.get("empty_batches", compat)
