@@ -92,6 +92,14 @@ class CudaGraphChunkCompiler:
     def __init__(self, *, warmup_runs: int = 2, max_graphs: int = 32) -> None:
         if warmup_runs < 1:
             raise ConfigurationError(*("warmup_runs must be >= 1",))
+        if (
+            not isinstance(max_graphs, int)
+            or isinstance(max_graphs, bool)
+            or max_graphs < 1
+        ):
+            raise ConfigurationError(
+                *(f"max_graphs must be a positive integer; got {max_graphs!r}.",)
+            )
         self.warmup_runs = warmup_runs
         self.max_graphs = max_graphs
         self.captures = 0

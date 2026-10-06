@@ -227,18 +227,42 @@ Mechanism constraints (validated at construction):
 | `gradient_checkpointing` | `False` | Opake automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with `torch_compile`. |
 | `torch_compile` | `False` | Compiles the tensor-only per-microbatch `vmap(grad)+clip+reduce` kernel with `fullgraph=True`. |
 | `cuda_graphs` | `False` | Replays the per-microbatch `vmap(grad)+clip+reduce` kernel from CUDA graphs. See [CUDA-graph replay](#cuda-graph-replay). |
+| `cuda_graph_max_graphs` | `32` | Maximum distinct graph signatures retained per trainer. Unseen signatures after the cap run eagerly. |
 
 ### CUDA-graph replay
 
 `cuda_graphs=True` captures the per-microbatch kernel (`vmap(grad)`, per-example
-clipping and the batch reduction) as a CUDA graph the first time each
-microbatch shape occurs, and replays it afterwards. This removes the Python and
-kernel-launch overhead that dominates DP-SGD steps whose microbatch kernels
-launch many small operations, and it makes the fused kernels
-(`use_performance_kernels`, `clip_backend`) pay off at small microbatches.
+clipping and the batch reduction) once per distinct input signature, then replays
+that signature. A signature includes tensor shapes, strides, dtypes, devices,
+`requires_grad`, and non-tensor arguments; sequence-length changes can therefore
+capture new graphs even when the microbatch size stays fixed.
 
-- Each distinct microbatch shape is captured once (at most one per partial last
-  microbatch size); the first steps include the capture time.
+CUDA graphs primarily reduce Python and kernel-launch overhead; they do not make
+the captured attention, GEMM, or other GPU kernels intrinsically faster. They
+are most promising when each microbatch does relatively little GPU work but
+launches many operations—for example, short sequences, small adapters, or small
+models with a high kernel-launch count. They are less likely to help when long
+sequences or large adapters make the step GPU-kernel-bound. Profile a matched
+eager run rather than assuming that a different shape or enabling graphs will
+improve throughput.
+
+For SFT/DPO, `pad_to_multiple_of` rounds each already-collated logical batch's
+maximum sequence length up to the chosen multiple; it does not group examples
+by length. Setting `max_length` and `pad_to_multiple_of` to the same value (for
+example, both `4096`) gives one padded sequence width and can avoid repeated
+captures caused by varying lengths, at the cost of padding shorter batches to
+that width. A smaller multiple creates coarse width buckets (e.g. multiples of
+`512` up to a `4096` cap can produce up to eight widths); these may reduce wasted
+padding on shorter batches but can require more retained graphs. Choose a
+multiple that divides `max_length` to keep padding within that cap.
+
+- The first occurrence of each signature includes capture time. Each retained
+  signature keeps graph-private buffers alive, so memory can grow with the
+  number of captures.
+- `cuda_graph_max_graphs` defaults to `32` and caps the number of signatures
+  retained by a trainer. Once reached, **unseen signatures run eagerly**; the
+  cap does not evict existing graphs, stabilize shapes, or guarantee a speedup.
+  Lower the cap for large models/adapters when memory is the limiting concern.
 - Every tensor input, including the current clipping threshold and the
   parameters, is copied into the graph before each replay. Python state that
   the per-example loss reads other than through its arguments is frozen at

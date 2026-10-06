@@ -116,6 +116,14 @@ def test_unhashable_non_tensor_arguments_are_rejected():
         graphed(torch.ones(2, device="cuda"), Unhashable())
 
 
+@pytest.mark.parametrize("max_graphs", [0, -1, True, 1.5, "3"])
+def test_max_graphs_requires_positive_integer(max_graphs):
+    with pytest.raises(
+        ConfigurationError, match="max_graphs must be a positive integer"
+    ):
+        CudaGraphChunkCompiler(max_graphs=max_graphs)
+
+
 def test_inputs_without_cuda_tensors_run_eagerly():
     compiler = CudaGraphChunkCompiler()
     graphed = compiler(lambda x: x * 2)

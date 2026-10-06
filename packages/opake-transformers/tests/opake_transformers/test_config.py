@@ -1006,6 +1006,34 @@ def test_cuda_graphs_is_accepted_with_gradient_checkpointing():
         gradient_checkpointing=True,
     )
     assert cfg.cuda_graphs is True
+    assert cfg.cuda_graph_max_graphs == 32
+
+
+def test_cuda_graph_max_graphs_is_configurable():
+    from opake.transformers.trl import SFTConfig
+
+    cfg = SFTConfig(
+        output_dir="/tmp/x",
+        privacy_noise_multiplier=0.01,
+        cuda_graphs=True,
+        cuda_graph_max_graphs=3,
+    )
+    assert cfg.cuda_graph_max_graphs == 3
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 1.5, "3"])
+def test_cuda_graph_max_graphs_requires_positive_integer(value):
+    from opake.exceptions import ConfigurationError
+    from opake.transformers.trl import SFTConfig
+
+    with pytest.raises(
+        ConfigurationError, match=r"cuda_graph_max_graphs.*positive integer"
+    ):
+        SFTConfig(
+            output_dir="/tmp/x",
+            privacy_noise_multiplier=0.01,
+            cuda_graph_max_graphs=value,
+        )
 
 
 @pytest.mark.parametrize(
