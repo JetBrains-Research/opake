@@ -219,7 +219,7 @@ Dataclass surface.  Every field listed here exists on
 | `torch_compile_backend` | `str \| None` | `None` | Defaults to `"inductor"` when compile is on. |
 | `torch_compile_mode` | `str \| None` | `None` | One of `{"default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"}`. |
 | `cuda_graphs` | `bool` | `False` | Opt in to per-microbatch CUDA-graph capture/replay on CUDA. |
-| `cuda_graph_max_graphs` | `int` | `32` | Maximum graph signatures retained per trainer; unseen signatures run eagerly after the limit. |
+| `cuda_graph_max_graphs` | `int` | `4` | Maximum graph signatures retained per trainer; unseen signatures run eagerly after the limit. |
 
 ### Batches and microbatching
 

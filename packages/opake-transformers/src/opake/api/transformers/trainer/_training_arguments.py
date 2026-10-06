@@ -509,7 +509,7 @@ class TrainingArguments:
     #: Maximum distinct CUDA-graph input signatures retained by one trainer.
     #: Once reached, unseen signatures run eagerly; existing signatures replay.
     #: This bounds graph-private memory when sequence shapes vary.
-    cuda_graph_max_graphs: int = 32
+    cuda_graph_max_graphs: int = 4
     # ``use_performance_kernels`` gates the CUDA + Triton kernel group
     # (``rope``, ``rms_norm``, ``activation``, ``cross_entropy``).  Default
     # ``False`` because the kernels need CUDA + Triton at runtime and the

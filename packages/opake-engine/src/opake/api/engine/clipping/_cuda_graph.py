@@ -89,7 +89,7 @@ class CudaGraphChunkCompiler:
     #: are only valid eagerly (the fused clip backend) stay valid.
     replays_eager_kernels = True
 
-    def __init__(self, *, warmup_runs: int = 2, max_graphs: int = 32) -> None:
+    def __init__(self, *, warmup_runs: int = 2, max_graphs: int = 4) -> None:
         if warmup_runs < 1:
             raise ConfigurationError(*("warmup_runs must be >= 1",))
         if (

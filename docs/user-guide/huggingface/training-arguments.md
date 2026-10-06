@@ -227,7 +227,7 @@ Mechanism constraints (validated at construction):
 | `gradient_checkpointing` | `False` | Opake automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with `torch_compile`. |
 | `torch_compile` | `False` | Compiles the tensor-only per-microbatch `vmap(grad)+clip+reduce` kernel with `fullgraph=True`. |
 | `cuda_graphs` | `False` | Replays the per-microbatch `vmap(grad)+clip+reduce` kernel from CUDA graphs. See [CUDA-graph replay](#cuda-graph-replay). |
-| `cuda_graph_max_graphs` | `32` | Maximum distinct graph signatures retained per trainer. Unseen signatures after the cap run eagerly. |
+| `cuda_graph_max_graphs` | `4` | Optional cap on distinct graph signatures retained per trainer. Unseen signatures after the cap run eagerly; the default requires no additional setting when `cuda_graphs=True`. |
 
 ### CUDA-graph replay
 
@@ -259,7 +259,7 @@ multiple that divides `max_length` to keep padding within that cap.
 - The first occurrence of each signature includes capture time. Each retained
   signature keeps graph-private buffers alive, so memory can grow with the
   number of captures.
-- `cuda_graph_max_graphs` defaults to `32` and caps the number of signatures
+- `cuda_graph_max_graphs` defaults to `4` and caps the number of signatures
   retained by a trainer. Once reached, **unseen signatures run eagerly**; the
   cap does not evict existing graphs, stabilize shapes, or guarantee a speedup.
   Lower the cap for large models/adapters when memory is the limiting concern.

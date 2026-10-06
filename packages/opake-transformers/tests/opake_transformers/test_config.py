@@ -1006,7 +1006,7 @@ def test_cuda_graphs_is_accepted_with_gradient_checkpointing():
         gradient_checkpointing=True,
     )
     assert cfg.cuda_graphs is True
-    assert cfg.cuda_graph_max_graphs == 32
+    assert cfg.cuda_graph_max_graphs == 4
 
 
 def test_cuda_graph_max_graphs_is_configurable():

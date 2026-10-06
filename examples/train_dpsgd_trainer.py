@@ -453,7 +453,7 @@ def parse_args() -> argparse.Namespace:
     train_group.add_argument(
         "--cuda-graph-max-graphs",
         type=int,
-        default=32,
+        default=4,
         help=(
             "Maximum distinct CUDA-graph signatures retained. New signatures "
             "after this limit run eagerly; lower it to guard graph-private memory."
