@@ -9,6 +9,7 @@ from torch.func import functional_call
 
 from opake.device import fused_kernels_available
 from opake.dpsgd.clipping import adaptive_clipped_grad
+from opake.patches import apply_runtime_patches
 from opake.random import key
 
 
@@ -18,6 +19,7 @@ from opake.random import key
 )
 @pytest.mark.parametrize("microbatch_size", [None, 4])
 def test_adaptive_clipping_with_triton_matches_torch(microbatch_size):
+    apply_runtime_patches()
     torch.manual_seed(0)
     net = torch.nn.Sequential(
         torch.nn.Linear(32, 64), torch.nn.GELU(), torch.nn.Linear(64, 8)

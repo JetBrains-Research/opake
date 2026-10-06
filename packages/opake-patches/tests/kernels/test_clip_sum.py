@@ -14,6 +14,7 @@ from opake.api.engine.clipping import clipped_grad
 from opake.api.engine.clipping._clipped_fun import clipped_fun
 from opake.api.engine.device import fused_kernels_available
 from opake.exceptions import ConfigurationError
+from opake.patches import apply_runtime_patches
 from opake.types import PerGroup
 
 cf = importlib.import_module("opake.api.engine.clipping._clipped_fun")
@@ -21,6 +22,13 @@ cf = importlib.import_module("opake.api.engine.clipping._clipped_fun")
 requires_fused = pytest.mark.skipif(
     not fused_kernels_available(), reason="needs a CUDA device and Triton"
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _register_fused_clip_backend():
+    if fused_kernels_available():
+        apply_runtime_patches()
+
 
 FP32 = {"w": torch.float32, "b": torch.float32, "e": torch.float32}
 BF16 = {"w": torch.bfloat16, "b": torch.bfloat16, "e": torch.bfloat16}
@@ -53,7 +61,7 @@ def _tree(batch, dtypes, seed, norms=(0.3, 2.0), device="cuda"):
 
 
 def _spy_fused(monkeypatch):
-    module = importlib.import_module("opake.api.engine.kernels._clip_sum")
+    module = importlib.import_module("opake.api.patches.kernels._clip_sum")
     calls = []
     real = module.fused_clip_sum
 
@@ -340,7 +348,7 @@ def test_fused_rejects_trees_across_devices():
 @pytest.mark.cuda
 @requires_fused
 def test_fused_tile_plan_cache_is_bounded():
-    module = importlib.import_module("opake.api.engine.kernels._clip_sum")
+    module = importlib.import_module("opake.api.patches.kernels._clip_sum")
     for width in range(1, module._MAX_PLANS + 6):
         _clip("triton", {"w": torch.randn(2, width, device="cuda")}, clipping_norm=1.0)
     assert len(module._PLANS) <= module._MAX_PLANS
