@@ -4515,8 +4515,13 @@ class DPTrainer:
                     )
                 )
             if self._cuda_graph_compiler is None:
-                self._cuda_graph_compiler = CudaGraphChunkCompiler()
-                log.info("CUDA-graph replay enabled for DP gradient chunks.")
+                self._cuda_graph_compiler = CudaGraphChunkCompiler(
+                    max_graphs=a.cuda_graph_max_graphs
+                )
+                log.info(
+                    "CUDA-graph replay enabled for DP gradient chunks (max_graphs=%d).",
+                    a.cuda_graph_max_graphs,
+                )
             return self._cuda_graph_compiler
         if not a.torch_compile:
             return None

@@ -506,6 +506,10 @@ class TrainingArguments:
     #: checkpointing the model must have no active dropout, because the
     #: checkpoint recompute then runs without saved RNG state.
     cuda_graphs: bool = False
+    #: Maximum distinct CUDA-graph input signatures retained by one trainer.
+    #: Once reached, unseen signatures run eagerly; existing signatures replay.
+    #: This bounds graph-private memory when sequence shapes vary.
+    cuda_graph_max_graphs: int = 4
     #: EXPERIMENTAL, NOT YET DP-REVIEWED. Order each logical batch by real
     #: sequence length and trim every microbatch's trailing all-padding
     #: columns before the per-example kernel runs. The collator pads the whole
@@ -950,6 +954,17 @@ class TrainingArguments:
         if not isinstance(self.cuda_graphs, bool):
             raise ConfigurationError(
                 *(f"cuda_graphs must be a bool; got {self.cuda_graphs!r}.",)
+            )
+        if (
+            not isinstance(self.cuda_graph_max_graphs, int)
+            or isinstance(self.cuda_graph_max_graphs, bool)
+            or self.cuda_graph_max_graphs < 1
+        ):
+            raise ConfigurationError(
+                *(
+                    "cuda_graph_max_graphs must be a positive integer; got "
+                    f"{self.cuda_graph_max_graphs!r}.",
+                )
             )
         if self.cuda_graphs and self.torch_compile:
             raise ConfigurationError(

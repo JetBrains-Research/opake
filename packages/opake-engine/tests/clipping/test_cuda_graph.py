@@ -105,6 +105,18 @@ def test_signatures_beyond_max_graphs_run_eagerly():
             assert torch.equal(e[0][name], g[0][name])
 
 
+def test_default_graph_cap_is_four():
+    assert CudaGraphChunkCompiler().max_graphs == 4
+
+
+@pytest.mark.parametrize("max_graphs", [0, -1, True, 1.5, "3"])
+def test_max_graphs_requires_positive_integer(max_graphs):
+    with pytest.raises(
+        ConfigurationError, match="max_graphs must be a positive integer"
+    ):
+        CudaGraphChunkCompiler(max_graphs=max_graphs)
+
+
 @pytest.mark.cuda
 @requires_cuda
 def test_unhashable_non_tensor_arguments_are_rejected():
