@@ -1,6 +1,6 @@
 """Multi-tensor variant of the fused clip-and-sum (prototype, not packaged).
 
-The packaged kernel (`opake.api.engine.kernels._clip_sum.fused_clip_sum`)
+The packaged kernel (`opake.api.patches.kernels._clip_sum.fused_clip_sum`)
 launches two kernels per parameter tensor plus a few small torch ops per
 tensor, so a 392-leaf LoRA tree costs thousands of launches per call. This
 version processes every leaf of one storage dtype in a single launch per pass,
@@ -197,7 +197,7 @@ def mt_fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=No
     return reduced, norm, post_sq, acc_dtype
 
 
-_CS = importlib.import_module("opake.api.engine.kernels._clip_sum")
+_CS = importlib.import_module("opake.api.patches.kernels._clip_sum")
 _ORIGINAL_FUSED = _CS.fused_clip_sum
 _ORIGINAL_STREAM_FN = _CS.fused_stream_clip_and_sum
 _MARKERS: dict = {}

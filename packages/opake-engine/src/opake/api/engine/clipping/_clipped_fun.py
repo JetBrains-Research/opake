@@ -9,6 +9,7 @@ import torch
 from torch.func import vmap as _vmap
 
 from opake.api.engine.clipping._helpers import batch_size_from_args, normalize_to_tuple
+from opake.api.engine.clipping._kernel_backend import get_fused_clip_backend
 from opake.api.engine.clipping._pytree import clip_pytree
 from opake.api.engine.clipping._streaming import (
     _FIXED_SCALE,
@@ -482,9 +483,10 @@ def _resolve_stream_impl(
     """Resolve ``clip_backend`` to a streaming clip-and-sum implementation.
 
     Returns ``None`` for the torch path, or a callable with the signature of
-    ``_stream_clip_and_sum``.  ``"triton"`` raises for configurations or hosts
-    the fused kernels cannot serve; ``"auto"`` resolves to the torch path
-    instead.
+    ``_stream_clip_and_sum``. ``"triton"`` raises for configurations or hosts
+    the fused kernels cannot serve; it also requires ``opake-patches`` to have
+    registered its clipping kernel via ``apply_runtime_patches()``. ``"auto"``
+    resolves to the torch path when the fused kernel is unavailable.
     """
     if clip_backend not in _CLIP_BACKENDS:
         raise ConfigurationError(
@@ -512,7 +514,13 @@ def _resolve_stream_impl(
     elif torch.version.hip is not None:
         unsupported = "ROCm builds, where the kernels are not validated"
     else:
-        unsupported = None
+        fused_backend = get_fused_clip_backend()
+        unsupported = (
+            None
+            if fused_backend is not None
+            else "an unregistered fused clipping kernel; call "
+            "opake.patches.apply_runtime_patches()"
+        )
     if unsupported is not None:
         if clip_backend == "triton":
             raise ConfigurationError(
@@ -522,10 +530,7 @@ def _resolve_stream_impl(
     strict = clip_backend == "triton"
 
     def fused_stream_impl(*args, **kwargs):
-        # Imported on first use: the module imports Triton.
-        from opake.api.engine.kernels._clip_sum import fused_stream_clip_and_sum
-
-        return fused_stream_clip_and_sum(*args, strict=strict, **kwargs)
+        return fused_backend(*args, strict=strict, **kwargs)
 
     return fused_stream_impl
 

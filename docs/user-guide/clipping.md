@@ -191,6 +191,10 @@ per-example gradients. The mechanism is unchanged:
   The stored-value guarantee holds for any order.
 
 ```python
+from opake.patches import apply_runtime_patches
+
+apply_runtime_patches()
+
 grad_fn, state = clipped_grad(
     loss_fn,
     clipping_norm=1.0,
@@ -207,6 +211,10 @@ The backend is opt-in:
 | `"triton"` | Fused kernels. Raises `ConfigurationError` when they cannot serve the configuration or a call. |
 | `"auto"` | Fused kernels where supported, PyTorch otherwise. |
 
+The fused clipping kernel is provided by `opake-patches`. Install that package
+and call `apply_runtime_patches()` before creating the clipping transform; this
+registers the kernel when CUDA and Triton are available. Without registration,
+`"auto"` uses the PyTorch path and `"triton"` raises `ConfigurationError`.
 The fused kernels need an NVIDIA CUDA device with Triton installed (ROCm builds
 use the PyTorch path), and support:
 

@@ -39,7 +39,7 @@ from opake.api.engine.pytree import tree_map  # noqa: E402
 if os.environ.get("CB_MT") == "1":
     mt_engine.install()
 
-_CS = importlib.import_module("opake.api.engine.kernels._clip_sum")
+_CS = importlib.import_module("opake.api.patches.kernels._clip_sum")
 _CF = importlib.import_module("opake.api.engine.clipping._clipped_fun")
 
 

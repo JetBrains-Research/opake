@@ -24,10 +24,13 @@ from torch.func import functional_call
 
 from opake.api.engine.clipping._clipped_fun import clipped_fun
 from opake.dpsgd.clipping import adaptive_clipped_grad
+from opake.patches import apply_runtime_patches
 from opake.random import key
 
 sys.path.insert(0, str(Path(__file__).parent))
 import mt_engine  # noqa: E402
+
+apply_runtime_patches()
 
 DEV = "cuda"
 FAIL = []

@@ -27,6 +27,9 @@ from opake.random import key  # noqa: E402
 
 BACKEND = sys.argv[1] if len(sys.argv) > 1 else "torch"
 if BACKEND != "torch":
+    from opake.patches import apply_runtime_patches
+
+    apply_runtime_patches()
     cudagraph_chunk.allow_fused_clip()
 torch.manual_seed(0)
 DEV = "cuda"

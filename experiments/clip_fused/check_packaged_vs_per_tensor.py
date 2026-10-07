@@ -26,8 +26,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 import _clip_sum_per_tensor as old  # noqa: E402
 
 from opake.api.engine.clipping._clipped_fun import clipped_fun  # noqa: E402
+from opake.patches import apply_runtime_patches  # noqa: E402
 
-CS = importlib.import_module("opake.api.engine.kernels._clip_sum")
+apply_runtime_patches()
+
+CS = importlib.import_module("opake.api.patches.kernels._clip_sum")
 NEW = (CS.fused_clip_sum, CS._dtype_marker)
 OLD = (old.fused_clip_sum, lambda leaf: leaf.new_zeros(()))
 
