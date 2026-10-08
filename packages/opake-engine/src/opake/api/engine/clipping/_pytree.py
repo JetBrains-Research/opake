@@ -192,17 +192,16 @@ def _scale_tensor(
     ) -> torch.Tensor:
         finfo = torch.finfo(value.dtype)
         smallest_normal = finfo.smallest_normal
-        rounded_up_subnormal = (value.abs() <= smallest_normal) & (
-            value.abs() > source.abs()
-        )
+        subnormal = value.abs() <= smallest_normal
         if value.dtype == torch.float16:
-            # Binary16 subnormals form an exact lattice in float32.
+            # Binary16 subnormals form an exact lattice in every wider dtype.
             quantum = smallest_normal * finfo.eps
-            wide = value.detach().to(torch.float32)
-            magnitude = wide.abs() - quantum
-            toward_zero = torch.where(wide < 0, -magnitude, magnitude).to(value.dtype)
+            steps = torch.trunc(source.detach() / quantum)
+            toward_zero = (steps * quantum).to(value.dtype)
+            rounded_up_subnormal = subnormal & (value != toward_zero)
         else:
             toward_zero = torch.zeros_like(value)
+            rounded_up_subnormal = subnormal & (value.abs() > source.abs())
         return torch.where(rounded_up_subnormal, toward_zero, value)
 
     if tensor.dtype.is_complex:
