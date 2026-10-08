@@ -447,6 +447,57 @@ class TestDPTrainerTrain:
                 break
         assert changed, "Model parameters did not change after training"
 
+    def test_from_pretrained_peft_forward_runs_in_train_mode(
+        self, gpt2_model_and_tokenizer, tiny_lm_dataset, tmp_path
+    ):
+        from transformers import AutoModelForCausalLM
+
+        base, tokenizer = gpt2_model_and_tokenizer
+        model_dir = tmp_path / "model"
+        base.save_pretrained(model_dir)
+        base = AutoModelForCausalLM.from_pretrained(model_dir)
+        attention = base.transformer.h[0].attn
+
+        model = get_peft_model(
+            base,
+            LoraConfig(
+                task_type=TaskType.CAUSAL_LM,
+                r=2,
+                lora_alpha=4,
+                lora_dropout=0.0,
+                target_modules=["c_attn"],
+                fan_in_fan_out=True,
+            ),
+        )
+        assert model.training
+        assert not attention.training
+
+        modes = []
+
+        def record_mode(module, _args):
+            modes.append(module.training)
+
+        handle = attention.register_forward_pre_hook(record_mode)
+        try:
+            trainer = DPTrainer(
+                model=model,
+                args=_default_args(
+                    output_dir=str(tmp_path / "output"),
+                    per_device_train_batch_size=1,
+                    max_steps=1,
+                    eval_strategy="no",
+                    save_strategy="no",
+                ),
+                processing_class=tokenizer,
+                train_dataset=tiny_lm_dataset.select([0]),
+            )
+            trainer.train()
+        finally:
+            handle.remove()
+
+        assert modes
+        assert all(modes)
+
     def test_fixed_noise_without_budget_skips_accounting(
         self, gpt2_with_lora, tiny_lm_dataset, tmp_path
     ):
