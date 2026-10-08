@@ -41,13 +41,13 @@ class ClippedGradAux:
 
     Fields:
         loss_values: Per-example loss values before clipping.
-        grad_norms: Per-example gradient L2 norms before clipping.
-        clipped_grad_norms: Per-example gradient L2 norms after clipping.
+        grad_norms: Measured per-example gradient L2 norms before clipping.
+        clipped_grad_norms: Measured per-example gradient L2 norms after clipping.
         loss_aux: Per-example auxiliary payload returned by the loss function.
-        clipping_rate: Fraction of per-example gradients whose norm exceeded
-            the clipping threshold.
+        clipping_rate: Fraction of per-example gradients whose measured norm
+            exceeded the clipping threshold.
         batch_size: Number of examples in the batch.
-        group_norms: Per-group per-example gradient L2 norms before clipping
+        group_norms: Measured per-group per-example gradient L2 norms before clipping
             (dict[str, Tensor] with shape [batch_size] per group), or None
             when global clipping is used.
     """

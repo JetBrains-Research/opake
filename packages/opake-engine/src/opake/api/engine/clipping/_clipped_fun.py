@@ -57,13 +57,13 @@ class ClippedFunAux:
 
     Fields:
         values: Per-example function values before clipping.
-        norms: Per-example L2 norms before clipping.
-        clipped_norms: Per-example L2 norms after clipping.
+        norms: Measured per-example L2 norms before clipping.
+        clipped_norms: Measured per-example L2 norms after clipping.
         value_aux: Per-example auxiliary payload returned by the wrapped function.
-        clipping_rate: Fraction of per-example outputs whose norm exceeded the
-            clipping threshold.  Equal to ``num_clipped / batch_size``.
+        clipping_rate: Fraction of per-example outputs whose measured norm
+            exceeded the clipping threshold. Equal to ``num_clipped / batch_size``.
         batch_size: Number of examples in the batch.
-        group_norms: Per-group per-example L2 norms before clipping
+        group_norms: Measured per-group per-example L2 norms before clipping
             (dict[str, Tensor] with shape [batch_size] per group), or None
             when global clipping is used.
     """
@@ -79,7 +79,7 @@ class ClippedFunAux:
 
 @dataclass(frozen=True)
 class ClippingStats:
-    """Aggregated clipping statistics without per-example materialization."""
+    """Aggregated comparisons of measured norms with the clipping bounds."""
 
     num_clipped: float | dict[str, float]
     clipping_rate: float | dict[str, float] | None

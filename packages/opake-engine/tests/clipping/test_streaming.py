@@ -11,6 +11,7 @@ from torch.func import grad, vmap
 from opake.api.engine.clipping import auto_clipped_grad, clipped_grad
 from opake.api.engine.clipping._clipped_fun import _RuntimeClipState, clipped_fun
 from opake.api.engine.clipping._pytree import clip_pytree
+from opake.api.engine.clipping.fun import auto_clipped_fun
 from opake.exceptions import ConfigurationError
 from opake.pytree import global_norm, tree_leaves, tree_map
 from opake.types import ClippedPytree, PerGroup
@@ -25,6 +26,14 @@ def _assert_tree_equal(actual, expected):
     assert len(actual_leaves) == len(expected_leaves)
     for a, b in zip(actual_leaves, expected_leaves, strict=True):
         torch.testing.assert_close(a, b, rtol=0, atol=0, equal_nan=True)
+
+
+def _stable_norm(tensor):
+    value = tensor.detach().cpu().double()
+    scale = float(value.abs().max())
+    if scale == 0.0:
+        return 0.0
+    return scale * float(((value / scale) ** 2).sum()) ** 0.5
 
 
 def _reference(fn, args, state, monkeypatch):
@@ -111,6 +120,36 @@ def test_adversarial_values_match_original(
             rtol=0,
             atol=0,
         )
+
+
+@pytest.mark.parametrize("mode", ["fixed", "auto"])
+@pytest.mark.parametrize("per_group", [False, True])
+@pytest.mark.parametrize("microbatch_size", [None, 1])
+def test_streaming_scaling_covers_square_underflow(mode, per_group, microbatch_size):
+    tiny = torch.full((1024,), 1e-23)
+    values = torch.stack((tiny, torch.zeros_like(tiny)))
+    true_norm = _stable_norm(tiny)
+    bound = 1.0 if mode == "auto" else 0.84 * true_norm
+    configured = (
+        PerGroup(groups={"w": "tiny"}, values={"tiny": bound}) if per_group else bound
+    )
+    options = {"microbatch_size": microbatch_size, "return_aux": True}
+    if mode == "auto":
+        fn, state = auto_clipped_fun(
+            lambda x: {"w": x},
+            R=configured,
+            gamma=true_norm / 100.0,
+            **options,
+        )
+    else:
+        fn, state = clipped_fun(lambda x: {"w": x}, clipping_norm=configured, **options)
+
+    (result, aux), _ = fn(values, state=state)
+
+    assert torch.equal(aux.norms, torch.zeros(2))
+    if per_group:
+        assert torch.equal(aux.group_norms["tiny"], torch.zeros(2))
+    assert _stable_norm(result.pytree["w"]) <= bound
 
 
 @pytest.mark.parametrize("microbatch_size", [None, 2])

@@ -53,11 +53,9 @@ class AutoClippedFunAux(ClippedFunAux):
     Inherits all fields from :class:`ClippedFunAux` with AUTO-S
     semantics:
 
-    - ``norms``: per-example L2 norms before scaling (i.e. ``||v||``).
-    - ``clipped_norms``: per-example L2 norms after AUTO-S scaling
-      (``R * ||v|| / (||v|| + gamma)``), clipped by ``R``.
-    - ``clipping_rate``: fraction of examples with ``||v|| > R``
-      (approximately the fraction where the scale factor was < 1).
+    - ``norms``: measured per-example L2 norms before scaling.
+    - ``clipped_norms``: measured per-example L2 norms after AUTO-S scaling.
+    - ``clipping_rate``: fraction whose measured norm exceeds ``R``.
     - ``values``, ``value_aux``, ``batch_size``, ``group_norms``:
       unchanged from :class:`ClippedFunAux`.
     """
@@ -70,11 +68,10 @@ class AutoClippedGradAux(ClippedGradAux):
     Inherits all fields from :class:`ClippedGradAux` with AUTO-S
     semantics:
 
-    - ``grad_norms``: per-example gradient L2 norms before scaling.
-    - ``clipped_grad_norms``: per-example gradient L2 norms after
-      AUTO-S scaling (``R * ||g|| / (||g|| + gamma)``), clipped by ``R``.
-    - ``clipping_rate``: fraction of examples with ``||g|| > R``
-      (approximately the fraction where the scale factor was < 1).
+    - ``grad_norms``: measured per-example gradient L2 norms before scaling.
+    - ``clipped_grad_norms``: measured per-example gradient L2 norms after
+      AUTO-S scaling.
+    - ``clipping_rate``: fraction whose measured norm exceeds ``R``.
     - ``loss_values``, ``loss_aux``, ``batch_size``, ``group_norms``:
       unchanged from :class:`ClippedGradAux`.
     """

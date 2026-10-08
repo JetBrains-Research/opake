@@ -10,14 +10,17 @@ from torch.func import vmap
 
 from opake.api.engine.clipping._pytree import (
     _accumulate_group_value,
+    _group_real_numel,
     _leaf_sq_sum,
     _norm_roundoff,
+    _norms_for_scaling,
     _real_dtype,
     _reduction_terms,
     _resolve_compute_dtype_for_reduction,
     _scale_tensor,
     _sq_accum_dtype,
     _tensor_path_leaves,
+    _tree_real_numel,
     _validate_per_group_paths,
 )
 from opake.api.engine.pytree import tree_flatten, tree_unflatten
@@ -63,9 +66,15 @@ def _stream_clip_and_sum(
         leaves, treedef = tree_flatten(values)
     acc_dtype = _resolve_compute_dtype_for_reduction(leaves, compute_dtype)
     sq_dtype = _sq_accum_dtype(leaves)
+    example_leaves = [leaf[0] for leaf in leaves]
     roundoff = _norm_roundoff(
-        acc_dtype, sq_dtype, len(leaves), _reduction_terms([leaf[0] for leaf in leaves])
+        acc_dtype, sq_dtype, len(leaves), _reduction_terms(example_leaves)
     )
+    n_components = _tree_real_numel(example_leaves)
+    group_sizes: dict[str, int] = {}
+    if isinstance(clipping_norm, PerGroup):
+        assert paths is not None
+        group_sizes = _group_real_numel(paths, example_leaves, clipping_norm)
 
     sq_norm = None
     group_sq_norms: dict[str, torch.Tensor] = {}
@@ -79,7 +88,7 @@ def _stream_clip_and_sum(
         del sanitized, sq
     if sq_norm is None:
         sq_norm = torch.zeros(batch_size, dtype=sq_dtype)
-    norm = torch.sqrt(sq_norm)
+    norm, scaling_norm = _norms_for_scaling(sq_norm, acc_dtype, n_components)
 
     def scale_ratio(bound_value, value_norm):
         bound = torch.clamp(
@@ -96,16 +105,21 @@ def _stream_clip_and_sum(
         return bound / value_norm
 
     if isinstance(clipping_norm, PerGroup):
-        group_norms = {name: torch.sqrt(sq) for name, sq in group_sq_norms.items()}
+        group_norms: dict[str, torch.Tensor] = {}
+        group_scaling_norms: dict[str, torch.Tensor] = {}
+        for name, sq in group_sq_norms.items():
+            measured, guarded = _norms_for_scaling(sq, acc_dtype, group_sizes[name])
+            group_norms[name] = measured
+            group_scaling_norms[name] = guarded
         group_ratios = {
-            name: scale_ratio(clipping_norm.values[name], group_norm)
-            for name, group_norm in group_norms.items()
+            name: scale_ratio(clipping_norm.values[name], group_scaling_norms[name])
+            for name in group_norms
         }
         ratio = None
     else:
         group_norms = None
         group_ratios = None
-        ratio = scale_ratio(clipping_norm, norm)
+        ratio = scale_ratio(clipping_norm, scaling_norm)
     clamp_to_one = scale.kind != "auto_s"
 
     # Match global_norm's diagnostic precision, including mixed complex/real
