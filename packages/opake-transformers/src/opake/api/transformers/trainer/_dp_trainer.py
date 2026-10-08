@@ -2263,6 +2263,7 @@ class DPTrainer:
                     "DPTrainer's functional context is not initialised.",
                 )
             )
+        self._model.train()
         inputs = self._prepare_input(inputs)
         # Subclass hook: augment the batch with tensors computed *outside* vmap
         # (e.g. TR-DPO's per-step reference logps). Default is a no-op. Any keys
