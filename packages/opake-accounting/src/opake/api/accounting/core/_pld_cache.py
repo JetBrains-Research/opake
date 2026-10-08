@@ -6,6 +6,8 @@ import functools
 import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Hashable
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import replace
 from threading import RLock
 from typing import TYPE_CHECKING
@@ -17,11 +19,34 @@ from .discretization import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from ._base import Pld
 
 _CacheKey = tuple[DiscretizationConfig, Hashable, int | None]
 _IdentityKey = tuple[DiscretizationConfig, int | None]
 _MISSING = object()
+
+
+_active_captures: ContextVar[tuple[list[Pld], ...]] = ContextVar(
+    "opake_accounting_pld_captures",
+    default=(),
+)
+_pld_call_depth: ContextVar[int] = ContextVar(
+    "opake_accounting_pld_call_depth",
+    default=0,
+)
+
+
+@contextmanager
+def _capture_pld_evaluations() -> Iterator[list[Pld]]:
+    """Capture caller-visible PLDs without their nested composition work."""
+    captured: list[Pld] = []
+    token = _active_captures.set((*_active_captures.get(), captured))
+    try:
+        yield captured
+    finally:
+        _active_captures.reset(token)
 
 
 class _WeakIdentityPldCache:
@@ -229,12 +254,31 @@ def pld_cache(*, maxsize: int | None, retain_per_instance: bool = False):
                 mc_resolution=mc_resolution,
                 mc_failure_probability=mc_failure_probability,
             )
-            return cache.get_or_compute(
-                self,
-                (config, None),
-                lambda: (config, self._pld_cache_key(), None),
-                lambda: _compute_pld(method, self, config),
-            )
+            captures = _active_captures.get()
+            if not captures:
+                return cache.get_or_compute(
+                    self,
+                    (config, None),
+                    lambda: (config, self._pld_cache_key(), None),
+                    lambda: _compute_pld(method, self, config),
+                )
+
+            depth = _pld_call_depth.get()
+            depth_token = _pld_call_depth.set(depth + 1)
+            try:
+                result = cache.get_or_compute(
+                    self,
+                    (config, None),
+                    lambda: (config, self._pld_cache_key(), None),
+                    lambda: _compute_pld(method, self, config),
+                )
+            finally:
+                _pld_call_depth.reset(depth_token)
+
+            if depth == 0:
+                for captured in captures:
+                    captured.append(result)
+            return result
 
         def cache_get(self, **kwargs):
             config = _resolve_config(**kwargs)

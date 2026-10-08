@@ -226,7 +226,7 @@ def test_b_min_sep_stricter_than_mf_only():
     assert eps_bms < eps_mf
 
 
-def test_calibration_reports_one_overall_mc_confidence_budget():
+def test_calibration_reports_overall_mc_confidence():
     import opake.accounting as acc
 
     prev = asdict(acc.get_discretization())

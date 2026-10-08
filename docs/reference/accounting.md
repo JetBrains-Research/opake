@@ -738,9 +738,21 @@ safe endpoint reaches the requested relative tolerance, `calibrate()` raises
 `CalibrationError` instead of returning an under-noised parameter.
 
 When the process uses a Monte Carlo PLD, calibration divides the configured
-failure probability across the two endpoint probes and at most
-`max_iterations` interior probes. `result.mc_confidence` therefore covers the
-adaptive search as a whole rather than only its selected final parameter.
+failure probability across every parameter in the complete binary-search
+decision tree: two endpoints and up to `2**max_iterations - 1` interior values.
+The resulting band is simultaneous over every parameter the adaptive search or
+runtime fallback can select, even though those probes share a transcript. The
+allocation is capped by the finite binary64 parameter space.
+`result.mc_failure_probability` reports the configured overall bound and
+`result.mc_confidence` its complement. The reported `achieved` is the
+privacy-conservative envelope of the simultaneous bound and the runtime-config
+evaluation. Because the tree depth affects Monte Carlo sample count, set
+`max_iterations` no higher than the search needs.
+
+Monte Carlo calibration requires a built-in budget factory. Custom `Budget`
+implementations remain supported for analytic processes, where no statistical
+metric direction needs to be certified.
+
 Balls-in-Bins calibration also reuses its seeded, sigma-independent projected
 draws across probes when they fit the bounded native cache. Set
 `OPAKE_BNB_TRANSCRIPT_CACHE_MAX_BYTES` to control its memory cap (4 GiB by
@@ -789,8 +801,8 @@ Returned by `calibrate()`.
 | `target`    | `float` | Target metric value                              |
 | `iterations`| `int`   | Number of binary search iterations               |
 | `converged` | `bool`  | Always `True` for a successfully returned result |
-| `mc_failure_probability` | `float` | Overall failure probability for adaptive MC probes |
-| `mc_confidence` | `float` | Confidence covering the complete calibration search |
+| `mc_failure_probability` | `float` | Overall failure probability of the simultaneous MC bound |
+| `mc_confidence` | `float` | Confidence of the simultaneous MC bound |
 
 ### Budget Factories
 
