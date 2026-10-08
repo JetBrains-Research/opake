@@ -94,23 +94,24 @@ def test_oversized_corpus_preserves_one_shot_fallback(monkeypatch):
     assert calls == 1
 
 
-def test_calibration_confidence_covers_runtime_fallback():
-    evaluations = []
+def test_calibration_confidence_covers_runtime_fallback(monkeypatch):
+    from opake.api.accounting.core import calibration as calibration_module
 
-    class RecordingEpsilonBudget:
-        value = 3.0
-        decreasing = True
-        name = "epsilon(3.0, delta=0.02)"
+    searches = 0
+    original = calibration_module._calibrate_impl
 
-        def evaluate(self, process):
-            evaluations.append(acc.get_discretization().mc_failure_probability)
-            return process.epsilon_at(2e-2)
+    def recording_search(*args, **kwargs):
+        nonlocal searches
+        searches += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(calibration_module, "_calibrate_impl", recording_search)
 
     max_iterations = 30
     config = replace(acc.get_discretization(), **_CONFIG, seed=42)
     with _use_discretization(config):
         result = acc.calibrate(
-            RecordingEpsilonBudget(),
+            acc.epsilon_budget(3.0, delta=2e-2),
             _process,
             param_min=0.2,
             param_max=5.0,
@@ -118,7 +119,5 @@ def test_calibration_confidence_covers_runtime_fallback():
             max_iterations=max_iterations,
         )
 
-    probe_failure = config.mc_failure_probability / (max_iterations + 2)
-    assert evaluations.count(probe_failure) > 2
-    assert evaluations.count(config.mc_failure_probability) > 1
-    assert result.mc_failure_probability == pytest.approx(sum(evaluations))
+    assert searches == 2
+    assert result.mc_failure_probability == pytest.approx(config.mc_failure_probability)

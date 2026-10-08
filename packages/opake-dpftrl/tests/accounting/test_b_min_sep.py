@@ -226,7 +226,7 @@ def test_b_min_sep_stricter_than_mf_only():
     assert eps_bms < eps_mf
 
 
-def test_calibration_reports_all_mc_evaluations():
+def test_calibration_reports_overall_mc_confidence():
     import opake.accounting as acc
 
     prev = asdict(acc.get_discretization())
@@ -255,10 +255,8 @@ def test_calibration_reports_all_mc_evaluations():
     finally:
         acc.set_discretization(**prev)
 
-    probe_failure = 1e-2 / (8 + 2)
-    expected_failure = (result.iterations + 2) * probe_failure + 1e-2
-    assert result.mc_failure_probability == pytest.approx(expected_failure)
-    assert result.mc_confidence == pytest.approx(1.0 - expected_failure)
+    assert result.mc_failure_probability == pytest.approx(1e-2)
+    assert result.mc_confidence == pytest.approx(0.99)
 
 
 def test_composed_mc_pld_uses_one_overall_confidence_and_resolution_budget():

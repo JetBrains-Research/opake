@@ -738,13 +738,21 @@ safe endpoint reaches the requested relative tolerance, `calibrate()` raises
 `CalibrationError` instead of returning an under-noised parameter.
 
 When the process uses a Monte Carlo PLD, calibration divides the configured
-failure probability across the two endpoint probes and at most
-`max_iterations` interior probes. Every evaluated PLD contributes its pointwise
-failure probability, including the runtime evaluation and any runtime-config
-fallback probes. `result.mc_failure_probability` is their capped sum, and
-`result.mc_confidence` is its complement. This is per-probe accounting; it does
-not establish a parameter-uniform confidence band for probes selected from a
-shared Monte Carlo transcript.
+failure probability across every parameter in the complete binary-search
+decision tree: two endpoints and up to `2**max_iterations - 1` interior values.
+The resulting band is simultaneous over every parameter the adaptive search or
+runtime fallback can select, even though those probes share a transcript. The
+allocation is capped by the finite binary64 parameter space.
+`result.mc_failure_probability` reports the configured overall bound and
+`result.mc_confidence` its complement. The reported `achieved` is the
+privacy-conservative envelope of the simultaneous bound and the runtime-config
+evaluation. Because the tree depth affects Monte Carlo sample count, set
+`max_iterations` no higher than the search needs.
+
+Monte Carlo calibration requires a built-in budget factory. Custom `Budget`
+implementations remain supported for analytic processes, where no statistical
+metric direction needs to be certified.
+
 Balls-in-Bins calibration also reuses its seeded, sigma-independent projected
 draws across probes when they fit the bounded native cache. Set
 `OPAKE_BNB_TRANSCRIPT_CACHE_MAX_BYTES` to control its memory cap (4 GiB by
@@ -793,8 +801,8 @@ Returned by `calibrate()`.
 | `target`    | `float` | Target metric value                              |
 | `iterations`| `int`   | Number of binary search iterations               |
 | `converged` | `bool`  | Always `True` for a successfully returned result |
-| `mc_failure_probability` | `float` | Capped sum of pointwise MC failure probabilities |
-| `mc_confidence` | `float` | Complement of `mc_failure_probability` |
+| `mc_failure_probability` | `float` | Overall failure probability of the simultaneous MC bound |
+| `mc_confidence` | `float` | Confidence of the simultaneous MC bound |
 
 ### Budget Factories
 

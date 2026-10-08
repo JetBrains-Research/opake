@@ -6,18 +6,18 @@ increase *spends* privacy (sample rate, step count) raised a
 self-contradictory "not in range" error with the target inside the printed
 range.
 
-Built entirely on ``acc.eps_delta`` chains: pure opake-accounting (respects
-the test dependency cone) and orders of magnitude faster than PLD mechanisms.
-The Poisson/Gaussian integration regressions live in
-``packages/opake-dpsgd/tests/accounting/test_calibration.py``.
+The tests use ``acc.eps_delta`` chains and a small synthetic PLD, keeping them
+inside opake-accounting's dependency cone. Poisson/Gaussian integration
+regressions live in ``packages/opake-dpsgd/tests/accounting/test_calibration.py``.
 """
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 import pytest
 
 import opake.accounting as acc
+from opake.api.accounting.core._pld_cache import pld_cache
 from opake.api.accounting.core.discretization import _use_discretization
 from opake.exceptions import CalibrationError
 
@@ -31,15 +31,32 @@ class _MetricProcess:
 
 @dataclass(frozen=True)
 class _PldMetadata:
+    metric: float
     mc_failure_probability: float
+
+    def epsilon_at(self, _delta: float) -> float:
+        return self.metric
 
 
 @dataclass(frozen=True)
 class _MonteCarloMetricProcess:
     metric: float
+    config_sensitive: bool = False
+    evaluations: list[float] | None = field(default=None, compare=False, repr=False)
 
-    def pld(self, **_kwargs):
-        return _PldMetadata(acc.get_discretization().mc_failure_probability)
+    def _pld_cache_key(self):
+        return (self.metric, self.config_sensitive)
+
+    @pld_cache(maxsize=None)
+    def pld(self):
+        failure = acc.get_discretization().mc_failure_probability
+        if self.evaluations is not None:
+            self.evaluations.append(failure)
+        metric = self.metric + failure if self.config_sensitive else self.metric
+        return _PldMetadata(metric, failure)
+
+    def epsilon_at(self, delta: float, **kwargs) -> float:
+        return self.pld(**kwargs).epsilon_at(delta)
 
 
 @dataclass(frozen=True)
@@ -85,6 +102,18 @@ def test_decreasing_parameter_loss_metric_converges():
     assert result.converged
     assert result.achieved <= 3.0
     assert result.mc_failure_probability == 0.0
+
+
+def test_process_receives_binary64_parameters():
+    parameter_types = set()
+
+    def process(param):
+        parameter_types.add(type(param))
+        return _MetricProcess(param)
+
+    acc.calibrate(_GainBudget(0.5), process, 0, 1)
+
+    assert parameter_types == {float}
 
 
 @pytest.mark.parametrize(
@@ -207,86 +236,47 @@ def test_runtime_value_must_meet_tolerance(decreasing):
         acc.calibrate(ConfigBudget(decreasing=decreasing), process, 0.0, 2.0)
 
 
-def test_mc_failure_bound_counts_endpoint_evaluations():
+@pytest.mark.parametrize(
+    ("max_iterations", "family_bits"),
+    [(8, 9), (100, 64)],
+)
+def test_mc_confidence_covers_the_adaptive_search_tree(
+    max_iterations,
+    family_bits,
+):
     failure_probability = 0.01
-    max_iterations = 8
+    evaluations = []
+    _MonteCarloMetricProcess.pld.cache_clear()
     config = replace(
         acc.get_discretization(),
         mc_failure_probability=failure_probability,
     )
     with _use_discretization(config):
         result = acc.calibrate(
-            _GainBudget(1.0),
-            _MonteCarloMetricProcess,
+            acc.epsilon_budget(1.0, delta=0.1),
+            lambda param: _MonteCarloMetricProcess(
+                2.0 - param,
+                evaluations=evaluations,
+            ),
             param_min=0.0,
-            param_max=1.0,
+            param_max=2.0,
             max_iterations=max_iterations,
         )
 
-    probe_failure = failure_probability / (max_iterations + 2)
-    assert result.iterations == 0
-    assert result.mc_failure_probability == pytest.approx(
-        2 * probe_failure + failure_probability
+    probe_failures = {value for value in evaluations if value != failure_probability}
+    assert len(probe_failures) == 1
+    assert probe_failures.pop() == pytest.approx(
+        math.ldexp(failure_probability, -family_bits)
     )
-
-
-def test_mc_failure_bound_keeps_earlier_mc_evaluations():
-    failure_probability = 0.01
-    max_iterations = 8
-
-    @dataclass(frozen=True)
-    class VariableProcess:
-        metric: float
-        mc_failure_probability: float
-
-        def pld(self, **_kwargs):
-            return _PldMetadata(self.mc_failure_probability)
-
-    def process(param):
-        failure = (
-            acc.get_discretization().mc_failure_probability if param < 0.5 else 0.0
-        )
-        return VariableProcess(param, failure)
-
-    config = replace(
-        acc.get_discretization(),
-        mc_failure_probability=failure_probability,
-    )
-    with _use_discretization(config):
-        result = acc.calibrate(
-            _GainBudget(0.75),
-            process,
-            param_min=0.0,
-            param_max=1.0,
-            max_iterations=max_iterations,
-        )
-
-    probe_failure = failure_probability / (max_iterations + 2)
-    assert process(result.param).mc_failure_probability == 0.0
-    assert result.mc_failure_probability == pytest.approx(probe_failure)
+    assert failure_probability in evaluations
+    assert result.mc_failure_probability == pytest.approx(failure_probability)
+    assert result.mc_confidence == pytest.approx(1.0 - failure_probability)
 
 
 @pytest.mark.parametrize("failure_probability", [0.01, 0.1])
-def test_mc_failure_bound_includes_runtime_fallback(failure_probability):
+def test_mc_confidence_covers_runtime_fallback(failure_probability):
     evaluations = []
-
-    @dataclass(frozen=True)
-    class ConfigProcess:
-        param: float
-
-        def pld(self, **_kwargs):
-            return _PldMetadata(acc.get_discretization().mc_failure_probability)
-
-    @dataclass(frozen=True)
-    class ConfigBudget:
-        value: float = 1.0
-        decreasing: bool = True
-        name: str = "config metric"
-
-        def evaluate(self, process):
-            failure = acc.get_discretization().mc_failure_probability
-            evaluations.append(failure)
-            return 2.0 - process.param + failure
+    _MonteCarloMetricProcess.pld.cache_clear()
 
     config = replace(
         acc.get_discretization(),
@@ -294,8 +284,12 @@ def test_mc_failure_bound_includes_runtime_fallback(failure_probability):
     )
     with _use_discretization(config):
         result = acc.calibrate(
-            ConfigBudget(),
-            ConfigProcess,
+            acc.epsilon_budget(1.0, delta=0.1),
+            lambda param: _MonteCarloMetricProcess(
+                2.0 - param,
+                config_sensitive=True,
+                evaluations=evaluations,
+            ),
             param_min=0.0,
             param_max=2.0,
             tolerance=1e-6,
@@ -304,4 +298,43 @@ def test_mc_failure_bound_includes_runtime_fallback(failure_probability):
 
     assert len(set(evaluations)) == 2
     assert evaluations.count(failure_probability) > 1
-    assert result.mc_failure_probability == pytest.approx(min(1.0, sum(evaluations)))
+    assert result.param == pytest.approx(1.0 + failure_probability, abs=1e-6)
+    assert result.mc_failure_probability == pytest.approx(failure_probability)
+
+
+def test_custom_budget_cannot_claim_monte_carlo_confidence():
+    @dataclass(frozen=True)
+    class CustomBudget:
+        value: float = 1.0
+        decreasing: bool = True
+        name: str = "custom epsilon"
+
+        def evaluate(self, process):
+            return process.epsilon_at(0.1, mc_failure_probability=0.02)
+
+    _MonteCarloMetricProcess.pld.cache_clear()
+    with pytest.raises(CalibrationError, match="requires a built-in budget"):
+        acc.calibrate(
+            CustomBudget(),
+            lambda param: _MonteCarloMetricProcess(2.0 - param),
+            param_min=0.0,
+            param_max=2.0,
+            max_iterations=8,
+        )
+
+
+def test_builtin_budget_requires_evaluation_metadata():
+    @dataclass(frozen=True)
+    class UntrackedProcess:
+        metric: float
+
+        def epsilon_at(self, _delta):
+            return self.metric
+
+    with pytest.raises(CalibrationError, match="did not expose the PLD metadata"):
+        acc.calibrate(
+            acc.epsilon_budget(1.0, delta=0.1),
+            lambda param: UntrackedProcess(2.0 - param),
+            param_min=0.0,
+            param_max=2.0,
+        )
