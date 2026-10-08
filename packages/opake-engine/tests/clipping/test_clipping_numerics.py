@@ -167,6 +167,39 @@ def test_final_cast_rounds_outward_subnormals_toward_zero():
     assert torch.equal(clipped["w"], torch.zeros(1, dtype=torch.float16))
 
 
+@pytest.mark.parametrize(
+    "device",
+    [
+        pytest.param("cuda", marks=pytest.mark.cuda),
+        pytest.param("mps", marks=pytest.mark.mps),
+    ],
+)
+def test_inductor_keeps_adjacent_float16_subnormal(device):
+    finfo = torch.finfo(torch.float16)
+    quantum = finfo.smallest_normal * finfo.eps
+    value = torch.tensor(
+        [3 * quantum, -3 * quantum], device=device, dtype=torch.float16
+    )
+    ratio = torch.tensor(0.84, device=device)
+
+    def scale(value, ratio):
+        return _pytree._scale_tensor(
+            value,
+            ratio,
+            torch.float32,
+            0.0,
+            clamp_to_one=False,
+        )
+
+    compiled = torch.compile(scale, backend="inductor", fullgraph=True)
+    actual = compiled(value, ratio)
+    expected = torch.tensor(
+        [2 * quantum, -2 * quantum], device=device, dtype=torch.float16
+    )
+
+    assert torch.equal(actual, expected)
+
+
 @pytest.mark.parametrize("dtype", LOW_PRECISION_DTYPES)
 def test_low_precision_scaling_uses_compute_dtype(dtype):
     """A wider compute dtype pays only for the final storage rounding."""
