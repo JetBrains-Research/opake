@@ -32,6 +32,7 @@ from opake.alignment.sft.loss import dft_loss, fused_dft_loss, nll_loss
 from opake.api.transformers.trainer import DPTrainer
 from opake.exceptions import ConfigurationError
 
+from ._logits import _has_family_logit_transform
 from ._sft_config import SFTConfig
 
 _IGNORE_INDEX = -100
@@ -230,10 +231,12 @@ class SFTTrainer(DPTrainer):
         self._backbone_prefix, self._lm_head_param_name = _resolve_fused_handles(
             model, args.loss_type == "dft"
         )
-        self._fused_dft_loss_only = (
-            args.loss_type == "dft" and self._lm_head_param_name is not None
+        raw_head_matches_logits = (
+            self._lm_head_param_name is not None
+            and not _has_family_logit_transform(model)
         )
-        self._fused_dft = self._fused_dft and self._lm_head_param_name is not None
+        self._fused_dft_loss_only = args.loss_type == "dft" and raw_head_matches_logits
+        self._fused_dft = self._fused_dft and raw_head_matches_logits
 
         if args.loss_type == "chunked_nll" or self._fused_nll:
             # Both let the model compute its own loss via the fused linear-CE
