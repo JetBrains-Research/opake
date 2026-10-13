@@ -40,6 +40,7 @@ import torch
 import torchopt
 from datasets import Dataset
 from torch import Tensor
+from torch._dynamo.exc import TorchDynamoException
 from torch.utils.data import DataLoader
 
 import opake.accounting as acc
@@ -251,16 +252,28 @@ def _rank_local_sampler_state(
 
 
 def _compile_strict_chunk(
-    fn: Callable, *, backend: str | Callable, mode: str
+    fn: Callable,
+    *,
+    backend: str | Callable,
+    mode: str,
+    on_fallback: Callable[[TorchDynamoException], None],
 ) -> Callable:
-    """Compile one tensor-only gradient chunk as a strict dynamic graph."""
-    return torch.compile(
-        fn,
-        backend=backend,
-        mode=mode,
-        fullgraph=True,
-        dynamic=True,
-    )
+    """Compile a gradient chunk strictly, then use eager on Dynamo failure."""
+    active = torch.compile(fn, backend=backend, mode=mode, fullgraph=True)
+
+    @functools.wraps(fn)
+    def run(*args: Any, **kwargs: Any) -> Any:
+        nonlocal active
+        if active is fn:
+            return fn(*args, **kwargs)
+        try:
+            return active(*args, **kwargs)
+        except TorchDynamoException as exc:
+            active = fn
+            on_fallback(exc)
+        return fn(*args, **kwargs)
+
+    return run
 
 
 @dataclasses.dataclass
@@ -2299,11 +2312,8 @@ class DPTrainer:
         # post-step metric bookkeeping below stays outside the scope.
         # ``sp.mark`` records the elapsed time since the previous mark.
         with self._perf_tracker.train(batch_size=step_batch_size) as sp:
-            # Clipped gradients (with optional CPU offload). Any rank-local
-            # failure must become a collective event before the gradient
-            # AllReduce below. This includes lazy strict-compilation failures:
-            # a rank with an empty Poisson draw skips the compiled kernel while
-            # a non-empty sibling may fail during its first compilation.
+            # Synchronize uncaught rank-local failures before gradient AllReduce;
+            # an empty Poisson draw may skip a failure seen by another rank.
             local_grad_error: Exception | None = None
             grads = aux = None
             try:
@@ -4454,14 +4464,7 @@ class DPTrainer:
         return torch.autocast(device_type=self._device.type, dtype=self._amp_dtype)
 
     def _grad_compiler(self) -> Callable | None:
-        """Return a strict compiler for the tensor-only gradient chunk.
-
-        The clipping factories keep variable-size microbatch orchestration,
-        diagnostics, and state updates eager.  The injected compiler sees only
-        ``vmap(grad_and_value)`` plus per-example clipping and reduction, with a
-        symbolic leading chunk dimension. This avoids specializing on realized
-        Poisson or remainder batch sizes; PyTorch may retain a size-one variant.
-        """
+        """Compile gradient chunks while keeping clipping state updates eager."""
         a = self.args
         if not a.torch_compile:
             return None
@@ -4482,10 +4485,22 @@ class DPTrainer:
             mode,
             self._device.type,
         )
+        warned = False
+
+        def on_fallback(exc: TorchDynamoException) -> None:
+            nonlocal warned
+            if not warned:
+                warned = True
+                reason = str(exc).partition("\n")[0]
+                log.warning(
+                    "Strict DP gradient compilation failed (%s: %s); "
+                    "running affected chunks eagerly.",
+                    type(exc).__name__,
+                    reason,
+                )
+
         return lambda fn: _compile_strict_chunk(
-            fn,
-            backend=backend,
-            mode=mode,
+            fn, backend=backend, mode=mode, on_fallback=on_fallback
         )
 
     def _create_grad_fn(
