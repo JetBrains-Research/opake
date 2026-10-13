@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 
 import pytest
 
@@ -29,6 +28,13 @@ class _UnregisteredBudget(_CustomBudget):
     """Separate protocol implementation that deliberately has no codec."""
 
 
+def test_budget_accessor() -> None:
+    budget = acc.epsilon_budget(1.0, delta=1e-5)
+
+    assert acc.Accountant().budget is None
+    assert acc.Accountant(budget=budget).budget is budget
+
+
 def test_registered_non_dataclass_budget_round_trips() -> None:
     acc.register_budget_serializer(
         _CustomBudget,
@@ -38,7 +44,7 @@ def test_registered_non_dataclass_budget_round_trips() -> None:
     accountant = acc.Accountant(budget=_CustomBudget(2.5))
 
     checkpoint = json.loads(json.dumps(state_dict(accountant)))
-    restored = from_state_dict(acc.Accountant(), checkpoint)
+    restored = from_state_dict(acc.Accountant(budget=_CustomBudget(2.5)), checkpoint)
 
     assert state_dict(restored) == checkpoint
 
@@ -68,9 +74,10 @@ def test_unregistered_budget_reports_registration_requirement() -> None:
 def test_unknown_budget_checkpoint_type_reports_registration_requirement() -> None:
     serialized = state_dict(acc.Accountant())
     serialized["budget"] = {"type": "example.UnregisteredBudget"}
+    template = acc.Accountant(budget=acc.epsilon_budget(1.0, delta=1e-5))
 
     with pytest.raises(CheckpointError, match="no budget serializer is registered"):
-        from_state_dict(acc.Accountant(), serialized)
+        from_state_dict(template, serialized)
 
 
 def test_template_budget_is_kept_when_checkpoint_has_none() -> None:
@@ -79,21 +86,30 @@ def test_template_budget_is_kept_when_checkpoint_has_none() -> None:
 
     restored = from_state_dict(acc.Accountant(budget=budget), checkpoint)
 
-    assert restored._budget is budget
+    assert restored.budget is budget
     assert restored.budget_exceeded
 
 
-def test_checkpoint_budget_override_logs_warning(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_matching_checkpoint_and_template_budgets_restore() -> None:
     saved = acc.epsilon_budget(2.0, delta=1e-5)
-    template = acc.epsilon_budget(0.1, delta=1e-5)
+    template = acc.epsilon_budget(2.0, delta=1e-5)
     checkpoint = state_dict(acc.Accountant(budget=saved))
 
-    with caplog.at_level(
-        logging.WARNING, logger="opake.api.accounting.core._accountant"
-    ):
-        restored = from_state_dict(acc.Accountant(budget=template), checkpoint)
+    restored = from_state_dict(acc.Accountant(budget=template), checkpoint)
 
-    assert restored._budget == saved
-    assert "template budget is discarded" in caplog.text
+    assert restored.budget == saved
+
+
+@pytest.mark.parametrize(
+    ("saved_epsilon", "template_epsilon"),
+    [(2.0, 0.1), (0.1, 2.0)],
+)
+def test_conflicting_checkpoint_and_template_budgets_raise(
+    saved_epsilon: float, template_epsilon: float
+) -> None:
+    saved = acc.epsilon_budget(saved_epsilon, delta=1e-5)
+    template = acc.epsilon_budget(template_epsilon, delta=1e-5)
+    checkpoint = state_dict(acc.Accountant(budget=saved))
+
+    with pytest.raises(CheckpointError, match=r"checkpoint budget.*template budget"):
+        from_state_dict(acc.Accountant(budget=template), checkpoint)
