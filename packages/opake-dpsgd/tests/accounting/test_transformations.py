@@ -92,9 +92,16 @@ class TestEffectiveNoiseMultiplier:
 
 
 class TestAdaclipValidation:
-    """Bounds live in ``AdaClip.__post_init__`` so direct construction, the
-    factory, and codec deserialization all reject a mis-priced process (e.g.
-    ``num_groups=0``, which used to price the quantile release as free)."""
+    """Constructor validation also covers factories and deserialization."""
+
+    def test_direct_construction_rejects_unsupported_inner(self):
+        with pytest.raises(TypeError, match="Gaussian or NonPrivate"):
+            AdaClip(acc.eps_delta(0.3), 0.05, 250.0)  # type: ignore[arg-type]
+
+    def test_direct_construction_rejects_wrapped_poisson(self):
+        inner = dpsgd_acc.poisson(dpsgd_acc.gaussian(1.1), 0.01)
+        with pytest.raises(TypeError, match="Gaussian or NonPrivate"):
+            AdaClip(inner, 0.05, 250.0)  # type: ignore[arg-type]
 
     def test_direct_construction_rejects_zero_num_groups(self):
         with pytest.raises(ValueError, match="num_groups"):
@@ -183,6 +190,19 @@ class TestCodecCannotProduceUnvalidated:
         with pytest.raises(ValueError, match="noise_multiplier"):
             from_state_dict(acc.identity(), state)
 
+    def test_unsupported_adaclip_inner_rejected_on_load(self):
+        state = self._adaclip_state(
+            inner={
+                "type": "Poisson",
+                "inner": {"type": "Gaussian", "noise_multiplier": 1.1},
+                "sample_rate": 0.01,
+                "truncated_batch_size": None,
+                "dataset_size": None,
+            }
+        )
+        with pytest.raises(TypeError, match="Gaussian or NonPrivate"):
+            from_state_dict(acc.identity(), state)
+
     def test_standalone_negative_gaussian_rejected_on_load(self):
         with pytest.raises(ValueError, match="noise_multiplier"):
             from_state_dict(
@@ -190,7 +210,7 @@ class TestCodecCannotProduceUnvalidated:
             )
 
     def test_valid_adaclip_round_trips(self):
-        """Valid checkpoints keep loading unchanged (no over-eager rejection)."""
+        """Valid checkpoints round-trip unchanged."""
         proc = dpsgd_acc.adaclip(dpsgd_acc.gaussian(0.8), expected_batch_size=1000)
         restored = from_state_dict(acc.identity(), state_dict(proc))
         assert restored == proc

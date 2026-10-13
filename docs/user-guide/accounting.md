@@ -111,9 +111,10 @@ eps = g.epsilon_at(delta=1e-5)
 
 Standard Poisson-subsampled mechanism. Each example is included independently
 with probability `sample_rate`. This provides privacy amplification through
-subsampling. Plain Poisson accepts any Opake `DpProcess` as its base
-mechanism. Use the capped form only when training truncates draws; it requires
-`gaussian()`, `adaclip()`, or `nonprivate()` as its base.
+subsampling. Both forms require `gaussian()`, `adaclip()`, or `nonprivate()`
+as the base mechanism. The returned process represents one DP-SGD step; compose
+it with `* num_steps` for a training run. Use the capped form only when training
+truncates draws.
 
 ```python
 step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.8), sample_rate=256 / 50_000)

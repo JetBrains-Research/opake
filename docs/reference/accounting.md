@@ -229,10 +229,11 @@ sensitivity-1 queries. Base mechanism for DP-SGD.
 ### `poisson(inner, sample_rate) -> DpProcess`
 
 Poisson-subsampled mechanism (standard DP-SGD step). `sample_rate` is
-`batch_size / dataset_size`. Plain Poisson accepts any Opake `DpProcess` as
-its base mechanism.
+`batch_size / dataset_size`. Both the plain and truncated forms accept a
+`Gaussian`, `AdaClip`, or `NonPrivate` base mechanism. Compose the returned
+step with `* num_steps` to account for a training run.
 
-- `inner` (DpProcess): Base mechanism
+- `inner` (Gaussian | AdaClip | NonPrivate): Base mechanism
 - `sample_rate` (float): Probability of including each example, in (0, 1)
 
 ```python
@@ -245,8 +246,7 @@ step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.5), sample_rate=256 / 50_000)
 `truncated_batch_size` and `dataset_size` are set together (must be both
 or neither). This is the truncated-Poisson PLD for capped batches; it does
 **not** improve privacy versus plain Poisson at the same rate—use it when
-training actually truncates draws. The capped form accepts a Gaussian,
-AdaClip(Gaussian), or `nonprivate()` base.
+training actually truncates draws.
 
 The guarantee is [Ganesh (2025), Theorem
 3.1](https://arxiv.org/abs/2508.15089). It assumes each over-cap provisional
