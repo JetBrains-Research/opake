@@ -15,7 +15,8 @@ the SFT / log-prob references use torch's own cross-entropy:
   hyper-parameters they read. They live under ``trl.experimental``, so they are
   imported inside the tests that need them: if upstream drops them, only those
   tests fail.
-- ``trl.trainer.sft_trainer.dft_loss`` is a module-level function.
+- ``SFTTrainer.compute_loss`` supplies the DFT reference on newer TRL releases
+  that implement DFT inside the trainer.
 
 The fabricated inputs are exact rather than approximate: with uniform logits
 over a vocabulary of size ``_V``, every per-token log-probability is exactly
@@ -44,6 +45,7 @@ import torch.nn.functional as F
 pytest.importorskip("trl")
 
 from trl.trainer.dpo_trainer import DPOTrainer
+from trl.trainer.sft_trainer import SFTTrainer
 
 try:
     from trl.trainer.sft_trainer import dft_loss as trl_dft_loss
@@ -94,6 +96,7 @@ class _NoopAccelerator:
     """Single-process stand-in: gathers are identity, device is CPU."""
 
     device = torch.device("cpu")
+    parallelism_config = None
 
     def gather_for_metrics(self, tensor: torch.Tensor) -> torch.Tensor:
         return tensor
@@ -158,27 +161,31 @@ def _trl_dpo_loss(
 ) -> torch.Tensor:
     """Run TRL's DPO loss block over a ``[chosen…, rejected…]`` batch."""
 
-    def model(**_: Any) -> types.SimpleNamespace:
-        return types.SimpleNamespace(logits=logits)
+    def model(
+        *,
+        input_ids: torch.Tensor,
+        labels: torch.Tensor | None = None,
+        **_: Any,
+    ) -> types.SimpleNamespace:
+        log_probs = F.log_softmax(logits[:, :-1], dim=-1).gather(
+            -1, input_ids[:, 1:, None]
+        )[..., 0]
+        if labels is not None:
+            log_probs = log_probs.masked_fill(labels[:, 1:] == -100, 0)
+        return types.SimpleNamespace(logits=logits, log_probs=log_probs)
 
-    try:
-        return DPOTrainer._compute_loss(
-            _dpo_trainer(**config),
-            model,
-            {
-                "input_ids": input_ids,
-                "attention_mask": torch.ones_like(input_ids),
-                "completion_mask": completion_mask,
-                "ref_chosen_logps": ref_chosen_logps,
-                "ref_rejected_logps": ref_rejected_logps,
-            },
-            False,
-        )
-    except AttributeError as exc:
-        if "log_probs" not in str(exc):
-            raise
-        # Newer TRL reads a ``log_probs`` output the parity stubs do not provide.
-        pytest.skip(f"trl DPOTrainer._compute_loss needs newer stubs: {exc}")
+    return DPOTrainer._compute_loss(
+        _dpo_trainer(**config),
+        model,
+        {
+            "input_ids": input_ids,
+            "attention_mask": torch.ones_like(input_ids),
+            "completion_mask": completion_mask,
+            "ref_chosen_logps": ref_chosen_logps,
+            "ref_rejected_logps": ref_rejected_logps,
+        },
+        False,
+    )
 
 
 def _fabricate(
@@ -572,15 +579,49 @@ def _reference_nll(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
 
 
 def _reference_dft(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-    """TRL's own ``dft_loss``.
+    """TRL's own DFT loss helper or trainer implementation, by version.
 
     TRL divides by the batch-wide non-ignored token count; for one example that
     is opake's per-example divisor, so the DP-corrected divisor is inert here.
     """
-    if trl_dft_loss is None:
-        pytest.skip("trl no longer exposes dft_loss from trl.trainer.sft_trainer")
-    return trl_dft_loss(
-        types.SimpleNamespace(logits=logits.unsqueeze(0)), labels.unsqueeze(0).clone()
+    batch_labels = labels.unsqueeze(0).clone()
+    if trl_dft_loss is not None:
+        return trl_dft_loss(
+            types.SimpleNamespace(logits=logits.unsqueeze(0)), batch_labels
+        )
+
+    def model(*, labels: torch.Tensor, **_: Any) -> types.SimpleNamespace:
+        shifted_labels = labels[..., 1:]
+        label_mask = shifted_labels != -100
+        targets = shifted_labels.masked_fill(~label_mask, 0)
+        log_probs = F.log_softmax(logits[None, :-1], dim=-1).gather(
+            -1, targets[..., None]
+        )[..., 0]
+        log_probs = log_probs.masked_fill(~label_mask, 0)
+        zeros = torch.zeros_like(log_probs)
+        return types.SimpleNamespace(
+            log_probs=log_probs,
+            label_mask=label_mask,
+            entropy=zeros,
+            is_top1=torch.zeros_like(label_mask),
+        )
+
+    trainer = object.__new__(SFTTrainer)
+    trainer.model = types.SimpleNamespace(training=False)
+    trainer.args = types.SimpleNamespace(
+        loss_type="dft", average_tokens_across_devices=False
+    )
+    trainer.accelerator = _NoopAccelerator()
+    trainer.aux_loss_enabled = False
+    trainer.compute_loss_func = None
+    trainer.label_smoother = None
+    trainer._metrics = {"eval": defaultdict(list)}
+    trainer._total_train_tokens = 0
+    trainer._tp_size = 1
+    return SFTTrainer.compute_loss(
+        trainer,
+        model,
+        {"input_ids": torch.zeros_like(batch_labels), "labels": batch_labels},
     )
 
 
