@@ -353,6 +353,21 @@ class TestCoinFlip:
         with pytest.raises(ValueError, match="does not match the dataset size"):
             cf.train_subset(list(range(29)))
 
+    def test_train_subset_rejects_same_size_dataset_with_changed_canary(self):
+        dataset = list(range(30))
+        cf = auditing.coin_flip(dataset, num_canaries=10, key=key(42))
+        substituted = dataset.copy()
+        substituted[int(cf.canary_indices[0])] += 100
+
+        with pytest.raises(ValueError, match="dataset content"):
+            cf.train_subset(substituted)
+
+    def test_train_subset_accepts_equal_content_copy(self):
+        dataset = list(range(30))
+        cf = auditing.coin_flip(dataset, num_canaries=10, key=key(42))
+
+        assert cf.train_subset(dataset.copy()).indices == cf.train_indices()
+
     def test_split_scores(self):
         canary_idx = np.arange(100)
         cf = _flip(canary_idx, key=key(42))

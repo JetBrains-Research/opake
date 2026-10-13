@@ -267,8 +267,8 @@ explicit conflicting size raises `ConfigurationError`.
 cf.train_subset(dataset) -> torch.utils.data.Subset
 ```
 
-The training subset of a PyTorch-style dataset. A size that differs from the
-recorded `dataset_size` raises `ConfigurationError`.
+The training subset of a PyTorch-style dataset. A size or canary-row identity
+that differs from the recorded dataset raises `ConfigurationError`.
 
 ### split_scores
 

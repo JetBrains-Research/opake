@@ -405,9 +405,16 @@ class CoinFlip:
             ``torch.utils.data.Subset`` over training indices.
 
         Raises:
-            ConfigurationError: If the dataset size differs from the size
-                recorded by this partition.
+            ConfigurationError: If the dataset size or identity differs from
+                the dataset recorded by this partition.
         """
+        if not self._matches_dataset(dataset):
+            raise ConfigurationError(
+                *(
+                    "dataset content does not match the dataset used to construct "
+                    "this CoinFlip; training requires the original full dataset",
+                )
+            )
         return Subset(dataset, self.train_indices(len(dataset)))
 
     def split_scores(self, scores: CanaryScores) -> tuple[np.ndarray, np.ndarray]:
