@@ -1353,6 +1353,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Compute / precision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cuda-graph-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CUDA-graph replay
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3312,6 +3329,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Compute / precision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cuda-graph-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CUDA-graph replay
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3692,8 +3726,61 @@ keys win on collision with the defaults table.</p>
 <td><code>False</code></td>
 <td>Strictly compiles each tensor-only <code>vmap(grad)+clip+reduce</code> chunk with automatic dynamic shapes. On a Dynamo failure, warns once and runs the affected chunk eagerly thereafter.</td>
 </tr>
+<tr>
+<td><code>cuda_graphs</code></td>
+<td><code>0</code></td>
+<td>Maximum distinct graph signatures retained per trainer. Zero disables graph replay; positive values enable replay and set the cap. See <a href="#cuda-graph-replay">CUDA-graph replay</a>.</td>
+</tr>
 </tbody>
 </table>
+<h3 id="cuda-graph-replay">CUDA-graph replay<a class="headerlink" href="#cuda-graph-replay" title="Permanent link">&para;</a></h3>
+<p><code>cuda_graphs &gt; 0</code> captures the per-microbatch kernel (<code>vmap(grad)</code>, per-example
+clipping and the batch reduction) once per distinct input signature, then replays
+that signature. The configured value caps the number of signatures retained;
+<code>cuda_graphs=0</code> disables replay. A signature includes tensor shapes, strides,
+dtypes, devices, <code>requires_grad</code>, and non-tensor arguments; sequence-length
+changes can therefore capture new graphs even when the microbatch size stays
+fixed.</p>
+<p>CUDA graphs primarily reduce Python and kernel-launch overhead; they do not make
+the captured attention, GEMM, or other GPU kernels intrinsically faster. They
+are most promising when each microbatch does relatively little GPU work but
+launches many operations—for example, short sequences, small adapters, or small
+models with a high kernel-launch count. They are less likely to help when long
+sequences or large adapters make the step GPU-kernel-bound. Profile a matched
+eager run rather than assuming that a different shape or enabling graphs will
+improve throughput.</p>
+<p>For SFT/DPO, <code>pad_to_multiple_of</code> rounds each already-collated logical batch's
+maximum sequence length up to the chosen multiple; it does not group examples
+by length. Setting <code>max_length</code> and <code>pad_to_multiple_of</code> to the same value (for
+example, both <code>4096</code>) gives one padded sequence width and can avoid repeated
+captures caused by varying lengths, at the cost of padding shorter batches to
+that width. A smaller multiple creates coarse width buckets (e.g. multiples of
+<code>512</code> up to a <code>4096</code> cap can produce up to eight widths); these may reduce wasted
+padding on shorter batches but can require more retained graphs. Choose a
+multiple that divides <code>max_length</code> to keep padding within that cap.</p>
+<ul>
+<li>The first occurrence of each signature includes capture time. Each retained
+  signature keeps graph-private buffers alive, so memory can grow with the
+  number of captures.</li>
+<li>Once the <code>cuda_graphs</code> limit is reached, <strong>unseen signatures run eagerly</strong>;
+  the cap does not evict existing graphs, stabilize shapes, or guarantee a
+  speedup. Lower the count for large models/adapters when memory is the limiting
+  concern.</li>
+<li>Every tensor input, including the current clipping threshold and the
+  parameters, is copied into the graph before each replay. Python state that
+  the per-example loss reads other than through its arguments is frozen at
+  capture.</li>
+<li>CUDA only. Mutually exclusive with <code>torch_compile</code> and incompatible with
+  <code>auto_find_microbatch_size</code> and <code>activation_offloading</code>.</li>
+<li>With <code>gradient_checkpointing</code>, the model must have no active dropout: the
+  checkpoint recompute runs without saved RNG state (<code>preserve_rng_state=False</code>).</li>
+<li>The fused linear cross-entropy (<code>loss_type="chunked_nll"</code>) processes ignored
+  tokens with zero weight instead of compacting them, because compaction needs
+  a host synchronization.</li>
+<li>Clipping, noise, sampling and accounting are unchanged. Results can differ
+  from eager execution in the last bits, within the run-to-run variation of
+  the eager kernels.</li>
+</ul>
 <h2 id="patches-and-kernels">Patches and kernels<a class="headerlink" href="#patches-and-kernels" title="Permanent link">&para;</a></h2>
 <p>Three flags drive the model patching at trainer construction time:</p>
 <table>
