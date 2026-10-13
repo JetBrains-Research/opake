@@ -131,7 +131,7 @@ def test_per_group_tensor_values_are_copied_before_replay():
     torch.testing.assert_close(graphed(second, x), 3 * x)
 
     assert compiler.captures == 1
-    assert compiler.replays == 1
+    assert compiler.replays == 2
 
 
 @pytest.mark.cuda
