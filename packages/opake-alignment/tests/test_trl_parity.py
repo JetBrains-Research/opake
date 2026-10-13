@@ -167,12 +167,30 @@ def _trl_dpo_loss(
         labels: torch.Tensor | None = None,
         **_: Any,
     ) -> types.SimpleNamespace:
-        log_probs = F.log_softmax(logits[:, :-1], dim=-1).gather(
-            -1, input_ids[:, 1:, None]
-        )[..., 0]
-        if labels is not None:
-            log_probs = log_probs.masked_fill(labels[:, 1:] == -100, 0)
-        return types.SimpleNamespace(logits=logits, log_probs=log_probs)
+        token_logits = logits[:, :-1]
+        token_log_probs = F.log_softmax(token_logits, dim=-1)
+        targets = input_ids[:, 1:]
+        log_probs = token_log_probs.gather(-1, targets.unsqueeze(-1)).squeeze(-1)
+        label_mask = (
+            torch.ones_like(targets, dtype=torch.bool)
+            if labels is None
+            else labels[:, 1:] != -100
+        )
+        log_probs = log_probs.masked_fill(~label_mask, 0)
+        entropy = -(token_log_probs.exp() * token_log_probs).sum(dim=-1)
+        entropy = entropy.masked_fill(~label_mask, 0)
+        mean_logits = token_logits.mean(dim=-1).masked_fill(~label_mask, 0)
+        is_top1 = (token_logits.argmax(dim=-1) == targets) & label_mask
+        log_sum_sq_probs = torch.logsumexp(2 * token_log_probs, dim=-1)
+        log_sum_sq_probs = log_sum_sq_probs.masked_fill(~label_mask, 0)
+        return types.SimpleNamespace(
+            logits=logits,
+            log_probs=log_probs,
+            entropy=entropy,
+            mean_logits=mean_logits,
+            is_top1=is_top1,
+            log_sum_sq_probs=log_sum_sq_probs,
+        )
 
     return DPOTrainer._compute_loss(
         _dpo_trainer(**config),
