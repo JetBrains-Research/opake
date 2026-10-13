@@ -176,6 +176,11 @@ def active_cuda_dtype(tensor: torch.Tensor) -> torch.dtype:
     return tensor.dtype
 
 
+def _allow_in_place_backward(requested: bool = True) -> bool:
+    """Allow guarded buffer reuse only in eager mode."""
+    return bool(requested) and not torch.compiler.is_compiling()
+
+
 def follow_autocast(*tensors):
     """Cast floating-point CUDA tensors to the active autocast dtype, if any.
 

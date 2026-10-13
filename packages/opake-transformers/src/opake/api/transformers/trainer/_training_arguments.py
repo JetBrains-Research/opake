@@ -211,8 +211,8 @@ _ALLOWED_SAMPLERS: dict[str, frozenset[str]] = {
 }
 
 _CLIPPING_KWARGS: dict[str, frozenset[str]] = {
-    "fixed": frozenset({"clip_backend"}),
-    "adaptive": frozenset({"target_quantile", "clipping_norm_max", "clip_backend"}),
+    "fixed": frozenset(),
+    "adaptive": frozenset({"target_quantile", "clipping_norm_max"}),
     "auto": frozenset({"gamma"}),
 }
 
@@ -499,17 +499,13 @@ class TrainingArguments:
     torch_compile: bool = False
     torch_compile_backend: str | None = None
     torch_compile_mode: str | None = None
-    #: Replay each DP microbatch kernel (``vmap(grad)`` + clipping + reduction)
-    #: from a CUDA graph captured once per microbatch shape, which removes the
-    #: per-call Python and launch overhead. CUDA only; excludes
-    #: ``torch_compile`` and ``auto_find_microbatch_size``. With gradient
-    #: checkpointing the model must have no active dropout, because the
-    #: checkpoint recompute then runs without saved RNG state.
-    cuda_graphs: bool = False
     #: Maximum distinct CUDA-graph input signatures retained by one trainer.
-    #: Once reached, unseen signatures run eagerly; existing signatures replay.
-    #: This bounds graph-private memory when sequence shapes vary.
-    cuda_graph_max_graphs: int = 4
+    #: Zero disables replay; positive values enable capture. Once reached,
+    #: unseen signatures run eagerly while existing signatures replay.
+    #: CUDA only; excludes ``torch_compile`` and ``auto_find_microbatch_size``.
+    #: With gradient checkpointing the model must have no active dropout,
+    #: because the checkpoint recompute then runs without saved RNG state.
+    cuda_graphs: int = 0
     # ``use_performance_kernels`` gates the CUDA + Triton kernel group
     # (``rope``, ``rms_norm``, ``activation``, ``cross_entropy``).  Default
     # ``False`` because the kernels need CUDA + Triton at runtime and the
@@ -578,8 +574,6 @@ class TrainingArguments:
     clipping_mode: str = "fixed"
     #: Mode-specific clipping factory kwargs. Adaptive clipping accepts
     #: ``target_quantile`` / ``clipping_norm_max``; AUTO-S accepts ``gamma``.
-    #: Fixed and adaptive clipping accept ``clip_backend`` (``"torch"``,
-    #: ``"auto"`` or ``"triton"``; see :func:`opake.dpsgd.clipping.clipped_grad`).
     clipping_kwargs: dict[str, Any] | str = field(default_factory=dict)
 
     # ---- Noise mechanism / fixed multiplier -------------------------------
@@ -942,32 +936,28 @@ class TrainingArguments:
 
         # torch.compile cannot retrace the vmap+grad closure that
         # auto_find_microbatch_size rebuilds on OOM (PyTorch #128711).
-        if not isinstance(self.cuda_graphs, bool):
-            raise ConfigurationError(
-                *(f"cuda_graphs must be a bool; got {self.cuda_graphs!r}.",)
-            )
         if (
-            not isinstance(self.cuda_graph_max_graphs, int)
-            or isinstance(self.cuda_graph_max_graphs, bool)
-            or self.cuda_graph_max_graphs < 1
+            not isinstance(self.cuda_graphs, int)
+            or isinstance(self.cuda_graphs, bool)
+            or self.cuda_graphs < 0
         ):
             raise ConfigurationError(
                 *(
-                    "cuda_graph_max_graphs must be a positive integer; got "
-                    f"{self.cuda_graph_max_graphs!r}.",
+                    "cuda_graphs must be a non-negative integer; got "
+                    f"{self.cuda_graphs!r}.",
                 )
             )
-        if self.cuda_graphs and self.torch_compile:
+        if self.cuda_graphs > 0 and self.torch_compile:
             raise ConfigurationError(
                 *(
-                    "cuda_graphs=True and torch_compile=True are mutually "
+                    "cuda_graphs > 0 and torch_compile=True are mutually "
                     "exclusive: both replace the eager microbatch kernel.",
                 )
             )
-        if self.cuda_graphs and self.auto_find_microbatch_size:
+        if self.cuda_graphs > 0 and self.auto_find_microbatch_size:
             raise ConfigurationError(
                 *(
-                    "cuda_graphs=True is incompatible with "
+                    "cuda_graphs > 0 is incompatible with "
                     "auto_find_microbatch_size=True: the probe's OOM retries "
                     "would capture graphs at every probed size.",
                 )

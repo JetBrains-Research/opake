@@ -55,7 +55,7 @@ DPTrainer(
 | `train_dataset` | `Dataset \| None` | May be `None` only when `train()` is not called. |
 | `eval_dataset` | `Dataset \| None` | Required when `args.eval_strategy != "no"`. |
 | `processing_class` | `PreTrainedTokenizerBase \| SequenceFeatureExtractor \| None` | Used for the default collator selection and token-count metrics. |
-| `compute_loss_func` | `Callable[[outputs, labels], Tensor] \| None` | Loss override; called under vmap per example during training and per-example-loss evaluation, and once on batched outputs/labels on the default reduced eval path. It takes precedence over label smoothing. Not HF's `(outputs, labels, num_items_in_batch) -> scalar` signature. |
+| `compute_loss_func` | `Callable[[outputs, labels], Tensor] \| None` | Per-example scalar loss override, called under `vmap` during training and evaluation. Evaluation reports the arithmetic mean of these scalars, without token-count weighting. It takes precedence over label smoothing. Not HF's `(outputs, labels, num_items_in_batch) -> scalar` signature. |
 | `compute_metrics` | `Callable[[EvalPrediction], dict] \| None` | Standard HF callback over concatenated predictions / label_ids / inputs / losses. |
 | `callbacks` | `list[TrainerCallback] \| None` | User callbacks; `DefaultFlowCallback` is auto-prepended. |
 | `optimizers` | `tuple[Any \| None, Any \| None]` | **Not supported.** Passing non-`None` raises `ConfigurationError`: DPTrainer owns the functional torchopt optimizer. |
@@ -215,11 +215,10 @@ Dataclass surface.  Every field listed here exists on
 | `tf32` | `bool \| None` | `None` | Toggle TF32 on Ampere+. |
 | `gradient_checkpointing` | `bool` | `False` | Off by default: vmap recomputes activations per microbatch, so GC adds overhead without memory benefit on models that fit. Opake automatically uses the vmap-safe non-reentrant path. Incompatible with `torch_compile`. |
 | `gradient_checkpointing_kwargs` | `dict \| str \| None` | `None` | Forwarded to `model.gradient_checkpointing_enable(...)`. |
-| `torch_compile` | `bool` | `False` | Compile each tensor-only microbatch gradient/clipping kernel with `fullgraph=True`. |
+| `torch_compile` | `bool` | `False` | Strictly compile tensor-only gradient chunks; on a Dynamo failure, warn once and use eager execution for affected chunks. |
 | `torch_compile_backend` | `str \| None` | `None` | Defaults to `"inductor"` when compile is on. |
 | `torch_compile_mode` | `str \| None` | `None` | One of `{"default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"}`. |
-| `cuda_graphs` | `bool` | `False` | Opt in to per-microbatch CUDA-graph capture/replay on CUDA. |
-| `cuda_graph_max_graphs` | `int` | `4` | Maximum graph signatures retained per trainer; unseen signatures run eagerly after the limit. |
+| `cuda_graphs` | `int` | `0` | Maximum graph signatures retained per trainer; `0` disables replay, and unseen signatures run eagerly after a positive limit is reached. |
 
 ### Batches and microbatching
 
@@ -500,8 +499,8 @@ SFT-specific fields on top of `TrainingArguments`.
 | `trust_remote_code` | `bool` | `False` | Forwarded when loading a string model or tokenizer that ships custom Hub code. |
 | `dataset_text_field` | `str` | `"text"` | Column holding raw text on a language-modeling dataset. |
 | `max_length` | `int \| None` | `1024` | Tokenized sequence length cap; `None` disables truncation (keep-start). |
-| `completion_only_loss` | `bool \| None` | `None` | Score only completion tokens. `None` enables this for prompt-completion data, but not language-modeling or chat data. |
-| `assistant_only_loss` | `bool` | `False` | Score only assistant turns of chat data (installs the `{% generation %}` template + mask). |
+| `completion_only_loss` | `bool \| None` | `None` | Score only completion tokens. `None` enables this for raw prompt-completion data, regardless of representation. Pre-tokenized data requires an existing effective mask. |
+| `assistant_only_loss` | `bool` | `False` | Score only assistant turns in conversational data; intersects with completion-only masking when both apply (requires generation markers). |
 | `eos_token` | `str \| None` | `None` | EOS appended to plain-text examples; overrides `tokenizer.eos_token` when set, else the tokenizer's own EOS is used. |
 | `pad_to_multiple_of` | `int \| None` | `None` | Round the padded batch length up to a multiple. |
 | `dataset_num_proc` | `int \| None` | `None` | Processes for `datasets.map` preprocessing. |

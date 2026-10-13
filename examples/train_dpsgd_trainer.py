@@ -446,17 +446,12 @@ def parse_args() -> argparse.Namespace:
     )
     train_group.add_argument(
         "--cuda-graphs",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Replay each DP microbatch kernel from a CUDA graph (CUDA only).",
-    )
-    train_group.add_argument(
-        "--cuda-graph-max-graphs",
         type=int,
-        default=4,
+        default=0,
+        metavar="N",
         help=(
-            "Maximum distinct CUDA-graph signatures retained. New signatures "
-            "after this limit run eagerly; lower it to guard graph-private memory."
+            "Capture and replay CUDA graphs for DP microbatch kernels, retaining "
+            "at most N input signatures. 0 disables graph replay."
         ),
     )
     train_group.add_argument(
@@ -549,18 +544,6 @@ def parse_args() -> argparse.Namespace:
         type=str,
         choices=["fixed", "adaptive", "auto"],
         default="adaptive",
-    )
-    dp_group.add_argument(
-        "--clip-backend",
-        type=str,
-        choices=["torch", "auto", "triton"],
-        default="torch",
-        help=(
-            "Per-example clip-and-sum implementation for fixed and adaptive "
-            "clipping: torch (default), triton (fused CUDA kernels; errors when "
-            "a call is unsupported) or auto (Triton where supported, torch "
-            "otherwise). AUTO-S (--clipping-mode auto) always uses torch."
-        ),
     )
     dp_group.add_argument(
         "--clipping-norm",
@@ -837,11 +820,6 @@ def parse_args() -> argparse.Namespace:
 
     if args.push_to_hub and not args.hub_model_id:
         parser.error("--push-to-hub requires --hub-model-id (e.g. 'org/name')")
-    if args.clip_backend == "triton" and args.clipping_mode == "auto":
-        parser.error(
-            "--clip-backend triton does not support --clipping-mode auto (AUTO-S)"
-        )
-
     if args.per_group_clipping:
         parsed: dict[str, float] = {}
         fallback_value = None
@@ -872,8 +850,6 @@ def _clipping_kwargs_for_trainer(args: argparse.Namespace) -> dict:
     if args.clipping_mode == "adaptive":
         kwargs["target_quantile"] = args.target_clipping_rate
         kwargs["clipping_norm_max"] = args.clipping_norm_max
-    if args.clip_backend != "torch":
-        kwargs["clip_backend"] = args.clip_backend
     return kwargs
 
 
@@ -1147,7 +1123,6 @@ def main() -> int:
         auto_find_microbatch_size=args.auto_find_microbatch_size,
         torch_compile=args.torch_compile,
         cuda_graphs=args.cuda_graphs,
-        cuda_graph_max_graphs=args.cuda_graph_max_graphs,
         torch_compile_backend=args.torch_compile_backend,
         torch_compile_mode=args.torch_compile_mode,
         use_performance_kernels=args.use_performance_kernels,
@@ -1206,7 +1181,6 @@ def main() -> int:
     print(f"  torch_compile: {training_args.torch_compile}")
     print(f"  cuda_graphs: {training_args.cuda_graphs}")
     if training_args.cuda_graphs:
-        print(f"    max_graphs={training_args.cuda_graph_max_graphs}")
         print(f"    pad_to_multiple_of={args.pad_to_multiple_of}")
     if training_args.torch_compile:
         print(

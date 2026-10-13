@@ -640,58 +640,40 @@ class TestClippingAndSamplingSurfaces:
             "clipping_norm_max": 50.0,
         }
 
-    @pytest.mark.parametrize("mode", ["fixed", "adaptive"])
-    def test_clipping_kwargs_accept_clip_backend(self, mode):
-        args = TrainingArguments(
-            privacy_noise_multiplier=1.0,
-            clipping_mode=mode,
-            clipping_kwargs={"clip_backend": "auto"},
-        )
-        assert args.clipping_kwargs == {"clip_backend": "auto"}
-
-    def test_auto_s_clipping_rejects_clip_backend(self):
+    @pytest.mark.parametrize("mode", ["fixed", "adaptive", "auto"])
+    def test_clipping_kwargs_reject_clip_backend(self, mode):
         with pytest.raises(
             ValueError, match="clipping_kwargs contains unsupported keys"
         ):
             TrainingArguments(
                 privacy_noise_multiplier=1.0,
-                clipping_mode="auto",
-                clipping_kwargs={"clip_backend": "auto"},
+                clipping_mode=mode,
+                clipping_kwargs={"clip_backend": "torch"},
             )
 
     @pytest.mark.parametrize("mode", ["fixed", "adaptive"])
-    def test_trainer_forwards_clip_backend(self, mode, monkeypatch):
-        import importlib
+    def test_trainer_builds_grad_fn_with_automatic_clipping(self, mode):
         from types import SimpleNamespace
 
         from opake.api.transformers.trainer._dp_trainer import DPTrainer
         from opake.random import key
 
-        # Without fused kernels, "triton" is rejected by the clipping factory,
-        # which can only happen if the trainer forwarded it.
-        clipped_fun_module = importlib.import_module(
-            "opake.api.engine.clipping._clipped_fun"
-        )
-        monkeypatch.setattr(
-            clipped_fun_module, "fused_kernels_available", lambda: False
-        )
         args = TrainingArguments(
             privacy_noise_multiplier=1.0,
             clipping_mode=mode,
-            clipping_kwargs={"clip_backend": "triton"},
         )
         trainer = SimpleNamespace(_grad_compiler=lambda: None)
-        with pytest.raises(ConfigurationError, match="clip_backend='triton'"):
-            DPTrainer._create_grad_fn(
-                trainer,
-                lambda params, batch: params.sum(),
-                (1,),
-                args,
-                1.0,
-                8,
-                None,
-                quantile_noise_key=key(0),
-            )
+        grad_fn, _ = DPTrainer._create_grad_fn(
+            trainer,
+            lambda params, batch: params.sum(),
+            (1,),
+            args,
+            1.0,
+            8,
+            None,
+            quantile_noise_key=key(0),
+        )
+        assert callable(grad_fn)
 
 
 class TestMechanismAndSamplerDefaults:
@@ -1002,37 +984,32 @@ def test_cuda_graphs_is_accepted_with_gradient_checkpointing():
     cfg = SFTConfig(
         output_dir="/tmp/x",
         privacy_noise_multiplier=0.01,
-        cuda_graphs=True,
+        cuda_graphs=4,
         gradient_checkpointing=True,
     )
-    assert cfg.cuda_graphs is True
-    assert cfg.cuda_graph_max_graphs == 4
+    assert cfg.cuda_graphs == 4
 
 
-def test_cuda_graph_max_graphs_is_configurable():
+def test_cuda_graphs_defaults_to_disabled():
     from opake.transformers.trl import SFTConfig
 
     cfg = SFTConfig(
         output_dir="/tmp/x",
         privacy_noise_multiplier=0.01,
-        cuda_graphs=True,
-        cuda_graph_max_graphs=3,
     )
-    assert cfg.cuda_graph_max_graphs == 3
+    assert cfg.cuda_graphs == 0
 
 
-@pytest.mark.parametrize("value", [0, -1, True, 1.5, "3"])
-def test_cuda_graph_max_graphs_requires_positive_integer(value):
+@pytest.mark.parametrize("value", [-1, True, 1.5, "3"])
+def test_cuda_graphs_requires_non_negative_integer(value):
     from opake.exceptions import ConfigurationError
     from opake.transformers.trl import SFTConfig
 
-    with pytest.raises(
-        ConfigurationError, match=r"cuda_graph_max_graphs.*positive integer"
-    ):
+    with pytest.raises(ConfigurationError, match=r"cuda_graphs.*non-negative integer"):
         SFTConfig(
             output_dir="/tmp/x",
             privacy_noise_multiplier=0.01,
-            cuda_graph_max_graphs=value,
+            cuda_graphs=value,
         )
 
 
@@ -1041,7 +1018,7 @@ def test_cuda_graph_max_graphs_requires_positive_integer(value):
     [
         ({"torch_compile": True}, "mutually exclusive"),
         ({"auto_find_microbatch_size": True}, "auto_find_microbatch_size"),
-        ({"cuda_graphs": "yes"}, "must be a bool"),
+        ({"cuda_graphs": "yes"}, "non-negative integer"),
     ],
 )
 def test_cuda_graphs_rejects_incompatible_settings(extra, match):
@@ -1052,7 +1029,7 @@ def test_cuda_graphs_rejects_incompatible_settings(extra, match):
         SFTConfig(
             output_dir="/tmp/x",
             privacy_noise_multiplier=0.01,
-            **({"cuda_graphs": True} | extra),
+            **({"cuda_graphs": 1} | extra),
         )
 
 

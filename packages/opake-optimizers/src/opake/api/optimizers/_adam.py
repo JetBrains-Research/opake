@@ -357,6 +357,7 @@ def adamw(
         moment,
         lr=lr,
         weight_decay=weight_decay,
+        optimizer_name="adamw",
         decoupled_weight_decay=decoupled_weight_decay,
         update_rms_clip=update_rms_clip,
     )

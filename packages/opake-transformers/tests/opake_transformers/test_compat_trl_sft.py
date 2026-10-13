@@ -66,16 +66,14 @@ def test_dataset_text_field_carries_through(tmp_path):
     assert cfg.dataset_text_field == "story"
 
 
-def test_cuda_graph_max_graphs_override_carries_through(tmp_path):
+def test_cuda_graph_count_carries_through(tmp_path):
     cfg = SFTConfig.from_trl(
         _trl_args(tmp_path),
         privacy_noise_multiplier=0.8,
         clipping_norm=1.0,
-        cuda_graphs=True,
-        cuda_graph_max_graphs=5,
+        cuda_graphs=5,
     )
-    assert cfg.cuda_graphs is True
-    assert cfg.cuda_graph_max_graphs == 5
+    assert cfg.cuda_graphs == 5
 
 
 def test_loss_type_nll_carries_through(tmp_path):
@@ -88,12 +86,13 @@ def test_loss_type_nll_carries_through(tmp_path):
 
 
 def test_loss_type_chunked_nll_carries_through(tmp_path):
+    trl_cfg = _trl_args(tmp_path, loss_type="chunked_nll")
     cfg = SFTConfig.from_trl(
-        _trl_args(tmp_path, loss_type="chunked_nll"),
+        trl_cfg,
         privacy_noise_multiplier=0.8,
         clipping_norm=1.0,
     )
-    assert cfg.loss_type == "chunked_nll"
+    assert cfg.loss_type == trl_cfg.loss_type
 
 
 def test_completion_only_loss_carries_through(tmp_path):

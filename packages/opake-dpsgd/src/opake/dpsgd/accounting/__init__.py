@@ -11,8 +11,9 @@ Mechanisms (in :mod:`opake.dpsgd.accounting.mechanisms`):
 Amplification (in :mod:`opake.dpsgd.accounting.amplification`):
 
 - :func:`k_out_of_t` — block or total k-out-of-t allocation over a declared horizon.
-- :func:`poisson` — Poisson subsampling. Set ``truncated_batch_size``
-  and ``dataset_size`` together for the truncated-Poisson production form.
+- :func:`poisson` — Poisson subsampling of a Gaussian, AdaClip, or NonPrivate
+  step. Set ``truncated_batch_size`` and ``dataset_size`` together for the
+  truncated-Poisson production form.
 - :func:`parallel_poisson` — Poisson subsampling under parallel workers.
 
 :func:`poisson` and :func:`parallel_poisson` return a **per-step**

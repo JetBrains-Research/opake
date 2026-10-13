@@ -4,12 +4,12 @@
 
 Drop-in replacement for
 :func:`opake.api.engine.clipping._streaming._stream_clip_and_sum`, selected by
-``clip_backend="triton"`` or ``"auto"`` on :func:`clipped_fun` /
-:func:`clipped_grad`. It never materializes sanitized or clipped copies of the
-batch, and it handles all tensors of one storage dtype in one launch per pass
-("multi-tensor apply"). Each program looks up its tensor in a cached tile table
-and reads that tensor's address from a per-call pointer table. A call therefore
-costs a few dozen CUDA launches, independent of the number of tensors.
+automatic dispatch on :func:`clipped_fun` / :func:`clipped_grad`. It never
+materializes sanitized or clipped copies of the batch, and it handles all
+tensors of one storage dtype in one launch per pass ("multi-tensor apply").
+Each program looks up its tensor in a cached tile table and reads that tensor's
+address from a per-call pointer table. A call therefore costs a few dozen CUDA
+launches, independent of the number of tensors.
 
 Semantics match the streaming path:
 
@@ -45,7 +45,7 @@ Supported calls: scalar clipping norm, fixed scaling (not AUTO-S), no second
 moment, ``compute_dtype=None``, float32/bfloat16 tensors on a single CUDA device
 that do not require grad, an output dtype equal to the storage dtype or float32,
 and no active ``torch.compile`` trace. Other calls fall back to the streaming
-path, or raise when ``strict``.
+path.
 """
 
 from __future__ import annotations
@@ -60,7 +60,6 @@ import triton.language as tl
 from opake.api.engine.clipping import _pytree as cp
 from opake.api.engine.clipping._streaming import _stream_clip_and_sum
 from opake.api.engine.pytree import tree_flatten, tree_unflatten
-from opake.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +178,8 @@ def unsupported_reason(
         return "an explicit compute_dtype is not supported"
     if not leaves:
         return "the value tree has no leaves"
+    if batch_size == 0:
+        return "the batch is empty"
     if batch_size > _MAX_BATCH:
         return f"batch size {batch_size} exceeds {_MAX_BATCH}"
     grad_mode = torch.is_grad_enabled()
@@ -294,8 +295,10 @@ def fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=None)
         ptrs = {}
         for g in plan["groups"]:
             first = leaves[g["idx"][0]]
-            ptrs[g["dtype"]] = _pointer_table(
-                [leaves[i].data_ptr() for i in g["idx"]], device
+            ptrs[g["dtype"]] = torch.tensor(
+                [leaves[i].data_ptr() for i in g["idx"]],
+                dtype=torch.int64,
+                device=device,
             )
             partial = torch.empty((batch, g["tiles"]), dtype=sq_dtype, device=device)
             _partial_sq_kernel[(g["tiles"], batch)](
@@ -376,43 +379,6 @@ def fused_clip_sum(leaves, clipping_norm, *, with_postsq: bool, out_dtypes=None)
     return reduced, norm, post_sq, acc_dtype
 
 
-_ARENA_SLOTS = 1 << 16  # int64 addresses in the pinned staging arena (512 KiB)
-_ARENA: dict = {"buffer": None, "used": 0}
-
-
-def _pointer_table(addresses, device):
-    """Tensor addresses as an int64 device tensor.
-
-    While a CUDA graph is being captured, pageable host-to-device copies are
-    not allowed, and pinned allocations would enter the capture's host-memory
-    bookkeeping. The upload therefore goes through a slice of a pinned arena
-    that the first eager call allocates. The graph re-reads its slice on every
-    replay, so slices are never reused; the addresses they hold are the graph's
-    static tensors, which are the same on every replay.
-    """
-    if torch.cuda.is_current_stream_capturing():
-        arena, used = _ARENA["buffer"], _ARENA["used"]
-        if arena is None or used + len(addresses) > arena.numel():
-            raise RuntimeError(
-                *(
-                    "fused clip pointer arena "
-                    + (
-                        "not allocated: run one eager call before capturing"
-                        if arena is None
-                        else "exhausted"
-                    )
-                    + ".",
-                )
-            )
-        view = arena[used : used + len(addresses)]
-        view.copy_(torch.tensor(addresses, dtype=torch.int64))
-        _ARENA["used"] = used + len(addresses)
-        return view.to(device=device, non_blocking=True)
-    if _ARENA["buffer"] is None:
-        _ARENA["buffer"] = torch.empty(_ARENA_SLOTS, dtype=torch.int64, pin_memory=True)
-    return torch.tensor(addresses, dtype=torch.int64, device=device)
-
-
 _MARKERS: dict = {}
 
 
@@ -440,12 +406,10 @@ def fused_stream_clip_and_sum(
     second_moment,
     return_aux,
     return_stats,
-    strict: bool,
 ):
     """``_stream_clip_and_sum`` with the fused kernels where supported.
 
-    Unsupported calls run the streaming path, or raise
-    :class:`~opake.exceptions.ConfigurationError` when ``strict``.
+    Unsupported calls run the streaming path.
     """
     leaves, treedef = tree_flatten(values)
     reason = unsupported_reason(
@@ -462,11 +426,7 @@ def fused_stream_clip_and_sum(
         if out_dtypes is None:
             reason = "the requested output dtype is not supported"
     if reason is not None:
-        if strict:
-            raise ConfigurationError(
-                *(f"clip_backend='triton' cannot run this call: {reason}.",)
-            )
-        logger.debug("clip_backend='auto' using the torch path: %s", reason)
+        logger.debug("using the PyTorch clipping path: %s", reason)
         return _stream_clip_and_sum(
             values,
             clipping_norm,

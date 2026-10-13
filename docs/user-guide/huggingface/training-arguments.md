@@ -225,17 +225,18 @@ Mechanism constraints (validated at construction):
 | `bf16` | `False` | bf16 autocast on the per-example loss closure. |
 | `bf16_full_eval` | `False` | Cast the model to bf16 for the eval scope only. |
 | `gradient_checkpointing` | `False` | Opake automatically uses the vmap-safe non-reentrant path; no checkpointing kwargs are required. Incompatible with `torch_compile`. |
-| `torch_compile` | `False` | Compiles the tensor-only per-microbatch `vmap(grad)+clip+reduce` kernel with `fullgraph=True`. |
-| `cuda_graphs` | `False` | Replays the per-microbatch `vmap(grad)+clip+reduce` kernel from CUDA graphs. See [CUDA-graph replay](#cuda-graph-replay). |
-| `cuda_graph_max_graphs` | `4` | Optional cap on distinct graph signatures retained per trainer. Unseen signatures after the cap run eagerly; the default requires no additional setting when `cuda_graphs=True`. |
+| `torch_compile` | `False` | Strictly compiles each tensor-only `vmap(grad)+clip+reduce` chunk with automatic dynamic shapes. On a Dynamo failure, warns once and runs the affected chunk eagerly thereafter. |
+| `cuda_graphs` | `0` | Maximum distinct graph signatures retained per trainer. Zero disables graph replay; positive values enable replay and set the cap. See [CUDA-graph replay](#cuda-graph-replay). |
 
 ### CUDA-graph replay
 
-`cuda_graphs=True` captures the per-microbatch kernel (`vmap(grad)`, per-example
+`cuda_graphs > 0` captures the per-microbatch kernel (`vmap(grad)`, per-example
 clipping and the batch reduction) once per distinct input signature, then replays
-that signature. A signature includes tensor shapes, strides, dtypes, devices,
-`requires_grad`, and non-tensor arguments; sequence-length changes can therefore
-capture new graphs even when the microbatch size stays fixed.
+that signature. The configured value caps the number of signatures retained;
+`cuda_graphs=0` disables replay. A signature includes tensor shapes, strides,
+dtypes, devices, `requires_grad`, and non-tensor arguments; sequence-length
+changes can therefore capture new graphs even when the microbatch size stays
+fixed.
 
 CUDA graphs primarily reduce Python and kernel-launch overhead; they do not make
 the captured attention, GEMM, or other GPU kernels intrinsically faster. They
@@ -259,10 +260,10 @@ multiple that divides `max_length` to keep padding within that cap.
 - The first occurrence of each signature includes capture time. Each retained
   signature keeps graph-private buffers alive, so memory can grow with the
   number of captures.
-- `cuda_graph_max_graphs` defaults to `4` and caps the number of signatures
-  retained by a trainer. Once reached, **unseen signatures run eagerly**; the
-  cap does not evict existing graphs, stabilize shapes, or guarantee a speedup.
-  Lower the cap for large models/adapters when memory is the limiting concern.
+- Once the `cuda_graphs` limit is reached, **unseen signatures run eagerly**;
+  the cap does not evict existing graphs, stabilize shapes, or guarantee a
+  speedup. Lower the count for large models/adapters when memory is the limiting
+  concern.
 - Every tensor input, including the current clipping threshold and the
   parameters, is copied into the graph before each replay. Python state that
   the per-example loss reads other than through its arguments is frozen at
@@ -287,6 +288,8 @@ Three flags drive the model patching at trainer construction time:
 | `use_compat_patches` | `True` | vmap-safety patches (eager attention, batchify, vmap-safe masking / collator / checkpoint hooks). |
 | `use_performance_kernels` | `False` | CUDA + Triton kernel group (RoPE, RMSNorm, SwiGLU/GeGLU, cross-entropy).  Auto-`False` on hosts without CUDA + Triton. |
 | `performance_kernels_config` | `None` | Flat dict forwarded as kwargs to `apply_model_patches` / `apply_runtime_patches` — per-key override. |
+
+If fused CE prevents full-graph capture, `performance_kernels_config={"fused_linear_cross_entropy": False}` disables it at the cost of higher logits memory use.
 
 See [Model patches](model-patches.md) for the full configuration matrix.
 

@@ -30,6 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import torch
+from torch.autograd.function import once_differentiable
 
 _MIB = 1024**2
 _CPU_WORKSPACE_BYTES = 512 * _MIB
@@ -271,6 +272,7 @@ class _ChunkedLinearCE(torch.autograd.Function):
     Operates on the pre-shifted, flattened ``e`` (N, D) and ``targets`` (N,) and
     returns the per-token loss (N,). The shift / ignore-mask / reduction live in
     the wrappers.
+    Its backward is replayable but intentionally first-order-only.
     """
 
     generate_vmap_rule = True
@@ -337,6 +339,7 @@ class _ChunkedLinearCE(torch.autograd.Function):
         ctx.vocab_tile = vocab_tile
 
     @staticmethod
+    @once_differentiable
     def backward(ctx, grad_loss, _grad_lse, _grad_token_weight):
         e, weight, targets, lse, token_weight = ctx.saved_tensors
         softcap = ctx.softcap

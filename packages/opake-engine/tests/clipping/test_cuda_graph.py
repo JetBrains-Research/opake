@@ -9,7 +9,6 @@ import torch
 import torch.nn.functional as F
 
 from opake.api.engine.clipping import CudaGraphChunkCompiler, clipped_grad
-from opake.api.engine.device import fused_kernels_available
 from opake.exceptions import ConfigurationError
 
 cf = importlib.import_module("opake.api.engine.clipping._clipped_fun")
@@ -46,14 +45,13 @@ def _loss(p, x, y):
     return F.cross_entropy(h @ p["w2"] + p["b2"], y)
 
 
-def _train(backend, compiler, device="cuda"):
+def _train(compiler, device="cuda"):
     kwargs = {
         "argnums": 0,
         "batch_argnums": (1, 2),
         "microbatch_size": 4,
         "return_aux": True,
         "normalize_by": 12,
-        "clip_backend": backend,
     }
     if compiler is not None:
         kwargs["_chunk_compiler"] = compiler
@@ -73,17 +71,12 @@ def _train(backend, compiler, device="cuda"):
     return trace
 
 
-def _backends():
-    return ["torch", "triton"] if fused_kernels_available() else ["torch"]
-
-
 @pytest.mark.cuda
 @requires_cuda
-@pytest.mark.parametrize("backend", _backends())
-def test_graph_replay_matches_eager_bitwise(backend):
-    eager = _train(backend, None)
+def test_graph_replay_matches_eager_bitwise():
+    eager = _train(None)
     compiler = CudaGraphChunkCompiler()
-    graphed = _train(backend, compiler)
+    graphed = _train(compiler)
     assert compiler.captures == 3  # chunk sizes 4, 2 and 1
     assert compiler.replays > 0
     for e, g in zip(eager, graphed, strict=True):
@@ -96,9 +89,9 @@ def test_graph_replay_matches_eager_bitwise(backend):
 @pytest.mark.cuda
 @requires_cuda
 def test_signatures_beyond_max_graphs_run_eagerly():
-    eager = _train("torch", None)
+    eager = _train(None)
     compiler = CudaGraphChunkCompiler(max_graphs=1)
-    graphed = _train("torch", compiler)
+    graphed = _train(compiler)
     assert compiler.captures == 1
     for e, g in zip(eager, graphed, strict=True):
         for name in e[0]:
@@ -135,17 +128,14 @@ def test_inputs_without_cuda_tensors_run_eagerly():
     assert compiler.captures == 0
 
 
-def test_graph_compiler_keeps_the_fused_backend(monkeypatch):
-    monkeypatch.setattr(cf, "fused_kernels_available", lambda: True)
-    monkeypatch.setattr(torch.version, "hip", None)
-    kwargs = {
-        "clipping_norm": 1.0,
-        "second_moment": False,
-        "compute_dtype": None,
-        "scale_fn": None,
-    }
-    graph = CudaGraphChunkCompiler()
-    assert cf._resolve_stream_impl("auto", chunk_compiler=graph, **kwargs) is not None
-    assert cf._resolve_stream_impl("auto", chunk_compiler=lambda f: f, **kwargs) is None
-    with pytest.raises(ConfigurationError, match="compiled microbatch kernel"):
-        cf._resolve_stream_impl("triton", chunk_compiler=lambda f: f, **kwargs)
+def test_graph_compiler_uses_torch_clipping_fallback():
+    assert (
+        cf._resolve_stream_impl(
+            clipping_norm=1.0,
+            second_moment=False,
+            compute_dtype=None,
+            scale_fn=None,
+            chunk_compiler=CudaGraphChunkCompiler(),
+        )
+        is None
+    )

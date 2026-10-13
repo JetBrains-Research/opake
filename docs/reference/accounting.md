@@ -229,10 +229,11 @@ sensitivity-1 queries. Base mechanism for DP-SGD.
 ### `poisson(inner, sample_rate) -> DpProcess`
 
 Poisson-subsampled mechanism (standard DP-SGD step). `sample_rate` is
-`batch_size / dataset_size`. Plain Poisson accepts any Opake `DpProcess` as
-its base mechanism.
+`batch_size / dataset_size`. Both the plain and truncated forms accept a
+`Gaussian`, `AdaClip`, or `NonPrivate` base mechanism. Compose the returned
+step with `* num_steps` to account for a training run.
 
-- `inner` (DpProcess): Base mechanism
+- `inner` (Gaussian | AdaClip | NonPrivate): Base mechanism
 - `sample_rate` (float): Probability of including each example, in (0, 1)
 
 ```python
@@ -245,8 +246,7 @@ step = dpsgd_acc.poisson(dpsgd_acc.gaussian(0.5), sample_rate=256 / 50_000)
 `truncated_batch_size` and `dataset_size` are set together (must be both
 or neither). This is the truncated-Poisson PLD for capped batches; it does
 **not** improve privacy versus plain Poisson at the same rate—use it when
-training actually truncates draws. The capped form accepts a Gaussian,
-AdaClip(Gaussian), or `nonprivate()` base.
+training actually truncates draws.
 
 The guarantee is [Ganesh (2025), Theorem
 3.1](https://arxiv.org/abs/2508.15089). It assumes each over-cap provisional
@@ -321,12 +321,12 @@ conservative upper bound.
 ### `adaclip(inner, *, fraction_noise_std, expected_batch_size, num_groups=1) -> DpProcess`
 
 Accounts for the extra privacy cost of adaptive clipping's noisy
-fraction query. Returns an `AdaClip` process composable with `poisson()`
+centered-indicator query. Returns an `AdaClip` process composable with `poisson()`
 (plain or truncated).
 
 - `inner` (Gaussian): Base mechanism (from `gaussian()`)
-- `fraction_noise_std` (float): Noise std on the clipping fraction. Default: 0.05.
-- `expected_batch_size` (float): Expected batch size (`sample_rate × dataset_size`), used to compute the absolute noise std for the quantile query.
+- `fraction_noise_std` (float): Noise std on the centered indicator. Default: 0.05.
+- `expected_batch_size` (float): Expected batch size (`sample_rate × dataset_size`), the fixed denominator for the indicator; it must match the runtime's `expected_batch_size`.
 - `num_groups` (int): Number of independently adaptive clipping groups, and
   therefore independent noisy quantile queries. Default: 1. Set this to the
   number of groups when using per-group adaptive clipping.
@@ -638,7 +638,8 @@ for i in range(num_steps):
 ```
 
 **Methods:** `epsilon_at(delta)`, `delta_at(epsilon)`, `advantage()`,
-`beta_at(alpha)`, `risk_at(prior)`, `budget_exceeded` (property).
+`beta_at(alpha)`, `risk_at(prior)`. **Properties:** `budget`,
+`budget_exceeded`.
 
 ### Seeding with a prior process
 
@@ -678,6 +679,16 @@ acct2 = from_state_dict(Accountant(), flat)
 
 `process.*` keys hold the composed tree; `budget.*` keys are present when
 the accountant was constructed with a budget.
+
+A template budget fills a checkpoint that has none. If both carry budgets,
+their checkpoint states must agree or restore raises `CheckpointError`. Use an
+empty template to keep the checkpoint budget; to choose a new budget, restore
+the process first:
+
+```python
+saved = from_state_dict(Accountant(), flat)
+acct2 = Accountant(budget=budget, prefix=saved.process)
+```
 
 ---
 

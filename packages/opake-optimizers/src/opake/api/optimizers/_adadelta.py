@@ -395,6 +395,7 @@ def adadelta(
         moment,
         lr=lr,
         weight_decay=weight_decay,
+        optimizer_name="adadelta",
         decoupled_weight_decay=decoupled_weight_decay,
         update_rms_clip=update_rms_clip,
     )

@@ -69,7 +69,6 @@ noise.
 | `pre_clipping_transform` | `Callable` | identity | Transform applied to each per-example gradient before clipping. |
 | `dtype` | `torch.dtype \| None` | `None` | Accumulation dtype (e.g., float32 for float16 inputs). |
 | `return_aux` | `bool` | `False` | Return per-example diagnostics. |
-| `clip_backend` | `str` | `"torch"` | Clip-and-sum implementation: `"torch"`, `"triton"` or `"auto"`. See [Fused Triton backend](#fused-triton-backend). |
 
 ### State flow
 
@@ -177,8 +176,10 @@ See [Memory Optimizations](memory-optimizations.md) for details.
 
 ## Fused Triton backend
 
-On CUDA, `clip_backend="triton"` replaces the per-leaf PyTorch operations of
-the clip-and-sum with a few fused kernels per call. Each kernel processes every
+On CUDA, clipping automatically uses fused Triton kernels when they are
+registered and support the call; otherwise it uses the PyTorch implementation.
+The fused kernels replace the per-leaf PyTorch operations of the clip-and-sum
+with a few fused kernels per call. Each kernel processes every
 parameter tensor of one dtype, so the number of launches does not grow with the
 number of tensors. The backend never materializes clipped copies of the
 per-example gradients. The mechanism is unchanged:
@@ -191,37 +192,34 @@ per-example gradients. The mechanism is unchanged:
   The stored-value guarantee holds for any order.
 
 ```python
+from opake.patches import apply_runtime_patches
+
+apply_runtime_patches()
 grad_fn, state = clipped_grad(
     loss_fn,
     clipping_norm=1.0,
     normalize_by=batch_size,
-    clip_backend="triton",
 )
 ```
 
-The backend is opt-in:
-
-| `clip_backend` | Behavior |
-|----------------|----------|
-| `"torch"` (default) | PyTorch operations. |
-| `"triton"` | Fused kernels. Raises `ConfigurationError` when they cannot serve the configuration or a call. |
-| `"auto"` | Fused kernels where supported, PyTorch otherwise. |
-
+The fused clipping kernel is provided by `opake-patches`. Install that package
+and call `apply_runtime_patches()` before creating the clipping transform; this
+registers the kernel when CUDA and Triton are available. Without registration,
+clipping uses the PyTorch path.
 The fused kernels need an NVIDIA CUDA device with Triton installed (ROCm builds
 use the PyTorch path), and support:
 
-- fixed or adaptive clipping with a scalar threshold (`adaptive_clipped_grad`
-  forwards `clip_backend`);
+- fixed or adaptive clipping with a scalar threshold;
 - float32 and bfloat16 gradients on a single CUDA device, with or without
   microbatching and diagnostics.
 
 Per-group thresholds, AUTO-S, `second_moment`, an explicit `compute_dtype`,
 float16 or float64 gradients, and compiled microbatch kernels use the PyTorch
-path (`"auto"`) or raise (`"triton"`). Under `torch.compile` or an enclosing
-`grad`/`jvp` transform, both settings use the vmapped PyTorch path.
+path. Under `torch.compile` or an enclosing `grad`/`jvp` transform, clipping
+uses the vmapped PyTorch path.
 
-With `DPTrainer`, pass it as `clipping_kwargs={"clip_backend": "auto"}`
-(fixed and adaptive clipping modes).
+`DPTrainer` applies runtime patches during construction and uses the same
+automatic dispatch for fixed and adaptive clipping.
 
 ## Adaptive clipping
 
@@ -240,6 +238,7 @@ grad_fn, clip_state = adaptive_clipped_grad(
     initial_clipping_norm=1.0,
     target_quantile=0.5,  # aim for 50% of gradients clipped
     normalize_by=batch_size,
+    expected_batch_size=batch_size,  # public expected batch size
     key=key(7),  # required for quantile noise
 )
 
@@ -251,9 +250,9 @@ grads, clip_state = grad_fn(params, batch, state=clip_state)
 
 After each step:
 
-1. Compute the fraction of per-example gradients whose norm exceeded the
-   current clip norm.
-2. Add calibrated Gaussian noise to this fraction (for privacy).
+1. Sum centered clipping indicators and divide by the public expected batch
+   size: `0.5 + (num_clipped - sampled_batch_size / 2) / expected_batch_size`.
+2. Add Gaussian noise with standard deviation `fraction_noise_std`.
 3. Apply a geometric update: if the noisy clipping rate exceeds the target
    quantile, increase the clip norm; otherwise, decrease it.
 
@@ -279,7 +278,8 @@ for batch in dataloader:
 ### Privacy accounting for adaptive clipping
 
 Adaptive clipping introduces an additional privacy cost (the noisy clipping
-rate query). Account for it using `dpsgd_acc.adaclip()`:
+rate query). Pass the fixed public expected batch size to both
+`adaptive_clipped_grad()` and `dpsgd_acc.adaclip()`:
 
 ```python
 import opake.dpsgd.accounting as dpsgd_acc
@@ -522,6 +522,7 @@ grad_fn, clip_state = adaptive_clipped_grad(
     target_quantile=0.5,
     batch_argnums=(1, 2),
     normalize_by=batch_size,
+    expected_batch_size=batch_size,  # public expected batch size
     key=key(7),
 )
 ```

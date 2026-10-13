@@ -7,7 +7,6 @@ import torch
 import torch.nn.functional as F
 
 from opake.api.engine.clipping import CudaGraphChunkCompiler
-from opake.api.engine.device import fused_kernels_available
 from opake.dpsgd.clipping import adaptive_clipped_grad
 from opake.random import key
 
@@ -20,7 +19,7 @@ def _loss(p, x, y):
     return F.cross_entropy(h @ p["w2"] + p["b2"], y)
 
 
-def _train(backend, compiler):
+def _train(compiler):
     gen = torch.Generator().manual_seed(0)
     params = {
         "w1": (torch.randn(D, H, generator=gen) * 0.3).cuda(),
@@ -46,7 +45,6 @@ def _train(backend, compiler):
         microbatch_size=4,
         return_aux=True,
         normalize_by=12,
-        clip_backend=backend,
         **kwargs,
     )
     trace = []
@@ -65,12 +63,9 @@ def _train(backend, compiler):
 
 @pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
-@pytest.mark.parametrize(
-    "backend", ["torch", "triton"] if fused_kernels_available() else ["torch"]
-)
-def test_adaptive_threshold_reaches_every_replay(backend):
-    eager = _train(backend, None)
-    graphed = _train(backend, CudaGraphChunkCompiler())
+def test_adaptive_threshold_reaches_every_replay():
+    eager = _train(None)
+    graphed = _train(CudaGraphChunkCompiler())
     assert len({step[2] for step in eager}) > 1
     for e, g in zip(eager, graphed, strict=True):
         for name in e[0]:

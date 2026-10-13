@@ -257,8 +257,12 @@ def _resolve_model_dtype(
     )
 
 
-def _kernel_mode_summary(device: torch.device, dtype_name: str) -> tuple[str, str]:
+def _kernel_mode_summary(
+    device: torch.device, dtype_name: str, kernel_patches: bool = True
+) -> tuple[str, str]:
     """Return concise status of kernel optimization mode for this run."""
+    if not kernel_patches:
+        return "disabled", "--no-kernel-patches"
     if os.environ.get("OPAKE_NO_PATCH", "0") == "1":
         return "disabled", "OPAKE_NO_PATCH=1"
 
@@ -283,9 +287,12 @@ def _print_runtime_mode_report(
     dtype_name: str,
     dtype: torch.dtype,
     dtype_warning: str | None,
+    kernel_patches: bool = True,
 ) -> None:
     """Print active runtime mode so fallback behavior is explicit."""
-    kernel_mode, kernel_reason = _kernel_mode_summary(device, dtype_name)
+    kernel_mode, kernel_reason = _kernel_mode_summary(
+        device, dtype_name, kernel_patches
+    )
 
     print("\nRuntime mode:")
     print(f"  Device: {device} ({device_label})")
@@ -580,16 +587,6 @@ def parse_args():
         help="Clipping strategy: fixed (constant threshold), adaptive (Andrew "
         "et al. quantile tracking), or auto (AUTO-S automatic scaling, Bu et "
         "al. NeurIPS 2023).",
-    )
-    dp_group.add_argument(
-        "--clip-backend",
-        type=str,
-        choices=["torch", "auto", "triton"],
-        default="torch",
-        help="Per-example clip-and-sum implementation for fixed and adaptive "
-        "clipping: torch (default), triton (fused CUDA kernels; errors when a "
-        "call is unsupported) or auto (Triton where supported, torch otherwise). "
-        "AUTO-S (--clipping-mode auto) always uses torch.",
     )
     dp_group.add_argument(
         "--clipping-norm",
@@ -979,11 +976,6 @@ def parse_args():
     elif args.allocation is not None:
         parser.error("--allocation is only used with --sampler k_out_of_t")
 
-    if args.clip_backend == "triton" and args.clipping_mode == "auto":
-        parser.error(
-            "--clip-backend triton does not support --clipping-mode auto (AUTO-S)"
-        )
-
     return args
 
 
@@ -1094,7 +1086,7 @@ def main():
     dtype_name, torch_dtype, dtype_warning = _resolve_model_dtype(args.dtype, device)
     args.dtype = dtype_name
     _print_runtime_mode_report(
-        device, device_name, dtype_name, torch_dtype, dtype_warning
+        device, device_name, dtype_name, torch_dtype, dtype_warning, args.kernel_patches
     )
 
     # Load model
@@ -1349,6 +1341,14 @@ def main():
             f"CPU offload: enabled (save_on_cpu, works {'with' if args.gradient_checkpointing else 'without'} checkpointing)"
         )
 
+    # ``from_pretrained`` returns an eval-mode model and ``get_peft_model`` keeps
+    # the base submodules in eval (only the new PeftModel wrapper reports
+    # ``training=True``). Training-gated code then silently no-ops: e.g. the
+    # kv_cache patch leaves ``use_cache=True`` so a DynamicCache is built every
+    # forward. Dropout is already zeroed in the config above, so train mode
+    # changes no math.
+    model.train()
+
     # Convert to functional (only LoRA parameters)
     print("\nConverting to functional form (LoRA parameters only)...")
     print("  (This may take 1-2 minutes for large models...)")
@@ -1512,7 +1512,6 @@ def main():
             key=quantile_noise_key,
             normalize_by=args.batch_size,
             second_moment=use_second_moment,
-            clip_backend=args.clip_backend,
         )
     elif args.clipping_mode == "auto":
         grad_fn, clip_state = auto_clipped_grad(
@@ -1536,7 +1535,6 @@ def main():
             microbatch_size=args.microbatch_size,
             return_aux=True,
             second_moment=use_second_moment,
-            clip_backend=args.clip_backend,
         )
 
     # Caller-applied torch.compile of the whole DP grad transform (opt-in).

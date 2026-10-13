@@ -1,9 +1,15 @@
 """Tests for adaptive clipping with quantile noise (Phase 4)."""
 
+import math
+
 import pytest
 import torch
 
-from opake.api.dpsgd.clipping._adaptive import adaptive_clipped_grad
+from opake.api.dpsgd.clipping._adaptive import (
+    _sample_noisy_clipping_rate,
+    adaptive_clipped_grad,
+)
+from opake.dpsgd.accounting import adaclip, gaussian
 from opake.exceptions import ConfigurationError
 from opake.random import key
 from opake.types import ClippedPytree
@@ -12,6 +18,42 @@ from opake.types import ClippedPytree
 def _unwrap_clipped(value):
     assert isinstance(value, ClippedPytree)
     return value.pytree
+
+
+def test_centered_indicator_has_fixed_neighbor_sensitivity():
+    def rate(count, size):
+        return _sample_noisy_clipping_rate(
+            count,
+            size,
+            expected_batch_size=8,
+            key=key(42),
+            step=0,
+            fraction_noise_std=0.05,
+        )
+
+    empty = rate(0, 0)
+    assert rate(1, 1) - empty == pytest.approx(1 / 16)
+    assert rate(0, 1) - empty == pytest.approx(-1 / 16)
+    assert rate(1, 12) - rate(0, 11) == pytest.approx(1 / 16)
+
+    indicator_sensitivity = rate(1, 1) - empty
+    accounted = adaclip(gaussian(1.5), fraction_noise_std=0.05, expected_batch_size=8)
+    assert 1 / accounted.effective_noise_multiplier == pytest.approx(
+        math.hypot(1 / 1.5, indicator_sensitivity / 0.05)
+    )
+
+
+def test_indicator_denominator_is_explicit_when_gradient_is_not_normalized():
+    def loss_fn(params, x):
+        return (params * x).sum()
+
+    with pytest.raises(ConfigurationError, match="expected_batch_size is required"):
+        adaptive_clipped_grad(loss_fn, key=key(0), batch_argnums=1)
+
+    _, state = adaptive_clipped_grad(
+        loss_fn, key=key(0), batch_argnums=1, expected_batch_size=8
+    )
+    assert state._expected_batch_size == 8
 
 
 class TestQuantileNoise:
@@ -29,6 +71,7 @@ class TestQuantileNoise:
                 loss_fn,
                 fraction_noise_std=0.1,
                 batch_argnums=(1, 2),
+                expected_batch_size=1.0,
             )
 
     def test_invalid_fraction_noise_std(self):
@@ -46,6 +89,7 @@ class TestQuantileNoise:
                 fraction_noise_std=-1.0,
                 key=key(42),
                 batch_argnums=(1, 2),
+                expected_batch_size=1.0,
             )
 
     def test_quantile_noise_reproducibility(self):
@@ -62,6 +106,7 @@ class TestQuantileNoise:
             fraction_noise_std=0.1,
             key=key(42),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         grad_fn2, state2 = adaptive_clipped_grad(
@@ -70,6 +115,7 @@ class TestQuantileNoise:
             fraction_noise_std=0.1,
             key=key(42),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Same data
@@ -107,6 +153,7 @@ class TestQuantileNoise:
             fraction_noise_std=1.0,  # Very large noise to increase chance of divergence
             key=key(42),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         grad_fn2, state2 = adaptive_clipped_grad(
@@ -115,6 +162,7 @@ class TestQuantileNoise:
             fraction_noise_std=1.0,
             key=key(99),  # Different key
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Verify initial states have different keys
@@ -149,6 +197,7 @@ class TestQuantileNoise:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # With substantial noise (to ensure divergence)
@@ -158,6 +207,7 @@ class TestQuantileNoise:
             fraction_noise_std=0.5,  # Increased noise for clear divergence
             key=key(42),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Same data
@@ -189,6 +239,7 @@ class TestQuantileNoise:
             fraction_noise_std=0.1,
             key=key(42),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # Initial state
@@ -219,6 +270,7 @@ class TestQuantileNoise:
             key=key(42),
             return_aux=True,
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         params = torch.randn(10, requires_grad=False)
@@ -250,6 +302,7 @@ class TestQuantileNoiseClipNorm:
             initial_clipping_norm=1.0,
             key=key(0),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # With noise
@@ -259,6 +312,7 @@ class TestQuantileNoiseClipNorm:
             fraction_noise_std=0.1,
             key=key(42),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         # clipping_norm should be identical (same initial_clipping_norm)
@@ -280,6 +334,7 @@ class TestQuantileNoiseClipNorm:
             fraction_noise_std=0.1,
             key=key(42),
             batch_argnums=(1, 2),
+            expected_batch_size=1.0,
         )
 
         assert state._current_clipping_norm == 5.0

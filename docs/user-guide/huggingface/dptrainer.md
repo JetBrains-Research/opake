@@ -137,9 +137,10 @@ clip-noise-step over one Poisson sample.
 
 `compute_loss_func` on the constructor accepts a callable
 `(outputs, labels) -> scalar` for one-off losses without subclassing.
-Training invokes it per example under `vmap`; default evaluation invokes it
-once per batch. There is no `num_items_in_batch` argument, and a custom loss
-takes precedence over `label_smoothing_factor`.
+Training and evaluation invoke it per example under `vmap`. There is no
+`num_items_in_batch` argument, and a custom loss takes precedence over
+`label_smoothing_factor`. Evaluation reports the arithmetic mean of the
+per-example scalars, without weighting examples by token count.
 
 ## PEFT and LoRA
 
@@ -151,6 +152,10 @@ LoRA adapters receive per-example gradients (essential for memory at
 multi-billion-parameter scale).  Fused LoRA Triton kernels engage
 automatically when adapters have `bias="none"` — see
 [Model patches — Fused LoRA operations](model-patches.md#fused-lora-operations).
+
+To resume a PEFT run, reconstruct the same base model and active adapter setup.
+LoRA adapter weights are restored from the checkpoint. PEFT formats that omit
+trainable state, including P-Tuning, cannot resume and raise `CheckpointError`.
 
 ## Non-private baseline
 

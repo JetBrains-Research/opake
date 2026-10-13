@@ -72,8 +72,8 @@ def fused_kernels_available() -> bool:
     """Host-level check: a CUDA device *and* an importable Triton.
 
     This is the runtime the Triton fused kernels (rope / rms_norm / swiglu /
-    geglu / cross-entropy / fused-linear-CE) need.  On MPS / CPU (or CUDA
-    without Triton) it returns ``False`` and callers fall back to the
+    geglu / cross-entropy / fused-linear-CE / clip-and-sum) need. On MPS / CPU
+    (or CUDA without Triton) it returns ``False`` and callers fall back to the
     pure-PyTorch eager implementations.
     """
     return torch.cuda.is_available() and _triton_importable()

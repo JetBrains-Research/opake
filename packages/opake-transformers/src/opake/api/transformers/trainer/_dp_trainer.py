@@ -15,8 +15,8 @@ The trainer is shape-agnostic: any HF-style ``data_collator`` whose output
 the model's forward accepts will work.  Domain-specific training that
 builds on this trainer (SFT / DPO / KTO) should subclass it and override
 :meth:`DPTrainer.compute_per_example_loss` — the single DP-correct
-extension point that both training (vmap → grad → clip → noise) and
-eval (vmap when ``include_for_metrics=['loss']``) route through.
+extension point used by training (vmap → grad → clip → noise) and by
+evaluation's per-example-loss path.
 """
 
 from __future__ import annotations
@@ -40,6 +40,7 @@ import torch
 import torchopt
 from datasets import Dataset
 from torch import Tensor
+from torch._dynamo.exc import TorchDynamoException
 from torch.utils.data import DataLoader
 
 import opake.accounting as acc
@@ -251,16 +252,28 @@ def _rank_local_sampler_state(
 
 
 def _compile_strict_chunk(
-    fn: Callable, *, backend: str | Callable, mode: str
+    fn: Callable,
+    *,
+    backend: str | Callable,
+    mode: str,
+    on_fallback: Callable[[TorchDynamoException], None],
 ) -> Callable:
-    """Compile one tensor-only gradient chunk as a strict dynamic graph."""
-    return torch.compile(
-        fn,
-        backend=backend,
-        mode=mode,
-        fullgraph=True,
-        dynamic=True,
-    )
+    """Compile a gradient chunk strictly, then use eager on Dynamo failure."""
+    active = torch.compile(fn, backend=backend, mode=mode, fullgraph=True)
+
+    @functools.wraps(fn)
+    def run(*args: Any, **kwargs: Any) -> Any:
+        nonlocal active
+        if active is fn:
+            return fn(*args, **kwargs)
+        try:
+            return active(*args, **kwargs)
+        except TorchDynamoException as exc:
+            active = fn
+            on_fallback(exc)
+        return fn(*args, **kwargs)
+
+    return run
 
 
 @dataclasses.dataclass
@@ -463,13 +476,9 @@ class DPTrainer:
     - ``log()`` — append to state + fire callbacks
     """
 
-    #: eval_loss aggregation: ``True`` → weight per-example / batch losses by
-    #: their real (non ``-100``) token counts, reconstructing the corpus
-    #: per-token mean (HF CE parity; valid when the per-example loss is a
-    #: token-mean CE).  Subclasses whose eval loss is a per-example objective
-    #: in its own right (e.g. SFT ``dft``) set this ``False`` → plain
-    #: per-example mean, matching the training objective's fixed,
-    #: per-example-equal weighting (no data-dependent token-count divisor).
+    #: Native causal-LM eval losses use token-count weighting by default.
+    #: Custom callbacks always use the plain per-example mean; subclasses with
+    #: other per-example objectives (for example, SFT ``dft``) set this false.
     _eval_token_weighted_loss: bool = True
 
     def __init__(
@@ -571,9 +580,8 @@ class DPTrainer:
         self._preprocess_logits = preprocess_logits_for_metrics
         self._warned_per_example_logits_only = False
         self._warned_eval_on_train = False
-        # Lazily-built per-example eval-loss closure (vmap'd).  Populated
-        # by ``_get_eval_per_example_loss_fn`` on first use; reset to
-        # ``None`` here so model rebinding can invalidate the cache.
+        # Lazily built per-example eval closures, keyed by functional source
+        # and input signature in ``_get_eval_per_example_loss_fn``.
         self._eval_per_example_loss_fn: Callable | None = None
         self._eval_per_example_loss_fn_model: Any = None
         self._eval_per_example_loss_only_fn: Callable | None = None
@@ -717,7 +725,7 @@ class DPTrainer:
         # complementary — HF's ``speed_metrics`` for run-level wall-clock
         # stays, the tracker adds per-step + post-warmup steady-state.
         self._perf_tracker: PerfTracker = perf_tracker(self._device)
-        # One CUDA-graph pool per trainer when ``cuda_graphs=True``; built lazily.
+        # One CUDA-graph pool per trainer when ``cuda_graphs > 0``; built lazily.
         self._cuda_graph_compiler: CudaGraphChunkCompiler | None = None
         self._callback_handler = build_callback_handler(
             args=args,
@@ -1245,7 +1253,7 @@ class DPTrainer:
         runtime_payload: ckpt.RuntimeCheckpoint | None = None
         trainer_state_json: dict[str, Any] | None = None
         if resume_path is not None:
-            self._load_model_weights(resume_path)
+            self._restore_checkpoint_model(resume_path)
             runtime_payload, prefix_accountant = self._read_runtime_for_resume(
                 resume_path
             )
@@ -1490,14 +1498,14 @@ class DPTrainer:
         # --- Gradient checkpointing ---
         if a.gradient_checkpointing:
             gc_kwargs = a.gradient_checkpointing_kwargs or {"use_reentrant": False}
-            if a.cuda_graphs:
+            if a.cuda_graphs > 0:
                 # Saving and restoring CUDA RNG state cannot be captured. The
                 # recompute needs it only for random ops, so require none.
                 active = _active_dropout(self._model)
                 if active:
                     raise ConfigurationError(
                         *(
-                            "cuda_graphs=True with gradient checkpointing "
+                            "cuda_graphs > 0 with gradient checkpointing "
                             "requires a model without active dropout; found "
                             f"{', '.join(active[:5])}.",
                         )
@@ -2300,6 +2308,7 @@ class DPTrainer:
                     "DPTrainer's functional context is not initialised.",
                 )
             )
+        self._model.train()
         inputs = self._prepare_input(inputs)
         # Subclass hook: augment the batch with tensors computed *outside* vmap
         # (e.g. TR-DPO's per-step reference logps). Default is a no-op. Any keys
@@ -2336,11 +2345,8 @@ class DPTrainer:
         # post-step metric bookkeeping below stays outside the scope.
         # ``sp.mark`` records the elapsed time since the previous mark.
         with self._perf_tracker.train(batch_size=step_batch_size) as sp:
-            # Clipped gradients (with optional CPU offload). Any rank-local
-            # failure must become a collective event before the gradient
-            # AllReduce below. This includes lazy strict-compilation failures:
-            # a rank with an empty Poisson draw skips the compiled kernel while
-            # a non-empty sibling may fail during its first compilation.
+            # Synchronize uncaught rank-local failures before gradient AllReduce;
+            # an empty Poisson draw may skip a failure seen by another rank.
             local_grad_error: Exception | None = None
             grads = aux = None
             try:
@@ -2526,7 +2532,8 @@ class DPTrainer:
 
         This is the unified DP-correct override hook.  The trainer wraps
         it with ``vmap`` for training (then ``grad`` → clip → noise) and
-        for per-example eval (when ``'loss' in include_for_metrics``).
+        for evaluation whenever a custom objective or per-example losses are
+        requested.
         Subclasses (SFT, DPO, KTO, …) override this method to compute
         domain-specific per-example losses — the same override point
         covers training and eval semantics by construction.
@@ -2761,17 +2768,23 @@ class DPTrainer:
         else:
             labs = None
 
-        # ``'loss' in include_for_metrics`` opts into real per-example
-        # losses via the vmap'd eval closure. Requires labels
-        # (loss-without-labels falls through to the standard path). In
-        # loss-only mode the separate scalar closure avoids returning logits.
-        use_per_example_loss = (
+        # Custom objectives have one contract in training and evaluation: the
+        # callback receives one example. ``include_for_metrics=['loss']`` also
+        # selects this path for native model losses.
+        include_per_example_loss = (
             "loss" in (self.args.include_for_metrics or []) and has_labels
         )
+        use_custom_eval_loss = self._compute_loss_func is not None and has_labels
+        custom_eval_loss: Tensor | None = None
 
-        if use_per_example_loss:
+        if include_per_example_loss or use_custom_eval_loss:
+            return_logits = include_per_example_loss and not prediction_loss_only
+            eval_batch_keys = tuple(
+                key for key, value in inputs.items() if isinstance(value, Tensor)
+            )
             vmapped_fn, _batch_argnums, batch_keys = self._get_eval_per_example_loss_fn(
-                return_logits=not prediction_loss_only
+                return_logits=return_logits,
+                batch_keys=eval_batch_keys,
             )
             if self._ctx is not None:
                 trainable = self._ctx.trainable_params
@@ -2781,23 +2794,7 @@ class DPTrainer:
                     for name, p in self._model.named_parameters()
                     if p.requires_grad
                 }
-            # ``batch_keys`` / ``batch_argnums`` were discovered from the
-            # *train* collator and baked into the vmap'd closure.  If the eval
-            # collator emits a different key set, ``inputs.get(k)`` is ``None``
-            # and vmap fails with an opake error.  Validate up front and
-            # raise a clear, actionable message instead.
-            missing = [k for k in batch_keys if inputs.get(k) is None]
-            if missing:
-                raise ConfigurationError(
-                    *(
-                        "Per-example eval (include_for_metrics=['loss']) expects the "
-                        f"eval batch to carry the train-discovered keys {list(batch_keys)!r}, "
-                        f"but {missing!r} are absent (or None).  The eval collator/"
-                        "dataset differs from the training one; align them, or drop "
-                        "'loss' from include_for_metrics to use the standard eval path.",
-                    )
-                )
-            batch_args = tuple(inputs.get(k) for k in batch_keys)
+            batch_args = tuple(inputs[k] for k in batch_keys)
             with torch.no_grad():
                 was_training = self._model.training
                 if was_training:
@@ -2809,31 +2806,30 @@ class DPTrainer:
                         self._model.train()
             if prediction_loss_only:
                 return output.detach(), None, None
-            loss, logits_tensor = output
-            loss = loss.detach()
-            # The per-example path collects only the model's ``logits``
-            # tensor (not the full ``ignore_keys``-filtered output tuple the
-            # standard path builds).  Surface that once so multi-output
-            # users aren't silently handed logits-only predictions, and
-            # honour an explicit ``logits`` entry in ``ignore_keys``.
-            if not getattr(self, "_warned_per_example_logits_only", False):
-                log.warning(
-                    "include_for_metrics=['loss'] uses the per-example eval "
-                    "path, which returns logits-only predictions (auxiliary "
-                    "model outputs are not collected).  Drop 'loss' from "
-                    "include_for_metrics for the full multi-output prediction "
-                    "tuple."
+            if include_per_example_loss:
+                loss, logits_tensor = output
+                loss = loss.detach()
+                # This opt-in path returns logits only; the default prediction
+                # path below preserves every tensor-valued model output.
+                if not getattr(self, "_warned_per_example_logits_only", False):
+                    log.warning(
+                        "include_for_metrics=['loss'] uses the per-example eval "
+                        "path, which returns logits-only predictions (auxiliary "
+                        "model outputs are not collected).  Drop 'loss' from "
+                        "include_for_metrics for the full multi-output prediction "
+                        "tuple."
+                    )
+                    self._warned_per_example_logits_only = True
+                preds = (
+                    None
+                    if ignore_keys and "logits" in ignore_keys
+                    else (logits_tensor.detach() if logits_tensor is not None else None)
                 )
-                self._warned_per_example_logits_only = True
-            preds = (
-                None
-                if ignore_keys and "logits" in ignore_keys
-                else (logits_tensor.detach() if logits_tensor is not None else None)
-            )
-            return loss, preds, labs
+                return loss, preds, labs
+            custom_eval_loss = output.detach()
 
-        # Batched forward: the default reduced eval path avoids the per-example
-        # vmap while still using the configured training objective below.
+        # The batched forward remains the full prediction surface. Custom loss
+        # values come from the complete per-example forwards above.
         forward_inputs = {**model_inputs, **labels_kwargs}
         smoothing = float(self.args.label_smoothing_factor)
         if (
@@ -2862,44 +2858,39 @@ class DPTrainer:
             finally:
                 if was_training:
                     self._model.train()
-            if has_labels and isinstance(output, Mapping):
-                if self._compute_loss_func is not None:
-                    custom_labels = next(
-                        (labels_kwargs[k] for k in label_keys if k in labels_kwargs),
+            if custom_eval_loss is not None:
+                loss = custom_eval_loss
+            elif has_labels and isinstance(output, Mapping):
+                loss = output.get("loss")
+                output_logits = output.get("logits")
+                if smoothing > 0.0 and output_logits is not None:
+                    label_key = next(
+                        (k for k in label_keys if k in labels_kwargs),
                         None,
                     )
-                    loss = self._compute_loss_func(output, custom_labels)
-                else:
-                    loss = output.get("loss")
-                    output_logits = output.get("logits")
-                    if smoothing > 0.0 and output_logits is not None:
-                        label_key = next(
-                            (k for k in label_keys if k in labels_kwargs),
-                            None,
+                    labels_tensor = (
+                        labels_kwargs.get(label_key)
+                        if label_key is not None
+                        else labels_kwargs.get("labels")
+                    )
+                    if labels_tensor is not None:
+                        if (
+                            self._is_causal_lm
+                            and output_logits.ndim >= 3  # noqa: PLR2004
+                            and output_logits.shape[:-1] == labels_tensor.shape
+                            and output_logits.shape[-2] > 1
+                        ):
+                            smooth_logits = output_logits[..., :-1, :].contiguous()
+                            smooth_labels = labels_tensor[..., 1:].contiguous()
+                        else:
+                            smooth_logits = output_logits
+                            smooth_labels = labels_tensor
+                        loss = torch.nn.functional.cross_entropy(
+                            smooth_logits.view(-1, smooth_logits.size(-1)),
+                            smooth_labels.view(-1),
+                            ignore_index=_IGNORE_INDEX,
+                            label_smoothing=smoothing,
                         )
-                        labels_tensor = (
-                            labels_kwargs.get(label_key)
-                            if label_key is not None
-                            else labels_kwargs.get("labels")
-                        )
-                        if labels_tensor is not None:
-                            if (
-                                self._is_causal_lm
-                                and output_logits.ndim >= 3  # noqa: PLR2004
-                                and output_logits.shape[:-1] == labels_tensor.shape
-                                and output_logits.shape[-2] > 1
-                            ):
-                                smooth_logits = output_logits[..., :-1, :].contiguous()
-                                smooth_labels = labels_tensor[..., 1:].contiguous()
-                            else:
-                                smooth_logits = output_logits
-                                smooth_labels = labels_tensor
-                            loss = torch.nn.functional.cross_entropy(
-                                smooth_logits.view(-1, smooth_logits.size(-1)),
-                                smooth_labels.view(-1),
-                                ignore_index=_IGNORE_INDEX,
-                                label_smoothing=smoothing,
-                            )
                 if loss is not None:
                     loss = loss.detach().mean()
             else:
@@ -3073,24 +3064,15 @@ class DPTrainer:
                         self._control,
                     )
 
-                    # ``loss`` is scalar (default forward) or 1-D per-example
-                    # (when ``'loss' in include_for_metrics`` triggers the
-                    # vmap'd eval closure).  The model's per-example CE is already
-                    # the mean over real (non-``-100``) tokens, so:
-                    #   - scalar branch: ``loss.item() * real_tokens_in_batch`` is
-                    #     the total CE; dividing the running sum by the running
-                    #     ``loss_samples`` count gives per-real-token mean CE.
-                    #   - 1-D branch: ``loss[i] * real_tokens_in_example[i]`` is
-                    #     example i's total CE; summing then dividing by the total
-                    #     real-token count gives the same per-token mean.
-                    # When labels aren't exposed (rare), or the trainer opted out
-                    # of token weighting (``_eval_token_weighted_loss=False``),
-                    # fall back to the plain per-example mean.
+                    # Native causal-LM loss is a token mean. A custom callback
+                    # instead defines one scalar per privacy unit, matching
+                    # training's per-example mean.
                     if loss is not None:
                         if (
                             labels is not None
                             and self._eval_token_weighted_loss
                             and self._is_causal_lm
+                            and self._compute_loss_func is None
                         ):
                             # HF's ForCausalLMLoss scores ``labels[..., 1:]`` (drops
                             # position 0 via the internal shift); the per-token-mean
@@ -3838,10 +3820,24 @@ class DPTrainer:
 
         def _call(merged: dict[str, Tensor], inputs: dict[str, Tensor]) -> Any:
             if with_metrics:
-                return self.compute_per_example_loss_and_metrics(fmodel, merged, inputs)
-            return self.compute_per_example_loss(
-                fmodel, merged, inputs, return_logits=return_logits
-            )
+                result = self.compute_per_example_loss_and_metrics(
+                    fmodel, merged, inputs
+                )
+            else:
+                result = self.compute_per_example_loss(
+                    fmodel, merged, inputs, return_logits=return_logits
+                )
+            loss = result[0] if with_metrics or return_logits else result
+            if not isinstance(loss, Tensor) or loss.ndim != 0:
+                actual = (
+                    f"Tensor with shape {tuple(loss.shape)}"
+                    if isinstance(loss, Tensor)
+                    else type(loss).__name__
+                )
+                raise InputTypeError(
+                    *(f"Per-example loss must be a scalar Tensor; got {actual}.",)
+                )
+            return result
 
         def per_example_loss(
             trainable: dict[str, Tensor],
@@ -3871,6 +3867,7 @@ class DPTrainer:
         self,
         *,
         return_logits: bool = True,
+        batch_keys: tuple[str, ...],
     ) -> tuple[Callable[..., Any], tuple[int, ...], tuple[str, ...]]:
         """Return a vmap'd per-example eval closure (cached) plus its batch keys.
 
@@ -3881,12 +3878,8 @@ class DPTrainer:
         ``return_logits=False`` builds a separate loss-only closure so callers
         that discard predictions do not retain a logits result.
 
-        Cached per model identity — invalidated when ``self._model``
-        rebinds (the cache key is the live ``self._model`` reference).
-        During an active training run the trainer already has
-        ``ctx.fmodel`` / ``ctx.frozen_params`` populated; outside
-        training we run ``make_functional(self._model)`` once on first
-        use and reuse the result.
+        ``batch_keys`` comes from the prepared evaluation batch. The closure is
+        cached by its functional model and input signature.
         """
         cached_fn = (
             self._eval_per_example_loss_fn
@@ -3898,33 +3891,50 @@ class DPTrainer:
             if return_logits
             else self._eval_per_example_loss_only_fn_model
         )
-        if cached_fn is not None and cached_model is self._model:
-            fn, batch_argnums, batch_keys = cached_fn
-            return fn, batch_argnums, batch_keys
-
+        requested_batch_keys = batch_keys
         ctx = self._ctx
+        cache_owner = ctx.fmodel if ctx is not None else self._model
+        if cached_fn is not None and cached_model is cache_owner:
+            fn, batch_argnums, cached_batch_keys = cached_fn
+            if cached_batch_keys == requested_batch_keys:
+                return fn, batch_argnums, cached_batch_keys
+
+        if not requested_batch_keys:
+            raise InputTypeError(
+                *("Per-example evaluation requires at least one tensor input.",)
+            )
         if ctx is not None:
             fmodel = ctx.fmodel
             frozen_params = ctx.frozen_params
-            batch_keys = ctx.batch_keys
         else:
             from opake.functional import make_functional
 
             fmodel, _trainable, frozen_params = make_functional(
                 self._model, partition_trainable=True
             )
-            batch_keys = self._discover_batch_keys()
         fn, batch_argnums = self._build_per_example_loss(
-            fmodel, frozen_params, batch_keys, return_logits=return_logits
+            fmodel, frozen_params, requested_batch_keys, return_logits=return_logits
         )
-        vmapped = torch.vmap(fn, in_dims=(None,) + (0,) * len(batch_argnums))
+        vmapped = torch.vmap(
+            fn,
+            in_dims=(None,) + (0,) * len(batch_argnums),
+            randomness="same",
+        )
         if return_logits:
-            self._eval_per_example_loss_fn = (vmapped, batch_argnums, batch_keys)
-            self._eval_per_example_loss_fn_model = self._model
+            self._eval_per_example_loss_fn = (
+                vmapped,
+                batch_argnums,
+                requested_batch_keys,
+            )
+            self._eval_per_example_loss_fn_model = cache_owner
         else:
-            self._eval_per_example_loss_only_fn = (vmapped, batch_argnums, batch_keys)
-            self._eval_per_example_loss_only_fn_model = self._model
-        return vmapped, batch_argnums, batch_keys
+            self._eval_per_example_loss_only_fn = (
+                vmapped,
+                batch_argnums,
+                requested_batch_keys,
+            )
+            self._eval_per_example_loss_only_fn_model = cache_owner
+        return vmapped, batch_argnums, requested_batch_keys
 
     def _discover_batch_keys(self) -> tuple[str, ...]:
         """Discover the ordered tuple of tensor keys the collator emits.
@@ -4491,30 +4501,23 @@ class DPTrainer:
         return torch.autocast(device_type=self._device.type, dtype=self._amp_dtype)
 
     def _grad_compiler(self) -> Callable | None:
-        """Return a strict compiler for the tensor-only gradient chunk.
-
-        The clipping factories keep variable-size microbatch orchestration,
-        diagnostics, and state updates eager.  The injected compiler sees only
-        ``vmap(grad_and_value)`` plus per-example clipping and reduction, with a
-        symbolic leading chunk dimension. This avoids specializing on realized
-        Poisson or remainder batch sizes; PyTorch may retain a size-one variant.
-        """
+        """Compile gradient chunks while keeping clipping state updates eager."""
         a = self.args
-        if a.cuda_graphs:
+        if a.cuda_graphs > 0:
             if self._device.type != "cuda":
                 raise ConfigurationError(
                     *(
-                        "cuda_graphs=True requires a CUDA device; got "
+                        "cuda_graphs > 0 requires a CUDA device; got "
                         f"{self._device.type!r}.",
                     )
                 )
             if self._cuda_graph_compiler is None:
                 self._cuda_graph_compiler = CudaGraphChunkCompiler(
-                    max_graphs=a.cuda_graph_max_graphs
+                    max_graphs=a.cuda_graphs
                 )
                 log.info(
-                    "CUDA-graph replay enabled for DP gradient chunks (max_graphs=%d).",
-                    a.cuda_graph_max_graphs,
+                    "CUDA-graph replay enabled for DP gradient chunks (graphs=%d).",
+                    a.cuda_graphs,
                 )
             return self._cuda_graph_compiler
         if not a.torch_compile:
@@ -4536,10 +4539,22 @@ class DPTrainer:
             mode,
             self._device.type,
         )
+        warned = False
+
+        def on_fallback(exc: TorchDynamoException) -> None:
+            nonlocal warned
+            if not warned:
+                warned = True
+                reason = str(exc).partition("\n")[0]
+                log.warning(
+                    "Strict DP gradient compilation failed (%s: %s); "
+                    "running affected chunks eagerly.",
+                    type(exc).__name__,
+                    reason,
+                )
+
         return lambda fn: _compile_strict_chunk(
-            fn,
-            backend=backend,
-            mode=mode,
+            fn, backend=backend, mode=mode, on_fallback=on_fallback
         )
 
     def _create_grad_fn(
@@ -4567,7 +4582,6 @@ class DPTrainer:
         target_quantile = float(ca.get("target_quantile", 0.5))
         clipping_norm_max = float(ca.get("clipping_norm_max", 10.0))
         auto_gamma = float(ca.get("gamma", 0.01))
-        clip_backend = ca.get("clip_backend", "torch")
         compiler = self._grad_compiler()
 
         if a.clipping_mode == "adaptive":
@@ -4583,7 +4597,6 @@ class DPTrainer:
                 return_aux=True,
                 key=quantile_noise_key,
                 normalize_by=expected_batch_size,
-                clip_backend=clip_backend,
                 _chunk_compiler=compiler,
             )
         elif a.clipping_mode == "auto":
@@ -4609,7 +4622,6 @@ class DPTrainer:
                 normalize_by=expected_batch_size,
                 microbatch_size=microbatch_size,
                 return_aux=True,
-                clip_backend=clip_backend,
                 _chunk_compiler=compiler,
             )
         return grad_fn, state
@@ -5031,28 +5043,7 @@ class DPTrainer:
         return True
 
     def _load_best_model(self, ctx: _TrainingContext) -> None:
-        """Restore best-checkpoint weights into the underlying ``nn.Module``.
-
-        Ordering contract (HF parity):
-
-        1. Read the saved state dict from ``state.best_model_checkpoint``.
-        2. Mutate ``self._model`` via ``load_state_dict(...)`` — the
-           caller verified the model's parameter set matches what was
-           saved.
-        3. Rebuild ``ctx.trainable_params`` from the freshly mutated
-           module so the functional path picks up the loaded weights.
-
-        Mutating the module first means a ``save_model()`` call between
-        ``_load_best_model`` and the ``train()`` ``finally`` block sees
-        the loaded weights even before ``_restore_params`` runs.
-
-        Raises ``RuntimeError`` when ``load_best_model_at_end=True`` was
-        requested but the best-checkpoint contract can't be honored —
-        no best checkpoint was recorded (eval never improved) or the
-        recorded directory has no weights file.  Soft-failing here
-        leaves the user with the last-trained weights silently masquerading
-        as "best", which is exactly what the flag is meant to prevent.
-        """
+        """Restore the selected checkpoint into the model and functional view."""
         ckpt_dir = self.state.best_model_checkpoint
         if ckpt_dir is None:
             raise OperationError(
@@ -5065,27 +5056,7 @@ class DPTrainer:
                 )
             )
         log.info("Loading best model from %s", ckpt_dir)
-        new_state, mutated = self._read_weights_file(ckpt_dir)
-        if not new_state and not mutated:
-            raise OperationError(
-                *(
-                    f"load_best_model_at_end=True: best checkpoint recorded at "
-                    f"{ckpt_dir!r} but no weights file (model.safetensors / "
-                    "pytorch_model.bin / sharded index) was found there.  The "
-                    "directory may have been pruned or moved between save and "
-                    "end-of-train load.",
-                )
-            )
-
-        # Mutate the underlying module so ``save_model()`` and any callback
-        # firing on ``on_train_end`` observe the best weights immediately.
-        # Sharded loads have already mutated the model in place — skip
-        # the redundant ``load_state_dict`` call.  PEFT detection drives
-        # ``strict``: adapter dirs ship only adapter weights, full-model
-        # dirs ship the full state dict.
-        if not mutated:
-            strict = not self._is_peft
-            self._model.load_state_dict(new_state, strict=strict)
+        self._restore_checkpoint_model(ckpt_dir)
 
         # Rebuild the functional view from the (now-mutated) module.  Keep
         # ``ctx.trainable_params`` keyed by the same names as before — i.e.
@@ -5102,86 +5073,159 @@ class DPTrainer:
                 },
             )
 
-    def _read_weights_file(
-        self,
-        ckpt_dir: str,
-    ) -> tuple[dict[str, torch.Tensor], bool]:
-        """Load weights from a checkpoint directory.
+    def _restore_checkpoint_model(self, ckpt_dir: str) -> None:
+        """Restore model weights from a trainer checkpoint."""
+        directory = Path(ckpt_dir)
+        try:
+            if self._is_peft:
+                self._restore_peft_checkpoint(directory)
+            else:
+                self._restore_full_checkpoint(directory)
+        except CheckpointError:
+            raise
+        except Exception as exc:
+            CheckpointError.raise_(
+                f"Could not restore model weights from {directory}: {exc}", cause=exc
+            )
 
-        Supports four on-disk shapes:
+    def _restore_peft_checkpoint(self, directory: Path) -> None:
+        from peft import (
+            PeftConfig,
+            get_peft_model_state_dict,
+            set_peft_model_state_dict,
+        )
+        from peft.utils import SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME
+        from peft.utils.save_and_load import load_peft_weights
 
-        - Single-file safetensors: ``model.safetensors`` (full model) or
-          ``adapter_model.safetensors`` (PEFT adapter).
-        - Single-file pickle: ``pytorch_model.bin`` /
-          ``adapter_model.bin``.
-        - Sharded safetensors with index ``model.safetensors.index.json``.
-        - Sharded pickle with index ``pytorch_model.bin.index.json``.
+        adapter_dirs = {
+            child.name: child
+            for child in directory.iterdir()
+            if child.is_dir() and (child / "adapter_config.json").is_file()
+        }
+        if (directory / "adapter_config.json").is_file():
+            adapter_dirs["default"] = directory
+        expected_names = set(self._model.peft_config)
+        if set(adapter_dirs) != expected_names:
+            CheckpointError.raise_(
+                f"PEFT adapters in {directory} differ from the model: "
+                f"saved={sorted(adapter_dirs)}, expected={sorted(expected_names)}"
+            )
 
-        Returns ``(state_dict, model_already_mutated)``.  In the
-        single-file cases ``state_dict`` carries the loaded tensors and
-        ``model_already_mutated`` is ``False`` (the caller must call
-        ``self._model.load_state_dict(state_dict, ...)`` itself).  In
-        the sharded case ``load_sharded_checkpoint`` has already
-        mutated ``self._model`` in place, so the state dict comes back
-        empty and ``model_already_mutated`` is ``True`` to signal "no
-        further ``load_state_dict`` needed".  Returns ``({}, False)``
-        when no checkpoint files were found.
-        """
+        metadata = {
+            "auto_mapping",
+            "base_model_name_or_path",
+            "inference_mode",
+            "peft_version",
+        }
+        for name in sorted(expected_names):
+            adapter_dir = adapter_dirs[name]
+            if not any(
+                (adapter_dir / filename).is_file()
+                for filename in (SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME)
+            ):
+                CheckpointError.raise_(f"Missing PEFT weights in {adapter_dir}")
+
+            raw_config = json.loads((adapter_dir / "adapter_config.json").read_text())
+            saved_config = PeftConfig.from_pretrained(str(adapter_dir))
+            unknown = set(raw_config) - set(saved_config.to_dict()) - {"peft_version"}
+            if unknown:
+                CheckpointError.raise_(
+                    f"Unsupported PEFT config fields in {adapter_dir}: {sorted(unknown)}"
+                )
+            live_config = self._model.peft_config[name]
+            saved_values = {
+                key: value
+                for key, value in saved_config.to_dict().items()
+                if key not in metadata
+            }
+            live_values = {
+                key: value
+                for key, value in live_config.to_dict().items()
+                if key not in metadata
+            }
+            if saved_values != live_values:
+                changed = sorted(
+                    key
+                    for key in saved_values.keys() | live_values.keys()
+                    if key not in saved_values
+                    or key not in live_values
+                    or saved_values[key] != live_values[key]
+                )
+                CheckpointError.raise_(
+                    f"PEFT config mismatch for {name!r} in {adapter_dir}: {changed}"
+                )
+
+            saved = load_peft_weights(str(adapter_dir), device="cpu")
+            set_peft_model_state_dict(self._model, dict(saved), adapter_name=name)
+            restored = get_peft_model_state_dict(
+                self._model, adapter_name=name, save_embedding_layers=False
+            )
+            if set(saved) - set(restored):
+                restored = get_peft_model_state_dict(
+                    self._model, adapter_name=name, save_embedding_layers=True
+                )
+            if set(saved) != set(restored):
+                CheckpointError.raise_(
+                    f"Incomplete PEFT adapter {name!r} in {adapter_dir}: "
+                    f"missing={sorted(set(restored) - set(saved))[:5]}, "
+                    f"unexpected={sorted(set(saved) - set(restored))[:5]}"
+                )
+            for weight_name, value in saved.items():
+                actual = restored[weight_name]
+                if isinstance(value, Tensor) and isinstance(actual, Tensor):
+                    matches = value.shape == actual.shape and torch.equal(
+                        value.to(device=actual.device, dtype=actual.dtype), actual
+                    )
+                else:
+                    matches = value == actual
+                if not matches:
+                    CheckpointError.raise_(
+                        f"PEFT tensor {weight_name!r} was not restored from {adapter_dir}"
+                    )
+
+    def _restore_full_checkpoint(self, directory: Path) -> None:
         from safetensors.torch import load_file as load_safetensors
 
-        from transformers.utils import (
-            SAFE_WEIGHTS_INDEX_NAME,
-            WEIGHTS_INDEX_NAME,
-        )
+        from transformers.trainer_utils import load_sharded_checkpoint
+        from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, WEIGHTS_INDEX_NAME
 
-        # ``load_sharded_checkpoint`` relocated across our supported range:
-        # ``transformers.modeling_utils`` in v4, ``transformers.trainer_utils``
-        # in v5.  Import from wherever it lives rather than pinning a module.
-        try:
-            from transformers.modeling_utils import load_sharded_checkpoint
-        except ImportError:  # transformers >= 5
-            from transformers.trainer_utils import load_sharded_checkpoint
-
-        # Single-file shapes win over sharded indices (HF parity:
-        # ``save_pretrained`` writes a single file when the model fits
-        # under ``max_shard_size``).
-        candidates = [
-            Path(ckpt_dir) / ckpt.SAFE_WEIGHTS_NAME,
-            Path(ckpt_dir) / "adapter_model.safetensors",
-            Path(ckpt_dir) / ckpt.WEIGHTS_NAME,
-            Path(ckpt_dir) / "adapter_model.bin",
-        ]
-        for path in candidates:
-            if not path.exists():
-                continue
-            if path.suffix == ".safetensors":
-                return load_safetensors(str(path), device=str(self._device)), False
-            # ``weights_only=False``: ``pytorch_model.bin`` is a pickled
-            # state-dict that may carry ``torch.dtype`` / ``torch.device``
-            # markers (HF historically stamps these into checkpoints) —
-            # PyTorch 2.6's safe-load default rejects them.  Pinning the
-            # explicit ``False`` keeps the behaviour we tested against.
-            return (
-                torch.load(str(path), map_location=self._device, weights_only=False),
-                False,
+        safe_path = directory / ckpt.SAFE_WEIGHTS_NAME
+        binary_path = directory / ckpt.WEIGHTS_NAME
+        if safe_path.is_file():
+            weights = load_safetensors(str(safe_path), device=str(self._device))
+            result = self._model.load_state_dict(weights, strict=False)
+        elif binary_path.is_file():
+            weights = torch.load(
+                str(binary_path), map_location=self._device, weights_only=False
             )
-
-        # Sharded checkpoints: ``load_sharded_checkpoint`` mutates the
-        # model in place.  ``strict=False`` mirrors the PEFT-friendly
-        # single-file path so partial-key checkpoints still load.
-        sharded_indices = (
-            Path(ckpt_dir) / SAFE_WEIGHTS_INDEX_NAME,
-            Path(ckpt_dir) / WEIGHTS_INDEX_NAME,
-        )
-        if any(p.exists() for p in sharded_indices):
-            load_sharded_checkpoint(
-                self._model,
-                ckpt_dir,
-                strict=False,
-                prefer_safe=True,
+            result = self._model.load_state_dict(weights, strict=False)
+        elif any(
+            (directory / name).is_file()
+            for name in (SAFE_WEIGHTS_INDEX_NAME, WEIGHTS_INDEX_NAME)
+        ):
+            result = load_sharded_checkpoint(
+                self._model, str(directory), strict=False, prefer_safe=True
             )
-            return {}, True
-        return {}, False
+        else:
+            CheckpointError.raise_(f"Missing model weights in {directory}")
+
+        missing = set(result.missing_keys)
+        unexpected = set(result.unexpected_keys)
+        tying = getattr(self._model, "tie_weights", None)
+        get_ties = getattr(self._model, "get_expanded_tied_weights_keys", None)
+        tied = get_ties(all_submodels=True) if callable(get_ties) else {}
+        loaded = set(self._model.state_dict()) - missing
+        invalid_missing = {
+            key for key in missing if not callable(tying) or tied.get(key) not in loaded
+        }
+        if unexpected or invalid_missing:
+            CheckpointError.raise_(
+                f"Model weights in {directory} do not match the model: "
+                f"missing={sorted(invalid_missing)[:5]}, "
+                f"unexpected={sorted(unexpected)[:5]}"
+            )
+        if missing:
+            tying(missing_keys=missing)
 
     def save_model(
         self,
@@ -5642,21 +5686,6 @@ class DPTrainer:
                 *(f"resume_from_checkpoint directory does not exist: {value}",)
             )
         return value
-
-    def _load_model_weights(self, ckpt_dir: str) -> None:
-        """Load saved weights into ``self._model`` so make_functional starts from them."""
-        new_state, mutated = self._read_weights_file(ckpt_dir)
-        if not new_state and not mutated:
-            log.warning("No weights file in %s; model untouched", ckpt_dir)
-            return
-        # Sharded loads already mutated ``self._model`` in place — skip
-        # the redundant ``load_state_dict`` call.  ``strict`` follows
-        # PEFT detection: adapter checkpoints store only adapter
-        # parameters (subset → ``strict=False``); full-model checkpoints
-        # surface mismatched keys as errors (``strict=True``).
-        if not mutated:
-            strict = not self._is_peft
-            self._model.load_state_dict(new_state, strict=strict)
 
     def _read_runtime_for_resume(
         self, ckpt_dir: str
