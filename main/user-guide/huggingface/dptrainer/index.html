@@ -3402,6 +3402,9 @@ LoRA adapters receive per-example gradients (essential for memory at
 multi-billion-parameter scale).  Fused LoRA Triton kernels engage
 automatically when adapters have <code>bias="none"</code> — see
 <a href="../model-patches/#fused-lora-operations">Model patches — Fused LoRA operations</a>.</p>
+<p>To resume a PEFT run, reconstruct the same base model and active adapter setup.
+LoRA adapter weights are restored from the checkpoint. PEFT formats that omit
+trainable state, including P-Tuning, cannot resume and raise <code>CheckpointError</code>.</p>
 <h2 id="non-private-baseline">Non-private baseline<a class="headerlink" href="#non-private-baseline" title="Permanent link">&para;</a></h2>
 <p>To measure the utility cost of differential privacy, run the trainer with
 noise turned off — <code>privacy_noise_multiplier=0.0</code> — keeping everything else
