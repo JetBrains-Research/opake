@@ -55,7 +55,7 @@ DPTrainer(
 | `train_dataset` | `Dataset \| None` | May be `None` only when `train()` is not called. |
 | `eval_dataset` | `Dataset \| None` | Required when `args.eval_strategy != "no"`. |
 | `processing_class` | `PreTrainedTokenizerBase \| SequenceFeatureExtractor \| None` | Used for the default collator selection and token-count metrics. |
-| `compute_loss_func` | `Callable[[outputs, labels], Tensor] \| None` | Loss override; called under vmap per example during training and per-example-loss evaluation, and once on batched outputs/labels on the default reduced eval path. It takes precedence over label smoothing. Not HF's `(outputs, labels, num_items_in_batch) -> scalar` signature. |
+| `compute_loss_func` | `Callable[[outputs, labels], Tensor] \| None` | Per-example scalar loss override, called under `vmap` during training and evaluation. Evaluation reports the arithmetic mean of these scalars, without token-count weighting. It takes precedence over label smoothing. Not HF's `(outputs, labels, num_items_in_batch) -> scalar` signature. |
 | `compute_metrics` | `Callable[[EvalPrediction], dict] \| None` | Standard HF callback over concatenated predictions / label_ids / inputs / losses. |
 | `callbacks` | `list[TrainerCallback] \| None` | User callbacks; `DefaultFlowCallback` is auto-prepended. |
 | `optimizers` | `tuple[Any \| None, Any \| None]` | **Not supported.** Passing non-`None` raises `ConfigurationError`: DPTrainer owns the functional torchopt optimizer. |
