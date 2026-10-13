@@ -98,7 +98,6 @@ def clipped_grad(
     microbatch_size: int | None = None,
     dtype: torch.dtype | None = None,
     compute_dtype: torch.dtype | None = None,
-    clip_backend: str = "torch",
     _scale_fn: Callable | None = None,
     _builtin_scale: _BuiltinScale | None = None,
     _chunk_compiler: Callable | None = None,
@@ -195,13 +194,6 @@ def clipped_grad(
             value. Independent of ``dtype`` (which controls the *output* dtype).
         second_moment: Whether to accumulate the clipped-gradient second
             moment required by DP-FTRL noise mechanisms.
-        clip_backend: Implementation of the per-example clip-and-sum:
-            ``"torch"`` (default), ``"triton"`` (fused CUDA kernels; raises
-            :class:`~opake.exceptions.ConfigurationError` when they cannot
-            serve the configuration or a call) or ``"auto"`` (Triton where
-            supported, PyTorch otherwise). See :func:`clipped_fun` for the
-            supported configurations; clipping norms, scales and the
-            stored-value bound are the same for both implementations.
     Returns:
         Tuple of (:class:`ClippedGradFn`, clip_state) where:
         - clipped_grad_fn: A function that computes the sum of clipped per-example gradients.
@@ -315,7 +307,6 @@ def clipped_grad(
         microbatch_size=microbatch_size,
         dtype=dtype,
         compute_dtype=compute_dtype,
-        clip_backend=clip_backend,
         _scale_fn=_scale_fn,
         _builtin_scale=_builtin_scale,
         _chunk_compiler=_chunk_compiler,

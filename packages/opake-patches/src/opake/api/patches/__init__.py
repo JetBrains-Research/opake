@@ -97,7 +97,7 @@ def apply_runtime_patches(
     batches), ``vmap_checkpointing`` (gradient-checkpointing shim),
     ``vmap_grouped_mm`` (vmap-safe grouped-GEMM gate for MoE experts).
     On CUDA with Triton available, ``performance=True`` also registers the
-    fused clipping kernel for ``clip_backend="auto"`` / ``"triton"``.
+    fused clipping kernel used by automatic clipping dispatch.
     Per-model CE patches live on :func:`apply_model_patches`.
     """
     global _runtime_patches_applied

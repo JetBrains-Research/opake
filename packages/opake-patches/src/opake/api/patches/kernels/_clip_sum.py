@@ -4,12 +4,12 @@
 
 Drop-in replacement for
 :func:`opake.api.engine.clipping._streaming._stream_clip_and_sum`, selected by
-``clip_backend="triton"`` or ``"auto"`` on :func:`clipped_fun` /
-:func:`clipped_grad`. It never materializes sanitized or clipped copies of the
-batch, and it handles all tensors of one storage dtype in one launch per pass
-("multi-tensor apply"). Each program looks up its tensor in a cached tile table
-and reads that tensor's address from a per-call pointer table. A call therefore
-costs a few dozen CUDA launches, independent of the number of tensors.
+automatic dispatch on :func:`clipped_fun` / :func:`clipped_grad`. It never
+materializes sanitized or clipped copies of the batch, and it handles all
+tensors of one storage dtype in one launch per pass ("multi-tensor apply").
+Each program looks up its tensor in a cached tile table and reads that tensor's
+address from a per-call pointer table. A call therefore costs a few dozen CUDA
+launches, independent of the number of tensors.
 
 Semantics match the streaming path:
 
@@ -45,7 +45,7 @@ Supported calls: scalar clipping norm, fixed scaling (not AUTO-S), no second
 moment, ``compute_dtype=None``, float32/bfloat16 tensors on a single CUDA device
 that do not require grad, an output dtype equal to the storage dtype or float32,
 and no active ``torch.compile`` trace. Other calls fall back to the streaming
-path, or raise when ``strict``.
+path.
 """
 
 from __future__ import annotations
@@ -60,7 +60,6 @@ import triton.language as tl
 from opake.api.engine.clipping import _pytree as cp
 from opake.api.engine.clipping._streaming import _stream_clip_and_sum
 from opake.api.engine.pytree import tree_flatten, tree_unflatten
-from opake.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -405,12 +404,10 @@ def fused_stream_clip_and_sum(
     second_moment,
     return_aux,
     return_stats,
-    strict: bool,
 ):
     """``_stream_clip_and_sum`` with the fused kernels where supported.
 
-    Unsupported calls run the streaming path, or raise
-    :class:`~opake.exceptions.ConfigurationError` when ``strict``.
+    Unsupported calls run the streaming path.
     """
     leaves, treedef = tree_flatten(values)
     reason = unsupported_reason(
@@ -427,11 +424,7 @@ def fused_stream_clip_and_sum(
         if out_dtypes is None:
             reason = "the requested output dtype is not supported"
     if reason is not None:
-        if strict:
-            raise ConfigurationError(
-                *(f"clip_backend='triton' cannot run this call: {reason}.",)
-            )
-        logger.debug("clip_backend='auto' using the torch path: %s", reason)
+        logger.debug("using the PyTorch clipping path: %s", reason)
         return _stream_clip_and_sum(
             values,
             clipping_norm,

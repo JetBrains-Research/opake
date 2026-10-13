@@ -640,58 +640,40 @@ class TestClippingAndSamplingSurfaces:
             "clipping_norm_max": 50.0,
         }
 
-    @pytest.mark.parametrize("mode", ["fixed", "adaptive"])
-    def test_clipping_kwargs_accept_clip_backend(self, mode):
-        args = TrainingArguments(
-            privacy_noise_multiplier=1.0,
-            clipping_mode=mode,
-            clipping_kwargs={"clip_backend": "auto"},
-        )
-        assert args.clipping_kwargs == {"clip_backend": "auto"}
-
-    def test_auto_s_clipping_rejects_clip_backend(self):
+    @pytest.mark.parametrize("mode", ["fixed", "adaptive", "auto"])
+    def test_clipping_kwargs_reject_clip_backend(self, mode):
         with pytest.raises(
             ValueError, match="clipping_kwargs contains unsupported keys"
         ):
             TrainingArguments(
                 privacy_noise_multiplier=1.0,
-                clipping_mode="auto",
-                clipping_kwargs={"clip_backend": "auto"},
+                clipping_mode=mode,
+                clipping_kwargs={"clip_backend": "torch"},
             )
 
     @pytest.mark.parametrize("mode", ["fixed", "adaptive"])
-    def test_trainer_forwards_clip_backend(self, mode, monkeypatch):
-        import importlib
+    def test_trainer_builds_grad_fn_with_automatic_clipping(self, mode, monkeypatch):
         from types import SimpleNamespace
 
         from opake.api.transformers.trainer._dp_trainer import DPTrainer
         from opake.random import key
 
-        # Without fused kernels, "triton" is rejected by the clipping factory,
-        # which can only happen if the trainer forwarded it.
-        clipped_fun_module = importlib.import_module(
-            "opake.api.engine.clipping._clipped_fun"
-        )
-        monkeypatch.setattr(
-            clipped_fun_module, "fused_kernels_available", lambda: False
-        )
         args = TrainingArguments(
             privacy_noise_multiplier=1.0,
             clipping_mode=mode,
-            clipping_kwargs={"clip_backend": "triton"},
         )
         trainer = SimpleNamespace(_grad_compiler=lambda: None)
-        with pytest.raises(ConfigurationError, match="clip_backend='triton'"):
-            DPTrainer._create_grad_fn(
-                trainer,
-                lambda params, batch: params.sum(),
-                (1,),
-                args,
-                1.0,
-                8,
-                None,
-                quantile_noise_key=key(0),
-            )
+        grad_fn, _ = DPTrainer._create_grad_fn(
+            trainer,
+            lambda params, batch: params.sum(),
+            (1,),
+            args,
+            1.0,
+            8,
+            None,
+            quantile_noise_key=key(0),
+        )
+        assert callable(grad_fn)
 
 
 class TestMechanismAndSamplerDefaults:

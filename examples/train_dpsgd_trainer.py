@@ -525,18 +525,6 @@ def parse_args() -> argparse.Namespace:
         default="adaptive",
     )
     dp_group.add_argument(
-        "--clip-backend",
-        type=str,
-        choices=["torch", "auto", "triton"],
-        default="torch",
-        help=(
-            "Per-example clip-and-sum implementation for fixed and adaptive "
-            "clipping: torch (default), triton (fused CUDA kernels; errors when "
-            "a call is unsupported) or auto (Triton where supported, torch "
-            "otherwise). AUTO-S (--clipping-mode auto) always uses torch."
-        ),
-    )
-    dp_group.add_argument(
         "--clipping-norm",
         type=float,
         default=1.0,
@@ -807,10 +795,6 @@ def parse_args() -> argparse.Namespace:
 
     if args.push_to_hub and not args.hub_model_id:
         parser.error("--push-to-hub requires --hub-model-id (e.g. 'org/name')")
-    if args.clip_backend == "triton" and args.clipping_mode == "auto":
-        parser.error(
-            "--clip-backend triton does not support --clipping-mode auto (AUTO-S)"
-        )
 
     if args.per_group_clipping:
         parsed: dict[str, float] = {}
@@ -842,8 +826,6 @@ def _clipping_kwargs_for_trainer(args: argparse.Namespace) -> dict:
     if args.clipping_mode == "adaptive":
         kwargs["target_quantile"] = args.target_clipping_rate
         kwargs["clipping_norm_max"] = args.clipping_norm_max
-    if args.clip_backend != "torch":
-        kwargs["clip_backend"] = args.clip_backend
     return kwargs
 
 
