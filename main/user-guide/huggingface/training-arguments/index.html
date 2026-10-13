@@ -3690,7 +3690,7 @@ keys win on collision with the defaults table.</p>
 <tr>
 <td><code>torch_compile</code></td>
 <td><code>False</code></td>
-<td>Compiles the tensor-only per-microbatch <code>vmap(grad)+clip+reduce</code> kernel with <code>fullgraph=True</code>.</td>
+<td>Strictly compiles each tensor-only <code>vmap(grad)+clip+reduce</code> chunk with automatic dynamic shapes. On a Dynamo failure, warns once and runs the affected chunk eagerly thereafter.</td>
 </tr>
 </tbody>
 </table>
@@ -3722,6 +3722,7 @@ keys win on collision with the defaults table.</p>
 </tr>
 </tbody>
 </table>
+<p>If fused CE prevents full-graph capture, <code>performance_kernels_config={"fused_linear_cross_entropy": False}</code> disables it at the cost of higher logits memory use.</p>
 <p>See <a href="../model-patches/">Model patches</a> for the full configuration matrix.</p>
 <h2 id="saving-and-resume">Saving and resume<a class="headerlink" href="#saving-and-resume" title="Permanent link">&para;</a></h2>
 <p>Standard HF save fields work as expected:</p>
