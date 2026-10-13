@@ -3611,12 +3611,35 @@ ignored when <code>model</code> is already a module.</p>
 when omitted; if it has no pad token, the EOS token is reused. Set
 <code>eos_token</code> on the config to override the EOS appended to plain-text examples.</p>
 <h3 id="data-formats-and-the-loss">Data formats and the loss<a class="headerlink" href="#data-formats-and-the-loss" title="Permanent link">&para;</a></h3>
-<p><code>SFTTrainer</code> tokenizes the dataset for you, dispatching on format: a plain-text
-column (<code>dataset_text_field</code>, default <code>"text"</code>), a <code>prompt</code>/<code>completion</code> pair,
-or a chat-message column (<code>messages</code> / <code>conversations</code> / <code>chat</code>). Pass a
+<p><code>SFTTrainer</code> accepts both standard strings and conversational message lists:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Standard</th>
+<th>Conversational</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Language modeling</td>
+<td><code>text: str</code></td>
+<td><code>messages: list[message]</code></td>
+</tr>
+<tr>
+<td>Prompt-completion</td>
+<td><code>prompt: str</code>, <code>completion: str</code></td>
+<td><code>prompt: list[message]</code>, <code>completion: list[message]</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>dataset_text_field</code> selects the standard language-modeling column (default
+<code>"text"</code>); <code>conversations</code> and <code>chat</code> are aliases for <code>messages</code>. Conversational
+prompt-completion rows are rendered as one full conversation. Pass a
 <code>formatting_func(example) -&gt; str</code> to render arbitrary rows into the text field
 first. Already-tokenized datasets (with an <code>input_ids</code> column) pass through
-untouched.</p>
+untouched. For pre-tokenized masking, provide the final effective
+<code>completion_mask</code>; retained raw columns are not reinterpreted.</p>
 <p><code>loss_type</code> selects <code>"nll"</code> (standard cross-entropy), <code>"dft"</code> (Dynamic
 Fine-Tuning), or <code>"chunked_nll"</code> (fused logits-free cross-entropy). All use a
 DP-safe per-example token-count divisor — see
@@ -3627,15 +3650,16 @@ DP-safe per-example token-count divisor — see
 reject a custom function.</p>
 <p>Set <code>completion_only_loss=True</code> to score only the completion tokens of
 prompt-completion data, or <code>assistant_only_loss=True</code> to score only assistant
-turns of chat data (the trainer installs the <code>{% generation %}</code>-marked training
-chat template and recovers the assistant-token mask). Left as the default
-<code>None</code>, <code>completion_only_loss</code> auto-detects: <code>True</code> for prompt-completion data
-and <code>False</code> for language-modeling data, including chat. Ordinary chat therefore
-scores the full rendered conversation; enable <code>assistant_only_loss</code> to mask its
-non-assistant tokens. Use <code>chat_template_path</code> to clone a chat template (and its
-special tokens) from another tokenizer/Jinja file onto the processing class
-before tokenizing — this resizes the model's embeddings, and under PEFT the new
-token rows are marked trainable.</p>
+turns of conversational data (the trainer installs the <code>{% generation %}</code>-marked
+training template and recovers the assistant-token mask). When both apply, only
+assistant tokens in the completion are scored. Left as the default <code>None</code>,
+<code>completion_only_loss</code> auto-detects: <code>True</code> for raw prompt-completion data and
+<code>False</code> for language-modeling data. Ordinary chat therefore scores the full
+rendered conversation; enable <code>assistant_only_loss</code> to mask its non-assistant
+tokens. Use <code>chat_template_path</code> to clone a chat template (and its special
+tokens) from another tokenizer/Jinja file onto the processing class before
+tokenizing — this resizes the model's embeddings, and under PEFT the new token
+rows are marked trainable.</p>
 <h3 id="telemetry-and-memory">Telemetry and memory<a class="headerlink" href="#telemetry-and-memory" title="Permanent link">&para;</a></h3>
 <p><code>log_completion_metrics</code> (default <code>True</code>) gates the per-step logits-derived
 diagnostics — <code>entropy</code> and <code>mean_token_accuracy</code> over the supervised
