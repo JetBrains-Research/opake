@@ -228,6 +228,7 @@ class _PromptCompletionChatTokenizer(_ChatTokenizer):
         result = {"input_ids": list(input_ids), "attention_mask": [1] * len(input_ids)}
         if return_assistant_tokens_mask:
             result["assistant_masks"] = list(self.assistant_mask)
+        return result
 
 
 class _TruncatingChatTokenizer(_ChatTokenizer):
