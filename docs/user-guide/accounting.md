@@ -182,7 +182,9 @@ Accounts for the additional privacy cost of adaptive clipping (the noisy
 quantile query). Use this when using `adaptive_clipped_grad`. `num_groups`
 defaults to 1 for a single adaptive threshold; set it to the number of
 independently adaptive groups for per-group clipping, because each group
-releases its own noisy quantile query.
+releases its own noisy quantile query. Pass the same public, fixed
+`expected_batch_size` to the runtime and accountant. The gradient's
+`normalize_by` may differ.
 
 ```python
 expected_batch_size = sample_rate * dataset_size

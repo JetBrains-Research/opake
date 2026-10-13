@@ -321,12 +321,12 @@ conservative upper bound.
 ### `adaclip(inner, *, fraction_noise_std, expected_batch_size, num_groups=1) -> DpProcess`
 
 Accounts for the extra privacy cost of adaptive clipping's noisy
-fraction query. Returns an `AdaClip` process composable with `poisson()`
+centered-indicator query. Returns an `AdaClip` process composable with `poisson()`
 (plain or truncated).
 
 - `inner` (Gaussian): Base mechanism (from `gaussian()`)
-- `fraction_noise_std` (float): Noise std on the clipping fraction. Default: 0.05.
-- `expected_batch_size` (float): Expected batch size (`sample_rate × dataset_size`), used to compute the absolute noise std for the quantile query.
+- `fraction_noise_std` (float): Noise std on the centered indicator. Default: 0.05.
+- `expected_batch_size` (float): Expected batch size (`sample_rate × dataset_size`), the fixed denominator for the indicator; it must match the runtime's `expected_batch_size`.
 - `num_groups` (int): Number of independently adaptive clipping groups, and
   therefore independent noisy quantile queries. Default: 1. Set this to the
   number of groups when using per-group adaptive clipping.
