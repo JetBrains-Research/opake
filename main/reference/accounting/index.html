@@ -4200,10 +4200,11 @@ sensitivity-1 queries. Base mechanism for DP-SGD.</p>
 </ul>
 <h3 id="poissoninner-sample_rate-dpprocess"><code>poisson(inner, sample_rate) -&gt; DpProcess</code><a class="headerlink" href="#poissoninner-sample_rate-dpprocess" title="Permanent link">&para;</a></h3>
 <p>Poisson-subsampled mechanism (standard DP-SGD step). <code>sample_rate</code> is
-<code>batch_size / dataset_size</code>. Plain Poisson accepts any Opake <code>DpProcess</code> as
-its base mechanism.</p>
+<code>batch_size / dataset_size</code>. Both the plain and truncated forms accept a
+<code>Gaussian</code>, <code>AdaClip</code>, or <code>NonPrivate</code> base mechanism. Compose the returned
+step with <code>* num_steps</code> to account for a training run.</p>
 <ul>
-<li><code>inner</code> (DpProcess): Base mechanism</li>
+<li><code>inner</code> (Gaussian | AdaClip | NonPrivate): Base mechanism</li>
 <li><code>sample_rate</code> (float): Probability of including each example, in (0, 1)</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="mi">256</span> <span class="o">/</span> <span class="mi">50_000</span><span class="p">)</span>
@@ -4213,8 +4214,7 @@ its base mechanism.</p>
 <code>truncated_batch_size</code> and <code>dataset_size</code> are set together (must be both
 or neither). This is the truncated-Poisson PLD for capped batches; it does
 <strong>not</strong> improve privacy versus plain Poisson at the same rate—use it when
-training actually truncates draws. The capped form accepts a Gaussian,
-AdaClip(Gaussian), or <code>nonprivate()</code> base.</p>
+training actually truncates draws.</p>
 <p>The guarantee is <a href="https://arxiv.org/abs/2508.15089">Ganesh (2025), Theorem
 3.1</a>. It assumes each over-cap provisional
 sample is replaced by a uniformly random subset of exactly the cap size.

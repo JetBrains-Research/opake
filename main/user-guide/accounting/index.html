@@ -3921,9 +3921,10 @@ typically uses Poisson sampling.</p>
 <h3 id="dpsgd_accpoissoninner-sample_rate"><code>dpsgd_acc.poisson(inner, sample_rate)</code><a class="headerlink" href="#dpsgd_accpoissoninner-sample_rate" title="Permanent link">&para;</a></h3>
 <p>Standard Poisson-subsampled mechanism. Each example is included independently
 with probability <code>sample_rate</code>. This provides privacy amplification through
-subsampling. Plain Poisson accepts any Opake <code>DpProcess</code> as its base
-mechanism. Use the capped form only when training truncates draws; it requires
-<code>gaussian()</code>, <code>adaclip()</code>, or <code>nonprivate()</code> as its base.</p>
+subsampling. Both forms require <code>gaussian()</code>, <code>adaclip()</code>, or <code>nonprivate()</code>
+as the base mechanism. The returned process represents one DP-SGD step; compose
+it with <code>* num_steps</code> for a training run. Use the capped form only when training
+truncates draws.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.8</span><span class="p">),</span> <span class="n">sample_rate</span><span class="o">=</span><span class="mi">256</span> <span class="o">/</span> <span class="mi">50_000</span><span class="p">)</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">training</span> <span class="o">=</span> <span class="n">step</span> <span class="o">*</span> <span class="mi">1000</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">eps</span> <span class="o">=</span> <span class="n">training</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="n">delta</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">)</span>
