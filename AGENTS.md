@@ -61,10 +61,11 @@ For code review, also read and follow `.junie/review-guidelines.md`.
 
 ## Pull requests
 
-The repo squash-merges. The PR title becomes the commit subject; the
-PR body becomes the commit body (repo-level squash setting =
-`PR_TITLE` + `PR_BODY`). Both feed `git-cliff` when release preparation builds
-the draft Release body from an exact tag-to-candidate range.
+The repo squash-merges. Its configured default uses the PR title as the commit
+subject and the PR body as the commit body (`PR_TITLE` + `PR_BODY`).
+During release preparation, `git-cliff` renders the subject and reads
+Conventional Commit metadata from the full message over an exact
+tag-to-candidate range.
 
 **Title** — Conventional Commits form `<type>(scope): <imperative subject>`:
 
@@ -83,9 +84,7 @@ the draft Release body from an exact tag-to-candidate range.
 
 **Body** — short prose:
 
-- 2–4 sentences of "why" + what the change does. This text lands in
-  `git log` and feeds the AI summary for every release line containing the
-  commit.
+- 2–4 sentences of "why" + what the change does. This text lands in `git log`.
 - Keep it readable for a future spelunker; avoid checklist-only bodies.
 
 **Gate** — on every push the PR workflow runs Linux amd64, dependency-boundary,
