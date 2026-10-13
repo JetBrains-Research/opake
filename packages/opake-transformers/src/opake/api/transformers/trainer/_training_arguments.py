@@ -962,6 +962,14 @@ class TrainingArguments:
                     "would capture graphs at every probed size.",
                 )
             )
+        if self.cuda_graphs > 0 and self.activation_offloading:
+            raise ConfigurationError(
+                *(
+                    "cuda_graphs > 0 is incompatible with "
+                    "activation_offloading=True because saved-tensor hooks "
+                    "perform pageable host transfers that CUDA graphs cannot capture.",
+                )
+            )
         if self.torch_compile and self.auto_find_microbatch_size:
             raise ConfigurationError(
                 *(

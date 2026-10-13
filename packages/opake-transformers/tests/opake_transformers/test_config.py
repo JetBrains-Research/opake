@@ -1018,6 +1018,7 @@ def test_cuda_graphs_requires_non_negative_integer(value):
     [
         ({"torch_compile": True}, "mutually exclusive"),
         ({"auto_find_microbatch_size": True}, "auto_find_microbatch_size"),
+        ({"activation_offloading": True}, "activation_offloading"),
         ({"cuda_graphs": "yes"}, "non-negative integer"),
     ],
 )

@@ -269,7 +269,7 @@ multiple that divides `max_length` to keep padding within that cap.
   the per-example loss reads other than through its arguments is frozen at
   capture.
 - CUDA only. Mutually exclusive with `torch_compile` and incompatible with
-  `auto_find_microbatch_size`.
+  `auto_find_microbatch_size` and `activation_offloading`.
 - With `gradient_checkpointing`, the model must have no active dropout: the
   checkpoint recompute runs without saved RNG state (`preserve_rng_state=False`).
 - The fused linear cross-entropy (`loss_type="chunked_nll"`) processes ignored

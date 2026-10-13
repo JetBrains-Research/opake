@@ -43,6 +43,7 @@ import torch
 
 from opake.api.engine.device import capture_safe_kernels
 from opake.api.engine.pytree import tree_flatten, tree_map, tree_unflatten
+from opake.api.engine.types import PerGroup
 from opake.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
@@ -61,6 +62,12 @@ def _leaf_key(leaf: Any) -> tuple:
             str(leaf.device),
             leaf.requires_grad,
         )
+    if isinstance(leaf, PerGroup):
+        return (
+            "per_group",
+            tuple(leaf.groups.items()),
+            tuple((name, _leaf_key(value)) for name, value in leaf.values.items()),
+        )
     try:
         hash(leaf)
     except TypeError:
@@ -71,6 +78,33 @@ def _leaf_key(leaf: Any) -> tuple:
             )
         ) from None
     return ("value", type(leaf), leaf)
+
+
+def _clone_input(leaf: Any) -> Any:
+    if isinstance(leaf, torch.Tensor):
+        return leaf.clone()
+    if isinstance(leaf, PerGroup):
+        return PerGroup(
+            leaf.groups,
+            {name: _clone_input(value) for name, value in leaf.values.items()},
+        )
+    return leaf
+
+
+def _collect_tensor_copies(
+    static: Any,
+    source: Any,
+    static_tensors: list[torch.Tensor],
+    source_tensors: list[torch.Tensor],
+) -> None:
+    if isinstance(source, torch.Tensor):
+        static_tensors.append(static)
+        source_tensors.append(source)
+    elif isinstance(source, PerGroup):
+        for name, value in source.values.items():
+            _collect_tensor_copies(
+                static.values[name], value, static_tensors, source_tensors
+            )
 
 
 class CudaGraphChunkCompiler:
@@ -142,10 +176,12 @@ class _GraphedChunk:
                 return self._fn(*args, **kwargs)
             entry = self._graphs[key] = self._capture(leaves, treedef, device)
         graph, static_leaves, static_out = entry
-        tensor_idx = [i for i, x in enumerate(leaves) if isinstance(x, torch.Tensor)]
-        torch._foreach_copy_(
-            [static_leaves[i] for i in tensor_idx], [leaves[i] for i in tensor_idx]
-        )
+        static_tensors: list[torch.Tensor] = []
+        source_tensors: list[torch.Tensor] = []
+        for static, source in zip(static_leaves, leaves, strict=True):
+            _collect_tensor_copies(static, source, static_tensors, source_tensors)
+        if static_tensors:
+            torch._foreach_copy_(static_tensors, source_tensors)
         graph.replay()
         self._owner.replays += 1
         return tree_map(
@@ -155,9 +191,7 @@ class _GraphedChunk:
     def _capture(self, leaves: list, treedef: Any, device: torch.device) -> tuple:
         owner = self._owner
         start = time.perf_counter()
-        static_leaves = [
-            x.clone() if isinstance(x, torch.Tensor) else x for x in leaves
-        ]
+        static_leaves = [_clone_input(x) for x in leaves]
         static_args, static_kwargs = tree_unflatten(treedef, static_leaves)
         with torch.cuda.device(device), capture_safe_kernels():
             if not owner._warmed_up:

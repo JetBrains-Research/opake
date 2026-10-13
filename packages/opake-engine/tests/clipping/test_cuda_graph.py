@@ -9,6 +9,12 @@ import torch
 import torch.nn.functional as F
 
 from opake.api.engine.clipping import CudaGraphChunkCompiler, clipped_grad
+from opake.api.engine.clipping._cuda_graph import (
+    _clone_input,
+    _collect_tensor_copies,
+    _leaf_key,
+)
+from opake.api.engine.types import PerGroup
 from opake.exceptions import ConfigurationError
 
 cf = importlib.import_module("opake.api.engine.clipping._clipped_fun")
@@ -45,7 +51,7 @@ def _loss(p, x, y):
     return F.cross_entropy(h @ p["w2"] + p["b2"], y)
 
 
-def _train(compiler, device="cuda"):
+def _train(compiler, device="cuda", clipping_norm=0.5):
     kwargs = {
         "argnums": 0,
         "batch_argnums": (1, 2),
@@ -55,7 +61,7 @@ def _train(compiler, device="cuda"):
     }
     if compiler is not None:
         kwargs["_chunk_compiler"] = compiler
-    fn, state = clipped_grad(_loss, clipping_norm=0.5, **kwargs)
+    fn, state = clipped_grad(_loss, clipping_norm=clipping_norm, **kwargs)
     params = _params(device)
     trace = []
     for x, y in _data(device):
@@ -78,6 +84,73 @@ def test_graph_replay_matches_eager_bitwise():
     compiler = CudaGraphChunkCompiler()
     graphed = _train(compiler)
     assert compiler.captures == 3  # chunk sizes 4, 2 and 1
+    assert compiler.replays > 0
+    for e, g in zip(eager, graphed, strict=True):
+        for name in e[0]:
+            assert torch.equal(e[0][name], g[0][name])
+        assert torch.equal(e[1], g[1])
+        assert torch.equal(e[2], g[2])
+
+
+def test_per_group_tensor_values_contribute_to_graph_key():
+    groups = {("weight",): "main"}
+    first = PerGroup(groups=groups, values={"main": torch.ones((), device="cpu")})
+    second = PerGroup(groups=groups, values={"main": torch.ones(2, device="cpu")})
+
+    first_key = _leaf_key(first)
+    second_key = _leaf_key(second)
+
+    hash(first_key)
+    assert first_key != second_key
+
+
+def test_per_group_tensor_values_are_copied_into_static_inputs():
+    groups = {("weight",): "main"}
+    static = _clone_input(PerGroup(groups=groups, values={"main": torch.tensor(2.0)}))
+    source = PerGroup(groups=groups, values={"main": torch.tensor(3.0)})
+    static_tensors = []
+    source_tensors = []
+
+    _collect_tensor_copies(static, source, static_tensors, source_tensors)
+    torch._foreach_copy_(static_tensors, source_tensors)
+
+    assert static.values["main"].item() == 3.0
+
+
+@pytest.mark.cuda
+@requires_cuda
+def test_per_group_tensor_values_are_copied_before_replay():
+    compiler = CudaGraphChunkCompiler()
+    graphed = compiler(lambda norm, x: norm.values["main"] * x)
+    groups = {("weight",): "main"}
+    x = torch.ones(3, device="cuda")
+
+    first = PerGroup(groups=groups, values={"main": torch.tensor(2.0, device="cuda")})
+    second = PerGroup(groups=groups, values={"main": torch.tensor(3.0, device="cuda")})
+    torch.testing.assert_close(graphed(first, x), 2 * x)
+    torch.testing.assert_close(graphed(second, x), 3 * x)
+
+    assert compiler.captures == 1
+    assert compiler.replays == 1
+
+
+@pytest.mark.cuda
+@requires_cuda
+def test_per_group_clipping_graph_replay_matches_eager():
+    clipping_norm = PerGroup(
+        groups={
+            ("w1",): "embedding",
+            ("b1",): "embedding",
+            ("w2",): "head",
+            ("b2",): "head",
+        },
+        values={"embedding": 0.5, "head": 0.25},
+    )
+    eager = _train(None, clipping_norm=clipping_norm)
+    compiler = CudaGraphChunkCompiler()
+    graphed = _train(compiler, clipping_norm=clipping_norm)
+
+    assert compiler.captures == 3
     assert compiler.replays > 0
     for e, g in zip(eager, graphed, strict=True):
         for name in e[0]:
