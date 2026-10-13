@@ -25,6 +25,7 @@ from transformers import (  # noqa: E402
 )
 
 from opake.api.alignment.data._chat_template import (  # noqa: E402
+    _generation_block_marks_only_assistant,
     clone_chat_template,
     get_training_chat_template,
 )
@@ -34,7 +35,7 @@ from opake.api.alignment.data._chat_template import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _GEN_START = "{% generation %}"
-_GEN_END = "{% endgeneration %}"
+_GEN_END = "{% endgeneration +%}"
 
 # A minimal ChatML-style template with an explicit assistant branch.
 _CHATML_TEMPLATE = (
@@ -205,6 +206,62 @@ class TestGetTrainingChatTemplate:
         )
         with pytest.raises(ValueError, match="existing generation markers"):
             get_training_chat_template(tokenizer)
+
+    def test_rejects_unmarked_supported_assistant_branch(self) -> None:
+        tokenizer = _make_fast_tokenizer()
+        tokenizer.chat_template = (
+            "{% if messages[0]['role'] == 'system' %}"
+            "{% for message in messages %}"
+            "{% if message['role'] == 'assistant' %}"
+            "system path: {{ message['content'] }}"
+            "{% else %}{{ message['content'] }}{% endif %}"
+            "{% endfor %}"
+            "{% else %}"
+            "{% for message in messages %}"
+            "{% if message['role'] == 'assistant' %}"
+            "ordinary path: {{ message['content'] }}"
+            "{% else %}{{ message['content'] }}{% endif %}"
+            "{% endfor %}"
+            "{% endif %}"
+        )
+
+        with pytest.raises(ValueError, match="assistant-only render path"):
+            get_training_chat_template(tokenizer)
+
+    def test_validation_uses_a_fixed_clock(self) -> None:
+        tokenizer = _make_fast_tokenizer()
+        tokenizer.chat_template = (
+            "{{ strftime_now('%Y-%m-%d %H:%M:%S.%f') }}|" + _CHATML_TEMPLATE
+        )
+
+        assert _GEN_START in get_training_chat_template(tokenizer)
+
+    @pytest.mark.parametrize(
+        "context",
+        ["add_generation_prompt", "tools", "documents"],
+    )
+    def test_validator_compares_supported_contexts(self, context: str) -> None:
+        unmarked = (
+            "{% for message in messages %}"
+            "{% if message['role'] == 'assistant' %}"
+            "{{ message['content'] }}"
+            "{% else %}{{ message['content'] }}{% endif %}"
+            "{% endfor %}"
+        )
+        marked = (
+            "{% for message in messages %}"
+            "{% if message['role'] == 'assistant' %}"
+            "{% generation %}{{ message['content'] }}{% endgeneration +%}"
+            "{% else %}{{ message['content'] }}{% endif %}"
+            "{% endfor %}"
+        )
+        original = unmarked + "{% if " + context + " %}original{% endif %}"
+        candidate = marked + "{% if " + context + " %}changed{% endif %}"
+
+        assert not _generation_block_marks_only_assistant(
+            candidate,
+            original_template=original,
+        )
 
     def test_idempotent_double_call(self) -> None:
         """Calling the function twice on a plain template yields the same output both times."""
@@ -379,12 +436,12 @@ class TestGetTrainingChatTemplate:
     @pytest.mark.parametrize(
         "template",
         [_LLAMA_3_TEMPLATE, _GEMMA_INLINE_TEMPLATE, _CHATML_TEMPLATE],
-        ids=["meta-llama-3-8b-instruct", "gemma-3-1b-it", "shared-chatml"],
+        ids=["shared-set-content", "inline-role-mapping", "explicit-assistant-branch"],
     )
     def test_representative_templates_render_assistant_only(
         self, template: str
     ) -> None:
-        """Llama 3, Gemma 3, and ChatML templates produce assistant-only spans."""
+        """Representative template shapes preserve text and mark assistant spans."""
         from transformers.utils.chat_template_utils import (
             _compile_jinja_template,
             _render_with_assistant_indices,
@@ -395,18 +452,28 @@ class TestGetTrainingChatTemplate:
             tokenizer.add_special_tokens({"bos_token": "<bos>"})
         tokenizer.chat_template = template
         transformed = get_training_chat_template(tokenizer)
+        messages = [
+            {"role": "user", "content": "user probe"},
+            {"role": "assistant", "content": "assistant probe"},
+        ]
+        original_rendered, _ = _render_with_assistant_indices(
+            _compile_jinja_template(template),
+            messages,
+            None,
+            None,
+            False,
+            **tokenizer.special_tokens_map,
+        )
         rendered, indices = _render_with_assistant_indices(
             _compile_jinja_template(transformed),
-            [
-                {"role": "user", "content": "user probe"},
-                {"role": "assistant", "content": "assistant probe"},
-            ],
+            messages,
             None,
             None,
             False,
             **tokenizer.special_tokens_map,
         )
 
+        assert rendered == original_rendered
         generated = "".join(rendered[start:end] for start, end in indices)
         assert "assistant probe" in generated
         assert "user probe" not in generated

@@ -36,6 +36,7 @@ from opake.api.alignment.data._chat_template import (  # noqa: E402
 from opake.api.alignment.data._completion_mask import (  # noqa: E402
     apply_chat_template_with_mask,
 )
+from opake.exceptions import OperationError  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -205,7 +206,7 @@ class TestApplyChatTemplateWithMask:
         assert isinstance(result["completion_mask"], expected_type)
         assert bool(result["completion_mask"].any())
 
-    def test_rejects_all_zero_assistant_mask(self) -> None:
+    def test_rejects_conversation_without_assistant_tokens(self) -> None:
         """A recognized marker without rendered assistant spans still fails."""
         tok = _make_chat_tokenizer()
         tok.chat_template = (
@@ -216,8 +217,20 @@ class TestApplyChatTemplateWithMask:
             "{% endfor %}"
         )
 
-        with pytest.raises(ValueError, match="returned no assistant-token mask"):
+        with pytest.raises(OperationError, match="produced no assistant tokens"):
             apply_chat_template_with_mask(tok, _CONVERSATION)
+
+    def test_reports_when_truncation_removes_assistant_tokens(self) -> None:
+        tok = _make_chat_tokenizer()
+        tok.chat_template = get_training_chat_template_for(tok)
+
+        with pytest.raises(OperationError, match=r"truncation removed.*max_length=8"):
+            apply_chat_template_with_mask(
+                tok,
+                _CONVERSATION,
+                max_length=8,
+                truncation=True,
+            )
 
     def test_resolves_named_template_override(self) -> None:
         """A named override follows Transformers' template-resolution behavior."""

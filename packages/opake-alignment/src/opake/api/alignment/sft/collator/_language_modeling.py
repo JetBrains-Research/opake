@@ -19,9 +19,8 @@ Design notes
 * **Padding** — right-pad with ``pad_token_id`` to the length of the longest
   (post-truncation) example in the batch, subject to ``pad_to_multiple_of``.
 * **Labels** — copy of ``input_ids`` with pad positions set to ``-100``.  When
-  ``completion_only_loss=True`` and a ``completion_mask`` is present,
-  non-completion positions are also set to ``-100``. Examples without a mask
-  retain full-sequence labels, matching TRL's language-modeling collator.
+  ``completion_only_loss=True``, every example must supply a
+  ``completion_mask`` and non-completion positions are also set to ``-100``.
 * **completion_mask output key** — included only when at least one example in
   the batch supplies ``"completion_mask"``.  This preserves backward
   compatibility with simple SFT datasets that do not carry the field.
@@ -34,6 +33,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
+
+from opake.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -98,9 +99,27 @@ class _LMCollator:
             A :class:`~opake.api.alignment.sft.collator.types.LMBatch` dict with
             keys ``input_ids``, ``attention_mask``, ``labels``, and optionally
             ``completion_mask``.
+
+        Raises:
+            ConfigurationError: If completion-only loss is requested for a
+                row without a completion mask.
         """
         if not examples:
             return self._empty_batch()
+
+        if self._completion_only_loss:
+            missing = [
+                index
+                for index, example in enumerate(examples)
+                if example.get("completion_mask") is None
+            ]
+            if missing:
+                raise ConfigurationError(
+                    *(
+                        "completion_only_loss=True requires a completion_mask "
+                        f"for every example; missing at batch positions {missing}",
+                    )
+                )
 
         # ---- Truncate each example to max_length (keep-start) --------
         input_ids_list: list[list[int]] = []
@@ -209,9 +228,9 @@ def language_modeling_collator(
             truncated from the right (keep-start) before padding.
         completion_only_loss: When ``True``, positions where
             ``completion_mask == 0`` are set to ``-100`` in ``labels`` so that
-            prompt tokens do not contribute to the language-modelling loss.
-            Defaults to ``False`` (standard next-token prediction over the
-            full sequence).
+            prompt tokens do not contribute to the language-modelling loss;
+            every example must supply the mask. Defaults to ``False`` (standard
+            next-token prediction over the full sequence).
         pad_to_multiple_of: When set, the padded length ``L`` is rounded up to
             the nearest multiple of this value before the batch tensors are
             allocated.  Useful for tensor-core alignment (e.g. ``8`` or

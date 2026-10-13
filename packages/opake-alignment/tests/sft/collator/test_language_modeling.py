@@ -20,11 +20,13 @@ unit β.W.
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 from opake.api.alignment.sft.collator._language_modeling import (
     language_modeling_collator,
 )
+from opake.exceptions import ConfigurationError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -200,21 +202,19 @@ def test_labels_completion_only_loss_masks_non_completion() -> None:
     assert labels[0].tolist() == [-100, -100, 3, 4]
 
 
-def test_labels_completion_only_loss_no_mask_retains_all_real_tokens() -> None:
-    """Without ``completion_mask``, completion-only mode leaves labels intact."""
+def test_labels_completion_only_loss_without_mask_raises() -> None:
     examples = [
         {"input_ids": [1, 2, 3]},
     ]
     collate = language_modeling_collator(
         pad_token_id=_PAD, max_length=16, completion_only_loss=True
     )
-    batch = collate(examples)
-    labels = batch["labels"]
-    assert labels[0].tolist() == [1, 2, 3]
+
+    with pytest.raises(ConfigurationError, match=r"batch positions \[0\]"):
+        collate(examples)
 
 
-def test_labels_completion_only_loss_mixed_batch() -> None:
-    """Mixed batch: one example has completion_mask, one does not."""
+def test_labels_completion_only_loss_mixed_batch_raises() -> None:
     examples = [
         {"input_ids": [1, 2, 3], "completion_mask": [0, 1, 1]},
         {"input_ids": [4, 5, 6]},
@@ -222,13 +222,9 @@ def test_labels_completion_only_loss_mixed_batch() -> None:
     collate = language_modeling_collator(
         pad_token_id=_PAD, max_length=16, completion_only_loss=True
     )
-    batch = collate(examples)
-    labels = batch["labels"]
-    # Row 0: prompt (pos 0) → -100; completion (pos 1, 2) → token ids
-    assert labels[0].tolist() == [-100, 2, 3]
-    # Row 1 has no completion mask, so all real tokens remain supervised.
-    assert labels[1].tolist() == [4, 5, 6]
-    assert batch["completion_mask"][1].tolist() == [1, 1, 1]
+
+    with pytest.raises(ConfigurationError, match=r"batch positions \[1\]"):
+        collate(examples)
 
 
 def test_labels_no_completion_only_loss_retains_all_real_tokens() -> None:
@@ -419,7 +415,7 @@ def test_determinism_with_completion_mask() -> None:
     examples = [
         {"input_ids": [1, 2, 3, 4], "completion_mask": [0, 0, 1, 1]},
         {"input_ids": [5, 6], "completion_mask": [0, 1]},
-        {"input_ids": [7, 8, 9]},
+        {"input_ids": [7, 8, 9], "completion_mask": [1, 1, 1]},
     ]
     batch_a = collate(examples)
     batch_b = collate(examples)
@@ -503,10 +499,6 @@ def test_max_length_exactly_equals_example_length() -> None:
 
 
 def test_completion_only_loss_without_any_completion_mask_in_batch() -> None:
-    """completion_only_loss=True but no example carries completion_mask.
-
-    Full-sequence labels are retained and no completion_mask key is emitted.
-    """
     examples = [
         {"input_ids": [1, 2, 3]},
         {"input_ids": [4, 5]},
@@ -514,11 +506,9 @@ def test_completion_only_loss_without_any_completion_mask_in_batch() -> None:
     collate = language_modeling_collator(
         pad_token_id=_PAD, max_length=16, completion_only_loss=True
     )
-    batch = collate(examples)
-    # No completion_mask key in output
-    assert "completion_mask" not in batch
-    assert batch["labels"][0].tolist() == [1, 2, 3]
-    assert batch["labels"][1].tolist() == [4, 5, -100]
+
+    with pytest.raises(ConfigurationError, match=r"batch positions \[0, 1\]"):
+        collate(examples)
 
 
 def test_dtype_is_long() -> None:
