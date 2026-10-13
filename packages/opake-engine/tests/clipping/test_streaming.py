@@ -146,9 +146,11 @@ def test_streaming_scaling_covers_square_underflow(mode, per_group, microbatch_s
 
     (result, aux), _ = fn(values, state=state)
 
-    assert torch.equal(aux.norms, torch.zeros(2))
+    assert aux.norms[0] > 0
+    assert aux.norms[1] == 0
     if per_group:
-        assert torch.equal(aux.group_norms["tiny"], torch.zeros(2))
+        assert aux.group_norms["tiny"][0] > 0
+        assert aux.group_norms["tiny"][1] == 0
     assert _stable_norm(result.pytree["w"]) <= bound
 
 

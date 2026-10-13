@@ -149,12 +149,12 @@ def test_mixed_dtype_tree_bound_holds(dtype):
 )
 def test_square_underflow_does_not_bypass_clipping(all_devices, dtype, value):
     leaf = torch.full((1024,), value, dtype=dtype, device=all_devices)
-    clipping_norm = 0.84 * _stable_norm({"w": leaf})
+    true_norm = _stable_norm({"w": leaf})
+    clipping_norm = 0.84 * true_norm
 
     clipped, aux = clip_pytree({"w": leaf}, clipping_norm)
 
-    if dtype == torch.float32:
-        assert aux.norm == 0
+    assert float(aux.norm) == pytest.approx(true_norm, rel=1e-6)
     assert _stable_norm(clipped) <= clipping_norm
 
 
@@ -163,23 +163,35 @@ def test_partial_square_underflow_is_covered():
     leaf[0] = 1e-20
     pytree = {"w": leaf}
     true_norm = _stable_norm(pytree)
-    _, aux = clip_pytree(pytree, float("inf"))
-    clipping_norm = (float(aux.norm) + true_norm) / 2.0
-    assert float(aux.norm) < clipping_norm < true_norm
+    clipping_norm = 0.84 * true_norm
 
-    clipped, _ = clip_pytree(pytree, clipping_norm)
+    clipped, aux = clip_pytree(pytree, clipping_norm)
 
+    assert float(aux.norm) == pytest.approx(true_norm, rel=1e-6)
     assert _stable_norm(clipped) <= clipping_norm
 
 
 def test_float64_square_underflow_does_not_bypass_clipping():
     leaf = torch.full((16,), 1e-200, dtype=torch.float64)
-    clipping_norm = 0.84 * _stable_norm({"w": leaf})
+    true_norm = _stable_norm({"w": leaf})
+    clipping_norm = 0.84 * true_norm
 
     clipped, aux = clip_pytree({"w": leaf}, clipping_norm)
 
-    assert aux.norm == 0
+    assert float(aux.norm) == pytest.approx(true_norm, rel=1e-12)
     assert _stable_norm(clipped) <= clipping_norm
+
+
+@pytest.mark.parametrize("mode", ["fixed", "auto"])
+def test_scaled_norm_does_not_overflow_while_computing_scale(mode):
+    leaf = torch.full((16,), 1e308, dtype=torch.float64)
+    if mode == "fixed":
+        clipped, _ = clip_pytree({"w": leaf}, clipping_norm=1.0)
+    else:
+        clipped, _ = auto_scale_pytree({"w": leaf}, R=1.0, gamma=0.1)
+
+    assert torch.isfinite(clipped["w"]).all()
+    assert _stable_norm(clipped) == pytest.approx(1.0, rel=1e-12)
 
 
 def test_explicit_float16_compute_covers_square_underflow():
@@ -188,7 +200,7 @@ def test_explicit_float16_compute_covers_square_underflow():
 
     clipped, aux = clip_pytree({"w": leaf}, clipping_norm, compute_dtype=torch.float16)
 
-    assert aux.norm == 0
+    assert float(aux.norm) == pytest.approx(_stable_norm({"w": leaf}), rel=1e-3)
     assert _stable_norm(clipped) <= clipping_norm
 
 
@@ -214,7 +226,7 @@ def test_square_underflow_guard_covers_flush_to_zero(kind):
     finally:
         torch.set_flush_denormal(previous_mode)
 
-    assert aux.norm == 0
+    assert aux.norm > 0
     assert _stable_norm(clipped) <= clipping_norm
 
 
@@ -224,7 +236,7 @@ def test_auto_scale_covers_square_underflow():
 
     scaled, aux = auto_scale_pytree({"w": leaf}, R=1.0, gamma=true_norm / 100.0)
 
-    assert aux.norm == 0
+    assert aux.norm > 0
     assert _stable_norm(scaled) <= 1.0
 
 
@@ -241,7 +253,7 @@ def test_per_group_clipping_covers_square_underflow():
         {"tiny": tiny, "ordinary": ordinary}, clipping_norm=bounds
     )
 
-    assert aux.group_norms["tiny"] == 0
+    assert aux.group_norms["tiny"] > 0
     assert _stable_norm({"w": clipped["tiny"]}) <= tiny_bound
     assert _stable_norm({"w": clipped["ordinary"]}) <= 1.0
 
@@ -253,7 +265,7 @@ def test_per_group_auto_scale_covers_square_underflow():
 
     scaled, aux = auto_scale_pytree({"w": leaf}, R=bounds, gamma=true_norm / 100.0)
 
-    assert aux.group_norms["tiny"] == 0
+    assert aux.group_norms["tiny"] > 0
     assert _stable_norm(scaled) <= 1.0
 
 
