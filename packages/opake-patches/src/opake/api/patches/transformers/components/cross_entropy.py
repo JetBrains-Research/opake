@@ -334,7 +334,7 @@ def _make_fused_ce_causal_lm_forward(original, *, force_chunked: bool | int = Fa
                 logits = logits * logit_scale
             if logits_scaling != 1.0:
                 logits = logits / logits_scaling
-            if softcap is not None:
+            if softcap:
                 logits = torch.tanh(logits / softcap) * softcap
             loss = self.loss_function(logits, labels, self.vocab_size, **kwargs)
 

@@ -263,6 +263,31 @@ def test_transformed_family_cuda_float_fallback_matches_upstream(family):
     _assert_matching_gradients(base, wrapped)
 
 
+@pytest.mark.cuda
+@pytest.mark.parametrize("family", ["gemma2", "gemma3"])
+def test_zero_softcap_cuda_float_fallback_matches_unsoftcapped_logits(family):
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
+
+    torch.manual_seed(0)
+    base = _tiny_model(family).cuda()
+    wrapped = copy.deepcopy(base)
+    _bind_upstream_forward(base, family)
+    _bind_fused_forward(wrapped, family)
+    base.config.final_logit_softcapping = None
+    wrapped.config.final_logit_softcapping = 0.0
+
+    input_ids = torch.randint(3, base.config.vocab_size, (2, 9), device="cuda")
+    labels = input_ids.clone()
+    out_base = base(input_ids=input_ids, labels=labels, use_cache=False)
+    out_wrapped = wrapped(
+        input_ids=input_ids, labels=labels, use_cache=False, loss_only=True
+    )
+
+    torch.testing.assert_close(out_wrapped.logits, out_base.logits)
+    torch.testing.assert_close(out_wrapped.loss, out_base.loss)
+
+
 def test_fused_ce_explicitly_preserves_logits_for_metrics():
     """The SFT metrics path can opt out without changing legacy callers."""
     model = _tiny_model("olmo2")
