@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NoReturn
 
-from opake.exceptions import InputTypeError
+from opake.exceptions import ConfigurationError, InputTypeError
 
 try:
     import torchopt
@@ -34,6 +34,29 @@ from opake.pytree import tree_map
 from opake.types import ClippedPytree, NoisedPytree, SecondMomentNoiseOutput
 
 _LR = float | Callable[[int], float]
+
+_SECOND_MOMENT_CONSUMERS = (
+    "adadelta",
+    "adam",
+    "adamw",
+    "ademamix",
+    "radam",
+    "rmsprop",
+)
+
+
+def _raise_unsupported_second_moment(optimizer_name: str) -> NoReturn:
+    """Raise the shared diagnostic for an unsupported paired update."""
+    supported = ", ".join(_SECOND_MOMENT_CONSUMERS)
+    raise ConfigurationError(
+        *(
+            f'Optimizer "{optimizer_name}" cannot consume SecondMomentNoiseOutput. '
+            f"Built-in base optimizers that consume it: {supported}. "
+            "Use a compatible optimizer, configure a single-stream noise mechanism, "
+            "or explicitly pass output.noisy_grads if discarding the second stream "
+            "is intentional.",
+        )
+    )
 
 
 def _rms_clip_transform(threshold: float) -> GradientTransformation:
@@ -101,6 +124,7 @@ def make_optimizer_chain(
     lr: _LR,
     weight_decay: float,
     *,
+    optimizer_name: str,
     decoupled_weight_decay: bool = True,
     update_rms_clip: float | None = None,
 ) -> GradientTransformation:
@@ -130,13 +154,22 @@ def make_optimizer_chain(
     ``NoisedPytree`` / ``SecondMomentNoiseOutput`` updates and threads
     it into the moment scaler internally — there is no public per-step
     metadata kwarg.
+
+    Paired updates require an explicit ``noisy_squared_grads`` parameter on the
+    moment scaler.
     """
     moment_update_params = inspect.signature(moment_scaler.update).parameters
     accepts_noise_stddev = "noise_stddev" in moment_update_params or any(
         p.kind is inspect.Parameter.VAR_KEYWORD for p in moment_update_params.values()
     )
-    accepts_second_moment = "noisy_squared_grads" in moment_update_params or any(
-        p.kind is inspect.Parameter.VAR_KEYWORD for p in moment_update_params.values()
+    second_moment_param = moment_update_params.get("noisy_squared_grads")
+    accepts_second_moment = (
+        second_moment_param is not None
+        and second_moment_param.kind
+        in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        )
     )
 
     def _route_noisy_pytree(updates: Any) -> tuple[Any, dict[str, Any]]:
@@ -170,7 +203,7 @@ def make_optimizer_chain(
         if not isinstance(updates, SecondMomentNoiseOutput):
             return _route_noisy_pytree(updates)
         if not accepts_second_moment:
-            return _route_noisy_pytree(updates.noisy_grads)
+            _raise_unsupported_second_moment(optimizer_name)
         return (
             _unwrap_second_moment_value(updates.noisy_grads, name="noisy_grads"),
             {

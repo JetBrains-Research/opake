@@ -31,7 +31,7 @@ class TestAccountantBasics:
         """Accountant accepts optional budget."""
         budget = epsilon_budget(3.0, delta=1e-5)
         acct = Accountant(budget=budget)
-        assert acct._budget is not None
+        assert acct.budget is budget
 
     def test_composition_via_or(self):
         """Composing processes via | returns new Accountant."""
@@ -297,9 +297,9 @@ class TestAccountantFunctional:
         acct3 = acct2 | dpsgd_acc.gaussian(0.1)
 
         # All should have the same budget reference
-        assert acct1._budget is budget
-        assert acct2._budget is budget
-        assert acct3._budget is budget
+        assert acct1.budget is budget
+        assert acct2.budget is budget
+        assert acct3.budget is budget
 
     def test_or_operator_associativity(self):
         """| operator is associative for privacy accounting."""
@@ -426,7 +426,7 @@ class TestAccountantCached:
         acct = Accountant(budget=budget)
         acct = acct | dpsgd_acc.gaussian(1.0)
         acct = acc.cached(acct)
-        assert acct._budget is budget
+        assert acct.budget is budget
 
     def test_cached_does_not_mutate(self):
         """cached() does not mutate the original Accountant."""

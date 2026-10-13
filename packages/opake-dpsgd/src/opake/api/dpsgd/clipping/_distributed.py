@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import torch
-
 from opake.api.engine.clipping._distributed import sync_clipped_grad_aux
 from opake.api.engine.distributed._state import (
     reduce_scalar,
@@ -20,15 +18,12 @@ from opake.api.engine.distributed._state import (
     sync_object,
 )
 from opake.distributed import is_distributed
-from opake.random import fold_in, generator_from_key
 from opake.types import PerGroup
 
 from ._adaptive import (
-    ADAPTIVE_CLIPPING_STREAM_FOLD,
     AdaptiveClippedGradAux,
     AdaptiveClipState,
-    _adaptive_clipping_norm_update,
-    _sample_noisy_clipping_rate,
+    _updated_clipping_norm,
 )
 
 _ADAPTIVE_CLIP_STATE_FIELD_OPS: dict[str, str] = {
@@ -37,6 +32,7 @@ _ADAPTIVE_CLIP_STATE_FIELD_OPS: dict[str, str] = {
     "_step": "local",
     "_rng_key": "local",
     "_fraction_noise_std": "local",
+    "_expected_batch_size": "local",
     "_learning_rate": "local",
     "_target_quantile": "local",
     "_clipping_norm_min": "local",
@@ -70,32 +66,13 @@ def sync_adaptive_clip_state(state: AdaptiveClipState) -> AdaptiveClipState:
                 state._num_clipped[gname], op="sum"
             )
 
-        if global_batch_size == 0:
-            return replace(state, _batch_size=global_batch_size)
-
-        step_for_noise = max(0, state._step - 1)
-        new_values: dict[str, float] = {}
-        for i, gname in enumerate(group_names):
-            global_rate = global_num_clipped[gname] / max(1.0, global_batch_size)
-            group_key = fold_in(
-                state._rng_key, ADAPTIVE_CLIPPING_STREAM_FOLD, step_for_noise, i
-            )
-            generator = generator_from_key(group_key)
-            noise = (
-                torch.randn(1, generator=generator).item() * state._fraction_noise_std
-            )
-            noisy_rate = global_rate + noise
-
-            new_values[gname] = _adaptive_clipping_norm_update(
-                base_clipping_norm=current_pg.values[gname],
-                noisy_clipping_rate=noisy_rate,
-                target_quantile=state._target_quantile,
-                learning_rate=state._learning_rate,
-                clipping_norm_min=state._clipping_norm_min,
-                clipping_norm_max=state._clipping_norm_max,
-            )
-
-        new_clipping_norm = PerGroup(groups=current_pg.groups, values=new_values)
+        new_clipping_norm = _updated_clipping_norm(
+            current_pg,
+            global_num_clipped,
+            global_batch_size,
+            state=state,
+            step=max(0, state._step - 1),
+        )
         return replace(
             state,
             _next_clipping_norm=new_clipping_norm,
@@ -112,26 +89,12 @@ def sync_adaptive_clip_state(state: AdaptiveClipState) -> AdaptiveClipState:
         field_ops=_ADAPTIVE_CLIP_STATE_FIELD_OPS,
     )
 
-    if synced._batch_size == 0:
-        return synced
-
-    global_rate = synced._num_clipped / max(1.0, synced._batch_size)
-
-    step_for_noise = max(0, synced._step - 1)
-    noisy_global_rate = _sample_noisy_clipping_rate(
-        global_rate,
-        key=synced._rng_key,
-        step=step_for_noise,
-        fraction_noise_std=synced._fraction_noise_std,
-    )
-
-    new_clipping_norm = _adaptive_clipping_norm_update(
-        base_clipping_norm=synced._current_clipping_norm,
-        noisy_clipping_rate=noisy_global_rate,
-        target_quantile=synced._target_quantile,
-        learning_rate=synced._learning_rate,
-        clipping_norm_min=synced._clipping_norm_min,
-        clipping_norm_max=synced._clipping_norm_max,
+    new_clipping_norm = _updated_clipping_norm(
+        synced._current_clipping_norm,
+        synced._num_clipped,
+        synced._batch_size,
+        state=synced,
+        step=max(0, synced._step - 1),
     )
 
     return replace(

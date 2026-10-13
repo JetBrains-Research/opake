@@ -175,7 +175,7 @@ grad_fn, clip_state = adaptive_clipped_grad(
     loss_fn,
     batch_argnums=(1, 2),
     initial_clipping_norm=1.0,
-    normalize_by=batch_size,
+    normalize_by=batch_size,  # public expected batch size
     key=key(7),
 )
 noise_fn, noise_state = gaussian_noise(noise_multiplier=1.1, key=key(42))
@@ -197,7 +197,7 @@ noise_state = sync(noise_state)
 
 `sync()` auto-dispatches based on the type of the state object. For
 `AdaptiveClipState`, it sums `num_clipped` and batch size across ranks,
-recomputes the global clipping rate from those aggregated totals, and updates
+updates the centered clipping statistic using the public expected batch size, and updates
 the internal next threshold identically on every device. This is the required
 step that keeps distributed adaptive clipping correct even when ranks see
 uneven local batches. The current DP bound is carried by the clipped output's
@@ -294,7 +294,7 @@ following types are registered:
 | Type | Behavior |
 |------|----------|
 | `FixedClipState` | Marker-state passthrough |
-| `AdaptiveClipState` | Aggregate counts, recompute global clipping rate, update the internal next threshold |
+| `AdaptiveClipState` | Aggregate counts, use the centered statistic with the public expected batch size, update the internal next threshold |
 | `ClippedFunAux`, `ClippedGradAux`, `AdaptiveClippedGradAux` | Gather aux tensors across ranks |
 | `GaussianNoiseState` | Assert seed and step counter match across ranks |
 | `MFNoiseState` | Assert seed and step counter match for MF noise |

@@ -9,6 +9,7 @@ patch fixture in ``conftest.py`` installs the vmap-safety runtime patches.
 
 from __future__ import annotations
 
+import importlib
 import types
 from operator import attrgetter
 
@@ -29,6 +30,7 @@ from transformers import (
 )
 
 from opake.alignment.dpo.loss import sequence_logp
+from opake.api.transformers.trl._logits import _has_family_logit_transform
 from opake.exceptions import ConfigurationError
 from opake.transformers.trl import (
     DPOConfig,
@@ -64,6 +66,56 @@ def _tiny_qwen2() -> Qwen2ForCausalLM:
         max_position_embeddings=128,
     )
     return Qwen2ForCausalLM(cfg)
+
+
+def _tiny_transformed_model(family):
+    extras = {
+        "cohere": {"logit_scale": 0.25},
+        "cohere2": {"logit_scale": 0.25},
+        "granite": {"logits_scaling": 8.0},
+        "gemma2": {"head_dim": 16, "final_logit_softcapping": 0.5},
+        "gemma3": {
+            "head_dim": 16,
+            "num_hidden_layers": 2,
+            "sliding_window": 8,
+            "sliding_window_pattern": 2,
+            "final_logit_softcapping": 0.5,
+        },
+    }
+    name = family.capitalize()
+    config_module = importlib.import_module(
+        f"transformers.models.{family}.configuration_{family}"
+    )
+    model_module = importlib.import_module(
+        f"transformers.models.{family}.modeling_{family}"
+    )
+    config_cls = getattr(
+        config_module, "Gemma3TextConfig" if family == "gemma3" else f"{name}Config"
+    )
+    model_cls = getattr(model_module, f"{name}ForCausalLM")
+    config_kwargs = {
+        "vocab_size": 64,
+        "hidden_size": 32,
+        "intermediate_size": 64,
+        "num_hidden_layers": 1,
+        "num_attention_heads": 4,
+        "num_key_value_heads": 2,
+        "max_position_embeddings": 128,
+        "pad_token_id": 0,
+    }
+    config_kwargs.update(extras[family])
+    config = config_cls(**config_kwargs)
+    config._attn_implementation = "eager"
+    return model_cls(config)
+
+
+def test_family_logit_transform_gate_covers_subclasses():
+    model = _tiny_transformed_model("granite")
+
+    class CustomGranite(type(model)):
+        pass
+
+    assert _has_family_logit_transform(CustomGranite(model.config))
 
 
 def _stub_tokenizer() -> types.SimpleNamespace:
@@ -103,6 +155,18 @@ def _chat_dataset() -> Dataset:
     return Dataset.from_list([{"messages": messages} for _ in range(4)])
 
 
+def _conversational_prompt_completion_dataset() -> Dataset:
+    prompt = [
+        {"role": "user", "content": "First question"},
+        {"role": "assistant", "content": "First answer"},
+        {"role": "user", "content": "Follow-up"},
+    ]
+    completion = [{"role": "assistant", "content": "Final answer"}]
+    return Dataset.from_list(
+        [{"prompt": prompt, "completion": completion} for _ in range(4)]
+    )
+
+
 class _ChatTokenizer:
     pad_token_id = 0
     pad_token = "<pad>"
@@ -139,6 +203,31 @@ class _ChatTokenizer:
         result = {"input_ids": input_ids, "attention_mask": [1] * len(input_ids)}
         if return_assistant_tokens_mask:
             result["assistant_masks"] = [0, 0, 1, 1]
+        return result
+
+
+class _PromptCompletionChatTokenizer(_ChatTokenizer):
+    prompt_ids: ClassVar[list[int]] = [10, 11, 12]
+    full_ids: ClassVar[list[int]] = [10, 11, 12, 13, 14, 15]
+    assistant_mask: ClassVar[list[int]] = [0, 1, 0, 0, 1, 1]
+
+    def apply_chat_template(
+        self,
+        conversation,
+        *,
+        tokenize,
+        return_dict,
+        return_assistant_tokens_mask=False,
+        add_generation_prompt=False,
+        **kwargs,
+    ):
+        assert tokenize is True
+        assert return_dict is True
+        assert len(conversation) == (3 if add_generation_prompt else 4)
+        input_ids = self.prompt_ids if add_generation_prompt else self.full_ids
+        result = {"input_ids": list(input_ids), "attention_mask": [1] * len(input_ids)}
+        if return_assistant_tokens_mask:
+            result["assistant_masks"] = list(self.assistant_mask)
         return result
 
 
@@ -312,7 +401,146 @@ def test_sft_assistant_only_loss_masks_chat_prompt(tmp_path):
     assert batch["labels"].tolist() == [[-100, -100, 21, 22]]
 
 
-def test_sft_assistant_only_loss_requires_chat_dataset(tmp_path):
+@pytest.mark.parametrize(
+    ("completion_only_loss", "assistant_only_loss", "expected_labels"),
+    [
+        (False, False, [10, 11, 12, 13, 14, 15]),
+        (None, False, [-100, -100, -100, 13, 14, 15]),
+        (False, True, [-100, 11, -100, -100, 14, 15]),
+        (None, True, [-100, -100, -100, -100, 14, 15]),
+    ],
+)
+def test_sft_conversational_prompt_completion_masks(
+    tmp_path, completion_only_loss, assistant_only_loss, expected_labels
+):
+    trainer = SFTTrainer(
+        model=_tiny_model(),
+        args=_args(
+            SFTConfig,
+            tmp_path,
+            max_length=8,
+            loss_type="nll",
+            completion_only_loss=completion_only_loss,
+            assistant_only_loss=assistant_only_loss,
+        ),
+        train_dataset=_conversational_prompt_completion_dataset(),
+        processing_class=_PromptCompletionChatTokenizer(),
+    )
+
+    batch = trainer.data_collator([trainer.train_dataset[0]])
+    assert batch["input_ids"].tolist() == [[10, 11, 12, 13, 14, 15]]
+    assert batch["labels"].tolist() == [expected_labels]
+
+
+def test_sft_standard_prompt_completion_is_unchanged(tmp_path):
+    class _Tokenizer:
+        def __call__(self, text, *, add_special_tokens):
+            if text == "Question":
+                assert add_special_tokens is True
+                return {"input_ids": [1, 2]}
+            assert text == "Answer"
+            assert add_special_tokens is False
+            return {"input_ids": [3, 4]}
+
+    args = _args(SFTConfig, tmp_path, max_length=8, loss_type="nll")
+    encoded = SFTTrainer.tokenize_row(
+        {"prompt": "Question", "completion": "Answer"},
+        _Tokenizer(),
+        args,
+        chat_col=None,
+        completion_only=True,
+    )
+
+    assert encoded == {
+        "input_ids": [1, 2, 3, 4],
+        "completion_mask": [0, 0, 1, 1],
+    }
+
+
+def test_sft_conversational_prompt_completion_truncates_mask_with_ids(tmp_path):
+    trainer = SFTTrainer(
+        model=_tiny_model(),
+        args=_args(
+            SFTConfig,
+            tmp_path,
+            max_length=4,
+            loss_type="nll",
+            assistant_only_loss=True,
+        ),
+        train_dataset=_conversational_prompt_completion_dataset(),
+        processing_class=_PromptCompletionChatTokenizer(),
+    )
+
+    assert len(trainer.train_dataset) == 4
+    assert trainer.train_dataset[0] == {
+        "input_ids": [10, 11, 12, 13],
+        "completion_mask": [0, 0, 0, 0],
+    }
+    batch = trainer.data_collator([trainer.train_dataset[0]])
+    assert batch["labels"].tolist() == [[-100, -100, -100, -100]]
+
+
+def test_sft_conversational_prompt_completion_warns_on_prefix_mismatch(tmp_path):
+    class _NonPrefixTokenizer(_PromptCompletionChatTokenizer):
+        prompt_ids: ClassVar[list[int]] = [10, 99, 12]
+
+    args = _args(SFTConfig, tmp_path, max_length=8, loss_type="nll")
+    example = _conversational_prompt_completion_dataset()[0]
+
+    with pytest.warns(UserWarning, match="not a prefix"):
+        encoded = SFTTrainer.tokenize_row(
+            example,
+            _NonPrefixTokenizer(),
+            args,
+            chat_col=None,
+            completion_only=True,
+        )
+
+    assert encoded["completion_mask"] == [0, 0, 0, 1, 1, 1]
+
+
+def test_sft_conversational_prompt_completion_rejects_longer_prompt(tmp_path):
+    class _LongPromptTokenizer(_PromptCompletionChatTokenizer):
+        prompt_ids: ClassVar[list[int]] = [10, 11, 12, 13, 14, 15, 16]
+
+    args = _args(SFTConfig, tmp_path, max_length=8, loss_type="nll")
+    example = _conversational_prompt_completion_dataset()[0]
+
+    with pytest.raises(ConfigurationError, match="prompt is longer"):
+        SFTTrainer.tokenize_row(
+            example,
+            _LongPromptTokenizer(),
+            args,
+            chat_col=None,
+            completion_only=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("prompt", "completion"),
+    [
+        ([{"role": "user", "content": "Question"}], "Answer"),
+        ("Question", [{"role": "assistant", "content": "Answer"}]),
+    ],
+)
+def test_sft_prompt_completion_requires_matching_representations(
+    tmp_path, prompt, completion
+):
+    args = _args(SFTConfig, tmp_path, max_length=8, loss_type="nll")
+
+    with pytest.raises(ConfigurationError, match="both be strings or both be"):
+        SFTTrainer.tokenize_row(
+            {"prompt": prompt, "completion": completion},
+            _PromptCompletionChatTokenizer(),
+            args,
+            chat_col=None,
+            completion_only=True,
+        )
+
+
+def test_sft_assistant_only_loss_requires_conversational_dataset(tmp_path):
+    dataset = Dataset.from_list([{"text": "hello"} for _ in range(4)])
+
     with pytest.raises(ConfigurationError, match="requires a conversational dataset"):
         SFTTrainer(
             model=_tiny_model(),
@@ -323,7 +551,7 @@ def test_sft_assistant_only_loss_requires_chat_dataset(tmp_path):
                 loss_type="nll",
                 assistant_only_loss=True,
             ),
-            train_dataset=_sft_dataset(),
+            train_dataset=dataset,
             processing_class=_stub_tokenizer(),
         )
 
@@ -347,11 +575,15 @@ def test_sft_completion_only_loss_requires_prompt_completion_dataset(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("completion_only_loss", "expected_labels"),
-    [(None, [1, 2, 3, 4]), (True, [-100, -100, 3, 4])],
+    ("completion_only_loss", "assistant_only_loss", "expected_labels"),
+    [
+        (None, False, [1, 2, 3, 4]),
+        (True, False, [-100, -100, 3, 4]),
+        (None, True, [-100, -100, 3, 4]),
+    ],
 )
 def test_sft_pretokenized_completion_mask_requires_explicit_option(
-    tmp_path, completion_only_loss, expected_labels
+    tmp_path, completion_only_loss, assistant_only_loss, expected_labels
 ):
     dataset = Dataset.from_list(
         [
@@ -370,6 +602,7 @@ def test_sft_pretokenized_completion_mask_requires_explicit_option(
             max_length=8,
             loss_type="nll",
             completion_only_loss=completion_only_loss,
+            assistant_only_loss=assistant_only_loss,
         ),
         train_dataset=dataset,
         processing_class=_stub_tokenizer(),
@@ -377,6 +610,33 @@ def test_sft_pretokenized_completion_mask_requires_explicit_option(
 
     batch = trainer.data_collator([trainer.train_dataset[0]])
     assert batch["labels"].tolist() == [expected_labels]
+
+
+@pytest.mark.parametrize(
+    "masking_option",
+    [{"completion_only_loss": True}, {"assistant_only_loss": True}],
+)
+def test_sft_pretokenized_masking_requires_mask(tmp_path, masking_option):
+    row = {
+        "input_ids": [1, 2, 3, 4],
+        "prompt": [{"role": "user", "content": "Question"}],
+        "completion": [{"role": "assistant", "content": "Answer"}],
+    }
+    dataset = Dataset.from_list([row for _ in range(4)])
+
+    with pytest.raises(ConfigurationError, match="requires a completion_mask"):
+        SFTTrainer(
+            model=_tiny_model(),
+            args=_args(
+                SFTConfig,
+                tmp_path,
+                max_length=8,
+                loss_type="nll",
+                **masking_option,
+            ),
+            train_dataset=dataset,
+            processing_class=_stub_tokenizer(),
+        )
 
 
 @pytest.mark.slow
@@ -1423,6 +1683,68 @@ def test_sft_dft_fused_eligible_resolves_lm_head(tmp_path):
     assert trainer._lm_head_param_name == "lm_head.weight"
 
 
+@pytest.mark.parametrize("family", ["cohere", "cohere2", "gemma2", "gemma3"])
+def test_sft_other_transformed_families_gate_dft(tmp_path, family):
+    trainer = SFTTrainer(
+        model=_tiny_transformed_model(family),
+        args=_args(
+            SFTConfig,
+            tmp_path,
+            max_length=8,
+            loss_type="dft",
+            log_completion_metrics=False,
+        ),
+        train_dataset=_sft_dataset(),
+        processing_class=_stub_tokenizer(),
+    )
+    assert trainer._fused_loss_eligible
+    assert trainer._lm_head_param_name is not None
+    assert not trainer._fused_dft
+    assert not trainer._fused_dft_loss_only
+
+
+@pytest.mark.parametrize("use_peft", [False, True])
+def test_sft_scaled_dft_uses_native_logits(tmp_path, use_peft):
+    from opake.alignment.sft.loss import dft_loss
+
+    torch.manual_seed(0)
+    trainer = SFTTrainer(
+        model=_tiny_transformed_model("granite"),
+        args=_args(
+            SFTConfig,
+            tmp_path,
+            max_length=8,
+            loss_type="dft",
+            log_completion_metrics=False,
+        ),
+        train_dataset=_sft_dataset(),
+        eval_dataset=_sft_dataset(),
+        processing_class=_stub_tokenizer(),
+        peft_config=_maybe_lora(use_peft),
+    )
+    assert trainer._fused_loss_eligible
+    assert trainer._lm_head_param_name is not None
+    assert not trainer._fused_dft
+    assert not trainer._fused_dft_loss_only
+
+    trainer.model.eval()
+    rows = [trainer.train_dataset[i] for i in range(2)]
+    batch = _to_device(trainer, trainer.data_collator(rows))
+    losses, _ = _per_example_losses(trainer, batch)
+    with torch.no_grad():
+        native = trainer.model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+        ).logits
+        expected = dft_loss(native, batch["labels"])
+    torch.testing.assert_close(losses, expected, atol=1e-4, rtol=1e-4)
+
+    eval_losses, _, _ = trainer.prediction_step(
+        trainer.model, batch, prediction_loss_only=True
+    )
+    torch.testing.assert_close(eval_losses, expected, atol=1e-3, rtol=1e-3)
+
+
 @pytest.mark.parametrize("loss_type", ["nll", "dft"])
 def test_sft_telemetry_on_keeps_eager(tmp_path, loss_type):
     # Telemetry on (the default) is logits-consuming → no fused path.
@@ -1629,6 +1951,53 @@ def test_dpo_fused_eligible_resolves_handles(tmp_path):
     assert trainer._use_fused_logp is True
     assert trainer._backbone_prefix == "model"
     assert trainer._lm_head_param_name == "lm_head.weight"
+
+
+def test_dpo_scaled_policy_logps_match_native_reference(tmp_path):
+    from opake.functional import make_functional
+
+    torch.manual_seed(0)
+    policy = _tiny_transformed_model("granite")
+    reference = _tiny_transformed_model("granite")
+    reference.load_state_dict(policy.state_dict())
+    trainer = DPOTrainer(
+        model=policy,
+        ref_model=reference,
+        args=_args(
+            DPOConfig,
+            tmp_path,
+            max_length=8,
+            loss_type="sigmoid",
+            log_completion_metrics=False,
+        ),
+        train_dataset=_pref_dataset(),
+        processing_class=_stub_tokenizer(),
+    )
+    assert trainer._fused_logp_eligible
+    assert trainer._lm_head_param_name is not None
+    assert not trainer._use_fused_logp
+
+    trainer.model.eval()
+    reference.to(next(trainer.model.parameters()).device).eval()
+    batch = _to_device(trainer, trainer.data_collator([trainer.train_dataset[0]]))
+    inputs = {name: value[0] for name, value in batch.items()}
+    fmodel, trainable, frozen = make_functional(trainer.model, partition_trainable=True)
+    _, aux = trainer.compute_per_example_loss_and_metrics(
+        fmodel, {**frozen, **trainable}, inputs
+    )
+
+    with torch.no_grad():
+        for side in ("chosen", "rejected"):
+            ids = batch[f"{side}_input_ids"]
+            mask = batch[f"{side}_attention_mask"]
+            completion = batch[f"{side}_completion_mask"][0]
+            policy_logits = trainer.model(input_ids=ids, attention_mask=mask).logits[0]
+            reference_logits = reference(input_ids=ids, attention_mask=mask).logits[0]
+            native_policy = sequence_logp(policy_logits, ids[0], completion)
+            native_reference = sequence_logp(reference_logits, ids[0], completion)
+            torch.testing.assert_close(aux[f"logps/{side}"], native_policy)
+            torch.testing.assert_close(batch[f"ref_{side}_logps"][0], native_reference)
+            torch.testing.assert_close(native_policy, native_reference)
 
 
 def test_dpo_ld_public_length_is_shorter_completion():

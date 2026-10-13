@@ -198,6 +198,39 @@ class TestRMSNormBackward:
         torch.testing.assert_close(x.grad, x_ref.grad, rtol=RTOL_B, atol=ATOL_B)
 
 
+class TestRMSNormRepeatedBackward:
+    def test_in_place_backward_rejects_second_traversal(self):
+        torch.manual_seed(5)
+        x = torch.randn(
+            2, 4, 64, device="cuda", dtype=torch.float32, requires_grad=True
+        )
+        weight = torch.randn(64, device="cuda")
+        y, _, _ = Opake_RMSNorm.apply(x, weight, 1e-5, 0.0, "llama", True, None)
+        grad_out = torch.randn_like(y)
+
+        torch.autograd.grad(y, x, grad_out, retain_graph=True)
+        with pytest.raises(NotImplementedError, match="Repeated backward"):
+            torch.autograd.grad(y, x, grad_out, retain_graph=True)
+
+    def test_allocating_backward_is_replayable(self):
+        torch.manual_seed(6)
+        x = torch.randn(
+            2, 4, 64, device="cuda", dtype=torch.float32, requires_grad=True
+        )
+        weight = torch.randn(64, device="cuda")
+        y, _, _ = Opake_RMSNorm.apply(x, weight, 1e-5, 0.0, "llama", False, None)
+        grad_out = torch.randn_like(y)
+        grad_out_before = grad_out.clone()
+
+        first = torch.autograd.grad(y, x, grad_out, retain_graph=True)[0]
+        first_before = first.clone()
+        second = torch.autograd.grad(y, x, grad_out, retain_graph=True)[0]
+
+        torch.testing.assert_close(grad_out, grad_out_before, rtol=0, atol=0)
+        torch.testing.assert_close(first, first_before, rtol=0, atol=0)
+        torch.testing.assert_close(second, first_before, rtol=0, atol=0)
+
+
 class TestRMSNormVmapForward:
     """vmap over microbatch dim: Triton vmap vs PyTorch vmap (Llama)."""
 

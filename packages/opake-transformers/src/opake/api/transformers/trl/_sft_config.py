@@ -55,7 +55,7 @@ class SFTConfig(TrainingArguments):
     #: Maximum tokenized sequence length; ``None`` disables truncation.
     max_length: int | None = 1024
     #: Compute the loss only over completion tokens (prompt-completion data).
-    #: ``None`` auto-detects from the dataset format at trainer-init time.
+    #: ``None`` auto-detects from the raw dataset format at trainer-init time.
     completion_only_loss: bool | None = None
     #: EOS token appended to plain-text examples so the model learns to stop.
     #: When set, this exact token overrides ``tokenizer.eos_token``; when ``None``
@@ -65,9 +65,9 @@ class SFTConfig(TrainingArguments):
     pad_to_multiple_of: int | None = None
     #: Number of processes for ``datasets.map`` during preprocessing.
     dataset_num_proc: int | None = None
-    #: Compute the loss only over assistant turns (conversational data). Uses
-    #: the ``{% generation %}``-marked training chat template + the assistant
-    #: token mask. Implies completion-only masking for chat data.
+    #: Compute loss only over assistant turns in conversational data. Requires
+    #: a ``{% generation %}``-marked template; intersects with completion-only
+    #: masking when both options apply.
     assistant_only_loss: bool = False
     #: Path to a tokenizer dir or Jinja file whose chat template (and special
     #: tokens) is cloned onto ``processing_class`` before tokenization.

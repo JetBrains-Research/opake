@@ -4,9 +4,8 @@ Examples: `feat(dpsgd): add AdamW-BC`, `fix(accounting): calibrate BLT for beta=
 `docs: clarify HF auth env vars`. The PR-gate workflow rejects titles that
 don't parse.
 
-Body (below): short, focused prose. On squash merge the body becomes the
-commit body that git-cliff reads. Keep it useful for future `git log`
-readers.
+Body (below): short, focused prose. The configured squash default copies it
+into the commit body; keep it useful for future `git log` readers.
 -->
 
 ## Summary

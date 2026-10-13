@@ -7,10 +7,12 @@ import torch
 
 torchopt = pytest.importorskip("torchopt")
 
+from opake.exceptions import ConfigurationError
 from opake.optimizers import adafactor
 from opake.optimizers.types import AdafactorState
 from opake.types import (
     PerGroup,
+    SecondMomentNoiseOutput,
     noised,
 )
 
@@ -198,6 +200,25 @@ class TestExplicitKwargsRejected:
             opt.update(
                 matrix_grads, state, params=matrix_params, noisy_squared_grads=sq
             )
+
+
+class TestSecondMomentOutput:
+    def test_is_rejected(self, matrix_params, matrix_grads):
+        opt = adafactor(lr=1e-3)
+        state = opt.init(matrix_params)
+        output = SecondMomentNoiseOutput(
+            noised(matrix_grads, max_norm=1.0, noise_stddev=0.1),
+            noised(
+                {name: value.square() for name, value in matrix_grads.items()},
+                max_norm=1.0,
+                noise_stddev=0.1,
+            ),
+        )
+        with pytest.raises(
+            ConfigurationError,
+            match='Optimizer "adafactor" cannot consume SecondMomentNoiseOutput',
+        ):
+            opt.update(output, state, params=matrix_params)
 
 
 class TestBCMode:

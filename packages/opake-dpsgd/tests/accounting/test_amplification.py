@@ -160,27 +160,50 @@ class TestPoissonConstructor:
         assert p.truncated_batch_size is None
         assert p.dataset_size is None
 
-    def test_accepts_generic_dp_process(self):
-        step = dpsgd_acc.poisson(acc.eps_delta(0.3), 0.2)
+    @pytest.mark.parametrize(
+        "inner_factory",
+        [
+            lambda: acc.eps_delta(0.3),
+            lambda: dpsgd_acc.poisson(dpsgd_acc.gaussian(0.8), 0.1),
+            lambda: dpsgd_acc.parallel_poisson(dpsgd_acc.gaussian(0.8), 0.1, 2),
+            lambda: dpsgd_acc.k_out_of_t(
+                dpsgd_acc.gaussian(0.8), k=2, t=4, allocation="block"
+            ),
+            lambda: dpsgd_acc.gaussian(0.8) * 2,
+            lambda: dpsgd_acc.gaussian(0.8) | dpsgd_acc.gaussian(1.0),
+            lambda: acc.cached(dpsgd_acc.gaussian(0.8)),
+        ],
+        ids=[
+            "generic",
+            "poisson",
+            "parallel-poisson",
+            "horizon",
+            "repeated",
+            "composed",
+            "cached",
+        ],
+    )
+    def test_rejects_non_step_mechanisms(self, inner_factory):
+        with pytest.raises(TypeError, match="Gaussian, AdaClip, or NonPrivate"):
+            dpsgd_acc.poisson(inner_factory(), 0.2)
 
-        assert step.inner == acc.eps_delta(0.3)
-        assert math.isfinite(step.epsilon_at(1e-5))
+    def test_direct_construction_rejects_generic_process(self):
+        with pytest.raises(TypeError, match="Gaussian, AdaClip, or NonPrivate"):
+            Poisson(acc.eps_delta(0.3), 0.2)  # type: ignore[arg-type]
 
-    def test_full_participation_matches_generic_inner(self):
-        inner = acc.eps_delta(0.3)
-        step = dpsgd_acc.poisson(inner, 1.0)
+    def test_full_participation_does_not_bypass_inner_validation(self):
+        with pytest.raises(TypeError, match="Gaussian, AdaClip, or NonPrivate"):
+            dpsgd_acc.poisson(acc.eps_delta(0.3), 1.0)  # type: ignore[arg-type]
 
-        assert step.epsilon_at(1e-5) == pytest.approx(inner.epsilon_at(1e-5))
+    def test_deserialization_rejects_generic_process(self):
+        state = dict(state_dict(Poisson(Gaussian(1.0), 0.2)))
+        state["inner"] = dict(state_dict(acc.eps_delta(0.3)))
 
-    def test_serializes_generic_dp_process(self):
-        step = dpsgd_acc.poisson(acc.eps_delta(0.3), 0.2)
-        restored = from_state_dict(Poisson(Gaussian(1.0), 0.2), state_dict(step))
-
-        assert restored == step
-        assert restored.epsilon_at(1e-5) == pytest.approx(step.epsilon_at(1e-5))
+        with pytest.raises(TypeError, match="Gaussian, AdaClip, or NonPrivate"):
+            from_state_dict(acc.identity(), state)
 
     def test_rejects_non_process(self):
-        with pytest.raises(TypeError, match="DpProcess"):
+        with pytest.raises(TypeError, match="Gaussian, AdaClip, or NonPrivate"):
             dpsgd_acc.poisson("bad", 0.01)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize("sample_rate", [0.0, -0.01, 1.01])
@@ -247,7 +270,7 @@ class TestPoissonTruncatedConstructor:
         assert t.dataset_size == 10_000
 
     def test_rejects_non_gaussian(self):
-        with pytest.raises(TypeError, match="truncated Poisson"):
+        with pytest.raises(TypeError, match="Gaussian, AdaClip, or NonPrivate"):
             dpsgd_acc.poisson(
                 acc.eps_delta(1.0),
                 0.01,
