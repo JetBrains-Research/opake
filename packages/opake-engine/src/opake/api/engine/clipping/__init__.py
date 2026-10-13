@@ -27,9 +27,11 @@ objects across ranks.
 import opake.api.engine.clipping._distributed  # noqa: F401  (registers sync handlers)
 from opake.api.engine.clipping._auto import auto_clipped_grad
 from opake.api.engine.clipping._clipped_grad import clipped_grad
+from opake.api.engine.clipping._cuda_graph import CudaGraphChunkCompiler
 from opake.api.engine.clipping._per_group import per_group
 
 __all__ = [
+    "CudaGraphChunkCompiler",
     "auto_clipped_grad",
     "clipped_grad",
     "per_group",

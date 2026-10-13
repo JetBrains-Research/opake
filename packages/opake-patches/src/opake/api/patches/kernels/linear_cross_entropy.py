@@ -35,6 +35,7 @@ import triton
 import triton.language as tl
 from triton import Config
 
+from opake.api.engine.device import capture_safe_kernels_active
 from opake.exceptions import ConfigurationError
 
 from ._utils import (
@@ -595,6 +596,35 @@ def _saved_valids(valids: torch.Tensor | None, targets: torch.Tensor) -> torch.T
     return valids
 
 
+def _valid_selection(
+    labels: torch.Tensor, ignore_index: int
+) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+    """Valid-token compaction indices, or a full-length mask when capturing.
+
+    Eagerly, ignored tokens are compacted away with ``nonzero``, so the kernels
+    process fewer rows. Under
+    :func:`~opake.api.engine.device.capture_safe_kernels` (CUDA-graph warmup and
+    capture) every token is processed and ignored ones are weighted by zero,
+    because ``nonzero`` needs a host synchronization and has a data-dependent
+    output shape. Returns ``(valids, mask)``; exactly one is not ``None`` unless
+    every token is valid on the eager path.
+    """
+    if capture_safe_kernels_active():
+        return None, (labels[..., 1:] != ignore_index).reshape(-1)
+    return _build_flat_valids(labels[..., 1:], ignore_index), None
+
+
+def _apply_token_mask(
+    nll: torch.Tensor, token_weight: torch.Tensor, mask: torch.Tensor | None
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Zero-weight ignored tokens; fold the mask into the backward's token weight."""
+    if mask is None:
+        return nll, token_weight
+    m = mask.to(nll.dtype)
+    token_weight = m if token_weight.numel() == 0 else token_weight * m
+    return nll * m, token_weight
+
+
 def _restore_valids(
     saved_valids: torch.Tensor, lse: torch.Tensor, n_tokens: int
 ) -> torch.Tensor | None:
@@ -940,9 +970,7 @@ class _LinearCEBackward(torch.autograd.Function):
 
         # Expand per-sample scalar grad to per-token grad
         if grad_bdim is not None:
-            do = grad_out.repeat_interleave(
-                torch.tensor(tokens_per_sample, device=grad_out.device)
-            )
+            do = grad_out.repeat_interleave(tokens_per_sample)
         else:
             do = grad_out.expand(n_tokens)
 
@@ -1022,7 +1050,7 @@ class Opake_LinearCrossEntropyLoss(torch.autograd.Function):
         e, targets, tokens_per_sequence = _flatten_unshifted_sources(
             hidden_states, labels
         )
-        valids = _build_flat_valids(labels[..., 1:], ignore_index)
+        valids, token_mask = _valid_selection(labels, ignore_index)
 
         lse_ret = _forward_impl(
             e,
@@ -1042,6 +1070,7 @@ class Opake_LinearCrossEntropyLoss(torch.autograd.Function):
             nll = token_weight * nll
         else:
             token_weight = lse_ret.lse.new_empty(0)
+        nll, token_weight = _apply_token_mask(nll, token_weight, token_mask)
         return nll.sum(), lse_ret.lse, _saved_valids(valids, targets), token_weight
 
     @staticmethod
@@ -1064,7 +1093,9 @@ class Opake_LinearCrossEntropyLoss(torch.autograd.Function):
         )
         ctx.softcap = logit_softcapping if logit_softcapping != 0 else None
         ctx.label_smoothing = float(label_smoothing)
-        ctx.use_token_scaling = bool(use_token_scaling)
+        # Token weights exist for DFT scaling and for the capture-safe mask path;
+        # the backward scales each token's upstream gradient by them.
+        ctx.use_token_scaling = bool(use_token_scaling) or token_weight.numel() > 0
         ctx.logit_scale = float(logit_scale)
 
     @staticmethod
@@ -1152,7 +1183,7 @@ class Opake_LinearCrossEntropyLoss(torch.autograd.Function):
         tokens_per_sample = (
             e.shape[0] // B_vmap // (tokens_per_sequence + 1) * tokens_per_sequence
         )
-        valids = _build_flat_valids(labels[..., 1:], ignore_index)
+        valids, token_mask = _valid_selection(labels, ignore_index)
 
         # Single forward call for entire merged batch
         lse_ret = _forward_impl(
@@ -1171,6 +1202,7 @@ class Opake_LinearCrossEntropyLoss(torch.autograd.Function):
             nll = token_weight * nll
         else:
             token_weight = lse_ret.lse.new_empty(0)
+        nll, token_weight = _apply_token_mask(nll, token_weight, token_mask)
 
         # Split per-sample: scatter NLLs back to sample buckets
         if valids is not None:

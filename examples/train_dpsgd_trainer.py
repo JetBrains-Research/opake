@@ -265,6 +265,17 @@ def parse_args() -> argparse.Namespace:
         default=1000,
     )
     data_group.add_argument("--max-seq-len", type=int, default=512)
+    data_group.add_argument(
+        "--pad-to-multiple-of",
+        type=int,
+        default=None,
+        help=(
+            "Round the collated logical-batch width up to this multiple. "
+            "With --cuda-graphs, use a divisor of --max-seq-len to create "
+            "bounded sequence-width buckets; set it equal to max-seq-len "
+            "for one fixed width."
+        ),
+    )
 
     train_group = parser.add_argument_group("training", "Training loop settings")
     train_group.add_argument(
@@ -432,6 +443,16 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable torch.compile on the DP per-example loss closure.",
+    )
+    train_group.add_argument(
+        "--cuda-graphs",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Capture and replay CUDA graphs for DP microbatch kernels, retaining "
+            "at most N input signatures. 0 disables graph replay."
+        ),
     )
     train_group.add_argument(
         "--torch-compile-backend",
@@ -792,10 +813,13 @@ def parse_args() -> argparse.Namespace:
 
     if args.microbatch_size == 0:
         args.microbatch_size = None
+    if args.pad_to_multiple_of is not None and (
+        args.pad_to_multiple_of < 1 or args.max_seq_len % args.pad_to_multiple_of != 0
+    ):
+        parser.error("--pad-to-multiple-of must be a positive divisor of --max-seq-len")
 
     if args.push_to_hub and not args.hub_model_id:
         parser.error("--push-to-hub requires --hub-model-id (e.g. 'org/name')")
-
     if args.per_group_clipping:
         parsed: dict[str, float] = {}
         fallback_value = None
@@ -1040,7 +1064,11 @@ def main() -> int:
         f"{len(eval_dataset)} eval samples"
     )
 
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False,
+        pad_to_multiple_of=args.pad_to_multiple_of,
+    )
 
     if args.wandb_run_name is None:
         model_short = args.model_name.split("/")[-1]
@@ -1094,6 +1122,7 @@ def main() -> int:
         microbatch_size=args.microbatch_size,
         auto_find_microbatch_size=args.auto_find_microbatch_size,
         torch_compile=args.torch_compile,
+        cuda_graphs=args.cuda_graphs,
         torch_compile_backend=args.torch_compile_backend,
         torch_compile_mode=args.torch_compile_mode,
         use_performance_kernels=args.use_performance_kernels,
@@ -1150,6 +1179,9 @@ def main() -> int:
     print(f"  Target delta: {training_args.privacy_target_delta or 'auto'}")
     print(f"  Save strategy: {training_args.save_strategy}")
     print(f"  torch_compile: {training_args.torch_compile}")
+    print(f"  cuda_graphs: {training_args.cuda_graphs}")
+    if training_args.cuda_graphs:
+        print(f"    pad_to_multiple_of={args.pad_to_multiple_of}")
     if training_args.torch_compile:
         print(
             f"    backend={training_args.torch_compile_backend or 'inductor'} "

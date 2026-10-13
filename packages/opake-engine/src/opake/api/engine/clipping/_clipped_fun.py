@@ -603,7 +603,8 @@ def clipped_fun(
         is paired with :class:`ClippingStats`.
 
     Raises:
-        ConfigurationError: If the batch is empty.
+        ConfigurationError: If the batch is empty or a chunk compiler is used
+            without a finite microbatch size.
     """
     batch_argnums = _prepare_clipped_fun(
         batch_argnums, clipping_norm, return_aux, return_stats

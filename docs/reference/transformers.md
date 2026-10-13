@@ -218,6 +218,7 @@ Dataclass surface.  Every field listed here exists on
 | `torch_compile` | `bool` | `False` | Strictly compile tensor-only gradient chunks; on a Dynamo failure, warn once and use eager execution for affected chunks. |
 | `torch_compile_backend` | `str \| None` | `None` | Defaults to `"inductor"` when compile is on. |
 | `torch_compile_mode` | `str \| None` | `None` | One of `{"default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"}`. |
+| `cuda_graphs` | `int` | `0` | Maximum graph signatures retained per trainer; `0` disables replay, and unseen signatures run eagerly after a positive limit is reached. |
 
 ### Batches and microbatching
 

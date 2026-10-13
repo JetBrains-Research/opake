@@ -652,7 +652,7 @@ class TestClippingAndSamplingSurfaces:
             )
 
     @pytest.mark.parametrize("mode", ["fixed", "adaptive"])
-    def test_trainer_builds_grad_fn_with_automatic_clipping(self, mode, monkeypatch):
+    def test_trainer_builds_grad_fn_with_automatic_clipping(self, mode):
         from types import SimpleNamespace
 
         from opake.api.transformers.trainer._dp_trainer import DPTrainer
@@ -973,3 +973,80 @@ class TestDictFieldInputContract:
             clipping_norm=_FakeDictConfig({"fallback": 1.0, "attn": 0.5}),
         )
         assert args.clipping_norm == {"fallback": 1.0, "attn": 0.5}
+
+
+# --- cuda_graphs ------------------------------------------------------------
+
+
+def test_cuda_graphs_is_accepted_with_gradient_checkpointing():
+    from opake.transformers.trl import SFTConfig
+
+    cfg = SFTConfig(
+        output_dir="/tmp/x",
+        privacy_noise_multiplier=0.01,
+        cuda_graphs=4,
+        gradient_checkpointing=True,
+    )
+    assert cfg.cuda_graphs == 4
+
+
+def test_cuda_graphs_defaults_to_disabled():
+    from opake.transformers.trl import SFTConfig
+
+    cfg = SFTConfig(
+        output_dir="/tmp/x",
+        privacy_noise_multiplier=0.01,
+    )
+    assert cfg.cuda_graphs == 0
+
+
+@pytest.mark.parametrize("value", [-1, True, 1.5, "3"])
+def test_cuda_graphs_requires_non_negative_integer(value):
+    from opake.exceptions import ConfigurationError
+    from opake.transformers.trl import SFTConfig
+
+    with pytest.raises(ConfigurationError, match=r"cuda_graphs.*non-negative integer"):
+        SFTConfig(
+            output_dir="/tmp/x",
+            privacy_noise_multiplier=0.01,
+            cuda_graphs=value,
+        )
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
+        ({"torch_compile": True}, "mutually exclusive"),
+        ({"auto_find_microbatch_size": True}, "auto_find_microbatch_size"),
+        ({"activation_offloading": True}, "activation_offloading"),
+        ({"cuda_graphs": "yes"}, "non-negative integer"),
+    ],
+)
+def test_cuda_graphs_rejects_incompatible_settings(extra, match):
+    from opake.exceptions import ConfigurationError
+    from opake.transformers.trl import SFTConfig
+
+    with pytest.raises(ConfigurationError, match=match):
+        SFTConfig(
+            output_dir="/tmp/x",
+            privacy_noise_multiplier=0.01,
+            **({"cuda_graphs": 1} | extra),
+        )
+
+
+def test_active_dropout_finds_modules_and_config_fields():
+    from types import SimpleNamespace
+
+    import torch
+
+    from opake.api.transformers.trainer._dp_trainer import _active_dropout
+
+    model = torch.nn.Sequential(
+        torch.nn.Linear(2, 2), torch.nn.Dropout(0.0), torch.nn.Dropout(0.1)
+    )
+    assert _active_dropout(model) == ["2"]
+    model.config = SimpleNamespace(attention_dropout=0.0, hidden_dropout=0.2)
+    assert _active_dropout(model) == ["2", "config.hidden_dropout=0.2"]
+    quiet = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.Dropout(0.0))
+    quiet.config = SimpleNamespace(attention_dropout=0.0)
+    assert _active_dropout(quiet) == []

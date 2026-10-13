@@ -195,7 +195,6 @@ per-example gradients. The mechanism is unchanged:
 from opake.patches import apply_runtime_patches
 
 apply_runtime_patches()
-
 grad_fn, state = clipped_grad(
     loss_fn,
     clipping_norm=1.0,

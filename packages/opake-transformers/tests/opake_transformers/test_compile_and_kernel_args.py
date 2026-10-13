@@ -124,6 +124,45 @@ def test_torch_compile_true_accepted(tmp_path):
     assert trainer.args.torch_compile is True
 
 
+def test_cuda_graph_count_sets_compiler_graph_cap(monkeypatch):
+    from types import SimpleNamespace
+
+    import opake.api.transformers.trainer._dp_trainer as dp_trainer_module
+
+    created = []
+
+    class _Compiler:
+        def __init__(self, *, max_graphs):
+            self.max_graphs = max_graphs
+            created.append(self)
+
+    monkeypatch.setattr(dp_trainer_module, "CudaGraphChunkCompiler", _Compiler)
+    trainer = SimpleNamespace(
+        args=SimpleNamespace(cuda_graphs=5),
+        _device=torch.device("cuda"),
+        _cuda_graph_compiler=None,
+    )
+
+    compiler = DPTrainer._grad_compiler(trainer)
+
+    assert compiler is trainer._cuda_graph_compiler
+    assert compiler.max_graphs == 5
+    assert created == [compiler]
+
+
+def test_cuda_graph_count_zero_disables_compiler():
+    from types import SimpleNamespace
+
+    trainer = SimpleNamespace(
+        args=SimpleNamespace(cuda_graphs=0, torch_compile=False),
+        _device=torch.device("cpu"),
+        _cuda_graph_compiler=None,
+    )
+
+    assert DPTrainer._grad_compiler(trainer) is None
+    assert trainer._cuda_graph_compiler is None
+
+
 @pytest.mark.slow
 def test_torch_compile_runs_poisson_training_strictly(tmp_path, monkeypatch, caplog):
     generator = torch.Generator().manual_seed(0)

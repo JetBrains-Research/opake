@@ -499,6 +499,13 @@ class TrainingArguments:
     torch_compile: bool = False
     torch_compile_backend: str | None = None
     torch_compile_mode: str | None = None
+    #: Maximum distinct CUDA-graph input signatures retained by one trainer.
+    #: Zero disables replay; positive values enable capture. Once reached,
+    #: unseen signatures run eagerly while existing signatures replay.
+    #: CUDA only; excludes ``torch_compile`` and ``auto_find_microbatch_size``.
+    #: With gradient checkpointing the model must have no active dropout,
+    #: because the checkpoint recompute then runs without saved RNG state.
+    cuda_graphs: int = 0
     # ``use_performance_kernels`` gates the CUDA + Triton kernel group
     # (``rope``, ``rms_norm``, ``activation``, ``cross_entropy``).  Default
     # ``False`` because the kernels need CUDA + Triton at runtime and the
@@ -929,6 +936,40 @@ class TrainingArguments:
 
         # torch.compile cannot retrace the vmap+grad closure that
         # auto_find_microbatch_size rebuilds on OOM (PyTorch #128711).
+        if (
+            not isinstance(self.cuda_graphs, int)
+            or isinstance(self.cuda_graphs, bool)
+            or self.cuda_graphs < 0
+        ):
+            raise ConfigurationError(
+                *(
+                    "cuda_graphs must be a non-negative integer; got "
+                    f"{self.cuda_graphs!r}.",
+                )
+            )
+        if self.cuda_graphs > 0 and self.torch_compile:
+            raise ConfigurationError(
+                *(
+                    "cuda_graphs > 0 and torch_compile=True are mutually "
+                    "exclusive: both replace the eager microbatch kernel.",
+                )
+            )
+        if self.cuda_graphs > 0 and self.auto_find_microbatch_size:
+            raise ConfigurationError(
+                *(
+                    "cuda_graphs > 0 is incompatible with "
+                    "auto_find_microbatch_size=True: the probe's OOM retries "
+                    "would capture graphs at every probed size.",
+                )
+            )
+        if self.cuda_graphs > 0 and self.activation_offloading:
+            raise ConfigurationError(
+                *(
+                    "cuda_graphs > 0 is incompatible with "
+                    "activation_offloading=True because saved-tensor hooks "
+                    "perform pageable host transfers that CUDA graphs cannot capture.",
+                )
+            )
         if self.torch_compile and self.auto_find_microbatch_size:
             raise ConfigurationError(
                 *(

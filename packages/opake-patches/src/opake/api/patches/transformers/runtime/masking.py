@@ -49,7 +49,8 @@ def _evaluate_mask_hook(
     result = hook(batch_indices, head_indices, query_indices, key_indices)
     if isinstance(result, torch.Tensor):
         return result.to(device=device, dtype=torch.bool)
-    return torch.tensor(result, device=device, dtype=torch.bool)
+    # On-device fill, not a host-to-device copy: CUDA-graph capturable.
+    return torch.full((), bool(result), device=device, dtype=torch.bool)
 
 
 def _apply_mask_hooks(
@@ -391,11 +392,11 @@ def vmap_create_causal_mask(
                 full_mask_cond[:, seq_len:target_length] = True
                 mask_cond = full_mask_cond
 
-        causal_mask[..., :seq_len, :target_length] = torch.where(
-            mask_cond,
-            torch.tensor(0.0, dtype=mask_dtype, device=input_embeds.device),
-            causal_mask[..., :seq_len, :target_length],
-        )
+        # masked_fill with a Python scalar needs no host-to-device copy, so the
+        # mask stays CUDA-graph capturable.
+        causal_mask[..., :seq_len, :target_length] = causal_mask[
+            ..., :seq_len, :target_length
+        ].masked_fill(mask_cond, 0.0)
     else:
         # Single token: can attend to all cached tokens
         causal_mask[..., :, :target_length] = 0.0
