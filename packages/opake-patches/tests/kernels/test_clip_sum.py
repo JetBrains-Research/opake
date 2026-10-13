@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import math
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -109,6 +110,40 @@ def test_auto_resolves_to_torch_for_unsupported_configurations(overrides, monkey
     monkeypatch.setattr(cf, "fused_kernels_available", lambda: True)
     monkeypatch.setattr(cf, "get_fused_clip_backend", lambda: object())
     assert _resolve_auto(**overrides) is None
+
+
+def test_empty_batch_falls_back_from_fused_kernel(monkeypatch):
+    pytest.importorskip("triton")
+    module = importlib.import_module("opake.api.patches.kernels._clip_sum")
+
+    class CudaTensor(torch.Tensor):
+        @property
+        def is_cuda(self):
+            return True
+
+    leaf = torch.empty((0, 3)).as_subclass(CudaTensor)
+    expected = object()
+    calls = []
+
+    def fallback(*args, **kwargs):
+        calls.append((args, kwargs))
+        return expected
+
+    monkeypatch.setattr(module, "_stream_clip_and_sum", fallback)
+    actual = module.fused_stream_clip_and_sum(
+        leaf,
+        1.0,
+        scale=SimpleNamespace(kind="fixed"),
+        batch_size=0,
+        reduce_leaf=lambda value: value,
+        compute_dtype=None,
+        second_moment=False,
+        return_aux=False,
+        return_stats=False,
+    )
+
+    assert actual is expected
+    assert len(calls) == 1
 
 
 def test_auto_resolves_to_torch_on_rocm_builds(monkeypatch):

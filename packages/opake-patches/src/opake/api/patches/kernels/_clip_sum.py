@@ -178,6 +178,8 @@ def unsupported_reason(
         return "an explicit compute_dtype is not supported"
     if not leaves:
         return "the value tree has no leaves"
+    if batch_size == 0:
+        return "the batch is empty"
     if batch_size > _MAX_BATCH:
         return f"batch size {batch_size} exceeds {_MAX_BATCH}"
     grad_mode = torch.is_grad_enabled()
