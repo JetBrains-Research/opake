@@ -818,6 +818,17 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def _clipping_kwargs_for_trainer(args: argparse.Namespace) -> dict:
+    """Mode-specific ``clipping_kwargs`` for ``TrainingArguments``."""
+    if args.clipping_mode == "auto":
+        return {"gamma": args.auto_clipping_gamma}
+    kwargs = {}
+    if args.clipping_mode == "adaptive":
+        kwargs["target_quantile"] = args.target_clipping_rate
+        kwargs["clipping_norm_max"] = args.clipping_norm_max
+    return kwargs
+
+
 def _validate_sampler_cli(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
@@ -1103,16 +1114,7 @@ def main() -> int:
             if args.per_group_clipping
             else args.clipping_norm
         ),
-        clipping_kwargs=(
-            {
-                "target_quantile": args.target_clipping_rate,
-                "clipping_norm_max": args.clipping_norm_max,
-            }
-            if args.clipping_mode == "adaptive"
-            else {"gamma": args.auto_clipping_gamma}
-            if args.clipping_mode == "auto"
-            else {}
-        ),
+        clipping_kwargs=_clipping_kwargs_for_trainer(args),
         sampling_mode=args.sampler,
         sampling_kwargs=_sampling_kwargs_for_trainer(args),
         privacy_noise_mechanism=args.noise_mechanism,

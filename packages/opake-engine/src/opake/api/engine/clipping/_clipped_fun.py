@@ -9,12 +9,14 @@ import torch
 from torch.func import vmap as _vmap
 
 from opake.api.engine.clipping._helpers import batch_size_from_args, normalize_to_tuple
+from opake.api.engine.clipping._kernel_backend import get_fused_clip_backend
 from opake.api.engine.clipping._pytree import clip_pytree
 from opake.api.engine.clipping._streaming import (
     _FIXED_SCALE,
     _BuiltinScale,
     _stream_clip_and_sum,
 )
+from opake.api.engine.device import fused_kernels_available
 from opake.api.engine.functional._transform_stack import under_differentiating_transform
 from opake.api.engine.pytree import global_norm, tree_leaves, tree_map
 from opake.api.engine.types import (
@@ -437,6 +439,34 @@ def _attach_value_aux(diagnostics, value, aux, has_aux):
             diagnostics["value_aux"] = aux
 
 
+def _resolve_stream_impl(
+    *,
+    clipping_norm: float | PerGroup,
+    second_moment: bool,
+    compute_dtype: torch.dtype | None,
+    scale_fn: Callable | None,
+    chunk_compiler: Callable | None,
+) -> Callable | None:
+    """Resolve the available streaming clip-and-sum implementation.
+
+    Returns ``None`` for the PyTorch path, or a callable with the signature of
+    ``_stream_clip_and_sum``. The fused kernel is used when ``opake-patches``
+    has registered it via ``apply_runtime_patches()`` and the call is supported;
+    otherwise clipping falls back to PyTorch.
+    """
+    if (
+        isinstance(clipping_norm, PerGroup)
+        or scale_fn is not None
+        or second_moment
+        or compute_dtype is not None
+        or chunk_compiler is not None
+        or not fused_kernels_available()
+        or torch.version.hip is not None
+    ):
+        return None
+    return get_fused_clip_backend()
+
+
 def _streaming_supported(clipping_norm, scale_fn, builtin_scale) -> bool:
     if scale_fn is None:
         return True
@@ -578,6 +608,13 @@ def clipped_fun(
     batch_argnums = _prepare_clipped_fun(
         batch_argnums, clipping_norm, return_aux, return_stats
     )
+    stream_impl = _resolve_stream_impl(
+        clipping_norm=clipping_norm,
+        second_moment=second_moment,
+        compute_dtype=compute_dtype,
+        scale_fn=_scale_fn,
+        chunk_compiler=_chunk_compiler,
+    )
 
     # Wrap function to handle has_aux - use empty tuple () not None!
     if not has_aux:
@@ -640,17 +677,17 @@ def clipped_fun(
             fun_with_aux, in_dims, args, kwargs, return_aux
         )
         reduced, markers, squared_reduced, squared_markers, diagnostics = (
-            _stream_clip_and_sum(
-                values,
-                kernel_clipping_norm,
-                scale=_FIXED_SCALE if _scale_fn is None else _builtin_scale,
-                batch_size=batch_size_from_args(args, batch_argnums),
-                reduce_leaf=reduce_leaf,
-                compute_dtype=compute_dtype,
-                second_moment=second_moment,
-                return_aux=return_aux,
-                return_stats=return_stats,
-            )
+            _stream_clip_and_sum if stream_impl is None else stream_impl
+        )(
+            values,
+            kernel_clipping_norm,
+            scale=_FIXED_SCALE if _scale_fn is None else _builtin_scale,
+            batch_size=batch_size_from_args(args, batch_argnums),
+            reduce_leaf=reduce_leaf,
+            compute_dtype=compute_dtype,
+            second_moment=second_moment,
+            return_aux=return_aux,
+            return_stats=return_stats,
         )
         if return_aux:
             _attach_value_aux(diagnostics, values, value_aux, has_aux)

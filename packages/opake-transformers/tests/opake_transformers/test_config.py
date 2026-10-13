@@ -640,6 +640,41 @@ class TestClippingAndSamplingSurfaces:
             "clipping_norm_max": 50.0,
         }
 
+    @pytest.mark.parametrize("mode", ["fixed", "adaptive", "auto"])
+    def test_clipping_kwargs_reject_clip_backend(self, mode):
+        with pytest.raises(
+            ValueError, match="clipping_kwargs contains unsupported keys"
+        ):
+            TrainingArguments(
+                privacy_noise_multiplier=1.0,
+                clipping_mode=mode,
+                clipping_kwargs={"clip_backend": "torch"},
+            )
+
+    @pytest.mark.parametrize("mode", ["fixed", "adaptive"])
+    def test_trainer_builds_grad_fn_with_automatic_clipping(self, mode, monkeypatch):
+        from types import SimpleNamespace
+
+        from opake.api.transformers.trainer._dp_trainer import DPTrainer
+        from opake.random import key
+
+        args = TrainingArguments(
+            privacy_noise_multiplier=1.0,
+            clipping_mode=mode,
+        )
+        trainer = SimpleNamespace(_grad_compiler=lambda: None)
+        grad_fn, _ = DPTrainer._create_grad_fn(
+            trainer,
+            lambda params, batch: params.sum(),
+            (1,),
+            args,
+            1.0,
+            8,
+            None,
+            quantile_noise_key=key(0),
+        )
+        assert callable(grad_fn)
+
 
 class TestMechanismAndSamplerDefaults:
     """``privacy_noise_mechanism`` surface + ``sampling_mode='auto'`` resolver."""

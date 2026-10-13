@@ -174,6 +174,54 @@ for candidate_mb in [64, 32, 16, 8, 4, 2, 1]:
 
 See [Memory Optimizations](memory-optimizations.md) for details.
 
+## Fused Triton backend
+
+On CUDA, clipping automatically uses fused Triton kernels when they are
+registered and support the call; otherwise it uses the PyTorch implementation.
+The fused kernels replace the per-leaf PyTorch operations of the clip-and-sum
+with a few fused kernels per call. Each kernel processes every
+parameter tensor of one dtype, so the number of launches does not grow with the
+number of tensors. The backend never materializes clipped copies of the
+per-example gradients. The mechanism is unchanged:
+
+- per-example norms are accumulated in float64 as on the PyTorch path, and the
+  clipping scales and the guarantee `norm(clipped) <= clipping_norm` on the
+  stored values come from the same code;
+- results can differ in the last bits only through summation order: of the
+  batch sum, of the norm accumulation, and of the `clipped_norms` diagnostic.
+  The stored-value guarantee holds for any order.
+
+```python
+from opake.patches import apply_runtime_patches
+
+apply_runtime_patches()
+
+grad_fn, state = clipped_grad(
+    loss_fn,
+    clipping_norm=1.0,
+    normalize_by=batch_size,
+)
+```
+
+The fused clipping kernel is provided by `opake-patches`. Install that package
+and call `apply_runtime_patches()` before creating the clipping transform; this
+registers the kernel when CUDA and Triton are available. Without registration,
+clipping uses the PyTorch path.
+The fused kernels need an NVIDIA CUDA device with Triton installed (ROCm builds
+use the PyTorch path), and support:
+
+- fixed or adaptive clipping with a scalar threshold;
+- float32 and bfloat16 gradients on a single CUDA device, with or without
+  microbatching and diagnostics.
+
+Per-group thresholds, AUTO-S, `second_moment`, an explicit `compute_dtype`,
+float16 or float64 gradients, and compiled microbatch kernels use the PyTorch
+path. Under `torch.compile` or an enclosing `grad`/`jvp` transform, clipping
+uses the vmapped PyTorch path.
+
+`DPTrainer` applies runtime patches during construction and uses the same
+automatic dispatch for fixed and adaptive clipping.
+
 ## Adaptive clipping
 
 `adaptive_clipped_grad` automatically adjusts the clip norm during training.
