@@ -3526,7 +3526,7 @@ consistent across ranks, explicitly synchronize that state after each step:</p>
 <a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">loss_fn</span><span class="p">,</span>
 <a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="n">batch_argnums</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
 <a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="n">initial_clipping_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="n">normalize_by</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="n">normalize_by</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>  <span class="c1"># public expected batch size</span>
 <a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">(</span><span class="mi">7</span><span class="p">),</span>
 <a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="p">)</span>
 <a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">noise_fn</span><span class="p">,</span> <span class="n">noise_state</span> <span class="o">=</span> <span class="n">gaussian_noise</span><span class="p">(</span><span class="n">noise_multiplier</span><span class="o">=</span><span class="mf">1.1</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">(</span><span class="mi">42</span><span class="p">))</span>
@@ -3544,7 +3544,7 @@ arguments and returns them in order:</p>
 </code></pre></div>
 <p><code>sync()</code> auto-dispatches based on the type of the state object. For
 <code>AdaptiveClipState</code>, it sums <code>num_clipped</code> and batch size across ranks,
-recomputes the global clipping rate from those aggregated totals, and updates
+updates the centered clipping statistic using the public expected batch size, and updates
 the internal next threshold identically on every device. This is the required
 step that keeps distributed adaptive clipping correct even when ranks see
 uneven local batches. The current DP bound is carried by the clipped output's
@@ -3693,7 +3693,7 @@ following types are registered:</p>
 </tr>
 <tr>
 <td><code>AdaptiveClipState</code></td>
-<td>Aggregate counts, recompute global clipping rate, update the internal next threshold</td>
+<td>Aggregate counts, use the centered statistic with the public expected batch size, update the internal next threshold</td>
 </tr>
 <tr>
 <td><code>ClippedFunAux</code>, <code>ClippedGradAux</code>, <code>AdaptiveClippedGradAux</code></td>

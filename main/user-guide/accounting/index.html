@@ -3974,7 +3974,9 @@ conservative upper bound.</p>
 quantile query). Use this when using <code>adaptive_clipped_grad</code>. <code>num_groups</code>
 defaults to 1 for a single adaptive threshold; set it to the number of
 independently adaptive groups for per-group clipping, because each group
-releases its own noisy quantile query.</p>
+releases its own noisy quantile query. Pass the same public, fixed
+<code>expected_batch_size</code> to the runtime and accountant. The gradient's
+<code>normalize_by</code> may differ.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">expected_batch_size</span> <span class="o">=</span> <span class="n">sample_rate</span> <span class="o">*</span> <span class="n">dataset_size</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">step</span> <span class="o">=</span> <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">adaclip</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="mf">0.8</span><span class="p">),</span>

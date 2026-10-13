@@ -3976,14 +3976,14 @@ method, and demonstrates microbatching for memory-efficient training.</p>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torch.utils.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">TensorDataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.utils.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">TensorDataset</span><span class="p">,</span> <span class="n">default_collate</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">acc</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">opake.dpsgd.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dpsgd_acc</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpsgd.clipping</span><span class="w"> </span><span class="kn">import</span> <span class="n">clipped_grad</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpsgd.noise</span><span class="w"> </span><span class="kn">import</span> <span class="n">gaussian_noise</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpsgd.sampling</span><span class="w"> </span><span class="kn">import</span> <span class="n">PoissonSampler</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">opake.functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_functional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opake.functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">empty_collate</span><span class="p">,</span> <span class="n">make_functional</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.random</span><span class="w"> </span><span class="kn">import</span> <span class="n">key</span>
 
 <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
@@ -3994,14 +3994,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, default_collate
 
 import opake.accounting as acc
 import opake.dpsgd.accounting as dpsgd_acc
 from opake.dpsgd.clipping import clipped_grad
 from opake.dpsgd.noise import gaussian_noise
 from opake.dpsgd.sampling import PoissonSampler
-from opake.functional import make_functional
+from opake.functional import empty_collate, make_functional
 from opake.random import key
 
 torch.manual_seed(42)
@@ -4243,7 +4243,7 @@ Truncated -- mean: 31.8, std: 5.1, max: 40
 <tbody>
 <tr>
 <td><code>DataLoader(shuffle=True)</code></td>
-<td><code>dpsgd_acc.poisson</code> (approximation)</td>
+<td>Requires separate shuffle accounting; <code>poisson</code> does not apply</td>
 </tr>
 <tr>
 <td><code>PoissonSampler</code> (plain)</td>
@@ -4331,7 +4331,7 @@ print(f"Ratio:             {eps_truncated / eps_poisson:.2f}x")</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>Poisson:           epsilon = 3.8331
+<pre>Poisson:           epsilon = 3.8333
 Truncated Poisson: epsilon = 9.2359
 Ratio:             2.41x
 </pre>
@@ -4387,6 +4387,7 @@ you recalibrate noise; use <code>dpsgd_acc.poisson(..., truncated_batch_size=, d
     <span class="n">argnums</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
     <span class="n">batch_argnums</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
     <span class="n">clipping_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">normalize_by</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="n">noise_fn</span><span class="p">,</span> <span class="n">noise_state</span> <span class="o">=</span> <span class="n">gaussian_noise</span><span class="p">(</span><span class="n">noise_multiplier</span><span class="o">=</span><span class="mf">1.1</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">(</span><span class="mi">42</span><span class="p">))</span>
 
@@ -4397,16 +4398,18 @@ you recalibrate noise; use <code>dpsgd_acc.poisson(..., truncated_batch_size=, d
     <span class="n">n_steps</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
     <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">(</span><span class="mi">44</span><span class="p">),</span>
 <span class="p">)</span>
-<span class="n">loader</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">batch_sampler</span><span class="o">=</span><span class="n">sampler</span><span class="p">)</span>
+<span class="n">collate</span> <span class="o">=</span> <span class="n">empty_collate</span><span class="p">(</span><span class="n">default_collate</span><span class="p">)</span>
+<span class="n">collate</span><span class="p">([</span><span class="n">dataset</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+<span class="n">loader</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">batch_sampler</span><span class="o">=</span><span class="n">sampler</span><span class="p">,</span> <span class="n">collate_fn</span><span class="o">=</span><span class="n">collate</span><span class="p">)</span>
 
 <span class="n">lr</span> <span class="o">=</span> <span class="mf">0.1</span>
 <span class="k">for</span> <span class="n">step</span><span class="p">,</span> <span class="p">(</span><span class="n">xb</span><span class="p">,</span> <span class="n">yb</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">loader</span><span class="p">):</span>
     <span class="n">bs</span> <span class="o">=</span> <span class="n">xb</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
     <span class="n">grads</span><span class="p">,</span> <span class="n">clip_state</span> <span class="o">=</span> <span class="n">grad_fn</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="p">(</span><span class="n">xb</span><span class="p">,</span> <span class="n">yb</span><span class="p">),</span> <span class="n">state</span><span class="o">=</span><span class="n">clip_state</span><span class="p">)</span>
     <span class="n">noisy</span><span class="p">,</span> <span class="n">noise_state</span> <span class="o">=</span> <span class="n">noise_fn</span><span class="p">(</span><span class="n">grads</span><span class="p">,</span> <span class="n">noise_state</span><span class="p">)</span>
-    <span class="n">params</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="p">(</span><span class="n">lr</span> <span class="o">/</span> <span class="n">bs</span><span class="p">)</span> <span class="o">*</span> <span class="n">g</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">g</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">noisy</span><span class="o">.</span><span class="n">pytree</span><span class="p">))</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">lr</span> <span class="o">*</span> <span class="n">g</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">g</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">noisy</span><span class="o">.</span><span class="n">pytree</span><span class="p">))</span>
 
-    <span class="k">if</span> <span class="n">step</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">step</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">bs</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="n">loss</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="p">(</span><span class="n">xb</span><span class="p">,</span> <span class="n">yb</span><span class="p">))</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Step </span><span class="si">{</span><span class="n">step</span><span class="si">:</span><span class="s2">2d</span><span class="si">}</span><span class="s2">  batch_size=</span><span class="si">{</span><span class="n">bs</span><span class="si">:</span><span class="s2">2d</span><span class="si">}</span><span class="s2">  loss=</span><span class="si">{</span><span class="n">loss</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
@@ -4426,6 +4429,7 @@ grad_fn, clip_state = clipped_grad(
     argnums=0,
     batch_argnums=1,
     clipping_norm=1.0,
+    normalize_by=batch_size,
 )
 noise_fn, noise_state = gaussian_noise(noise_multiplier=1.1, key=key(42))
 
@@ -4436,16 +4440,18 @@ sampler = PoissonSampler(
     n_steps=10,
     key=key(44),
 )
-loader = DataLoader(dataset, batch_sampler=sampler)
+collate = empty_collate(default_collate)
+collate([dataset[0]])
+loader = DataLoader(dataset, batch_sampler=sampler, collate_fn=collate)
 
 lr = 0.1
 for step, (xb, yb) in enumerate(loader):
     bs = xb.shape[0]
     grads, clip_state = grad_fn(params, (xb, yb), state=clip_state)
     noisy, noise_state = noise_fn(grads, noise_state)
-    params = tuple(p - (lr / bs) * g for p, g in zip(params, noisy.pytree))
+    params = tuple(p - lr * g for p, g in zip(params, noisy.pytree))
 
-    if step % 3 == 0:
+    if step % 3 == 0 and bs:
         with torch.no_grad():
             loss = loss_fn(params, (xb, yb)).item()
         print(f"Step {step:2d}  batch_size={bs:2d}  loss={loss:.4f}")</div>
@@ -4460,10 +4466,10 @@ for step, (xb, yb) in enumerate(loader):
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>Step  0  batch_size=36  loss=0.6868
-Step  3  batch_size=33  loss=0.6728
-Step  6  batch_size=22  loss=0.6683
-Step  9  batch_size=31  loss=0.6504
+<pre>Step  0  batch_size=40  loss=0.7004
+Step  3  batch_size=31  loss=0.6608
+Step  6  batch_size=38  loss=0.6366
+Step  9  batch_size=21  loss=0.6606
 </pre>
 </div>
 </div>
@@ -4592,7 +4598,7 @@ print(f"Max difference: {max_diff:.2e}")</div>
 <tbody>
 <tr>
 <td>Fixed-batch</td>
-<td>Worst</td>
+<td>Requires separate accounting</td>
 <td>Deterministic</td>
 <td>Prototyping</td>
 </tr>
@@ -4604,7 +4610,7 @@ print(f"Max difference: {max_diff:.2e}")</div>
 </tr>
 <tr>
 <td>Truncated Poisson</td>
-<td>~1.5x worse</td>
+<td>Higher ε at the same rate and noise</td>
 <td>Bounded</td>
 <td>Production</td>
 </tr>

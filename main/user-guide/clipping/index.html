@@ -4045,18 +4045,19 @@ be clipped (the <em>target quantile</em>).</p>
 <a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">initial_clipping_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
 <a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">target_quantile</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>  <span class="c1"># aim for 50% of gradients clipped</span>
 <a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="n">normalize_by</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">(</span><span class="mi">7</span><span class="p">),</span>  <span class="c1"># required for quantile noise</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="p">)</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="n">grads</span><span class="p">,</span> <span class="n">clip_state</span> <span class="o">=</span> <span class="n">grad_fn</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="n">clip_state</span><span class="p">)</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># the returned state carries the next threshold internally</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="n">expected_batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>  <span class="c1"># public expected batch size</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">(</span><span class="mi">7</span><span class="p">),</span>  <span class="c1"># required for quantile noise</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="p">)</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">grads</span><span class="p">,</span> <span class="n">clip_state</span> <span class="o">=</span> <span class="n">grad_fn</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="n">clip_state</span><span class="p">)</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1"># the returned state carries the next threshold internally</span>
 </code></pre></div>
 <h3 id="how-adaptive-clipping-works">How adaptive clipping works<a class="headerlink" href="#how-adaptive-clipping-works" title="Permanent link">&para;</a></h3>
 <p>After each step:</p>
 <ol>
-<li>Compute the fraction of per-example gradients whose norm exceeded the
-   current clip norm.</li>
-<li>Add calibrated Gaussian noise to this fraction (for privacy).</li>
+<li>Sum centered clipping indicators and divide by the public expected batch
+   size: <code>0.5 + (num_clipped - sampled_batch_size / 2) / expected_batch_size</code>.</li>
+<li>Add Gaussian noise with standard deviation <code>fraction_noise_std</code>.</li>
 <li>Apply a geometric update: if the noisy clipping rate exceeds the target
    quantile, increase the clip norm; otherwise, decrease it.</li>
 </ol>
@@ -4076,7 +4077,8 @@ internal execution state. Always use the returned state for the next call; use
 </code></pre></div>
 <h3 id="privacy-accounting-for-adaptive-clipping">Privacy accounting for adaptive clipping<a class="headerlink" href="#privacy-accounting-for-adaptive-clipping" title="Permanent link">&para;</a></h3>
 <p>Adaptive clipping introduces an additional privacy cost (the noisy clipping
-rate query). Account for it using <code>dpsgd_acc.adaclip()</code>:</p>
+rate query). Pass the fixed public expected batch size to both
+<code>adaptive_clipped_grad()</code> and <code>dpsgd_acc.adaclip()</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">opake.dpsgd.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dpsgd_acc</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">expected_batch_size</span> <span class="o">=</span> <span class="n">sample_rate</span> <span class="o">*</span> <span class="n">dataset_size</span>
@@ -4267,8 +4269,9 @@ adapts independently based on its own clipping rate:</p>
 <a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    <span class="n">target_quantile</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
 <a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>    <span class="n">batch_argnums</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
 <a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>    <span class="n">normalize_by</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
-<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>    <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">(</span><span class="mi">7</span><span class="p">),</span>
-<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="p">)</span>
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>    <span class="n">expected_batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>  <span class="c1"># public expected batch size</span>
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>    <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">(</span><span class="mi">7</span><span class="p">),</span>
+<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="p">)</span>
 </code></pre></div>
 <p><code>self_attn</code> and <code>mlp</code> adapt from separate noisy clipping-rate queries.
 <code>pg.num_groups</code> is 2 here and remains correct if the grouping changes. Pass it

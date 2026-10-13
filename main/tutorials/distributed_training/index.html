@@ -3942,12 +3942,12 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="distributed-dp-sgd-training">Distributed DP-SGD Training<a class="anchor-link" href="#distributed-dp-sgd-training">¶</a></h1><p>This notebook demonstrates how to run DP-SGD training across multiple
-GPUs using PyTorch's Distributed Data Parallel (DDP). The key
+processes using PyTorch's Distributed Data Parallel (DDP). The key
 differences from single-device training are:</p>
 <ol>
-<li>Each device computes clipped gradients on its local data shard.</li>
-<li>Clipped gradients are summed across devices with <code>sum_gradients()</code>.</li>
-<li>All devices add the same noise (using the same RNG key).</li>
+<li>Each rank computes clipped gradients on its local data shard.</li>
+<li>Clipped gradients are summed across ranks with <code>sum_gradients()</code>.</li>
+<li>All ranks add the same noise (using the same RNG key).</li>
 <li>The dataset is sharded with <code>local_shard()</code> and each rank gets a per-rank sampling key via <code>fold_in()</code>.</li>
 </ol>
 <p><strong>Prerequisites:</strong> <a href="dp_sgd_training.ipynb">DP-SGD Training</a>,
@@ -3994,24 +3994,25 @@ device.</p>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.distributed</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dist</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torch.utils.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">TensorDataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.utils.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataLoader</span><span class="p">,</span> <span class="n">TensorDataset</span><span class="p">,</span> <span class="n">default_collate</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">opake.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">acc</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">opake.dpsgd.accounting</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dpsgd_acc</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpsgd.clipping</span><span class="w"> </span><span class="kn">import</span> <span class="n">clipped_grad</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpsgd.noise</span><span class="w"> </span><span class="kn">import</span> <span class="n">gaussian_noise</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.dpsgd.sampling</span><span class="w"> </span><span class="kn">import</span> <span class="n">PoissonSampler</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">opake.functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_functional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">opake.functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">empty_collate</span><span class="p">,</span> <span class="n">make_functional</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.distributed.gradients</span><span class="w"> </span><span class="kn">import</span> <span class="n">sum_gradients_</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.random</span><span class="w"> </span><span class="kn">import</span> <span class="n">key</span><span class="p">,</span> <span class="n">fold_in</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">opake.distributed</span><span class="w"> </span><span class="kn">import</span> <span class="n">local_shard</span>
 
 <span class="c1"># Initialize distributed (set by torchrun)</span>
-<span class="n">dist</span><span class="o">.</span><span class="n">init_process_group</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"nccl"</span><span class="p">)</span>
+<span class="n">dist</span><span class="o">.</span><span class="n">init_process_group</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"nccl"</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s2">"gloo"</span><span class="p">)</span>
 <span class="n">rank</span> <span class="o">=</span> <span class="n">dist</span><span class="o">.</span><span class="n">get_rank</span><span class="p">()</span>
 <span class="n">world_size</span> <span class="o">=</span> <span class="n">dist</span><span class="o">.</span><span class="n">get_world_size</span><span class="p">()</span>
-<span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="sa">f</span><span class="s2">"cuda:</span><span class="si">{</span><span class="n">rank</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">set_device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+<span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="sa">f</span><span class="s2">"cuda:</span><span class="si">{</span><span class="n">rank</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s2">"cpu"</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"cuda"</span><span class="p">:</span>
+    <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">set_device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Rank </span><span class="si">{</span><span class="n">rank</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">world_size</span><span class="si">}</span><span class="s2"> on </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
@@ -4019,24 +4020,25 @@ device.</p>
 import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, default_collate
 
 import opake.accounting as acc
 import opake.dpsgd.accounting as dpsgd_acc
 from opake.dpsgd.clipping import clipped_grad
 from opake.dpsgd.noise import gaussian_noise
 from opake.dpsgd.sampling import PoissonSampler
-from opake.functional import make_functional
+from opake.functional import empty_collate, make_functional
 from opake.distributed.gradients import sum_gradients_
 from opake.random import key, fold_in
 from opake.distributed import local_shard
 
 # Initialize distributed (set by torchrun)
-dist.init_process_group(backend="nccl")
+dist.init_process_group(backend="nccl" if torch.cuda.is_available() else "gloo")
 rank = dist.get_rank()
 world_size = dist.get_world_size()
-device = torch.device(f"cuda:{rank}")
-torch.cuda.set_device(device)
+device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+if device.type == "cuda":
+    torch.cuda.set_device(device)
 
 print(f"Rank {rank}/{world_size} on {device}")</div>
 </div>
@@ -4075,7 +4077,9 @@ using <code>local_shard()</code>, so each rank trains on a disjoint partition.</
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Synthetic dataset (same on all ranks)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+
+<span class="c1"># Synthetic dataset (same on all ranks)</span>
 <span class="n">dataset_size</span> <span class="o">=</span> <span class="mi">10_000</span>
 <span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">dataset_size</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
 <span class="n">y</span> <span class="o">=</span> <span class="p">(</span><span class="n">X</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">X</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
@@ -4095,7 +4099,9 @@ using <code>local_shard()</code>, so each rank trains on a disjoint partition.</
 <span class="n">model</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
 <span class="n">fmodel</span><span class="p">,</span> <span class="n">params</span> <span class="o">=</span> <span class="n">make_functional</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-2"># Synthetic dataset (same on all ranks)
+<div class="clipboard-copy-txt" id="cell-2">torch.manual_seed(42)
+
+# Synthetic dataset (same on all ranks)
 dataset_size = 10_000
 X = torch.randn(dataset_size, 20)
 y = (X[:, 0] + X[:, 1] &gt; 0).float()
@@ -4202,7 +4208,9 @@ identical noise.</p>
     <span class="n">n_steps</span><span class="o">=</span><span class="n">NUM_STEPS</span><span class="p">,</span>
     <span class="n">key</span><span class="o">=</span><span class="n">fold_in</span><span class="p">(</span><span class="n">key</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">rank</span><span class="p">),</span>
 <span class="p">)</span>
-<span class="n">loader</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">shard</span><span class="p">,</span> <span class="n">batch_sampler</span><span class="o">=</span><span class="n">sampler</span><span class="p">)</span>
+<span class="n">collate</span> <span class="o">=</span> <span class="n">empty_collate</span><span class="p">(</span><span class="n">default_collate</span><span class="p">)</span>
+<span class="n">collate</span><span class="p">([</span><span class="n">shard</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+<span class="n">loader</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">shard</span><span class="p">,</span> <span class="n">batch_sampler</span><span class="o">=</span><span class="n">sampler</span><span class="p">,</span> <span class="n">collate_fn</span><span class="o">=</span><span class="n">collate</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">BATCH_SIZE = 64
 NUM_STEPS = 500
@@ -4254,7 +4262,9 @@ sampler = PoissonSampler(
     n_steps=NUM_STEPS,
     key=fold_in(key(0), rank),
 )
-loader = DataLoader(shard, batch_sampler=sampler)</div>
+collate = empty_collate(default_collate)
+collate([shard[0]])
+loader = DataLoader(shard, batch_sampler=sampler, collate_fn=collate)</div>
 </div>
 </div>
 </div>
@@ -4308,12 +4318,11 @@ all ranks add the same noise (from the shared key).</p>
     <span class="n">noisy_grads</span><span class="p">,</span> <span class="n">noise_state</span> <span class="o">=</span> <span class="n">noise_fn</span><span class="p">(</span><span class="n">grads</span><span class="p">,</span> <span class="n">noise_state</span><span class="p">)</span>
 
     <span class="c1"># 4. SGD update — unwrap .pytree for the raw tensor leaves</span>
-    <span class="n">bs</span> <span class="o">=</span> <span class="n">xb</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">world_size</span>  <span class="c1"># effective global batch size</span>
-    <span class="n">params</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="p">(</span><span class="n">LR</span> <span class="o">/</span> <span class="n">bs</span><span class="p">)</span> <span class="o">*</span> <span class="n">g</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">g</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">noisy_grads</span><span class="o">.</span><span class="n">pytree</span><span class="p">))</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">LR</span> <span class="o">*</span> <span class="n">g</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">g</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">noisy_grads</span><span class="o">.</span><span class="n">pytree</span><span class="p">))</span>
 
     <span class="k">if</span> <span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="n">step</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="mi">100</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-            <span class="n">loss</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">xb</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">yb</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+            <span class="n">loss</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">xb</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">yb</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">xb</span><span class="p">)</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">"nan"</span><span class="p">)</span>
         <span class="n">eps</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">dpsgd_acc</span><span class="o">.</span><span class="n">gaussian</span><span class="p">(</span><span class="n">noise_multiplier</span><span class="p">),</span> <span class="n">sample_rate</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">step</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
         <span class="p">)</span><span class="o">.</span><span class="n">epsilon_at</span><span class="p">(</span><span class="n">DELTA</span><span class="p">)</span>
@@ -4335,12 +4344,11 @@ all ranks add the same noise (from the shared key).</p>
     noisy_grads, noise_state = noise_fn(grads, noise_state)
 
     # 4. SGD update — unwrap .pytree for the raw tensor leaves
-    bs = xb.shape[0] * world_size  # effective global batch size
-    params = tuple(p - (LR / bs) * g for p, g in zip(params, noisy_grads.pytree))
+    params = tuple(p - LR * g for p, g in zip(params, noisy_grads.pytree))
 
     if rank == 0 and (step + 1) % 100 == 0:
         with torch.no_grad():
-            loss = loss_fn(params, xb[0], yb[0]).item()
+            loss = loss_fn(params, xb[0], yb[0]).item() if len(xb) else float("nan")
         eps = (
             dpsgd_acc.poisson(dpsgd_acc.gaussian(noise_multiplier), sample_rate) * (step + 1)
         ).epsilon_at(DELTA)

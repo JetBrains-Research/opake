@@ -4277,12 +4277,12 @@ complete horizon. The accountant currently uses the block reduction as a
 conservative upper bound.</p>
 <h3 id="adaclipinner-fraction_noise_std-expected_batch_size-num_groups1-dpprocess"><code>adaclip(inner, *, fraction_noise_std, expected_batch_size, num_groups=1) -&gt; DpProcess</code><a class="headerlink" href="#adaclipinner-fraction_noise_std-expected_batch_size-num_groups1-dpprocess" title="Permanent link">&para;</a></h3>
 <p>Accounts for the extra privacy cost of adaptive clipping's noisy
-fraction query. Returns an <code>AdaClip</code> process composable with <code>poisson()</code>
+centered-indicator query. Returns an <code>AdaClip</code> process composable with <code>poisson()</code>
 (plain or truncated).</p>
 <ul>
 <li><code>inner</code> (Gaussian): Base mechanism (from <code>gaussian()</code>)</li>
-<li><code>fraction_noise_std</code> (float): Noise std on the clipping fraction. Default: 0.05.</li>
-<li><code>expected_batch_size</code> (float): Expected batch size (<code>sample_rate × dataset_size</code>), used to compute the absolute noise std for the quantile query.</li>
+<li><code>fraction_noise_std</code> (float): Noise std on the centered indicator. Default: 0.05.</li>
+<li><code>expected_batch_size</code> (float): Expected batch size (<code>sample_rate × dataset_size</code>), the fixed denominator for the indicator; it must match the runtime's <code>expected_batch_size</code>.</li>
 <li><code>num_groups</code> (int): Number of independently adaptive clipping groups, and
   therefore independent noisy quantile queries. Default: 1. Set this to the
   number of groups when using per-group adaptive clipping.</li>
