@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 import warnings
 
 import pytest
@@ -11,18 +10,6 @@ import pytest
 # unavailable so test runs without ``trl`` installed don't error out.
 trl = pytest.importorskip("trl")
 _SFT_FIELDS = trl.SFTConfig.__dataclass_fields__
-
-# Newer TRL releases normalize the deprecated ``loss_type="chunked_nll"`` to ``"nll"``.
-_TRL_KEEPS_CHUNKED_NLL = (
-    trl.SFTConfig(
-        output_dir=tempfile.gettempdir(),
-        loss_type="chunked_nll",
-        report_to=[],
-        save_strategy="no",
-        use_cpu=True,
-    ).loss_type
-    == "chunked_nll"
-)
 
 from opake.transformers.trl import SFTConfig  # noqa: E402
 
@@ -88,17 +75,14 @@ def test_loss_type_nll_carries_through(tmp_path):
     assert cfg.loss_type == "nll"
 
 
-@pytest.mark.skipif(
-    not _TRL_KEEPS_CHUNKED_NLL,
-    reason="installed trl normalizes loss_type='chunked_nll' to 'nll'",
-)
 def test_loss_type_chunked_nll_carries_through(tmp_path):
+    trl_cfg = _trl_args(tmp_path, loss_type="chunked_nll")
     cfg = SFTConfig.from_trl(
-        _trl_args(tmp_path, loss_type="chunked_nll"),
+        trl_cfg,
         privacy_noise_multiplier=0.8,
         clipping_norm=1.0,
     )
-    assert cfg.loss_type == "chunked_nll"
+    assert cfg.loss_type == trl_cfg.loss_type
 
 
 def test_completion_only_loss_carries_through(tmp_path):
