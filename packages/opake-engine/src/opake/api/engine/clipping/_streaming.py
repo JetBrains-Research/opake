@@ -9,13 +9,16 @@ import torch
 from torch.func import vmap
 
 from opake.api.engine.clipping._pytree import (
-    _accumulate_group_value,
-    _leaf_sq_sum,
+    _combine_scaled_sq_sums,
+    _leaf_scaled_sq_sum,
     _norm_roundoff,
+    _ratio_from_scaled_norm,
     _real_dtype,
     _reduction_terms,
     _resolve_compute_dtype_for_reduction,
+    _resolve_norm_dtype,
     _scale_tensor,
+    _scaled_norm,
     _sq_accum_dtype,
     _tensor_path_leaves,
     _validate_per_group_paths,
@@ -63,49 +66,56 @@ def _stream_clip_and_sum(
         leaves, treedef = tree_flatten(values)
     acc_dtype = _resolve_compute_dtype_for_reduction(leaves, compute_dtype)
     sq_dtype = _sq_accum_dtype(leaves)
+    example_leaves = [leaf[0] for leaf in leaves]
+    norm_dtype = _resolve_norm_dtype(example_leaves)
     roundoff = _norm_roundoff(
-        acc_dtype, sq_dtype, len(leaves), _reduction_terms([leaf[0] for leaf in leaves])
+        norm_dtype, sq_dtype, len(leaves), _reduction_terms(example_leaves)
     )
-
-    sq_norm = None
-    group_sq_norms: dict[str, torch.Tensor] = {}
+    scaled_sq_norm = None
+    group_scaled_sq_norms: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
     for index, leaf in enumerate(leaves):
         sanitized = torch.nan_to_num(leaf, nan=0.0, posinf=0.0, neginf=0.0)
-        sq = vmap(lambda x: _leaf_sq_sum(x, acc_dtype, sq_dtype))(sanitized)
-        sq_norm = sq if sq_norm is None else sq_norm + sq
+        scaled_sq = vmap(lambda x: _leaf_scaled_sq_sum(x, norm_dtype, sq_dtype))(
+            sanitized
+        )
+        scaled_sq_norm = (
+            scaled_sq
+            if scaled_sq_norm is None
+            else _combine_scaled_sq_sums(scaled_sq_norm, scaled_sq)
+        )
         if paths is not None:
             group_name = clipping_norm.groups[paths[index]]
-            _accumulate_group_value(group_sq_norms, group_name, sq)
-        del sanitized, sq
-    if sq_norm is None:
-        sq_norm = torch.zeros(batch_size, dtype=sq_dtype)
-    norm = torch.sqrt(sq_norm)
+            if group_name in group_scaled_sq_norms:
+                group_scaled_sq_norms[group_name] = _combine_scaled_sq_sums(
+                    group_scaled_sq_norms[group_name], scaled_sq
+                )
+            else:
+                group_scaled_sq_norms[group_name] = scaled_sq
+        del sanitized, scaled_sq
+    if scaled_sq_norm is None:
+        zero = torch.zeros(batch_size, dtype=sq_dtype)
+        scaled_sq_norm = (zero, zero)
+    norm = _scaled_norm(scaled_sq_norm)
 
-    def scale_ratio(bound_value, value_norm):
-        bound = torch.clamp(
-            torch.as_tensor(
-                bound_value, dtype=value_norm.dtype, device=value_norm.device
-            ),
-            min=0.0,
-        )
+    def scale_ratio(bound_value, scaled_sq):
         if scale.kind == "auto_s":
-            gamma = torch.as_tensor(
-                scale.gamma, dtype=value_norm.dtype, device=value_norm.device
-            )
-            return bound / (value_norm + gamma)
-        return bound / value_norm
+            return _ratio_from_scaled_norm(bound_value, scaled_sq, gamma=scale.gamma)
+        return _ratio_from_scaled_norm(bound_value, scaled_sq)
 
     if isinstance(clipping_norm, PerGroup):
-        group_norms = {name: torch.sqrt(sq) for name, sq in group_sq_norms.items()}
+        group_norms: dict[str, torch.Tensor] = {}
+        for name, scaled_sq in group_scaled_sq_norms.items():
+            measured = _scaled_norm(scaled_sq)
+            group_norms[name] = measured
         group_ratios = {
-            name: scale_ratio(clipping_norm.values[name], group_norm)
-            for name, group_norm in group_norms.items()
+            name: scale_ratio(clipping_norm.values[name], group_scaled_sq_norms[name])
+            for name in group_norms
         }
         ratio = None
     else:
         group_norms = None
         group_ratios = None
-        ratio = scale_ratio(clipping_norm, norm)
+        ratio = scale_ratio(clipping_norm, scaled_sq_norm)
     clamp_to_one = scale.kind != "auto_s"
 
     # Match global_norm's diagnostic precision, including mixed complex/real
