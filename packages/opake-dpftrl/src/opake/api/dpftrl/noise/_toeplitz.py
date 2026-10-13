@@ -252,11 +252,12 @@ def inverse_as_streaming_matrix(
     # use so states that skipped ``init`` (restored, moved) still work. Each
     # entry records ``coef._version`` and is refreshed after an in-place update
     # of a caller-owned ``coef``; grad-carrying coefficients are converted on
-    # every call so autograd always records a fresh conversion.
+    # every call so autograd always records a fresh conversion, and inference
+    # tensors are converted on every call because they carry no version counter.
     coef_cache: dict[tuple[torch.device, torch.dtype], tuple[int, torch.Tensor]] = {}
 
     def _coef_like(state: torch.Tensor) -> torch.Tensor:
-        if coef.requires_grad:
+        if coef.requires_grad or coef.is_inference():
             return coef.to(device=state.device, dtype=state.dtype)
         key = (state.device, state.dtype)
         entry = coef_cache.get(key)
