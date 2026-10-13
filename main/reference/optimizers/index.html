@@ -3410,12 +3410,14 @@ and route DP metadata from <code>NoisedPytree</code> or <code>SecondMomentNoiseO
 known Gaussian variance carried by <code>NoisedPytree</code> updates (off by default;
 flip on to ablate against vanilla). Where applicable they also route
 <code>SecondMomentNoiseOutput</code> for private squared-gradient substitution —
-an alternative answer to the same v-update bias.</p>
+an alternative answer to the same v-update bias. The table makes paired-output
+support explicit.</p>
 <table>
 <thead>
 <tr>
 <th>Factory</th>
 <th>DP-aware mode</th>
+<th>Consumes <code>SecondMomentNoiseOutput</code>?</th>
 <th>When to use</th>
 </tr>
 </thead>
@@ -3423,60 +3425,75 @@ an alternative answer to the same v-update bias.</p>
 <tr>
 <td><strong><code>sgd</code></strong></td>
 <td>No second moment; accepts <code>NoisedPytree</code> and ignores σ metadata</td>
+<td>No</td>
 <td>Canonical DP baseline</td>
 </tr>
 <tr>
 <td><strong><code>adam</code></strong></td>
 <td>Original Adam/L2 variant with the same BC/private-moment paths as AdamW</td>
+<td>Yes</td>
 <td>Adam parity without decoupled WD</td>
 </tr>
 <tr>
 <td><strong><code>adamw</code></strong></td>
 <td>Optional φ-EMA on v̂ when <code>noise_bias_correction=True</code>; private second moments via <code>SecondMomentNoiseOutput</code></td>
+<td>Yes</td>
 <td>Adam-family fine-tuning when first-momentum and decoupled WD matter</td>
 </tr>
 <tr>
 <td><strong><code>radam</code></strong></td>
 <td>φ-EMA on v̂ in the rectified phase (<code>ρ_t &gt; 5</code>); SGD-of-momentum in warmup</td>
+<td>Yes</td>
 <td>Long runs where you want RAdam's variance rectification with DP correction</td>
 </tr>
 <tr>
 <td><strong><code>adadelta</code></strong></td>
 <td>Two-EMA BC: φ_g on <code>E[g²]</code> and per-element φ_dx on <code>E[Δx²]</code></td>
+<td>Yes</td>
 <td>LR-free DP optimizer; useful when learning-rate tuning is hard</td>
 </tr>
 <tr>
 <td><strong><code>ademamix</code></strong></td>
 <td>φ-EMA on v̂ + private second moments</td>
+<td>Yes</td>
 <td>Long-horizon training (slow EMA captures long-range signal)</td>
 </tr>
 <tr>
 <td><strong><code>adafactor</code></strong></td>
 <td>Factored second moment; optional per-factor φ-EMA when <code>noise_bias_correction=True</code></td>
+<td>No</td>
 <td>Recommended default for DP LM fine-tuning (relative step scaling); see <a href="../../user-guide/optimizers/">user guide</a></td>
 </tr>
 <tr>
 <td><strong><code>lion</code></strong></td>
 <td>No second-moment correction</td>
+<td>No</td>
 <td>Smaller state than Adam; vanilla works under noise</td>
 </tr>
 <tr>
 <td><strong><code>rmsprop</code></strong></td>
 <td>φ-EMA on v + private second moments</td>
+<td>Yes</td>
 <td>Adaptive without first moment; cheaper than Adam</td>
 </tr>
 <tr>
 <td><strong><code>adagrad</code></strong></td>
 <td>cumulative <code>Φ_acc</code> subtraction</td>
+<td>No</td>
 <td>Sparse-gradient settings; <strong>the correction is mandatory</strong> — vanilla Adagrad's denominator runs away under DP noise</td>
 </tr>
 <tr>
 <td><strong><code>schedule_free</code></strong></td>
 <td>post-processing (transparent forward)</td>
+<td>Base-dependent</td>
 <td>Wrapper around any base optimizer; replaces external LR schedules</td>
 </tr>
 </tbody>
 </table>
+<p>Passing paired output to a factory marked No raises <code>ConfigurationError</code>.
+<code>schedule_free</code> inherits the behavior of its Opake base; arbitrary third-party
+bases make no paired-input guarantee. To intentionally discard the second
+stream, pass <code>output.noisy_grads</code> explicitly.</p>
 <p>Constructor knobs vary per optimizer (e.g. <code>decoupled_weight_decay</code>,
 <code>update_rms_clip</code> on <code>adamw</code>, <code>ademamix</code>, and <code>adafactor</code>). Every
 <code>update_rms_clip</code> is model-wide/global over the full update pytree, not
