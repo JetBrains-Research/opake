@@ -51,6 +51,7 @@ from opake.api.accounting.core._budgets import (
     risk_budget,
 )
 from opake.api.accounting.core._native_cache import _clear_all_native_caches
+from opake.api.accounting.core._pld_cache import _capture_pld_evaluations
 from opake.api.accounting.core.discretization import (
     _use_discretization,
     get_discretization,
@@ -77,8 +78,8 @@ class CalibrateResult:
         target: Target metric value.
         iterations: Number of binary search iterations.
         converged: Always ``True`` for results returned by :func:`calibrate`.
-        mc_failure_probability: Overall failure probability covering every
-            adaptive Monte Carlo probe. Zero for analytic calibration.
+        mc_failure_probability: Overall failure probability of the simultaneous
+            Monte Carlo calibration bound. Zero for analytic calibration.
     """
 
     param: float
@@ -90,7 +91,7 @@ class CalibrateResult:
 
     @property
     def mc_confidence(self) -> float:
-        """Confidence level covering all adaptive Monte Carlo probes."""
+        """Confidence of the simultaneous Monte Carlo calibration bound."""
         return 1.0 - self.mc_failure_probability
 
     def __repr__(self) -> str:
@@ -105,6 +106,111 @@ class CalibrateResult:
             f"achieved={self.achieved:.6f}, target={self.target:.6f}, "
             f"iterations={self.iterations}, {status}{confidence})"
         )
+
+
+@dataclass(slots=True)
+class _FailureTrackingBudget:
+    """Evaluate a budget and retain the PLD metadata it actually used."""
+
+    budget: Budget
+    failure_limit: float | None = None
+    uses_monte_carlo: bool = False
+
+    @property
+    def value(self) -> float:
+        return self.budget.value
+
+    @property
+    def name(self) -> str:
+        return self.budget.name
+
+    @property
+    def decreasing(self) -> bool:
+        return self.budget.decreasing
+
+    def evaluate(self, process: DpProcess) -> float:
+        with _capture_pld_evaluations() as evaluations:
+            achieved = self.budget.evaluate(process)
+
+        if not evaluations and type(self.budget) in _BUILTIN_BUDGET_TYPES:
+            raise CalibrationError(
+                *(
+                    f"Budget evaluation on {type(process).__name__} did not expose "
+                    "the PLD metadata required for calibrated confidence.",
+                )
+            )
+
+        seen: set[int] = set()
+        failure = 0.0
+        for pld in evaluations:
+            identity = id(pld)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            failure += pld.mc_failure_probability
+
+        if failure == 0.0:
+            return achieved
+        if type(self.budget) not in _BUILTIN_BUDGET_TYPES:
+            raise CalibrationError(
+                *(
+                    "Monte Carlo calibration requires a built-in budget; "
+                    f"{type(self.budget).__name__}.evaluate() does not expose "
+                    "the one-sided metric needed to certify its result.",
+                )
+            )
+        if self.failure_limit is not None and failure > self.failure_limit:
+            raise CalibrationError(
+                *(
+                    "Budget evaluation exceeded calibration's pointwise Monte "
+                    f"Carlo failure allocation: allowed={self.failure_limit}, "
+                    f"used={failure}.",
+                )
+            )
+        self.uses_monte_carlo = True
+        return achieved
+
+
+_BUILTIN_BUDGET_TYPES = (
+    EpsilonBudget,
+    DeltaBudget,
+    AdvantageBudget,
+    BetaBudget,
+    RiskBudget,
+)
+_FLOAT_PARAMETER_SPACE_BITS = 64
+
+
+def _is_privacy_safe(budget: Budget, achieved: float) -> bool:
+    return achieved <= budget.value if budget.decreasing else achieved >= budget.value
+
+
+def _conservative_metric(budget: Budget, first: float, second: float) -> float:
+    return max(first, second) if budget.decreasing else min(first, second)
+
+
+def _adaptive_probe_failure_probability(
+    overall_failure_probability: float,
+    max_iterations: int,
+) -> float:
+    """Allocate confidence over the complete binary-search decision tree."""
+    if max_iterations <= 0:
+        raise CalibrationError(*(f"max_iterations must be > 0, got {max_iterations}",))
+    # The decision tree fits below 2**(max_iterations + 1) nodes and cannot
+    # contain more distinct values than the binary64 parameter space.
+    family_bits = min(max_iterations + 1, _FLOAT_PARAMETER_SPACE_BITS)
+    failure = math.nextafter(
+        math.ldexp(overall_failure_probability, -family_bits),
+        0.0,
+    )
+    if failure == 0.0:
+        raise CalibrationError(
+            *(
+                "Monte Carlo failure allocation underflowed; reduce "
+                "max_iterations or increase mc_failure_probability.",
+            )
+        )
+    return failure
 
 
 def calibrate(
@@ -141,12 +247,19 @@ def calibrate(
     tolerance.  If no safe endpoint reaches that tolerance, calibration
     raises instead of returning an under-noised parameter.
 
+    Monte Carlo calibration uses a simultaneous bound over every parameter
+    the binary-search decision tree can query. This remains valid when probes
+    share a transcript and later parameters depend on earlier results. The
+    reported metric is the privacy-conservative envelope of that bound and the
+    runtime-configuration evaluation.
+
     **Parameters:**
 
     Args:
         budget: Calibration budget (created with epsilon_budget(), delta_budget(), etc.)
             - Must have: budget.value (float), budget.evaluate(process) → float
             - Common budgets: epsilon_budget(3.0, 1e-5), delta_budget(1e-5, 3.0), advantage_budget(0.1)
+            - Monte Carlo calibration requires one of the built-in budgets
             - Budgets validate themselves: epsilon_budget(-1.0) raises
               PrivacyBudgetError
 
@@ -173,6 +286,8 @@ def calibrate(
 
         max_iterations: Positive maximum number of binary search iterations
             - Each iteration halves the search space
+            - For Monte Carlo PLDs, larger values require a stronger
+              simultaneous confidence band
             - Exhaustion or stalled bounds raises CalibrationError
 
         prefix: Optional already-executed process; each probe evaluates
@@ -186,8 +301,8 @@ def calibrate(
         - target: Target metric value (for comparison)
         - iterations: Number of iterations performed
         - converged: always True for a successfully returned result
-        - mc_failure_probability: overall failure probability covering all
-          adaptive MC probes (zero for analytic calibration)
+        - mc_failure_probability: overall failure probability of the
+          simultaneous MC calibration bound (zero for analytic calibration)
 
     Raises:
         CalibrationError: If tolerance is not finite and positive, or
@@ -287,6 +402,9 @@ def calibrate(
     - *CalibrationError: calibration did not converge*
       → Increase tolerance or max_iterations; check that param changes actually affect metric
     """
+    param_min = float(param_min)
+    param_max = float(param_max)
+
     if prefix is not None:
         from opake.api.accounting.core.composition._cached import cached
 
@@ -298,66 +416,93 @@ def calibrate(
 
     try:
         overall_config = get_discretization()
-        probe_count = max_iterations + 2
+        probe_failure = _adaptive_probe_failure_probability(
+            overall_config.mc_failure_probability,
+            max_iterations,
+        )
         probe_config = replace(
             overall_config,
-            mc_failure_probability=(
-                overall_config.mc_failure_probability / probe_count
-            ),
+            mc_failure_probability=probe_failure,
+        )
+        certified_budget = _FailureTrackingBudget(
+            budget,
+            failure_limit=probe_failure,
         )
         with _use_discretization(probe_config):
             result = _calibrate_impl(
-                budget,
+                certified_budget,
                 process,
                 param_min,
                 param_max,
                 tolerance,
                 max_iterations,
             )
+        certified = result.achieved
 
         # Re-evaluate the calibrated process under the runtime discretization.
-        # The probe context uses stricter MC bounds; re-evaluate under overall_config
-        # to get the achieved epsilon that will actually apply during training.
+        # The simultaneous probe value certifies privacy; the runtime value keeps
+        # the reported metric conservative for the configuration used afterwards.
+        runtime_budget = _FailureTrackingBudget(budget)
+        used_runtime_fallback = False
         with _use_discretization(overall_config):
             final_process = process(result.param)
-            achieved = budget.evaluate(final_process)
-            runtime_safe = (
-                achieved <= budget.value
-                if budget.decreasing
-                else achieved >= budget.value
-            )
-            if not runtime_safe:
+            runtime_achieved = runtime_budget.evaluate(final_process)
+            if not _is_privacy_safe(budget, runtime_achieved):
+                used_runtime_fallback = True
                 result = _calibrate_impl(
-                    budget,
+                    runtime_budget,
                     process,
                     param_min,
                     param_max,
                     tolerance,
                     max_iterations,
                 )
-                final_process = process(result.param)
-                achieved = result.achieved
-            if not math.isclose(achieved, budget.value, rel_tol=tolerance, abs_tol=0.0):
-                message = (
-                    f"Calibration for {budget.name} did not converge under runtime "
-                    f"discretization: target={budget.value}, achieved={achieved}, "
-                    f"relative tolerance={tolerance}, param={result.param}."
-                )
-                raise CalibrationError(message)
-            result.achieved = achieved
+                runtime_achieved = result.achieved
 
-            pld_method = getattr(final_process, "pld", None)
-            runtime_kwargs = {}
-            if isinstance(budget, EpsilonBudget):
-                runtime_kwargs["mc_resolution"] = min(
-                    overall_config.mc_resolution,
-                    budget.delta / 2.0,
+        if (
+            used_runtime_fallback
+            and runtime_budget.uses_monte_carlo
+            and not certified_budget.uses_monte_carlo
+        ):
+            raise CalibrationError(
+                *(
+                    "Runtime fallback introduced a Monte Carlo process that was "
+                    "absent from the simultaneous calibration search.",
                 )
-            final_pld = pld_method(**runtime_kwargs) if callable(pld_method) else None
-            if final_pld is not None and final_pld.mc_failure_probability > 0.0:
-                result.mc_failure_probability = overall_config.mc_failure_probability
+            )
+        if used_runtime_fallback and certified_budget.uses_monte_carlo:
+            with _use_discretization(probe_config):
+                certified = certified_budget.evaluate(process(result.param))
+        if certified_budget.uses_monte_carlo and not _is_privacy_safe(
+            budget, certified
+        ):
+            raise CalibrationError(
+                *(
+                    f"Calibration for {budget.name} did not produce a parameter "
+                    "that is safe under its simultaneous Monte Carlo bound.",
+                )
+            )
 
-            return result
+        achieved = (
+            _conservative_metric(budget, certified, runtime_achieved)
+            if certified_budget.uses_monte_carlo
+            else runtime_achieved
+        )
+        if not math.isclose(achieved, budget.value, rel_tol=tolerance, abs_tol=0.0):
+            message = (
+                f"Calibration for {budget.name} did not converge under runtime "
+                f"discretization: target={budget.value}, achieved={achieved}, "
+                f"relative tolerance={tolerance}, param={result.param}."
+            )
+            raise CalibrationError(message)
+        result.achieved = achieved
+        result.mc_failure_probability = (
+            overall_config.mc_failure_probability
+            if (certified_budget.uses_monte_carlo or runtime_budget.uses_monte_carlo)
+            else 0.0
+        )
+
+        return result
     finally:
         _clear_all_native_caches()
 
