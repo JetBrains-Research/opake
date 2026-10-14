@@ -113,6 +113,37 @@ def test_adversarial_values_match_original(
         )
 
 
+def test_streaming_keeps_adjacent_float16_subnormal(all_devices):
+    finfo = torch.finfo(torch.float16)
+    quantum = finfo.smallest_normal * finfo.eps
+    values = torch.tensor(
+        [[3 * quantum, -3 * quantum]],
+        device=all_devices,
+        dtype=torch.float16,
+    )
+    clipping_norm = 0.84 * float(torch.linalg.vector_norm(values[0].cpu().double()))
+    expected = torch.tensor(
+        [2 * quantum, -2 * quantum],
+        device=all_devices,
+        dtype=torch.float16,
+    )
+    values.requires_grad_()
+    fn, state = clipped_fun(
+        lambda x: x,
+        clipping_norm=clipping_norm,
+        microbatch_size=1,
+    )
+
+    result, _ = fn(values, state=state)
+
+    assert torch.equal(result.pytree, expected)
+    stored_norm = torch.linalg.vector_norm(result.pytree.detach().cpu().double()).item()
+    assert stored_norm <= clipping_norm
+    weights = torch.tensor([1.0, 2.0], device=all_devices)
+    (result.pytree.float() * weights).sum().backward()
+    assert torch.equal(values.grad, torch.zeros_like(values))
+
+
 @pytest.mark.parametrize("microbatch_size", [None, 2])
 @pytest.mark.parametrize("return_stats", [False, True])
 def test_discarded_non_tensor_aux_is_not_batched(
