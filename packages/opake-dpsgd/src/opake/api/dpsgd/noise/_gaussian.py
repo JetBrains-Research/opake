@@ -24,6 +24,7 @@ For independent noise, derive a per-rank key with ``fold_in(key, rank)``.
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import TYPE_CHECKING
 
 import torch
@@ -80,20 +81,22 @@ class GaussianNoiseState(NoiseState):
 
 
 def _validate_noise_stddev(noise_stddev: float | PerGroup) -> None:
-    """Validate that realized noise standard deviation is non-negative."""
+    """Validate that realized noise standard deviation is finite and non-negative."""
     if isinstance(noise_stddev, PerGroup):
         for gname, value in noise_stddev.values.items():
-            if value < 0:
+            if not math.isfinite(value) or value < 0:
                 raise ConfigurationError(
                     *(
-                        "noise standard deviation must be non-negative for all groups, "
+                        "noise standard deviation must be non-negative and finite for all groups, "
                         f"got {value} for group '{gname}'",
                     )
                 )
     else:
-        if noise_stddev < 0:
+        if not math.isfinite(noise_stddev) or noise_stddev < 0:
             raise ConfigurationError(
-                *(f"noise standard deviation must be non-negative, got {noise_stddev}",)
+                *(
+                    f"noise standard deviation must be non-negative and finite, got {noise_stddev}",
+                )
             )
 
 
@@ -101,9 +104,11 @@ def _resolve_noise_multiplier(noise_multiplier: float | None) -> float:
     if noise_multiplier is None:
         raise ConfigurationError(*("gaussian_noise() requires noise_multiplier.",))
     multiplier = float(noise_multiplier)
-    if multiplier < 0:
+    if not math.isfinite(multiplier) or multiplier < 0:
         raise ConfigurationError(
-            *(f"noise_multiplier must be non-negative, got {noise_multiplier}",)
+            *(
+                f"noise_multiplier must be non-negative and finite, got {noise_multiplier}",
+            )
         )
     return multiplier
 
@@ -149,7 +154,7 @@ def gaussian_noise(
         noise_fn, state = gaussian_noise(noise_multiplier=1.1, key=my_key)
 
     Args:
-        noise_multiplier: Gaussian noise multiplier.  The realized standard
+        noise_multiplier: Finite, non-negative Gaussian noise multiplier. The realized standard
             deviation is ``noise_multiplier * clipped.max_norm``.
         key: Explicit RNG key for deterministic, functional randomness.
             Same key on all ranks → same noise (synchronized).

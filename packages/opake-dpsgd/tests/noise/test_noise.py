@@ -80,6 +80,30 @@ class TestGaussian:
         ):
             gaussian_noise(noise_multiplier=-1.0, key=key(0))
 
+    @pytest.mark.parametrize("multiplier", [math.nan, math.inf, -math.inf])
+    def test_nonfinite_noise_multiplier_raises(self, multiplier):
+        with pytest.raises(ConfigurationError, match=r"noise_multiplier.*finite"):
+            gaussian_noise(noise_multiplier=multiplier, key=key(0))
+
+    @pytest.mark.parametrize("max_norm", [math.nan, math.inf, 1e308])
+    @pytest.mark.parametrize("per_group", [False, True])
+    def test_nonfinite_realized_stddev_raises(self, max_norm, per_group):
+        noise_fn, state = gaussian_noise(noise_multiplier=2.0, key=key(0))
+        bound = (
+            PerGroup(groups={"w": "weights"}, values={"weights": max_norm})
+            if per_group
+            else max_norm
+        )
+        grads = {"w": torch.zeros(4)}
+        with pytest.raises(ConfigurationError, match=r"standard deviation.*finite"):
+            noise_fn(clipped(grads, max_norm=bound), state)
+
+        # Rejected calls leave the explicit RNG state available for a valid retry.
+        assert state._step_counter == 0
+        output, next_state = noise_fn(clipped(grads, max_norm=1.0), state)
+        assert torch.isfinite(output.pytree["w"]).all()
+        assert next_state._step_counter == 1
+
     def test_bound_is_not_supported(self):
         with pytest.raises(TypeError, match="bound"):
             gaussian_noise(noise_multiplier=1.0, key=key(0), bound=3.0)  # type: ignore[call-arg]
