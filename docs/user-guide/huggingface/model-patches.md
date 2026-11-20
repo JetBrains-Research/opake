@@ -152,6 +152,12 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 ```
 
+For Gemma2, stock SDPA cannot apply attention-logit softcapping. If
+Transformers rejects SDPA at load time, load with `attn_implementation="eager"`,
+call `apply_model_patches(model, eager_attention=True)`, then call
+`model.set_attn_implementation("sdpa")` to select Opake's chunked softcap path.
+This override does not change the backend support of other model families.
+
 ## Model compatibility
 
 `apply_model_patches` dispatches per `config.model_type` to a

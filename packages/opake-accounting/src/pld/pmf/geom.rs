@@ -363,8 +363,8 @@ impl GeomPmf {
         }
 
         let mut probs = vec![0.0f64; out_n];
-        for i in 0..n {
-            if self.probs[i] == 0.0 {
+        for (i, &prob) in self.probs.iter().enumerate() {
+            if prob == 0.0 {
                 continue;
             }
             let pos = directed_next(loss_at(i) / discretization, dir);
@@ -374,7 +374,7 @@ impl GeomPmf {
             } as i64
                 - idx_lo;
             let k = k.clamp(0, out_n as i64 - 1) as usize;
-            probs[k] += self.probs[i];
+            probs[k] += prob;
         }
 
         Ok(Pmf {

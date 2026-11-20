@@ -272,6 +272,42 @@ def test_reject_neftune_noise_alpha(tmp_path):
         )
 
 
+@pytest.mark.skipif(
+    "activation_checkpointing" not in _HF_FIELDS,
+    reason="Transformers has not introduced the activation checkpointing aliases",
+)
+def test_activation_checkpointing_maps_to_opake_checkpointing(tmp_path):
+    converted = TrainingArguments.from_hf(
+        _hf_args(
+            tmp_path,
+            activation_checkpointing=True,
+            activation_checkpointing_kwargs={"use_reentrant": False},
+        ),
+        privacy_noise_multiplier=0.8,
+        clipping_norm=1.0,
+    )
+    assert converted.gradient_checkpointing is True
+    assert converted.gradient_checkpointing_kwargs == {"use_reentrant": False}
+
+
+@pytest.mark.skipif(
+    "activation_checkpointing_kwargs" not in _HF_FIELDS,
+    reason="Transformers has not introduced the activation checkpointing aliases",
+)
+@pytest.mark.parametrize("kwargs", [{"offload": True}, {"every_n_layers": 2}])
+def test_hf_specific_activation_checkpointing_options_are_rejected(tmp_path, kwargs):
+    with pytest.raises(ValueError, match="activation_checkpointing_kwargs"):
+        TrainingArguments.from_hf(
+            _hf_args(
+                tmp_path,
+                activation_checkpointing=True,
+                activation_checkpointing_kwargs=kwargs,
+            ),
+            privacy_noise_multiplier=0.8,
+            clipping_norm=1.0,
+        )
+
+
 def test_auto_find_batch_size_maps_to_microbatch(tmp_path):
     """HF ``auto_find_batch_size`` → opake ``auto_find_microbatch_size``."""
     opake = TrainingArguments.from_hf(
