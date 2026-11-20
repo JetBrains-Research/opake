@@ -34,9 +34,8 @@ _MODULE_PATCH_NAMES = (
     "apply_rotary_pos_emb",
 )
 
-# gemma2 additionally rewrites the process-wide ``ALL_ATTENTION_FUNCTIONS``
-# "sdpa" entry, and mistral rebinds the sliding-window mask builder, so between
-# them they cover both leak routes.
+# Gemma2 also replaces its registry and opts into SDPA; Mistral rebinds the
+# sliding-window mask builder.
 _FAMILIES = ("mistral", "gemma2", "qwen3_next")
 
 
@@ -94,7 +93,8 @@ def test_reference_output_survives_a_patch_cycle(family, device):
         config_cls, model_cls, device, config_kwargs=_config_kwargs(model_cls)
     )
     with parity_model_patches(patchable):
-        pass
+        if family == "gemma2":
+            assert model_cls._supports_sdpa
 
     after = _reference_logits(config_cls, model_cls, device)
 

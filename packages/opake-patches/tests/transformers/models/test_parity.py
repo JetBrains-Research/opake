@@ -43,6 +43,7 @@ from _test_utils import (
     build_patched_model_pair,
     get_tiny_config_kwargs,
     parity_model_patches,
+    snapshot_family_attention_support,
 )
 
 from opake.api.patches.transformers import supported_families
@@ -125,11 +126,7 @@ def _resolve_family_imports(family: str):
     model_mod = importlib.import_module(
         f"transformers.models.{family}.modeling_{family}"
     )
-    module_attrs, class_forwards = _PRISTINE_FAMILY_STATE[family]
-    for name, value in module_attrs.items():
-        setattr(model_mod, name, value)
-    for cls, forward in class_forwards.items():
-        cls.forward = forward
+    _restore_family_state({family: _PRISTINE_FAMILY_STATE[family]})
 
     if family in _EXCEPTIONS:
         config_cls = getattr(cfg_mod, _EXCEPTIONS[family][0])
@@ -261,7 +258,11 @@ def _snapshot_pristine_family_state(families=FAMILIES):
             and value.__module__ == model_mod.__name__
             and hasattr(value, "forward")
         }
-        state[family] = module_attrs, class_forwards
+        state[family] = (
+            module_attrs,
+            class_forwards,
+            snapshot_family_attention_support(model_mod),
+        )
     return state
 
 
@@ -269,7 +270,7 @@ _PRISTINE_FAMILY_STATE = _snapshot_pristine_family_state()
 
 
 def _restore_family_state(state):
-    for family, (module_attrs, class_forwards) in state.items():
+    for family, (module_attrs, class_forwards, attention_support) in state.items():
         model_mod = importlib.import_module(
             f"transformers.models.{family}.modeling_{family}"
         )
@@ -277,6 +278,8 @@ def _restore_family_state(state):
             setattr(model_mod, name, value)
         for cls, forward in class_forwards.items():
             cls.forward = forward
+        for cls, supports_sdpa in attention_support.items():
+            cls._supports_sdpa = supports_sdpa
 
 
 @pytest.fixture(autouse=True)
