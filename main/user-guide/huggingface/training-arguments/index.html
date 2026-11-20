@@ -3938,6 +3938,10 @@ the matching opake config:</p>
   gradient_accumulation_steps</code>) into the logical Poisson batch, with
   <code>per_device_train_batch_size</code> becoming the vmap <code>microbatch_size</code> and
   <code>auto_find_batch_size → auto_find_microbatch_size</code>;</li>
+<li><strong>maps</strong> HF's <code>activation_checkpointing</code> and <code>activation_checkpointing_kwargs</code>
+  to Opake's vmap-safe <code>gradient_checkpointing</code> path. HF Trainer-only options
+  <code>every_n_layers</code> and <code>offload</code> are not supported; use <code>activation_offloading</code>
+  for saved-activation offload;</li>
 <li><strong>loosely maps</strong> <code>max_grad_norm → clipping_norm</code> (no warning — pass an
   explicit <code>clipping_norm=</code> to override);</li>
 <li><strong>remaps</strong> optimizers (<code>adamw_torch</code>/<code>adamw_hf</code>/<code>adamw_torch_fused → adamw</code>,

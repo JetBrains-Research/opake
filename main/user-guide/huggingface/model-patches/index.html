@@ -3784,6 +3784,11 @@ Measured at Qwen2-0.5B scale with LoRA:</p>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">attn_implementation</span><span class="o">=</span><span class="s2">"sdpa"</span><span class="p">,</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">)</span>
 </code></pre></div>
+<p>For Gemma2, stock SDPA cannot apply attention-logit softcapping. If
+Transformers rejects SDPA at load time, load with <code>attn_implementation="eager"</code>,
+call <code>apply_model_patches(model, eager_attention=True)</code>, then call
+<code>model.set_attn_implementation("sdpa")</code> to select Opake's chunked softcap path.
+This override does not change the backend support of other model families.</p>
 <h2 id="model-compatibility">Model compatibility<a class="headerlink" href="#model-compatibility" title="Permanent link">&para;</a></h2>
 <p><code>apply_model_patches</code> dispatches per <code>config.model_type</code> to a
 registered family handler.  The table shows vmap compatibility and
