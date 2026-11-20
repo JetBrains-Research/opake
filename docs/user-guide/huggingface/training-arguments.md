@@ -372,6 +372,10 @@ What the converter does:
   gradient_accumulation_steps`) into the logical Poisson batch, with
   `per_device_train_batch_size` becoming the vmap `microbatch_size` and
   `auto_find_batch_size → auto_find_microbatch_size`;
+- **maps** HF's `activation_checkpointing` and `activation_checkpointing_kwargs`
+  to Opake's vmap-safe `gradient_checkpointing` path. HF Trainer-only options
+  `every_n_layers` and `offload` are not supported; use `activation_offloading`
+  for saved-activation offload;
 - **loosely maps** `max_grad_norm → clipping_norm` (no warning — pass an
   explicit `clipping_norm=` to override);
 - **remaps** optimizers (`adamw_torch`/`adamw_hf`/`adamw_torch_fused → adamw`,

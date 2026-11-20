@@ -306,7 +306,26 @@ def _liger_to_perf_kernels(hf: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _activation_checkpointing_aliases(hf: dict[str, Any]) -> dict[str, Any]:
+    # HF mirrors the new names onto the deprecated attributes in __post_init__.
+    # Keep Opake's vmap-safe checkpoint path and reject HF Trainer-only options.
+    kwargs = hf.get("activation_checkpointing_kwargs")
+    if isinstance(kwargs, dict) and {"every_n_layers", "offload"} & kwargs.keys():
+        message = (
+            "activation_checkpointing_kwargs does not support every_n_layers or "
+            "offload on Opake's vmap checkpoint path. Use activation_offloading "
+            "to offload saved activations."
+        )
+        raise ConfigurationError(message)
+    return {
+        "gradient_checkpointing": hf["activation_checkpointing"],
+        "gradient_checkpointing_kwargs": kwargs,
+    }
+
+
 HF_TRANSFORM_MAP: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
+    "activation_checkpointing": _activation_checkpointing_aliases,
+    "activation_checkpointing_kwargs": _activation_checkpointing_aliases,
     "per_device_train_batch_size": _batch_collapse,
     "gradient_accumulation_steps": _batch_collapse,
     "auto_find_batch_size": _batch_collapse,
@@ -329,6 +348,8 @@ HF_LEGACY_FIELDS: frozenset[str] = frozenset(
         # Removed in 5.x, which folded the fraction into ``warmup_steps``.
         "warmup_ratio",
         # Added after the 5.0 compatibility floor.
+        "activation_checkpointing",
+        "activation_checkpointing_kwargs",
         "dataloader_in_order",
         "dataloader_multiprocessing_context",
         "ddp_static_graph",

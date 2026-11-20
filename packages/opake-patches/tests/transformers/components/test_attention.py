@@ -708,7 +708,8 @@ def test_gqa_sdpa_reduces_cuda_peak_memory():
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("sequence_length", [1024, 4096])
+# Use lengths where the eager score allocations dominate fixed CUDA workspace.
+@pytest.mark.parametrize("sequence_length", [2048, 4096])
 def test_gemma2_softcap_sdpa_reduces_cuda_peak_memory(sequence_length):
     device = torch.device("cuda")
     dtype = torch.float16

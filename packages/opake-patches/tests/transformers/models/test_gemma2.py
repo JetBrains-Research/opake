@@ -28,9 +28,11 @@ def tiny_model(device):
     kwargs = get_tiny_config_kwargs()
     kwargs.update({"head_dim": 16})
     config = Gemma2Config(**kwargs)
-    config._attn_implementation = "sdpa"
+    config._attn_implementation = "eager"
     model = Gemma2ForCausalLM(config).to(device)
     apply_model_patches(model, eager_attention=True)
+    model.set_attn_implementation("sdpa")
+    assert model.config._attn_implementation == "sdpa"
     return model
 
 

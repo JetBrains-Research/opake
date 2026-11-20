@@ -129,16 +129,20 @@ def test_gemma2_softcap_avoids_the_eager_fallback(
     model = modeling_gemma2.Gemma2ForCausalLM(config).eval()
 
     with torch.no_grad():
-        model(input_ids=torch.tensor([[1, 2, 3, 4]]))
+        output = model(input_ids=torch.tensor([[1, 2, 3, 4]]), output_attentions=True)
 
     assert softcap_fallback_spy == []
+    # Eager emits attention weights; the chunked backend does not.
+    assert not output.attentions or all(
+        weights is None for weights in output.attentions
+    )
     assert config.attn_logit_softcapping is not None
 
 
 def test_softcap_family_is_not_rerouted_through_gemma2(
     patched_gemma2_family, softcap_fallback_spy
 ):
-    """A softcap-forwarding family opake never patched keeps HF's SDPA path."""
+    """An unpatched softcap family keeps HF's backend choice and registry."""
     modeling_vaultgemma = pytest.importorskip(
         "transformers.models.vaultgemma.modeling_vaultgemma"
     )
@@ -146,9 +150,11 @@ def test_softcap_family_is_not_rerouted_through_gemma2(
     config = modeling_vaultgemma.VaultGemmaConfig(**_TINY_CONFIG)
     # The reason this family is the canary: it forwards a non-None softcap.
     assert config.attn_logit_softcapping is not None
-    config._attn_implementation = "sdpa"
-    model = modeling_vaultgemma.VaultGemmaForCausalLM(config).eval()
+    model_class = modeling_vaultgemma.VaultGemmaForCausalLM
+    config._attn_implementation = "sdpa" if model_class._supports_sdpa else "eager"
+    model = model_class(config).eval()
 
+    assert modeling_vaultgemma.ALL_ATTENTION_FUNCTIONS is SHARED_ATTENTION_FUNCTIONS
     assert modeling_vaultgemma.ALL_ATTENTION_FUNCTIONS["sdpa"] is sdpa_attention_forward
 
     with torch.no_grad():

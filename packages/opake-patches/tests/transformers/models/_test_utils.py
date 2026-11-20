@@ -265,6 +265,11 @@ _FAMILY_MODULE_PATCH_NAMES = (
 )
 
 
+def snapshot_family_attention_support(modeling_module) -> dict[type, bool]:
+    gemma2_base = getattr(modeling_module, "Gemma2PreTrainedModel", None)
+    return {gemma2_base: gemma2_base._supports_sdpa} if gemma2_base else {}
+
+
 @contextmanager
 def parity_model_patches(
     model: torch.nn.Module, apply_model_patches_kwargs: dict | None = None
@@ -289,6 +294,8 @@ def parity_model_patches(
         modeling_module, "ALL_ATTENTION_FUNCTIONS", None
     )
 
+    original_attention_support = snapshot_family_attention_support(modeling_module)
+
     _reset_patched_families()
     try:
         apply_transformers_model_patches(
@@ -302,6 +309,8 @@ def parity_model_patches(
             setattr(modeling_module, name, value)
         if original_attention_functions is not None:
             modeling_module.ALL_ATTENTION_FUNCTIONS = original_attention_functions
+        for cls, supports_sdpa in original_attention_support.items():
+            cls._supports_sdpa = supports_sdpa
         _reset_patched_families()
 
 

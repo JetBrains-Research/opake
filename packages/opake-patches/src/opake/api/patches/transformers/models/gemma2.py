@@ -27,12 +27,24 @@ from opake.api.patches.transformers.components.masking import (
 _MODULE_PATH = "transformers.models.gemma2.modeling_gemma2"
 
 
+def _patch_gemma2_masking_and_dispatch(module):
+    result = apply_compact_sdpa_sliding_window_masking_patch(module)
+    # HF disables stock SDPA because it cannot softcap. Opt in only after
+    # Gemma2's local registry points to Opake's softcap-aware implementation.
+    if (
+        getattr(module, "ALL_ATTENTION_FUNCTIONS", {}).get("sdpa")
+        is vmap_sdpa_attention_forward_gemma2
+    ):
+        module.Gemma2PreTrainedModel._supports_sdpa = True
+    return result
+
+
 apply_gemma2_family_patches = make_apply_family_patches(
     family="gemma2",
     module_path=_MODULE_PATH,
     eager_attention_replacement=vmap_eager_attention_forward_gemma2,
     sdpa_attention_replacement=vmap_sdpa_attention_forward_gemma2,
-    masking_module_patcher=apply_compact_sdpa_sliding_window_masking_patch,
+    masking_module_patcher=_patch_gemma2_masking_and_dispatch,
 )
 
 
