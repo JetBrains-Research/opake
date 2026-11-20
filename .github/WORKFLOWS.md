@@ -131,7 +131,8 @@ workflow consumes only those attached assets; it never rebuilds them.
 
 ## Security and maintenance
 
-Actions remain pinned to immutable commit SHAs. The maintenance-branch
+Actions remain pinned to immutable commit SHAs except for the Junie action,
+which follows JetBrains' `v1` tag for upstream fixes. The maintenance-branch
 dispatcher deliberately calls this repository's current `main` release
 workflow; its selected source SHA remains immutable and is the only code tested
 or packaged. Entry-point workflows default to read-only permissions and
@@ -149,12 +150,8 @@ rules and OIDC access remain scoped to publishing runs.
 Fork pull requests do not run untrusted code on the self-hosted GPU runner and
 never receive repository, package, or cloud credentials.
 
-The active `main` ruleset requires `Build documentation`, `Format Python`,
-`Format Rust`, `Conventional Commits PR title`, the selected individual Python
-environment/package checks, `Rust / opake-accounting`, and `Junie review`.
-The review workflow uses the `JUNIE_API_KEY` Actions secret. Fork and Dependabot
-pull requests cannot receive the secret-backed Junie review; the job records
-that limitation and completes without invoking Junie.
+`Junie review` is not required by the `main` ruleset. The job is skipped on
+fork and Dependabot pull requests, which cannot use `JUNIE_API_KEY`.
 
 Interactive Junie sessions follow `.junie/guidelines.md`; automated reviews use
 `.junie/review-guidelines.md`. The review file is also the canonical policy for
@@ -164,10 +161,11 @@ Privacy-sensitive reviews trace the guarantee end to end and use read-only web
 search and URL fetching to verify primary literature before reporting
 theorem-dependent findings.
 
-The automated review and interactive workflows use the same SHA-pinned upstream
-Junie action and `JUNIE_API_KEY`. Only non-bot authors with an `OWNER`,
-`MEMBER`, or `COLLABORATOR` association reach the action, which then verifies
-that the actor has repository write or admin access. The job grants `contents`,
+The automated review and interactive workflows both use
+`JetBrains/junie-github-action@v1` and the `JUNIE_API_KEY` Actions secret. In the
+interactive workflow, only non-bot authors with an `OWNER`, `MEMBER`, or
+`COLLABORATOR` association reach the action, which then verifies that the actor
+has repository write or admin access. The job grants `contents`,
 pull-request, and issue write access explicitly; repository-wide workflow
 permissions remain read-only. Repository Settings > Actions > General must also
 allow GitHub Actions to create and approve pull requests.
